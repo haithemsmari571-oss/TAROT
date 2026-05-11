@@ -1,0 +1,422 @@
+[
+  {
+    "username": "psychic1",
+    "email": "psychic1@example.com",
+    "is_verified": true,
+    "bio": "A skilled psychic specializing in love and relationships.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "monday",
+        "start_at": "10:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic2",
+    "email": "psychic2@example.com",
+    "is_verified": true,
+    "bio": "Guides clients through career and life path questions.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "tuesday",
+        "start_at": "12:00:00",
+        "end_at": "20:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic3",
+    "email": "psychic3@example.com",
+    "is_verified": true,
+    "bio": "Experienced in past life readings and spiritual guidance.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "wednesday",
+        "start_at": "09:00:00",
+        "end_at": "17:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic4",
+    "email": "psychic4@example.com",
+    "is_verified": true,
+    "bio": "Tarot reader with a focus on clarity and insight.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "thursday",
+        "start_at": "10:00:00",
+        "end_at": "16:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic5",
+    "email": "psychic5@example.com",
+    "is_verified": true,
+    "bio": "Specializes in spiritual counseling and meditation guidance.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "friday",
+        "start_at": "11:00:00",
+        "end_at": "19:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic6",
+    "email": "psychic6@example.com",
+    "is_verified": true,
+    "bio": "Focuses on energy healing and aura readings.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "saturday",
+        "start_at": "10:00:00",
+        "end_at": "14:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic7",
+    "email": "psychic7@example.com",
+    "is_verified": true,
+    "bio": "Helps clients explore intuition and personal growth.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "sunday",
+        "start_at": "12:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic8",
+    "email": "psychic8@example.com",
+    "is_verified": true,
+    "bio": "Guides on love, relationships, and emotional clarity.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "monday",
+        "start_at": "13:00:00",
+        "end_at": "19:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic9",
+    "email": "psychic9@example.com",
+    "is_verified": true,
+    "bio": "Numerology and astrology expert with years of experience.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "tuesday",
+        "start_at": "09:00:00",
+        "end_at": "15:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic10",
+    "email": "psychic10@example.com",
+    "is_verified": true,
+    "bio": "Clairvoyant psychic focused on personal guidance and clarity.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "wednesday",
+        "start_at": "14:00:00",
+        "end_at": "20:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic11",
+    "email": "psychic11@example.com",
+    "is_verified": true,
+    "bio": "Provides tarot and oracle readings to illuminate life choices.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "thursday",
+        "start_at": "08:00:00",
+        "end_at": "16:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic12",
+    "email": "psychic12@example.com",
+    "is_verified": true,
+    "bio": "Specialist in chakra balancing and energy healing techniques.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "friday",
+        "start_at": "10:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic13",
+    "email": "psychic13@example.com",
+    "is_verified": true,
+    "bio": "Focuses on past life regression and spiritual insight.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "saturday",
+        "start_at": "09:00:00",
+        "end_at": "15:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic14",
+    "email": "psychic14@example.com",
+    "is_verified": true,
+    "bio": "Mystical guidance for personal growth and understanding.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "sunday",
+        "start_at": "11:00:00",
+        "end_at": "17:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic15",
+    "email": "psychic15@example.com",
+    "is_verified": true,
+    "bio": "Specializes in spiritual counseling and meditation practices.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "monday",
+        "start_at": "12:00:00",
+        "end_at": "20:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic16",
+    "email": "psychic16@example.com",
+    "is_verified": true,
+    "bio": "Guides clients through career, life, and relationship decisions.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "tuesday",
+        "start_at": "10:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic17",
+    "email": "psychic17@example.com",
+    "is_verified": true,
+    "bio": "Intuitive psychic offering insights on love and personal growth.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "wednesday",
+        "start_at": "09:00:00",
+        "end_at": "17:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic18",
+    "email": "psychic18@example.com",
+    "is_verified": true,
+    "bio": "Expert in energy healing and spiritual guidance.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "thursday",
+        "start_at": "08:00:00",
+        "end_at": "16:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic19",
+    "email": "psychic19@example.com",
+    "is_verified": true,
+    "bio": "Tarot and astrology readings to clarify life decisions.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "friday",
+        "start_at": "10:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic20",
+    "email": "psychic20@example.com",
+    "is_verified": true,
+    "bio": "Provides intuitive insights and guidance for personal growth.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "saturday",
+        "start_at": "09:00:00",
+        "end_at": "15:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic21",
+    "email": "psychic21@example.com",
+    "is_verified": true,
+    "bio": "Focus on love, relationships, and emotional clarity.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "sunday",
+        "start_at": "12:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic22",
+    "email": "psychic22@example.com",
+    "is_verified": true,
+    "bio": "Spiritual guidance with tarot and clairvoyance expertise.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "monday",
+        "start_at": "09:00:00",
+        "end_at": "17:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic23",
+    "email": "psychic23@example.com",
+    "is_verified": true,
+    "bio": "Expert in astrology, numerology, and spiritual counseling.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "tuesday",
+        "start_at": "10:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic24",
+    "email": "psychic24@example.com",
+    "is_verified": true,
+    "bio": "Focus on past life regression and spiritual insight.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "wednesday",
+        "start_at": "11:00:00",
+        "end_at": "19:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic25",
+    "email": "psychic25@example.com",
+    "is_verified": true,
+    "bio": "Helps clients with meditation and energy balancing.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "thursday",
+        "start_at": "08:00:00",
+        "end_at": "16:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic26",
+    "email": "psychic26@example.com",
+    "is_verified": true,
+    "bio": "Guides on career, relationships, and spiritual growth.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "friday",
+        "start_at": "09:00:00",
+        "end_at": "17:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic27",
+    "email": "psychic27@example.com",
+    "is_verified": true,
+    "bio": "Mystical guidance for love, life, and clarity.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "saturday",
+        "start_at": "10:00:00",
+        "end_at": "14:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic28",
+    "email": "psychic28@example.com",
+    "is_verified": true,
+    "bio": "Provides insights into personal growth and intuition.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "sunday",
+        "start_at": "12:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic29",
+    "email": "psychic29@example.com",
+    "is_verified": true,
+    "bio": "Focuses on love, relationships, and spiritual guidance.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "monday",
+        "start_at": "10:00:00",
+        "end_at": "18:00:00"
+      }
+    ]
+  },
+  {
+    "username": "psychic30",
+    "email": "psychic30@example.com",
+    "is_verified": true,
+    "bio": "Experienced in tarot, astrology, and intuitive guidance.",
+    "price_per_second": 1.0,
+    "availability": [
+      {
+        "day_of_the_week": "tuesday",
+        "start_at": "09:00:00",
+        "end_at": "17:00:00"
+      }
+    ]
+  }
+]

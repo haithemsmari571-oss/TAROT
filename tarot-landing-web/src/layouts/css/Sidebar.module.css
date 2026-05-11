@@ -1,0 +1,81 @@
+/* Sidebar main */
+.sidebar {
+  width: 300px;
+  background-color: #101010;
+  color: white;
+}
+
+.sidebar.collapsed {
+  width: 120px;
+}
+
+/* Link base */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  border-radius: 9999px 0 0 9999px; /* left curved */
+  font-weight: 550;
+  position: relative;
+  cursor: pointer;
+}
+
+.sidebar-link .icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 0.5rem;
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+/* Active Link */
+.sidebar-link.active {
+  background-color: white;
+  color: #24C18F;
+}
+
+.sidebar-link.active .icon-box {
+  background-color: #101010;
+  color: #24C18F;
+}
+
+/* Curved pseudo-elements like Mantine example */
+.sidebar-link.active::before,
+.sidebar-link.active::after {
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  right: 0;
+  background-color: #101010;
+}
+
+.sidebar-link.active::before {
+  top: -24px;
+  border-bottom-left-radius: 25px;
+  box-shadow: 0 -24px 0 0 white;
+}
+
+.sidebar-link.active::after {
+  bottom: -24px;
+  border-top-left-radius: 25px;
+  box-shadow: 0 24px 0 0 white;
+}
+
+/* Hover effect */
+.sidebar-link:hover {
+  background-color: #24C18F;
+  color: white;
+}
+
+.sidebar-link:hover .icon-box {
+  color: white;
+}
+
+/* Footer */
+.footer {
+  font-size: 0.875rem;
+  color: #ccc;
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "label": "100 Points",
+    "points": 100,
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "label": "250 Points",
+    "points": 250,
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "label": "500 Points",
+    "points": 500,
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "label": "1000 Points",
+    "points": 1000,
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "label": "2500 Points",
+    "points": 2500,
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "label": "5000 Points",
+    "points": 5000,
+    "is_active": true,
+    "sort_order": 6
+  }
+]

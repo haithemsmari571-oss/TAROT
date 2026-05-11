@@ -1,0 +1,86 @@
+[
+  {
+    "number": 1,
+    "title": "The Leader",
+    "description": "Born to lead and pioneer. Your independent spirit and courage make you a natural trailblazer. You have the gift of turning ideas into reality through determination and original thinking.",
+    "core_strengths": ["Leadership", "Independence", "Courage", "Innovation", "Determination"],
+    "growth_areas": ["Patience with others", "Collaboration", "Listening skills", "Avoiding dominance"]
+  },
+  {
+    "number": 2,
+    "title": "The Peacemaker",
+    "description": "Harmony flows through you. Your diplomatic nature and intuitive understanding of others make you the perfect mediator. You excel at creating balance and fostering cooperation.",
+    "core_strengths": ["Diplomacy", "Cooperation", "Intuition", "Sensitivity", "Patience"],
+    "growth_areas": ["Assertiveness", "Setting boundaries", "Decision-making", "Self-confidence"]
+  },
+  {
+    "number": 3,
+    "title": "The Creative",
+    "description": "Expression is your gift. Your creativity, optimism, and communication skills inspire others. You bring joy and beauty into the world through artistic and verbal expression.",
+    "core_strengths": ["Creativity", "Communication", "Optimism", "Social skills", "Inspiration"],
+    "growth_areas": ["Focus", "Discipline", "Emotional depth", "Commitment"]
+  },
+  {
+    "number": 4,
+    "title": "The Builder",
+    "description": "Solid foundations are your specialty. Your practical nature, dedication, and methodical approach create lasting structures. You turn dreams into concrete reality through hard work.",
+    "core_strengths": ["Reliability", "Organization", "Practicality", "Dedication", "Discipline"],
+    "growth_areas": ["Flexibility", "Spontaneity", "Accepting change", "Work-life balance"]
+  },
+  {
+    "number": 5,
+    "title": "The Freedom Seeker",
+    "description": "Adventure calls to you. Your versatility, curiosity, and love of freedom make life an exciting journey. You thrive on change and bring dynamic energy wherever you go.",
+    "core_strengths": ["Adaptability", "Curiosity", "Charisma", "Resourcefulness", "Progressive thinking"],
+    "growth_areas": ["Commitment", "Focus", "Responsibility", "Consistency"]
+  },
+  {
+    "number": 6,
+    "title": "The Nurturer",
+    "description": "Compassion defines you. Your caring nature and sense of responsibility make you a natural caregiver. You create harmony and beauty in homes, families, and communities.",
+    "core_strengths": ["Compassion", "Responsibility", "Nurturing", "Loyalty", "Service"],
+    "growth_areas": ["Self-care", "Setting limits", "Avoiding martyrdom", "Personal needs"]
+  },
+  {
+    "number": 7,
+    "title": "The Seeker",
+    "description": "Wisdom is your quest. Your analytical mind and spiritual depth lead you to profound truths. You see beyond the surface to understand life's mysteries.",
+    "core_strengths": ["Wisdom", "Analysis", "Intuition", "Introspection", "Spirituality"],
+    "growth_areas": ["Social connection", "Trust", "Practicality", "Expressing emotions"]
+  },
+  {
+    "number": 8,
+    "title": "The Powerhouse",
+    "description": "Abundance flows through you. Ambitious, authoritative, and driven by success, you have the rare gift of turning vision into material reality. Power and prosperity are your natural domain.",
+    "core_strengths": ["Ambition", "Authority", "Business acumen", "Confidence", "Achievement"],
+    "growth_areas": ["Compassion", "Material detachment", "Patience", "Emotional expression"]
+  },
+  {
+    "number": 9,
+    "title": "The Humanitarian",
+    "description": "Universal love guides you. Your compassionate nature and idealism inspire you to serve humanity. You see the big picture and work toward making the world a better place.",
+    "core_strengths": ["Compassion", "Idealism", "Generosity", "Wisdom", "Universal love"],
+    "growth_areas": ["Boundaries", "Letting go", "Self-care", "Practical matters"]
+  },
+  {
+    "number": 11,
+    "title": "The Illuminator",
+    "description": "Spiritual insight lights your path. As a master number, you possess heightened intuition and the ability to inspire others. You are here to be a spiritual teacher and guide.",
+    "core_strengths": ["Intuition", "Inspiration", "Idealism", "Spiritual awareness", "Visionary thinking"],
+    "growth_areas": ["Grounding", "Self-doubt", "Nervousness", "Practical application"]
+  },
+  {
+    "number": 22,
+    "title": "The Master Builder",
+    "description": "You turn dreams into empires. As a master number, you combine practical skills with visionary thinking. You have the power to build lasting structures that benefit humanity.",
+    "core_strengths": ["Mastery", "Vision", "Practicality", "Leadership", "Large-scale thinking"],
+    "growth_areas": ["Overwhelm", "Pressure management", "Patience", "Self-care"]
+  },
+  {
+    "number": 33,
+    "title": "The Master Teacher",
+    "description": "Unconditional love and healing flow through you. As the rarest master number, you are here to uplift and nurture on a grand scale. Your compassion knows no bounds.",
+    "core_strengths": ["Nurturing", "Healing", "Unconditional love", "Teaching", "Service"],
+    "growth_areas": ["Martyrdom", "Boundaries", "Self-sacrifice", "Personal needs"]
+  }
+]

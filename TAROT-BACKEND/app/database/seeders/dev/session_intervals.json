@@ -1,0 +1,242 @@
+[
+  {
+    "session_index": 1,
+    "started_at": "2026-04-20 10:00:00",
+    "ended_at": "2026-04-20 10:30:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 2,
+    "started_at": "2026-04-21 14:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 3,
+    "started_at": "2026-04-22 09:15:00",
+    "ended_at": "2026-04-22 09:45:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 4,
+    "started_at": "2026-04-23 16:30:00",
+    "ended_at": "2026-04-23 16:35:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "SOCKET_LOST"
+  },
+  {
+    "session_index": 5,
+    "started_at": "2026-04-24 11:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 6,
+    "started_at": "2026-04-25 13:20:00",
+    "ended_at": "2026-04-25 14:00:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 7,
+    "started_at": "2026-04-26 10:45:00",
+    "ended_at": "2026-04-26 10:50:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "SOCKET_LOST"
+  },
+  {
+    "session_index": 8,
+    "started_at": "2026-04-27 15:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 9,
+    "started_at": "2026-04-28 12:30:00",
+    "ended_at": "2026-04-28 13:15:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 10,
+    "started_at": "2026-04-29 08:00:00",
+    "ended_at": "2026-04-29 08:25:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 11,
+    "started_at": "2026-04-20 17:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 12,
+    "started_at": "2026-04-21 11:30:00",
+    "ended_at": "2026-04-21 12:00:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 13,
+    "started_at": "2026-04-22 14:00:00",
+    "ended_at": "2026-04-22 14:05:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "SOCKET_LOST"
+  },
+  {
+    "session_index": 14,
+    "started_at": "2026-04-23 09:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 15,
+    "started_at": "2026-04-24 16:15:00",
+    "ended_at": "2026-04-24 16:50:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 16,
+    "started_at": "2026-04-25 10:00:00",
+    "ended_at": "2026-04-25 10:10:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "SOCKET_LOST"
+  },
+  {
+    "session_index": 17,
+    "started_at": "2026-04-26 13:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 18,
+    "started_at": "2026-04-27 11:45:00",
+    "ended_at": "2026-04-27 12:20:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 19,
+    "started_at": "2026-04-28 15:30:00",
+    "ended_at": "2026-04-28 16:00:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 20,
+    "started_at": "2026-04-29 10:30:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 21,
+    "started_at": "2026-04-20 14:20:00",
+    "ended_at": "2026-04-20 15:00:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 22,
+    "started_at": "2026-04-21 09:00:00",
+    "ended_at": "2026-04-21 09:08:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "SOCKET_LOST"
+  },
+  {
+    "session_index": 23,
+    "started_at": "2026-04-22 16:00:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 24,
+    "started_at": "2026-04-23 12:30:00",
+    "ended_at": "2026-04-23 13:10:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 25,
+    "started_at": "2026-04-24 08:45:00",
+    "ended_at": null,
+    "is_billed": false,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": null
+  },
+  {
+    "session_index": 1,
+    "started_at": "2026-04-19 15:00:00",
+    "ended_at": "2026-04-19 15:20:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 3,
+    "started_at": "2026-04-18 10:00:00",
+    "ended_at": "2026-04-18 10:35:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 6,
+    "started_at": "2026-04-17 11:15:00",
+    "ended_at": "2026-04-17 11:50:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 9,
+    "started_at": "2026-04-16 13:00:00",
+    "ended_at": "2026-04-16 13:40:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  },
+  {
+    "session_index": 12,
+    "started_at": "2026-04-15 09:30:00",
+    "ended_at": "2026-04-15 10:10:00",
+    "is_billed": true,
+    "trigger_event": "INITIAL_START",
+    "termination_reason": "MANUAL_EXIT"
+  }
+]

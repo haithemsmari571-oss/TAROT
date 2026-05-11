@@ -1,0 +1,35 @@
+/* PrimarySelect.module.css */
+
+.customSelectInput {
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.dropdown {
+  transition: all 0.15s ease;
+  border-radius: 10px;
+  border: 1px solid;
+  max-height: 14rem; /* 56 tailwind units */
+  overflow-y: auto;
+  margin-top: 0.25rem;
+  z-index: 10;
+}
+
+.dropdown li {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown li:hover {
+  background-color: var(--primaryLight-15);
+}
+
+/* Optional CSS variables based on theme colors (to keep code clean) */

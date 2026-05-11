@@ -1,0 +1,59 @@
+/* PrimaryInput.module.css */
+
+.primaryInput {
+  width: 100%;
+  border: 1px solid var(--neutralGray);
+  border-radius: 10px;
+  background-color: var(--neutralWhite);
+  color: var(--neutralDark);
+  font-family: var(--fontBody);
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+/* Hover effect (like PrimarySelect option hover) */
+.primaryInput:not(:disabled):hover {
+  border-color: var(--primary);
+  background-color: var(--primaryLight15);
+}
+
+/* Focus effect (like PrimarySelect box-shadow) */
+.primaryInput:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primaryLight20);
+}
+
+/* Size variants */
+.primaryInput.sm {
+  font-size: var(--fontSizeSm);
+  padding: var(--spacingXs) var(--spacingSm);
+}
+
+.primaryInput.md {
+  font-size: var(--fontSizeBase);
+  padding: var(--spacingSm) var(--spacingMd);
+}
+
+.primaryInput.lg {
+  font-size: var(--fontSizeLg);
+  padding: var(--spacingMd) var(--spacingLg);
+}
+
+/* Error state (like PrimarySelect error border) */
+.primaryInput.error {
+  border-color: var(--accent);
+  background-color: var(--neutralWhite);
+}
+
+/* Left icon padding */
+.primaryInput.icon-left {
+  padding-left: var(--spacingXl);
+}
+
+/* Disabled state */
+.primaryInput:disabled {
+  cursor: not-allowed;
+  background-color: var(--neutralGray);
+  color: var(--neutralDark);
+  border-color: var(--neutralGray);
+}

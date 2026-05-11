@@ -1,0 +1,30 @@
+/* Set default font to Poppins */
+body {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Apply Poppins to all elements */
+* {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Optional: Use Bricolage Grotesque for headings */
+h1, h2, h3, h4, h5, h6, .playfair {
+  font-family: 'Bricolage Grotesque', serif;
+}
+
+/* Optional: Apply background color */
+html,
+/* Set default font to Poppins */
+body, * {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Playfair font class */
+.playfair {
+  font-family: 'Bricolage Grotesque', serif;
+}
+
+.secondary-font {
+  font-family: 'Bricolage Grotesque', 'Roboto', sans-serif;
+}

@@ -1,0 +1,177 @@
+[
+  {
+    "username": "user1",
+    "email": "user1@example.com",
+    "is_verified": true,
+    "balance": 5000,
+    "role": "SUPERADMIN"
+  },
+  {
+    "username": "user2",
+    "email": "user2@example.com",
+    "is_verified": true,
+    "balance": 3200,
+    "role": "USER"
+  },
+  {
+    "username": "user3",
+    "email": "user3@example.com",
+    "is_verified": true,
+    "balance": 7500,
+    "role": "USER"
+  },
+  {
+    "username": "user4",
+    "email": "user4@example.com",
+    "is_verified": true,
+    "balance": 1200,
+    "role": "USER"
+  },
+  {
+    "username": "user5",
+    "email": "user5@example.com",
+    "is_verified": true,
+    "balance": 9800,
+    "role": "USER"
+  },
+  {
+    "username": "user6",
+    "email": "user6@example.com",
+    "is_verified": true,
+    "balance": 4500,
+    "role": "USER"
+  },
+  {
+    "username": "user7",
+    "email": "user7@example.com",
+    "is_verified": true,
+    "balance": 6300,
+    "role": "USER"
+  },
+  {
+    "username": "user8",
+    "email": "user8@example.com",
+    "is_verified": true,
+    "balance": 2100,
+    "role": "USER"
+  },
+  {
+    "username": "user9",
+    "email": "user9@example.com",
+    "is_verified": true,
+    "balance": 8700,
+    "role": "USER"
+  },
+  {
+    "username": "user10",
+    "email": "user10@example.com",
+    "is_verified": true,
+    "balance": 3900,
+    "role": "USER"
+  },
+  {
+    "username": "user11",
+    "email": "user11@example.com",
+    "is_verified": true,
+    "balance": 5600,
+    "role": "USER"
+  },
+  {
+    "username": "user12",
+    "email": "user12@example.com",
+    "is_verified": true,
+    "balance": 7200,
+    "role": "USER"
+  },
+  {
+    "username": "user13",
+    "email": "user13@example.com",
+    "is_verified": true,
+    "balance": 4100,
+    "role": "USER"
+  },
+  {
+    "username": "user14",
+    "email": "user14@example.com",
+    "is_verified": true,
+    "balance": 6800,
+    "role": "USER"
+  },
+  {
+    "username": "user15",
+    "email": "user15@example.com",
+    "is_verified": true,
+    "balance": 2900,
+    "role": "USER"
+  },
+  {
+    "username": "user16",
+    "email": "user16@example.com",
+    "is_verified": true,
+    "balance": 8100,
+    "role": "USER"
+  },
+  {
+    "username": "user17",
+    "email": "user17@example.com",
+    "is_verified": true,
+    "balance": 3500,
+    "role": "USER"
+  },
+  {
+    "username": "user18",
+    "email": "user18@example.com",
+    "is_verified": true,
+    "balance": 9200,
+    "role": "USER"
+  },
+  {
+    "username": "user19",
+    "email": "user19@example.com",
+    "is_verified": true,
+    "balance": 4700,
+    "role": "USER"
+  },
+  {
+    "username": "user20",
+    "email": "user20@example.com",
+    "is_verified": true,
+    "balance": 6100,
+    "role": "USER"
+  },
+  {
+    "username": "user21",
+    "email": "user21@example.com",
+    "is_verified": true,
+    "balance": 5300,
+    "role": "USER"
+  },
+  {
+    "username": "user22",
+    "email": "user22@example.com",
+    "is_verified": true,
+    "balance": 7800,
+    "role": "USER"
+  },
+  {
+    "username": "user23",
+    "email": "user23@example.com",
+    "is_verified": true,
+    "balance": 3800,
+    "role": "USER"
+  },
+  {
+    "username": "user24",
+    "email": "user24@example.com",
+    "is_verified": true,
+    "balance": 8500,
+    "role": "USER"
+  },
+  {
+    "username": "user25",
+    "email": "user25@example.com",
+    "is_verified": true,
+    "balance": 4400,
+    "role": "USER"
+  }
+]
