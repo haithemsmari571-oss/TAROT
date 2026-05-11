@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: ./TAROT-BACKEND
+      dockerfile: Dockerfile
+    container_name: tarot-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./TAROT-BACKEND:/app
+    env_file:
+      - ./TAROT-BACKEND/.env
+    environment:
+      - DATABASE_URL=sqlite:///./dev.db
+      - MAIL_SERVER=mailpit
+      - MAIL_PORT=1025
+      - RELOAD=true
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - mailpit
+
+  frontend:
+    build:
+      context: ./tarot-landing-web
+      dockerfile: Dockerfile
+    container_name: tarot-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./tarot-landing-web:/app
+      - /app/node_modules
+    env_file:
+      - ./tarot-landing-web/.env
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: tarot-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    container_name: tarot-stripe-cli
+    command:
+      - listen
+      - --forward-to=http://backend:8000/payment/webhook
+      - --log-level=debug
+    environment:
+      - STRIPE_API_KEY=${STRIPE_API_KEY:-}
+    depends_on:
+      - backend
