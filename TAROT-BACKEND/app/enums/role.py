@@ -19,6 +19,7 @@ ROLE_PERMISSIONS = {
         Permission.MANAGE_ZODIAC,
         Permission.MANAGE_BUY_OPTIONS,
         Permission.MANAGE_SETTINGS,
+        Permission.MANAGE_CATEGORIES,
         Permission.VIEW_TRANSACTIONS,
     ],
     Role.PSYCHIC: [

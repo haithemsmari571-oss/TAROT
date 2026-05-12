@@ -9,5 +9,5 @@ class Category(Base):
     title: Mapped[str] = mapped_column(unique=True)
 
     psychics: Mapped["PsychicCategory"] = relationship(
-        "PsychicCategory", back_populates="category"
+        "PsychicCategory", back_populates="category", cascade="all, delete-orphan"
     )

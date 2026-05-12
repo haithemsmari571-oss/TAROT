@@ -56,6 +56,7 @@ export enum Permission {
   MANAGE_ZODIAC = "manage_zodiac",
   MANAGE_BUY_OPTIONS = "manage_buy_options",
   MANAGE_SETTINGS = "manage_settings",
+  MANAGE_CATEGORIES = "manage_categories",
   VIEW_EARNINGS = "view_earnings",
   VIEW_TRANSACTIONS = "view_transactions",
 }
@@ -69,6 +70,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.MANAGE_ZODIAC,
     Permission.MANAGE_BUY_OPTIONS,
     Permission.MANAGE_SETTINGS,
+    Permission.MANAGE_CATEGORIES,
     Permission.VIEW_TRANSACTIONS,
   ],
   [UserRole.PSYCHIC]: [Permission.VIEW_EARNINGS],

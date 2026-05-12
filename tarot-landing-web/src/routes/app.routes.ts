@@ -17,6 +17,7 @@ import earningsRoutes from "./earnings.routes";
 import psychicProfileRoutes from "./psychic-profile.routes";
 import { notificationRoutes } from "./notification.routes";
 import buyOptionsRoutes from "./buy-options.routes";
+import categoriesRoutes from "./categories.routes";
 import { UserRole } from "../features/auth/types/auth.types";
 
 
@@ -59,6 +60,7 @@ const routes: RouteConfig[] = [
 ...psychicProfileRoutes,
 ...notificationRoutes,
 ...buyOptionsRoutes,
+...categoriesRoutes,
 
 ];
 

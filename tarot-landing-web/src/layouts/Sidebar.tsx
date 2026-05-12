@@ -102,6 +102,7 @@ const Sidebar = () => {
     { label: "My Profile", path: "/admin/my-profile", icon: "solar:user-id-bold-duotone", roles: [UserRole.PSYCHIC] },
     { label: "Ledger", path: "/admin/ledger", icon: "solar:wallet-money-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
     { label: "Buy Options", path: "/admin/buy-options", icon: "solar:cart-large-2-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+    { label: "Categories", path: "/admin/categories", icon: "solar:folder-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
     { label: "Zodiac", path: "/admin/zodiac", icon: "solar:stars-minimalistic-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
     { label: "Life Path", path: "/admin/lifepath", icon: "solar:calculator-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
     { label: "Settings", path: "/admin/settings", icon: "solar:settings-bold-duotone", roles: [UserRole.SUPERADMIN] },
