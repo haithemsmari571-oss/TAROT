@@ -15,7 +15,13 @@ from app.models.transaction import Transaction
 from app.models.user import User
 
 
-def get_admin_dashboard_stats(db: Session) -> Dict[str, Any]:
+def get_admin_dashboard_stats(
+    db: Session,
+    psychics_page: int = 1,
+    psychics_per_page: int = 5,
+    transactions_page: int = 1,
+    transactions_per_page: int = 10,
+) -> Dict[str, Any]:
     total_users = db.query(func.count(User.id)).scalar() or 0
     total_psychics = (
         db.query(func.count(User.id)).filter(User.role == Role.PSYCHIC).scalar() or 0
@@ -54,6 +60,20 @@ def get_admin_dashboard_stats(db: Session) -> Dict[str, Any]:
         ) or 0
         chat_status_counts[status.value] = count
 
+    psychics_offset = (psychics_page - 1) * psychics_per_page
+    psychics_total = (
+        db.query(func.count(User.id))
+        .select_from(User)
+        .join(Chat, Chat.psychic_id == User.id)
+        .join(Transaction, Transaction.related_chat_id == Chat.id)
+        .filter(
+            User.role == Role.PSYCHIC,
+            Transaction.transaction_type == TransactionType.DEBIT,
+            Transaction.status == TransactionStatus.COMPLETED,
+        )
+        .scalar()
+    ) or 0
+
     top_psychics_query = (
         db.query(
             User.id,
@@ -72,7 +92,8 @@ def get_admin_dashboard_stats(db: Session) -> Dict[str, Any]:
         )
         .group_by(User.id)
         .order_by(func.sum(Transaction.amount).desc())
-        .limit(5)
+        .offset(psychics_offset)
+        .limit(psychics_per_page)
         .all()
     )
 
@@ -107,8 +128,15 @@ def get_admin_dashboard_stats(db: Session) -> Dict[str, Any]:
             }
         )
 
+    transactions_offset = (transactions_page - 1) * transactions_per_page
+    transactions_total = db.query(func.count(Transaction.id)).scalar() or 0
+
     recent_transactions = (
-        db.query(Transaction).order_by(Transaction.created_at.desc()).limit(10).all()
+        db.query(Transaction)
+        .order_by(Transaction.created_at.desc())
+        .offset(transactions_offset)
+        .limit(transactions_per_page)
+        .all()
     )
     recent = []
     for t in recent_transactions:
@@ -152,8 +180,18 @@ def get_admin_dashboard_stats(db: Session) -> Dict[str, Any]:
         "totalTransactions": total_transactions,
         "transactionStatusCounts": transaction_status_counts,
         "chatStatusCounts": chat_status_counts,
-        "topPsychics": top_psychics,
-        "recentTransactions": recent,
+        "topPsychics": {
+            "items": top_psychics,
+            "total": psychics_total,
+            "page": psychics_page,
+            "perPage": psychics_per_page,
+        },
+        "recentTransactions": {
+            "items": recent,
+            "total": transactions_total,
+            "page": transactions_page,
+            "perPage": transactions_per_page,
+        },
         "signupsByDay": signups_by_day,
         "unitPriceCents": unit_price_cents,
     }

@@ -21,6 +21,13 @@ export interface RecentTransaction {
   createdAt: string;
 }
 
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+  page: number;
+  perPage: number;
+}
+
 export interface SignupDay {
   date: string;
   count: number;
@@ -35,8 +42,8 @@ export interface AdminDashboardStats {
   totalTransactions: number;
   transactionStatusCounts: Record<string, number>;
   chatStatusCounts: Record<string, number>;
-  topPsychics: TopPsychic[];
-  recentTransactions: RecentTransaction[];
+  topPsychics: PaginatedList<TopPsychic>;
+  recentTransactions: PaginatedList<RecentTransaction>;
   signupsByDay: SignupDay[];
   unitPriceCents: number;
 }
@@ -67,8 +74,13 @@ export const dashboardApi = {
     const response = await axiosClient.get("/payment/unit-price");
     return response.data;
   },
-  getAdminStats: async (): Promise<AdminDashboardStats> => {
-    const response = await axiosClient.get("/admin/dashboard/stats");
+  getAdminStats: async (params?: {
+    psychics_page?: number;
+    psychics_per_page?: number;
+    transactions_page?: number;
+    transactions_per_page?: number;
+  }): Promise<AdminDashboardStats> => {
+    const response = await axiosClient.get("/admin/dashboard/stats", { params });
     return response.data;
   },
 

@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from datetime import time, datetime
+from datetime import time, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List
 
@@ -83,7 +83,8 @@ def fetch_random_categories(db: Session, n: int = 3) -> list[int]:
 
 def seed_psychics(db: Session, psychic_list: List[Dict]):
     default_password = hash_password("password")
-    for psy_data in psychic_list:
+    now = datetime.utcnow()
+    for i, psy_data in enumerate(psychic_list):
         # Check if psychic already exists
         existing = (
             db.query(User).filter(User.username == psy_data.get("username")).first()
@@ -92,6 +93,7 @@ def seed_psychics(db: Session, psychic_list: List[Dict]):
         if existing:
             continue
 
+        days_ago = min(i * 3, 89)
         psychic = User(
             username=psy_data.get("username"),
             email=psy_data.get("email"),
@@ -100,6 +102,8 @@ def seed_psychics(db: Session, psychic_list: List[Dict]):
             password_hash=default_password,
             role=Role.PSYCHIC,
             bio=psy_data.get("bio"),
+            created_at=now.replace(hour=8, minute=0, second=0, microsecond=0)
+            - timedelta(days=days_ago),
         )
         db.add(psychic)
         db.flush()
@@ -248,7 +252,8 @@ def seed_life_path_compatibility(db: Session):
 
 def seed_users(db: Session, users_list: List[Dict]):
     default_password = hash_password("password")
-    for user_data in users_list:
+    now = datetime.utcnow()
+    for i, user_data in enumerate(users_list):
         # Check if user already exists
         existing = (
             db.query(User).filter(User.username == user_data.get("username")).first()
@@ -263,6 +268,7 @@ def seed_users(db: Session, users_list: List[Dict]):
         except KeyError:
             role = Role.USER
 
+        days_ago = min(i * 3, 89)
         user = User(
             username=user_data.get("username"),
             email=user_data.get("email"),
@@ -270,6 +276,8 @@ def seed_users(db: Session, users_list: List[Dict]):
             balance=user_data.get("balance", 0),
             password_hash=default_password,
             role=role,
+            created_at=now.replace(hour=10, minute=0, second=0, microsecond=0)
+            - timedelta(days=days_ago),
         )
         db.add(user)
     db.flush()

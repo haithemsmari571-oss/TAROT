@@ -1,175 +1,196 @@
 [
   {
-    "username": "user1",
-    "email": "user1@example.com",
+    "username": "superadmin",
+    "email": "superadmin@tarot.com",
+    "is_verified": true,
+    "balance": 99999,
+    "role": "SUPERADMIN"
+  },
+  {
+    "username": "admin",
+    "email": "admin@tarot.com",
+    "is_verified": true,
+    "balance": 99999,
+    "role": "ADMIN"
+  },
+  {
+    "username": "user",
+    "email": "user@tarot.com",
+    "is_verified": true,
+    "balance": 10000,
+    "role": "USER"
+  },
+  {
+    "username": "sarahmitchell",
+    "email": "sarah.mitchell@email.com",
     "is_verified": true,
     "balance": 5000,
     "role": "SUPERADMIN"
   },
   {
-    "username": "user2",
-    "email": "user2@example.com",
+    "username": "jameswalker",
+    "email": "james.walker@email.com",
     "is_verified": true,
     "balance": 3200,
     "role": "USER"
   },
   {
-    "username": "user3",
-    "email": "user3@example.com",
+    "username": "elenarodriguez",
+    "email": "elena.rodriguez@email.com",
     "is_verified": true,
     "balance": 7500,
     "role": "USER"
   },
   {
-    "username": "user4",
-    "email": "user4@example.com",
+    "username": "marcusthorne",
+    "email": "marcus.thorne@email.com",
     "is_verified": true,
     "balance": 1200,
     "role": "USER"
   },
   {
-    "username": "user5",
-    "email": "user5@example.com",
+    "username": "amandacheng",
+    "email": "amanda.cheng@email.com",
     "is_verified": true,
     "balance": 9800,
     "role": "USER"
   },
   {
-    "username": "user6",
-    "email": "user6@example.com",
+    "username": "liamobrien",
+    "email": "liam.obrien@email.com",
     "is_verified": true,
     "balance": 4500,
     "role": "USER"
   },
   {
-    "username": "user7",
-    "email": "user7@example.com",
+    "username": "isabellatorres",
+    "email": "isabella.torres@email.com",
     "is_verified": true,
     "balance": 6300,
     "role": "USER"
   },
   {
-    "username": "user8",
-    "email": "user8@example.com",
+    "username": "noahbennett",
+    "email": "noah.bennett@email.com",
     "is_verified": true,
     "balance": 2100,
     "role": "USER"
   },
   {
-    "username": "user9",
-    "email": "user9@example.com",
+    "username": "chloegupta",
+    "email": "chloe.gupta@email.com",
     "is_verified": true,
     "balance": 8700,
     "role": "USER"
   },
   {
-    "username": "user10",
-    "email": "user10@example.com",
+    "username": "ethanmccarthy",
+    "email": "ethan.mccarthy@email.com",
     "is_verified": true,
     "balance": 3900,
     "role": "USER"
   },
   {
-    "username": "user11",
-    "email": "user11@example.com",
+    "username": "oliviapatel",
+    "email": "olivia.patel@email.com",
     "is_verified": true,
     "balance": 5600,
     "role": "USER"
   },
   {
-    "username": "user12",
-    "email": "user12@example.com",
+    "username": "henrykim",
+    "email": "henry.kim@email.com",
     "is_verified": true,
     "balance": 7200,
     "role": "USER"
   },
   {
-    "username": "user13",
-    "email": "user13@example.com",
+    "username": "zarasokolov",
+    "email": "zara.sokolov@email.com",
     "is_verified": true,
     "balance": 4100,
     "role": "USER"
   },
   {
-    "username": "user14",
-    "email": "user14@example.com",
+    "username": "danielmoreau",
+    "email": "daniel.moreau@email.com",
     "is_verified": true,
     "balance": 6800,
     "role": "USER"
   },
   {
-    "username": "user15",
-    "email": "user15@example.com",
+    "username": "mialambert",
+    "email": "mia.lambert@email.com",
     "is_verified": true,
     "balance": 2900,
     "role": "USER"
   },
   {
-    "username": "user16",
-    "email": "user16@example.com",
+    "username": "alexandernyugen",
+    "email": "alexander.nyugen@email.com",
     "is_verified": true,
     "balance": 8100,
     "role": "USER"
   },
   {
-    "username": "user17",
-    "email": "user17@example.com",
+    "username": "sophieharrington",
+    "email": "sophie.harrington@email.com",
     "is_verified": true,
     "balance": 3500,
     "role": "USER"
   },
   {
-    "username": "user18",
-    "email": "user18@example.com",
+    "username": "victorsantos",
+    "email": "victor.santos@email.com",
     "is_verified": true,
     "balance": 9200,
     "role": "USER"
   },
   {
-    "username": "user19",
-    "email": "user19@example.com",
+    "username": "nadiavolkov",
+    "email": "nadia.volkov@email.com",
     "is_verified": true,
     "balance": 4700,
     "role": "USER"
   },
   {
-    "username": "user20",
-    "email": "user20@example.com",
+    "username": "calebwood",
+    "email": "caleb.wood@email.com",
     "is_verified": true,
     "balance": 6100,
     "role": "USER"
   },
   {
-    "username": "user21",
-    "email": "user21@example.com",
+    "username": "aurorafontana",
+    "email": "aurora.fontana@email.com",
     "is_verified": true,
     "balance": 5300,
     "role": "USER"
   },
   {
-    "username": "user22",
-    "email": "user22@example.com",
+    "username": "sebastiandunn",
+    "email": "sebastian.dunn@email.com",
     "is_verified": true,
     "balance": 7800,
     "role": "USER"
   },
   {
-    "username": "user23",
-    "email": "user23@example.com",
+    "username": "hannahpike",
+    "email": "hannah.pike@email.com",
     "is_verified": true,
     "balance": 3800,
     "role": "USER"
   },
   {
-    "username": "user24",
-    "email": "user24@example.com",
+    "username": "theocosta",
+    "email": "theo.costa@email.com",
     "is_verified": true,
     "balance": 8500,
     "role": "USER"
   },
   {
-    "username": "user25",
-    "email": "user25@example.com",
+    "username": "laylajohnson",
+    "email": "layla.johnson@email.com",
     "is_verified": true,
     "balance": 4400,
     "role": "USER"

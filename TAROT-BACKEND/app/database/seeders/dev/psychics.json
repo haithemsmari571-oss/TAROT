@@ -1,422 +1,369 @@
 [
   {
-    "username": "psychic1",
-    "email": "psychic1@example.com",
+    "username": "psychic",
+    "email": "psychic@tarot.com",
     "is_verified": true,
-    "bio": "A skilled psychic specializing in love and relationships.",
-    "price_per_second": 1.0,
+    "bio": "Experienced psychic reader with a gift for clarity and connection. I provide warm, accurate guidance across love, career, and spiritual growth. Every session with me is a safe space for your truth to unfold.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "monday",
-        "start_at": "10:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "monday", "start_at": "09:00:00", "end_at": "21:00:00" },
+      { "day_of_the_week": "tuesday", "start_at": "09:00:00", "end_at": "21:00:00" },
+      { "day_of_the_week": "wednesday", "start_at": "09:00:00", "end_at": "21:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "09:00:00", "end_at": "21:00:00" },
+      { "day_of_the_week": "friday", "start_at": "09:00:00", "end_at": "21:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "10:00:00", "end_at": "18:00:00" }
     ]
   },
   {
-    "username": "psychic2",
-    "email": "psychic2@example.com",
+    "username": "lunasilver",
+    "email": "luna.silver@tarot.com",
     "is_verified": true,
-    "bio": "Guides clients through career and life path questions.",
-    "price_per_second": 1.0,
+    "bio": "Clairvoyant medium with 15 years of experience. I specialize in love readings, ancestral connections, and spiritual guidance. My guides speak through symbols and vivid imagery. Every session is a journey into the soul's deepest truths.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "tuesday",
-        "start_at": "12:00:00",
-        "end_at": "20:00:00"
-      }
+      { "day_of_the_week": "monday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "wednesday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "friday", "start_at": "12:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic3",
-    "email": "psychic3@example.com",
+    "username": "orionblackwood",
+    "email": "orion.blackwood@tarot.com",
     "is_verified": true,
-    "bio": "Experienced in past life readings and spiritual guidance.",
-    "price_per_second": 1.0,
+    "bio": "Intuitive tarot reader and shadow work guide. I help people navigate life's crossroads with brutal honesty and compassion. Trained in the Marseille tradition with a modern psychological approach. No sugar-coating, just the truth you need to hear.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "wednesday",
-        "start_at": "09:00:00",
-        "end_at": "17:00:00"
-      }
+      { "day_of_the_week": "tuesday", "start_at": "12:00:00", "end_at": "20:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "12:00:00", "end_at": "20:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "14:00:00", "end_at": "22:00:00" }
     ]
   },
   {
-    "username": "psychic4",
-    "email": "psychic4@example.com",
+    "username": "willowrain",
+    "email": "willow.rain@tarot.com",
     "is_verified": true,
-    "bio": "Tarot reader with a focus on clarity and insight.",
-    "price_per_second": 1.0,
+    "bio": "Past life regressionist and soul contract reader. I guide clients through the corridors of their former incarnations to heal recurring patterns. Certified in hypnotic regression therapy and akashic record reading. Every lifetime leaves a fingerprint on your soul.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "thursday",
-        "start_at": "10:00:00",
-        "end_at": "16:00:00"
-      }
+      { "day_of_the_week": "wednesday", "start_at": "09:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "friday", "start_at": "09:00:00", "end_at": "17:00:00" }
     ]
   },
   {
-    "username": "psychic5",
-    "email": "psychic5@example.com",
+    "username": "celestiawinter",
+    "email": "celestia.winter@tarot.com",
     "is_verified": true,
-    "bio": "Specializes in spiritual counseling and meditation guidance.",
-    "price_per_second": 1.0,
+    "bio": "Astrologer and tarot fusion reader. I blend the wisdom of the stars with the symbolism of the cards for deeply layered readings. My specialty is transit forecasting and timing major life events. The cosmos speaks in cycles, and I help you understand the language.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "friday",
-        "start_at": "11:00:00",
-        "end_at": "19:00:00"
-      }
+      { "day_of_the_week": "thursday", "start_at": "10:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "11:00:00", "end_at": "17:00:00" }
     ]
   },
   {
-    "username": "psychic6",
-    "email": "psychic6@example.com",
+    "username": "emberknight",
+    "email": "ember.knight@tarot.com",
     "is_verified": true,
-    "bio": "Focuses on energy healing and aura readings.",
-    "price_per_second": 1.0,
+    "bio": "Spiritual counselor and meditation guide with a passion for helping anxious souls find stillness. I combine Reiki energy work with guided visualization to clear mental blocks. My readings focus on practical spirituality — tools you can actually use in daily life.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "saturday",
-        "start_at": "10:00:00",
-        "end_at": "14:00:00"
-      }
+      { "day_of_the_week": "friday", "start_at": "11:00:00", "end_at": "19:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "10:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "12:00:00", "end_at": "18:00:00" }
     ]
   },
   {
-    "username": "psychic7",
-    "email": "psychic7@example.com",
+    "username": "auroradawn",
+    "email": "aurora.dawn@tarot.com",
     "is_verified": true,
-    "bio": "Helps clients explore intuition and personal growth.",
-    "price_per_second": 1.0,
+    "bio": "Energy healer and aura reader. I see the luminous field around you and can identify blockages before they manifest physically. Trained in Pranic Healing and crystal therapy. My mission is to help you realign with your authentic energetic signature.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "sunday",
-        "start_at": "12:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "saturday", "start_at": "10:00:00", "end_at": "14:00:00" },
+      { "day_of_the_week": "tuesday", "start_at": "14:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic8",
-    "email": "psychic8@example.com",
+    "username": "silasmoone",
+    "email": "silas.moone@tarot.com",
     "is_verified": true,
-    "bio": "Guides on love, relationships, and emotional clarity.",
-    "price_per_second": 1.0,
+    "bio": "Clairsentient empath and intuition coach. I feel what you feel, often before you do. My readings are deeply emotional and therapeutic, helping you untangle the knots in your heart. I also mentor aspiring intuitives in developing their own gift.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "monday",
-        "start_at": "13:00:00",
-        "end_at": "19:00:00"
-      }
+      { "day_of_the_week": "sunday", "start_at": "12:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "monday", "start_at": "15:00:00", "end_at": "21:00:00" }
     ]
   },
   {
-    "username": "psychic9",
-    "email": "psychic9@example.com",
+    "username": "opalhart",
+    "email": "opal.hart@tarot.com",
     "is_verified": true,
-    "bio": "Numerology and astrology expert with years of experience.",
-    "price_per_second": 1.0,
+    "bio": "Love and relationship specialist. Whether you're navigating a breakup, seeking your twin flame, or deepening an existing bond, I provide clear guidance. I use angel oracle cards and mediumship to connect with your highest love outcome.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "tuesday",
-        "start_at": "09:00:00",
-        "end_at": "15:00:00"
-      }
+      { "day_of_the_week": "monday", "start_at": "13:00:00", "end_at": "19:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "09:00:00", "end_at": "15:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "11:00:00", "end_at": "17:00:00" }
     ]
   },
   {
-    "username": "psychic10",
-    "email": "psychic10@example.com",
+    "username": "drakemorrison",
+    "email": "drake.morrison@tarot.com",
     "is_verified": true,
-    "bio": "Clairvoyant psychic focused on personal guidance and clarity.",
-    "price_per_second": 1.0,
+    "bio": "Numerologist and astrological cartographer. Your numbers and birth chart tell a story that most people never learn to read. I decode the mathematics of your existence — life path, expression number, and the cosmic weather affecting your journey right now.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "wednesday",
-        "start_at": "14:00:00",
-        "end_at": "20:00:00"
-      }
+      { "day_of_the_week": "tuesday", "start_at": "09:00:00", "end_at": "15:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "14:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic11",
-    "email": "psychic11@example.com",
+    "username": "ivythorn",
+    "email": "ivy.thorn@tarot.com",
     "is_verified": true,
-    "bio": "Provides tarot and oracle readings to illuminate life choices.",
-    "price_per_second": 1.0,
+    "bio": "Clairvoyant psychic and dream interpreter. Your subconscious speaks in symbols, and I translate its language. I also connect with departed loved ones through mediumship, bringing messages of healing and closure from the other side.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "thursday",
-        "start_at": "08:00:00",
-        "end_at": "16:00:00"
-      }
+      { "day_of_the_week": "wednesday", "start_at": "14:00:00", "end_at": "20:00:00" },
+      { "day_of_the_week": "friday", "start_at": "10:00:00", "end_at": "16:00:00" }
     ]
   },
   {
-    "username": "psychic12",
-    "email": "psychic12@example.com",
+    "username": "raphaelstarr",
+    "email": "raphael.starr@tarot.com",
     "is_verified": true,
-    "bio": "Specialist in chakra balancing and energy healing techniques.",
-    "price_per_second": 1.0,
+    "bio": "Oracle card reader and mystic counselor. Every card pull is a conversation with the divine. I bring warmth, humor, and radical acceptance to every session. My readings feel like talking to an old friend who happens to see the future.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "friday",
-        "start_at": "10:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "thursday", "start_at": "08:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "09:00:00", "end_at": "15:00:00" }
     ]
   },
   {
-    "username": "psychic13",
-    "email": "psychic13@example.com",
+    "username": "selenemare",
+    "email": "selene.mare@tarot.com",
     "is_verified": true,
-    "bio": "Focuses on past life regression and spiritual insight.",
-    "price_per_second": 1.0,
+    "bio": "Chakra healer and crystal intuitive. Each chakra tells a story, and the crystals amplify the truth. I use a combination of vibrational healing, sound therapy, and crystal grids to restore energetic harmony. You'll feel the shift before the session ends.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "saturday",
-        "start_at": "09:00:00",
-        "end_at": "15:00:00"
-      }
+      { "day_of_the_week": "friday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "monday", "start_at": "11:00:00", "end_at": "17:00:00" }
     ]
   },
   {
-    "username": "psychic14",
-    "email": "psychic14@example.com",
+    "username": "jaspercove",
+    "email": "jasper.cove@tarot.com",
     "is_verified": true,
-    "bio": "Mystical guidance for personal growth and understanding.",
-    "price_per_second": 1.0,
+    "bio": "Shamanic practitioner and past life explorer. I use guided journeying and drumming to access non-ordinary states of consciousness. Ancient wisdom traditions inform my practice. If you're ready to meet your soul's true history, I'm your guide.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "sunday",
-        "start_at": "11:00:00",
-        "end_at": "17:00:00"
-      }
+      { "day_of_the_week": "saturday", "start_at": "09:00:00", "end_at": "15:00:00" },
+      { "day_of_the_week": "tuesday", "start_at": "10:00:00", "end_at": "16:00:00" }
     ]
   },
   {
-    "username": "psychic15",
-    "email": "psychic15@example.com",
+    "username": "liliasveil",
+    "email": "lilias.veil@tarot.com",
     "is_verified": true,
-    "bio": "Specializes in spiritual counseling and meditation practices.",
-    "price_per_second": 1.0,
+    "bio": "Psychic medium bridging the veil between worlds. I communicate with spirit guides, angels, and ancestors to bring through messages of guidance and validation. Every session is corroborated by specific details only you would recognize.",
+    "price_per_second": 3.0,
     "availability": [
-      {
-        "day_of_the_week": "monday",
-        "start_at": "12:00:00",
-        "end_at": "20:00:00"
-      }
+      { "day_of_the_week": "sunday", "start_at": "11:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "wednesday", "start_at": "12:00:00", "end_at": "18:00:00" }
     ]
   },
   {
-    "username": "psychic16",
-    "email": "psychic16@example.com",
+    "username": "cassianthorne",
+    "email": "cassian.thorne@tarot.com",
     "is_verified": true,
-    "bio": "Guides clients through career, life, and relationship decisions.",
-    "price_per_second": 1.0,
+    "bio": "Career and life purpose astrologer. Your vocational path is written in the stars, and I help you read the map. With a background in human resources and psychological astrology, I offer a unique blend of practical advice and cosmic timing.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "tuesday",
-        "start_at": "10:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "monday", "start_at": "12:00:00", "end_at": "20:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "10:00:00", "end_at": "18:00:00" }
     ]
   },
   {
-    "username": "psychic17",
-    "email": "psychic17@example.com",
+    "username": "poppyseed",
+    "email": "poppy.seed@tarot.com",
     "is_verified": true,
-    "bio": "Intuitive psychic offering insights on love and personal growth.",
-    "price_per_second": 1.0,
+    "bio": "Nature-based intuitive and herbal magic practitioner. I read the signs in the natural world — the flight of birds, the growth of plants, the phases of the moon. My guidance is earthy, grounded, and deeply connected to the rhythms of the natural world.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "wednesday",
-        "start_at": "09:00:00",
-        "end_at": "17:00:00"
-      }
+      { "day_of_the_week": "tuesday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "09:00:00", "end_at": "15:00:00" }
     ]
   },
   {
-    "username": "psychic18",
-    "email": "psychic18@example.com",
+    "username": "ariannashade",
+    "email": "arianna.shade@tarot.com",
     "is_verified": true,
-    "bio": "Expert in energy healing and spiritual guidance.",
-    "price_per_second": 1.0,
+    "bio": "Shadow work guide and inner child healer. The parts of yourself you hide hold the keys to your liberation. I create a safe container for exploring trauma, breaking generational cycles, and reclaiming your power. Not for the faint of heart, but for the brave.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "thursday",
-        "start_at": "08:00:00",
-        "end_at": "16:00:00"
-      }
+      { "day_of_the_week": "wednesday", "start_at": "09:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "12:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic19",
-    "email": "psychic19@example.com",
+    "username": "felixember",
+    "email": "felix.ember@tarot.com",
     "is_verified": true,
-    "bio": "Tarot and astrology readings to clarify life decisions.",
-    "price_per_second": 1.0,
+    "bio": "Elemental energy worker and Reiki master. Fire, water, air, earth — the elements speak through my hands. I offer distance Reiki sessions and elemental balancing treatments. My approach is gentle, intuitive, and surprisingly powerful.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "friday",
-        "start_at": "10:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "thursday", "start_at": "08:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "friday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "tuesday", "start_at": "13:00:00", "end_at": "19:00:00" }
     ]
   },
   {
-    "username": "psychic20",
-    "email": "psychic20@example.com",
+    "username": "rosethorn",
+    "email": "rose.thorn@tarot.com",
     "is_verified": true,
-    "bio": "Provides intuitive insights and guidance for personal growth.",
-    "price_per_second": 1.0,
+    "bio": "Tarot and astrology fusion reader. I cross-reference your birth chart with every card spread to give you readings that feel tailor-made (because they are). My predictive accuracy is known for being startlingly on-point. Warning: I will call you out.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "saturday",
-        "start_at": "09:00:00",
-        "end_at": "15:00:00"
-      }
+      { "day_of_the_week": "friday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "11:00:00", "end_at": "17:00:00" }
     ]
   },
   {
-    "username": "psychic21",
-    "email": "psychic21@example.com",
+    "username": "briarlunar",
+    "email": "briar.lunar@tarot.com",
     "is_verified": true,
-    "bio": "Focus on love, relationships, and emotional clarity.",
-    "price_per_second": 1.0,
+    "bio": "Moon cycle astrologer and manifesting coach. I work exclusively with lunar energetics — new moons for setting intentions, full moons for release, and eclipses for fateful turns. If you want to align your life with the rhythm of the cosmos, let's talk.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "sunday",
-        "start_at": "12:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "saturday", "start_at": "09:00:00", "end_at": "15:00:00" },
+      { "day_of_the_week": "monday", "start_at": "10:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "wednesday", "start_at": "14:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic22",
-    "email": "psychic22@example.com",
+    "username": "morrigangrey",
+    "email": "morrigan.grey@tarot.com",
     "is_verified": true,
-    "bio": "Spiritual guidance with tarot and clairvoyance expertise.",
-    "price_per_second": 1.0,
+    "bio": "Soul purpose reader and karmic astrologer. Your birth chart reveals not just who you are, but why you're here. I specialize in the karmic nodes, Saturn return analysis, and soul contract interpretation. This is deep-healing work for those ready to evolve.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "monday",
-        "start_at": "09:00:00",
-        "end_at": "17:00:00"
-      }
+      { "day_of_the_week": "sunday", "start_at": "12:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "tuesday", "start_at": "09:00:00", "end_at": "15:00:00" }
     ]
   },
   {
-    "username": "psychic23",
-    "email": "psychic23@example.com",
+    "username": "finndove",
+    "email": "finn.dove@tarot.com",
     "is_verified": true,
-    "bio": "Expert in astrology, numerology, and spiritual counseling.",
-    "price_per_second": 1.0,
+    "bio": "Angel communicator and lightworker. I connect with the angelic realm to bring through messages of hope, guidance, and divine timing. My readings are gentle yet precise, like a warm hug from the universe. You'll leave feeling seen and held.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "tuesday",
-        "start_at": "10:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "monday", "start_at": "09:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "friday", "start_at": "11:00:00", "end_at": "19:00:00" }
     ]
   },
   {
-    "username": "psychic24",
-    "email": "psychic24@example.com",
+    "username": "teagenstorm",
+    "email": "teagen.storm@tarot.com",
     "is_verified": true,
-    "bio": "Focus on past life regression and spiritual insight.",
-    "price_per_second": 1.0,
+    "bio": "Astrologer and horoscope writer. I translate complex astrological transits into actionable daily guidance. My readings focus on timing — when to act, when to wait, when to release. If you've been feeling the cosmic pressure lately, I can tell you why.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "wednesday",
-        "start_at": "11:00:00",
-        "end_at": "19:00:00"
-      }
+      { "day_of_the_week": "tuesday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "09:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "10:00:00", "end_at": "14:00:00" }
     ]
   },
   {
-    "username": "psychic25",
-    "email": "psychic25@example.com",
+    "username": "serafinawells",
+    "email": "serafina.wells@tarot.com",
     "is_verified": true,
-    "bio": "Helps clients with meditation and energy balancing.",
-    "price_per_second": 1.0,
+    "bio": "Psychometry and object reading specialist. I hold your belongings and receive their energetic history. Heirlooms, jewelry, even photographs carry imprints. I also offer soul retrieval and cord-cutting ceremonies for those ready to release what no longer serves them.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "thursday",
-        "start_at": "08:00:00",
-        "end_at": "16:00:00"
-      }
+      { "day_of_the_week": "wednesday", "start_at": "11:00:00", "end_at": "19:00:00" },
+      { "day_of_the_week": "saturday", "start_at": "14:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic26",
-    "email": "psychic26@example.com",
+    "username": "wolframblake",
+    "email": "wolfram.blake@tarot.com",
     "is_verified": true,
-    "bio": "Guides on career, relationships, and spiritual growth.",
-    "price_per_second": 1.0,
+    "bio": "Divination generalist and rune master. I read the bones, the runes, the tea leaves, and the cards. My practice is rooted in Norse traditions with a modern psychological overlay. I believe every symbol carries multiple layers of meaning, and I help you unpack them all.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "friday",
-        "start_at": "09:00:00",
-        "end_at": "17:00:00"
-      }
+      { "day_of_the_week": "thursday", "start_at": "08:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "monday", "start_at": "13:00:00", "end_at": "19:00:00" }
     ]
   },
   {
-    "username": "psychic27",
-    "email": "psychic27@example.com",
+    "username": "hazelfae",
+    "email": "hazel.fae@tarot.com",
     "is_verified": true,
-    "bio": "Mystical guidance for love, life, and clarity.",
-    "price_per_second": 1.0,
+    "bio": "Fae contactee and nature spirit medium. The fae have chosen me as their voice in the human world. I offer a unique perspective on life's challenges through the lens of nature spirits and elemental beings. Expect the unexpected — the fae have a wicked sense of humor.",
+    "price_per_second": 2.0,
     "availability": [
-      {
-        "day_of_the_week": "saturday",
-        "start_at": "10:00:00",
-        "end_at": "14:00:00"
-      }
+      { "day_of_the_week": "friday", "start_at": "09:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "tuesday", "start_at": "11:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "10:00:00", "end_at": "14:00:00" }
     ]
   },
   {
-    "username": "psychic28",
-    "email": "psychic28@example.com",
+    "username": "corvinasharp",
+    "email": "corvina.sharp@tarot.com",
     "is_verified": true,
-    "bio": "Provides insights into personal growth and intuition.",
-    "price_per_second": 1.0,
+    "bio": "Shadow worker and ancestral healer. The wounds of your lineage live in your blood. I help you identify and release inherited patterns that no longer serve you. This is profound, multi-generational healing work that changes not just your life, but your family's future.",
+    "price_per_second": 3.0,
     "availability": [
-      {
-        "day_of_the_week": "sunday",
-        "start_at": "12:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "saturday", "start_at": "10:00:00", "end_at": "14:00:00" },
+      { "day_of_the_week": "monday", "start_at": "14:00:00", "end_at": "20:00:00" }
     ]
   },
   {
-    "username": "psychic29",
-    "email": "psychic29@example.com",
+    "username": "marisolsun",
+    "email": "marisol.sun@tarot.com",
     "is_verified": true,
-    "bio": "Focuses on love, relationships, and spiritual guidance.",
-    "price_per_second": 1.0,
+    "bio": "Tarot mentor and spiritual teacher. I don't just give readings — I teach you to read for yourself. My approach is empowering and educational. I'll help you build a relationship with your own intuition so you can navigate life with confidence between our sessions.",
+    "price_per_second": 1.5,
     "availability": [
-      {
-        "day_of_the_week": "monday",
-        "start_at": "10:00:00",
-        "end_at": "18:00:00"
-      }
+      { "day_of_the_week": "tuesday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "08:00:00", "end_at": "16:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "12:00:00", "end_at": "16:00:00" }
     ]
   },
   {
-    "username": "psychic30",
-    "email": "psychic30@example.com",
+    "username": "indigowren",
+    "email": "indigo.wren@tarot.com",
     "is_verified": true,
-    "bio": "Experienced in tarot, astrology, and intuitive guidance.",
-    "price_per_second": 1.0,
+    "bio": "Indigo child turned conscious channel. I channel ascended masters and spirit guides who offer collective and personal guidance. My readings are transmissions of light codes that activate knowing in your cells. You'll understand things you never learned.",
+    "price_per_second": 2.5,
     "availability": [
-      {
-        "day_of_the_week": "tuesday",
-        "start_at": "09:00:00",
-        "end_at": "17:00:00"
-      }
+      { "day_of_the_week": "monday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "13:00:00", "end_at": "19:00:00" }
+    ]
+  },
+  {
+    "username": "silverfoxx",
+    "email": "silver.foxx@tarot.com",
+    "is_verified": true,
+    "bio": "Elder mystic with 40+ years of practice. I've read for thousands across five continents. My approach combines wisdom traditions from around the world. I pull no punches, I fluff no feathers, and I've seen enough to know what's real. Experience speaks volumes.",
+    "price_per_second": 3.5,
+    "availability": [
+      { "day_of_the_week": "tuesday", "start_at": "09:00:00", "end_at": "17:00:00" },
+      { "day_of_the_week": "thursday", "start_at": "10:00:00", "end_at": "16:00:00" }
+    ]
+  },
+  {
+    "username": "vesperlane",
+    "email": "vesper.lane@tarot.com",
+    "is_verified": true,
+    "bio": "Twilight reader and liminal space guide. I work best at the threshold between worlds — dusk, dawn, the space between heartbeats. My readings are poetic, intuitive, and deeply atmospheric. If you need a reader who thinks in metaphors and sees in shadows, I'm your guide.",
+    "price_per_second": 2.0,
+    "availability": [
+      { "day_of_the_week": "friday", "start_at": "10:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "sunday", "start_at": "12:00:00", "end_at": "18:00:00" },
+      { "day_of_the_week": "wednesday", "start_at": "14:00:00", "end_at": "20:00:00" }
     ]
   }
 ]

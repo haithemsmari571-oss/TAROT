@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "../../../features/auth/hooks";
 import { UserRole } from "../../../features/auth/types/auth.types";
 import {
@@ -34,16 +34,24 @@ const AdminView = () => {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState("30D");
   const [searchQuery, setSearchQuery] = useState("");
+  const [psychicsPage, setPsychicsPage] = useState(1);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const psychicsCardRef = useRef<HTMLDivElement>(null);
+  const transactionsCardRef = useRef<HTMLDivElement>(null);
+  const [matchedHeight, setMatchedHeight] = useState<number | null>(null);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [psychicsPage, transactionsPage]);
 
   const fetchStats = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await dashboardApi.getAdminStats();
+      const data = await dashboardApi.getAdminStats({
+        psychics_page: psychicsPage,
+        transactions_page: transactionsPage,
+      });
       setStats(data);
     } catch (err: any) {
       setError(err.response?.data?.message || err.response?.data?.detail || err.message || "Failed to load dashboard.");
@@ -62,8 +70,8 @@ const AdminView = () => {
   }, [stats, timeRange]);
 
   const filteredPsychics = useMemo(() => {
-    if (!stats?.topPsychics) return [];
-    return stats.topPsychics.filter((p) =>
+    if (!stats?.topPsychics?.items) return [];
+    return stats.topPsychics.items.filter((p) =>
       p.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [stats, searchQuery]);
@@ -78,6 +86,19 @@ const AdminView = () => {
       { label: "Active Chats", val: formatNumber(activeChats), icon: "solar:chat-round-line-bold-duotone", color: COLORS.primaryLight },
     ];
   }, [stats]);
+
+  useEffect(() => {
+    const psychicsEl = psychicsCardRef.current;
+    const transactionsEl = transactionsCardRef.current;
+    if (!psychicsEl || !transactionsEl) return;
+    requestAnimationFrame(() => {
+      const ph = psychicsEl.offsetHeight;
+      const th = transactionsEl.offsetHeight;
+      if (ph > 0 && th > 0) {
+        setMatchedHeight(Math.min(ph, th));
+      }
+    });
+  }, [stats, psychicsPage, transactionsPage, searchQuery, filteredPsychics.length]);
 
   if (loading && !stats) {
     return (
@@ -256,15 +277,24 @@ const AdminView = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="p-10 rounded-[56px]" style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.neutralDarkGray}` }}>
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        <div
+          ref={psychicsCardRef}
+          className="flex-1 flex flex-col p-10 rounded-[56px]"
+          style={{
+            backgroundColor: COLORS.surface,
+            border: `1px solid ${COLORS.neutralDarkGray}`,
+            height: matchedHeight || 'auto',
+            overflow: 'hidden',
+          }}
+        >
           <div className="flex items-center justify-between mb-10">
             <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }} className="text-3xl font-black italic uppercase tracking-tighter">
               Top <span style={{ color: COLORS.neutralGray }}>Psychics</span>
             </h2>
-            <span className="text-[10px] font-black uppercase" style={{ color: COLORS.neutralGray }}>{stats?.topPsychics.length || 0} leaders</span>
+            <span className="text-[10px] font-black uppercase" style={{ color: COLORS.neutralGray }}>{stats?.topPsychics.total || 0} total</span>
           </div>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto min-h-0 space-y-4">
             <AnimatePresence mode="popLayout">
               {filteredPsychics.map((p) => (
                 <motion.div
@@ -293,14 +323,60 @@ const AdminView = () => {
               ))}
             </AnimatePresence>
           </div>
+          {stats && (
+            <div className="flex items-center justify-center gap-4 mt-8">
+              <button
+                onClick={() => setPsychicsPage((p) => Math.max(1, p - 1))}
+                disabled={psychicsPage <= 1}
+                className="p-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-20 hover:opacity-80"
+                style={{ backgroundColor: COLORS.surfaceAccent, border: `1px solid ${COLORS.neutralDarkGray}`, color: COLORS.neutralGray }}
+              >
+                <Icon icon="solar:alt-arrow-left-bold" className="text-lg" />
+              </button>
+              {Array.from(
+                { length: Math.ceil(stats.topPsychics.total / stats.topPsychics.perPage) },
+                (_, i) => i + 1
+              ).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setPsychicsPage(page)}
+                  className="min-w-[40px] h-10 rounded-2xl text-sm font-black transition-all"
+                  style={{
+                    backgroundColor: psychicsPage === page ? COLORS.primary : 'transparent',
+                    border: `1px solid ${psychicsPage === page ? COLORS.primary : COLORS.neutralDarkGray}`,
+                    color: psychicsPage === page ? COLORS.neutralWhite : COLORS.neutralGray,
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setPsychicsPage((p) => p + 1)}
+                disabled={psychicsPage >= Math.ceil(stats.topPsychics.total / stats.topPsychics.perPage)}
+                className="p-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-20 hover:opacity-80"
+                style={{ backgroundColor: COLORS.surfaceAccent, border: `1px solid ${COLORS.neutralDarkGray}`, color: COLORS.neutralGray }}
+              >
+                <Icon icon="solar:alt-arrow-right-bold" className="text-lg" />
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="p-10 rounded-[56px] flex flex-col" style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.neutralDarkGray}` }}>
+        <div
+          ref={transactionsCardRef}
+          className="flex-1 flex flex-col p-10 rounded-[56px]"
+          style={{
+            backgroundColor: COLORS.surface,
+            border: `1px solid ${COLORS.neutralDarkGray}`,
+            height: matchedHeight || 'auto',
+            overflow: 'hidden',
+          }}
+        >
           <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }} className="text-3xl font-black italic uppercase tracking-tighter mb-10 leading-none">
             Recent <span style={{ color: COLORS.neutralGray }}>Activity</span>
           </h2>
-          <div className="flex-1 space-y-6">
-            {stats?.recentTransactions.slice(0, 10).map((t) => (
+          <div className="flex-1 overflow-y-auto min-h-0 space-y-6">
+            {stats?.recentTransactions.items.map((t) => (
               <div key={t.id} className="flex items-start gap-5 p-5 rounded-3xl" style={{ border: `1px solid ${COLORS.neutralDarkGray}30`, backgroundColor: `${COLORS.surfaceAccent}60` }}>
                 <div
                   className="w-1.5 h-10 rounded-full shrink-0"
@@ -322,10 +398,47 @@ const AdminView = () => {
                 </div>
               </div>
             ))}
-            {(!stats?.recentTransactions || stats.recentTransactions.length === 0) && (
+            {(!stats?.recentTransactions.items || stats.recentTransactions.items.length === 0) && (
               <p className="text-[10px] font-black uppercase tracking-widest text-center py-12" style={{ color: COLORS.neutralGray }}>No recent transactions</p>
             )}
           </div>
+          {stats && (
+            <div className="flex items-center justify-center gap-4 mt-8">
+              <button
+                onClick={() => setTransactionsPage((p) => Math.max(1, p - 1))}
+                disabled={transactionsPage <= 1}
+                className="p-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-20 hover:opacity-80"
+                style={{ backgroundColor: COLORS.surfaceAccent, border: `1px solid ${COLORS.neutralDarkGray}`, color: COLORS.neutralGray }}
+              >
+                <Icon icon="solar:alt-arrow-left-bold" className="text-lg" />
+              </button>
+              {Array.from(
+                { length: Math.ceil(stats.recentTransactions.total / stats.recentTransactions.perPage) },
+                (_, i) => i + 1
+              ).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setTransactionsPage(page)}
+                  className="min-w-[40px] h-10 rounded-2xl text-sm font-black transition-all"
+                  style={{
+                    backgroundColor: transactionsPage === page ? COLORS.primary : 'transparent',
+                    border: `1px solid ${transactionsPage === page ? COLORS.primary : COLORS.neutralDarkGray}`,
+                    color: transactionsPage === page ? COLORS.neutralWhite : COLORS.neutralGray,
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setTransactionsPage((p) => p + 1)}
+                disabled={transactionsPage >= Math.ceil(stats.recentTransactions.total / stats.recentTransactions.perPage)}
+                className="p-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-20 hover:opacity-80"
+                style={{ backgroundColor: COLORS.surfaceAccent, border: `1px solid ${COLORS.neutralDarkGray}`, color: COLORS.neutralGray }}
+              >
+                <Icon icon="solar:alt-arrow-right-bold" className="text-lg" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

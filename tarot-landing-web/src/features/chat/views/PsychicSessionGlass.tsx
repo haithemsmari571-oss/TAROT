@@ -43,6 +43,7 @@ const PsychicSessionGlass = () => {
   >("ALL");
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showSessionSummaryModal, setShowSessionSummaryModal] = useState(false);
   const [sessionSummaryData, setSessionSummaryData] = useState({
     duration: 0,
@@ -686,9 +687,13 @@ const PsychicSessionGlass = () => {
   };
 
   const filteredChats =
-    activeTab === "ALL"
+    (activeTab === "ALL"
       ? chats
-      : chats.filter((chat) => chat.status === activeTab);
+      : chats.filter((chat) => chat.status === activeTab)
+    ).filter((chat) =>
+      (chat.user_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (chat.psychic_name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const formatTime = (totalSeconds: number | null | undefined) => {
     const secs = totalSeconds || 0;
@@ -834,10 +839,7 @@ const PsychicSessionGlass = () => {
 
             {/* Admin Mode Banner */}
             {isAdmin && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+              <div
                 className="mb-6 px-6 py-4 rounded-2xl backdrop-blur-xl border flex items-center gap-3"
                 style={{
                   background: `linear-gradient(135deg, ${COLORS.starGold}20 0%, ${COLORS.starGold}10 100%)`,
@@ -854,14 +856,37 @@ const PsychicSessionGlass = () => {
                     You can view, accept, reject, and manage all psychic chats
                   </span>
                 </div>
-              </motion.div>
+              </div>
             )}
 
+            {/* Search Bar */}
+            <div className="relative mb-6">
+              <Icon icon="solar:magnifer-linear" className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: COLORS.neutralGray }} />
+              <input
+                type="text"
+                placeholder="Search by username..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-12 py-3.5 rounded-2xl text-sm outline-none transition-all backdrop-blur-xl border"
+                style={{
+                  backgroundColor: `${COLORS.surface}DD`,
+                  borderColor: `${COLORS.neutralDarkGray}50`,
+                  color: COLORS.neutralWhite,
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-lg"
+                  style={{ color: COLORS.neutralGray }}
+                >
+                  <Icon icon="solar:close-circle-bold" />
+                </button>
+              )}
+            </div>
+
             {/* Tabs with enhanced design */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+            <div
               className="relative mb-8 p-1.5 rounded-2xl backdrop-blur-xl border overflow-hidden"
               style={{
                 background: `linear-gradient(135deg, ${COLORS.surface}DD 0%, ${COLORS.surfaceAccent}AA 100%)`,
@@ -881,11 +906,9 @@ const PsychicSessionGlass = () => {
 
               <div className="relative flex gap-2">
                 {tabs.map((tab, index) => (
-                  <motion.button
+                  <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                     className="flex-1 px-6 py-4 rounded-xl transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 relative overflow-hidden"
                     style={{
                       backgroundColor:
@@ -901,21 +924,17 @@ const PsychicSessionGlass = () => {
                     }}
                   >
                     {activeTab === tab.key && (
-                      <motion.div
-                        layoutId="activeTab"
+                      <div
                         className="absolute inset-0"
                         style={{
                           background: `linear-gradient(135deg, ${COLORS.primary}FF 0%, ${COLORS.primary}DD 100%)`,
                           borderRadius: "12px",
                         }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
                       />
                     )}
                     <span className="relative z-10">{tab.label}</span>
                     {tab.count > 0 && (
-                      <motion.span
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
+                      <span
                         className="relative z-10 min-w-[20px] h-5 px-1.5 rounded-full text-[9px] font-black flex items-center justify-center"
                         style={{
                           backgroundColor:
@@ -933,19 +952,16 @@ const PsychicSessionGlass = () => {
                         }}
                       >
                         {tab.count}
-                      </motion.span>
+                      </span>
                     )}
-                  </motion.button>
+                  </button>
                 ))}
               </div>
-            </motion.div>
+            </div>
 
-            {/* Chat List with stagger animation */}
+            {/* Chat List */}
             {filteredChats.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.4 }}
+              <div
                 className="p-20 rounded-3xl backdrop-blur-xl border text-center relative overflow-hidden"
                 style={{
                   background: `linear-gradient(135deg, ${COLORS.surface}DD 0%, ${COLORS.surfaceAccent}AA 100%)`,
@@ -960,22 +976,11 @@ const PsychicSessionGlass = () => {
                     backgroundSize: "30px 30px",
                   }}
                 />
-                <motion.div
-                  animate={{
-                    y: [0, -10, 0],
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                >
-                  <Icon
-                    icon="solar:chat-line-bold-duotone"
-                    className="text-7xl mx-auto mb-6"
-                    style={{ color: COLORS.neutralGray, opacity: 0.5 }}
-                  />
-                </motion.div>
+                <Icon
+                  icon="solar:chat-line-bold-duotone"
+                  className="text-7xl mx-auto mb-6"
+                  style={{ color: COLORS.neutralGray, opacity: 0.5 }}
+                />
                 <p className="text-white/70 text-base font-bold mb-2">
                   No {activeTab.toLowerCase()} sessions
                 </p>
@@ -983,34 +988,23 @@ const PsychicSessionGlass = () => {
                   className="text-[10px] uppercase tracking-widest font-black"
                   style={{ color: COLORS.neutralGray, opacity: 0.5 }}
                 >
-                  Your queue is clear
+                  {searchQuery ? "Try a different search" : "Your queue is clear"}
                 </p>
-              </motion.div>
+              </div>
             ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="space-y-4"
-              >
-                {filteredChats.map((chat, index) => (
-                  <motion.div
+              <div className="space-y-4">
+                {filteredChats.map((chat) => (
+                  <GlassChatListItem
                     key={chat.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.05 * index, duration: 0.3 }}
-                  >
-                    <GlassChatListItem
-                      chat={chat}
-                      onAccept={() => handleAcceptChat(chat.id)}
-                      onDeny={() => handleDenyChat(chat.id)}
-                      onEnter={() => handleEnterChat(chat.id)}
-                      isProcessing={processingChats.has(chat.id)}
-                      isPsychic={user?.role === "PSYCHIC" || isAdmin}
-                    />
-                  </motion.div>
+                    chat={chat}
+                    onAccept={() => handleAcceptChat(chat.id)}
+                    onDeny={() => handleDenyChat(chat.id)}
+                    onEnter={() => handleEnterChat(chat.id)}
+                    isProcessing={processingChats.has(chat.id)}
+                    isPsychic={user?.role === "PSYCHIC" || isAdmin}
+                  />
                 ))}
-              </motion.div>
+              </div>
             )}
           </motion.div>
         ) : (

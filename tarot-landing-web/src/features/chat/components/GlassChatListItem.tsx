@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS } from "../../../theme";
 
@@ -52,9 +51,7 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
   const statusIcon = getStatusIcon(chat.status);
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.01, y: -2 }}
-      whileTap={{ scale: 0.99 }}
+    <div
       className="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-300 cursor-pointer overflow-hidden"
       style={{
         background: `linear-gradient(135deg, ${COLORS.surface}EE 0%, ${COLORS.surfaceAccent}BB 100%)`,
@@ -107,9 +104,7 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
             </div>
             
             {/* Status indicator badge */}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
+            <div
               className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2"
               style={{
                 backgroundColor: COLORS.dark,
@@ -123,7 +118,7 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
                   animation: chat.status === "ACTIVE" ? "pulse 2s ease-in-out infinite" : "none",
                 }}
               />
-            </motion.div>
+            </div>
           </div>
 
           <div className="flex-1 min-w-0">
@@ -132,16 +127,13 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
                 {displayName}
               </h3>
               {chat.status === "REQUESTED" && (
-                <motion.div
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
+                <div>
                   <Icon
                     icon="solar:star-bold"
                     className="text-xs"
                     style={{ color: COLORS.primary }}
                   />
-                </motion.div>
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -192,9 +184,7 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {chat.status === "REQUESTED" && (
             <>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              <button
                 onClick={onAccept}
                 disabled={isProcessing}
                 className="px-5 py-2.5 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 relative overflow-hidden"
@@ -213,10 +203,8 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
                 />
                 <Icon icon="solar:check-circle-bold-duotone" className="text-base relative z-10" />
                 <span className="relative z-10">{isProcessing ? "Processing..." : "Accept"}</span>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              </button>
+              <button
                 onClick={onDeny}
                 disabled={isProcessing}
                 className="px-5 py-2.5 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -228,14 +216,12 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
               >
                 <Icon icon="solar:close-circle-bold-duotone" className="text-base" />
                 Decline
-              </motion.button>
+              </button>
             </>
           )}
 
           {chat.status === "ACTIVE" && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            <button
               onClick={onEnter}
               className="px-6 py-2.5 rounded-xl border-2 transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 relative overflow-hidden"
               style={{
@@ -253,13 +239,11 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
               />
               <Icon icon="solar:chat-round-line-bold-duotone" className="text-base relative z-10" />
               <span className="relative z-10">Enter Session</span>
-            </motion.button>
+            </button>
           )}
 
           {chat.status === "ENDED" && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            <button
               onClick={onEnter}
               className="px-5 py-2.5 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
               style={{
@@ -270,10 +254,10 @@ export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
             >
               <Icon icon="solar:eye-bold-duotone" className="text-base" />
               View History
-            </motion.button>
+            </button>
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
