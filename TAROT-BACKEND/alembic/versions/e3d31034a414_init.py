@@ -1,8 +1,8 @@
 """init
 
-Revision ID: 800357d125e5
+Revision ID: e3d31034a414
 Revises: 
-Create Date: 2026-05-11 13:46:22.439316
+Create Date: 2026-05-12 11:58:04.522901
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '800357d125e5'
+revision: str = 'e3d31034a414'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -38,6 +38,15 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('title')
+    )
+    op.create_table('landing_content',
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('section', sa.String(), nullable=False),
+    sa.Column('content', sa.JSON(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('section')
     )
     op.create_table('life_path_numbers',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
@@ -260,6 +269,7 @@ def downgrade() -> None:
     op.drop_table('users')
     op.drop_table('settings')
     op.drop_table('life_path_numbers')
+    op.drop_table('landing_content')
     op.drop_table('categories')
     op.drop_table('buy_options')
     # ### end Alembic commands ###

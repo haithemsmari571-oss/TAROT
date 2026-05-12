@@ -1,18 +1,34 @@
 import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import axiosClient from "../../../lib/axiosClient";
 
-const TESTIMONIALS = [
-  { name: "Aria Vance", role: "Soul Seeker", content: "The Two-Fold Truth reading felt like she was reading the very blueprint of my heart.", x: "15%", y: "20%", depth: 1.2 },
-  { name: "Julian Thorne", role: "Returning Client", content: "Deep Soul Access is an understatement. The 10 questions covered every corner of my life.", x: "65%", y: "15%", depth: 0.8 },
-  { name: "Elena Rossi", role: "Artist", content: "A Whisper Message was all I needed. Short, piercingly accurate, and delivered with grace.", x: "40%", y: "50%", depth: 1.5 },
-  { name: "Marcus K.", role: "Mentor", content: "Rarely do I find an intuitive with this level of raw, unfiltered accuracy. No fluff.", x: "10%", y: "70%", depth: 0.9 },
-  { name: "Sasha L.", role: "Seeker", content: "The channeled card spread is now my daily meditation. It speaks to me daily.", x: "70%", y: "75%", depth: 1.1 },
+const DEFAULT_TESTIMONIALS = [
+  { name: "Aria Vance", role: "Soul Seeker", content: "The Two-Fold Truth reading felt like she was reading the very blueprint of my heart." },
+  { name: "Julian Thorne", role: "Returning Client", content: "Deep Soul Access is an understatement. The 10 questions covered every corner of my life." },
+  { name: "Elena Rossi", role: "Artist", content: "A Whisper Message was all I needed. Short, piercingly accurate, and delivered with grace." },
+  { name: "Marcus K.", role: "Mentor", content: "Rarely do I find an intuitive with this level of raw, unfiltered accuracy. No fluff." },
+  { name: "Sasha L.", role: "Seeker", content: "The channeled card spread is now my daily meditation. It speaks to me daily." },
+];
+
+const POSITIONS = [
+  { x: "15%", y: "20%", depth: 1.2 },
+  { x: "65%", y: "15%", depth: 0.8 },
+  { x: "40%", y: "50%", depth: 1.5 },
+  { x: "10%", y: "70%", depth: 0.9 },
+  { x: "70%", y: "75%", depth: 1.1 },
 ];
 
 const TestimonialCarousel = () => {
   const containerRef = useRef(null);
+  const [testimonials, setTestimonials] = useState(DEFAULT_TESTIMONIALS);
+
+  useEffect(() => {
+    axiosClient.get("/landing/testimonials").then((res) => {
+      if (res.data?.content?.testimonials) setTestimonials(res.data.content.testimonials);
+    }).catch(() => {});
+  }, []);
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start end", "end start"],
@@ -32,10 +48,10 @@ const TestimonialCarousel = () => {
 
       {/* 2. THE FLOATING FIELD */}
       <div className="absolute inset-0 z-10 w-full h-full">
-        {TESTIMONIALS.map((item, idx) => (
+        {testimonials.slice(0, POSITIONS.length).map((item, idx) => (
           <FloatingCard 
             key={idx} 
-            data={item} 
+            data={{ ...item, ...POSITIONS[idx] }} 
             progress={smoothProgress} 
           />
         ))}

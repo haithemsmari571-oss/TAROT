@@ -16,3 +16,8 @@ class SettingUpdate(BaseModel):
 
 class SettingsListResponse(BaseModel):
     settings: list[SettingResponse]
+
+
+class PublicSettingsResponse(BaseModel):
+    privacy_policy: str
+    terms_of_service: str

@@ -27,6 +27,8 @@ from app.routers import (
     admin_transaction_router,
     admin_psychic_router,
     dashboard_router,
+    landing_router,
+    public_settings_router,
 )
 import app.models
 
@@ -195,6 +197,18 @@ app.include_router(
     dashboard_router,
     prefix="/admin",
     tags=["Admin - Dashboard"],
+)
+
+app.include_router(
+    landing_router,
+    prefix="",
+    tags=["Landing Content"],
+)
+
+app.include_router(
+    public_settings_router,
+    prefix="",
+    tags=["Public Settings"],
 )
 
 

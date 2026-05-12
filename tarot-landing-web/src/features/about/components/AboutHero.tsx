@@ -1,7 +1,12 @@
 import { motion } from "framer-motion";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import type { AboutContent } from "../../landing-editor/types/landingEditor.types";
 
-const AboutHero = () => {
+interface AboutHeroProps {
+  content: AboutContent;
+}
+
+const AboutHero = ({ content }: AboutHeroProps) => {
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -39,7 +44,7 @@ const AboutHero = () => {
 
       <motion.div variants={itemVariants} className="relative z-10 space-y-2">
         <span className="text-[10px] font-black uppercase tracking-[0.8em] text-primary/60">
-          The Foundation
+          {content.badge}
         </span>
         <h1 
           style={{ 
@@ -48,7 +53,7 @@ const AboutHero = () => {
           }} 
           className="text-7xl md:text-[10rem] font-black uppercase tracking-tighter text-white"
         >
-          OUR <span className="italic font-light" style={{ color: COLORS.primary }}>ETHOS</span>
+          {content.title} <span className="italic font-light" style={{ color: COLORS.primary }}>{content.titleHighlighted}</span>
         </h1>
       </motion.div>
 
@@ -60,10 +65,10 @@ const AboutHero = () => {
         
         <div className="space-y-2">
           <p className="text-white/30 uppercase tracking-[0.5em] text-[10px] font-bold">
-            Established 2026
+            {content.established}
           </p>
           <p className="text-white/10 uppercase tracking-[0.3em] text-[9px]">
-            Guided by the absolute resonance of the stars
+            {content.tagline}
           </p>
         </div>
       </motion.div>
@@ -71,12 +76,12 @@ const AboutHero = () => {
       {/* Side Decorative Tags - Minimalist Editorial Touch */}
       <div className="absolute left-0 top-1/2 -rotate-90 origin-left hidden lg:block">
         <span className="text-[8px] font-black uppercase tracking-[0.5em] text-white/10">
-          Celestial Navigation System v1.0
+          {content.leftTag}
         </span>
       </div>
       <div className="absolute right-0 top-1/2 rotate-90 origin-right hidden lg:block">
         <span className="text-[8px] font-black uppercase tracking-[0.5em] text-white/10">
-          Deciphering the Void
+          {content.rightTag}
         </span>
       </div>
     </motion.header>

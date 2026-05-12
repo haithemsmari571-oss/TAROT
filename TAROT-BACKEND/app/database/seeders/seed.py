@@ -31,6 +31,7 @@ from app.models.session_intervals import SessionInterval
 from app.models.transaction import Transaction
 from app.models.review import Review
 from app.models.buy_option import BuyOption
+from app.models.landing_content import LandingContent
 from app.utils.security import hash_password
 from app.utils.zodiac_calculator import (
     calculate_compatibility_percentages,
@@ -480,6 +481,20 @@ def seed_reviews(db: Session, reviews_list: List[Dict]):
     db.flush()
 
 
+def seed_landing_content(db: Session, landing_list: List[Dict]):
+    for entry_data in landing_list:
+        section = entry_data.get("section")
+        existing = (
+            db.query(LandingContent).filter(LandingContent.section == section).first()
+        )
+        if not existing:
+            entry = LandingContent(
+                section=section,
+                content=entry_data.get("content", {}),
+            )
+            db.add(entry)
+
+
 def seed_buy_options(db: Session, buy_options_list: List[Dict]):
     for opt_data in buy_options_list:
         existing = (
@@ -567,6 +582,11 @@ def seed_all():
         buy_options_list = seed_data.get("buy_options", [])
         seed_buy_options(db, buy_options_list)
         print("[SEED] Buy options seeded")
+
+        # Seed landing content
+        landing_list = seed_data.get("landing_content", [])
+        seed_landing_content(db, landing_list)
+        print("[SEED] Landing content seeded")
 
         db.commit()
         print("[SEED] All data seeded successfully!")

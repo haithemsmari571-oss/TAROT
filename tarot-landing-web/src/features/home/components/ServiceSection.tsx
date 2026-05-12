@@ -1,17 +1,36 @@
 import { motion, useScroll, useTransform, useSpring, useMotionValue } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import axiosClient from "../../../lib/axiosClient";
 
-const TAROT_CARDS = [
-  { icon: "ph:star-four-fill", title: "Personal\nReading", desc: "Direct answers to your specific soul questions. Focused clarity for immediate crossroads.", delay: 0.1, rotate: -4, yOffset: 25, energy: "High Focus" },
-  { icon: "ph:eye-closed-fill", title: "Deep\nInsight", desc: "An intuitive dive into your current energy cycle. Uncover subconscious patterns.", delay: 0.2, rotate: -1.5, yOffset: 0, energy: "Deep Flow" },
-  { icon: "ph:lightning-fill", title: "Fast\nReply", desc: "Urgent clarity delivered within 24–48 hours. High-priority divine intervention.", delay: 0.3, rotate: 1.5, yOffset: 0, energy: "Rapid" },
-  { icon: "mdi:crystal-ball", title: "Divine\nPath", desc: "Long-term guidance for your spiritual journey. A map for your soul's evolution.", delay: 0.4, rotate: 4, yOffset: 25, energy: "Eternal" },
-];
+const DEFAULT_SERVICES = {
+  badge: "The Sacred Offerings",
+  heading: "What you'll",
+  headingHighlighted: "Receive",
+  cards: [
+    { icon: "ph:star-four-fill", title: "Personal\nReading", desc: "Direct answers to your specific soul questions. Focused clarity for immediate crossroads.", energy: "High Focus" },
+    { icon: "ph:eye-closed-fill", title: "Deep\nInsight", desc: "An intuitive dive into your current energy cycle. Uncover subconscious patterns.", energy: "Deep Flow" },
+    { icon: "ph:lightning-fill", title: "Fast\nReply", desc: "Urgent clarity delivered within 24\u201348 hours. High-priority divine intervention.", energy: "Rapid" },
+    { icon: "mdi:crystal-ball", title: "Divine\nPath", desc: "Long-term guidance for your spiritual journey. A map for your soul's evolution.", energy: "Eternal" },
+  ],
+  cta: "Claim Your Destiny",
+  stats: [
+    { label: "Turnaround", value: "24-48 Hours" },
+    { label: "Channel", value: "Digital Link" },
+    { label: "Format", value: "Video/PDF" },
+  ],
+};
 
 const ServiceSection = () => {
   const containerRef = useRef(null);
+  const [content, setContent] = useState(DEFAULT_SERVICES);
+
+  useEffect(() => {
+    axiosClient.get("/landing/services").then((res) => {
+      if (res.data?.content) setContent({ ...DEFAULT_SERVICES, ...res.data.content });
+    }).catch(() => {});
+  }, []);
   
   // Mouse Tracking for Background Interactivity
   const mouseX = useMotionValue(0);
@@ -93,14 +112,14 @@ const ServiceSection = () => {
             className="flex items-center gap-3 px-6 py-2 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-xl mb-10 shadow-2xl"
           >
         
-            <span className="text-[10px] font-black tracking-[0.5em] uppercase text-white/50">The Sacred Offerings</span>
+            <span className="text-[10px] font-black tracking-[0.5em] uppercase text-white/50">{content.badge}</span>
           </motion.div>
           
           <h2 
             style={{ ...TYPOGRAPHY.headings.h2, fontSize: "clamp(2.8rem, 8vw, 5rem)", color: COLORS.neutralWhite }}
             className="mb-8 tracking-tighter"
           >
-            What you'll <span style={{ color: COLORS.primary, filter: `drop-shadow(0 0 15px ${COLORS.primary}40)` }}>Receive</span>
+            {content.heading} <span style={{ color: COLORS.primary, filter: `drop-shadow(0 0 15px ${COLORS.primary}40)` }}>{content.headingHighlighted}</span>
           </h2>
           
        
@@ -108,16 +127,16 @@ const ServiceSection = () => {
 
         {/* 3. INTERACTIVE TAROT SPREAD */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
-          {TAROT_CARDS.map((card, i) => (
+          {content.cards.map((card, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 100 }}
-              whileInView={{ opacity: 1, y: card.yOffset }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-              style={{ rotate: card.rotate }}
+              style={{ rotate: i === 0 ? -4 : i === 1 ? -1.5 : i === 2 ? 1.5 : 4 }}
               whileHover={{ 
-                y: card.yOffset - 40, 
+                y: -40, 
                 rotate: 0, 
                 scale: 1.05,
                 transition: { type: "spring", stiffness: 400, damping: 20 } 
@@ -201,19 +220,15 @@ const ServiceSection = () => {
                 className="relative px-20 py-7 rounded-2xl font-bold text-[13px] tracking-[0.6em] uppercase transition-all shadow-2xl flex items-center gap-6"
                 style={{ backgroundColor: COLORS.secondary, color: COLORS.dark }}
               >
-                Claim Your Destiny
+                 {content.cta}
               </motion.button>
           </div>
           
           <div className="flex gap-16 text-center">
-            {[
-              { label: "Turnaround", val: "24-48 Hours" },
-              { label: "Channel", val: "Digital Link" },
-              { label: "Format", val: "Video/PDF" }
-            ].map((stat, idx) => (
+            {content.stats.map((stat, idx) => (
               <div key={idx} className="flex flex-col gap-1">
                 <span className="text-[9px] font-black tracking-widest text-white/20 uppercase">{stat.label}</span>
-                <span className="text-xs font-light" style={{ color: COLORS.secondary }}>{stat.val}</span>
+                <span className="text-xs font-light" style={{ color: COLORS.secondary }}>{stat.value}</span>
               </div>
             ))}
           </div>

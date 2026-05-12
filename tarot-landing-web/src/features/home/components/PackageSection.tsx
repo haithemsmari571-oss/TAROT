@@ -1,48 +1,60 @@
 import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import CoverImg from "../../../assets/Cover.png"; 
+import axiosClient from "../../../lib/axiosClient";
 
-const PACKAGES = [
-  {
-    id: 1,
-    symbol: "🜂",
-    title: "Whisper Message",
-    price: "15",
-    tagline: "A quiet message from spirit, just for you.",
-    features: ["1 Psychic Question Answered", "Clear and honest intuitive insight", "Energy-focused response"],
-    footer: "Perfect for when you need one clear answer.",
-    cta: "Receive My Whisper Message",
-    popular: false
-  },
-  {
-    id: 2,
-    symbol: "🜁",
-    title: "Two-Fold Truth",
-    price: "20",
-    tagline: "Double the clarity. Double the alignment.",
-    features: ["2 Psychic Questions Answered", "Additional energy message", "Expanded soul-connected detail"],
-    footer: "For those pulled between two options or paths.",
-    cta: "Reveal My Two-Fold Truth",
-    popular: true,
-    label: "Most Chosen by Returning Clients"
-  },
-  {
-    id: 3,
-    symbol: "🜃",
-    title: "Deep Soul Access",
-    price: "70",
-    tagline: "Your full energetic reading — raw and real.",
-    features: ["Ask up to 10 questions", "Full spiritual overview (Audio/Written)", "Channeled card spread image", "1 Follow-up question (48h)"],
-    footer: "Unlock deep guidance and the full picture.",
-    cta: "Access Deep Soul Reading",
-    popular: false
-  }
-];
+const SYMBOLS_LIST = ["\uD83D\uDD02", "\uD83D\uDD01", "\uD83D\uDD03"];
+
+const DEFAULT_PACKAGES = {
+  badge: "The Sacred Offerings",
+  heading: "Choose the",
+  headingHighlighted: "Depth",
+  subheading: "of Your Insight",
+  packages: [
+    {
+      title: "Whisper Message",
+      price: "15",
+      tagline: "A quiet message from spirit, just for you.",
+      features: ["1 Psychic Question Answered", "Clear and honest intuitive insight", "Energy-focused response"],
+      footer: "Perfect for when you need one clear answer.",
+      cta: "Receive My Whisper Message",
+      popular: false,
+      label: "",
+    },
+    {
+      title: "Two-Fold Truth",
+      price: "20",
+      tagline: "Double the clarity. Double the alignment.",
+      features: ["2 Psychic Questions Answered", "Additional energy message", "Expanded soul-connected detail"],
+      footer: "For those pulled between two options or paths.",
+      cta: "Reveal My Two-Fold Truth",
+      popular: true,
+      label: "Most Chosen by Returning Clients",
+    },
+    {
+      title: "Deep Soul Access",
+      price: "70",
+      tagline: "Your full energetic reading \u2014 raw and real.",
+      features: ["Ask up to 10 questions", "Full spiritual overview (Audio/Written)", "Channeled card spread image", "1 Follow-up question (48h)"],
+      footer: "Unlock deep guidance and the full picture.",
+      cta: "Access Deep Soul Reading",
+      popular: false,
+      label: "",
+    },
+  ],
+};
 
 const PackageSection = () => {
   const containerRef = useRef(null);
+  const [content, setContent] = useState(DEFAULT_PACKAGES);
+
+  useEffect(() => {
+    axiosClient.get("/landing/packages").then((res) => {
+      if (res.data?.content) setContent({ ...DEFAULT_PACKAGES, ...res.data.content });
+    }).catch(() => {});
+  }, []);
   
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -141,14 +153,14 @@ const PackageSection = () => {
             className="flex items-center gap-3 px-6 py-2 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-xl mb-6 shadow-2xl"
           >
         
-            <span className="text-[10px] font-black tracking-[0.5em] uppercase text-white/50">The Sacred Offerings</span>
+            <span className="text-[10px] font-black tracking-[0.5em] uppercase text-white/50">{content.badge}</span>
           </motion.div>
           
           <h2 
             style={{ ...TYPOGRAPHY.headings.h2, fontSize: "clamp(2.8rem, 8vw, 5rem)", color: COLORS.neutralWhite }}
             className="mb-8 tracking-tighter"
           >
-           Choose the <span style={{ color: COLORS.primary, filter: `drop-shadow(0 0 15px ${COLORS.primary}40)` }}>Depth</span> of Your Insight
+           {content.heading} <span style={{ color: COLORS.primary, filter: `drop-shadow(0 0 15px ${COLORS.primary}40)` }}>{content.headingHighlighted}</span> {content.subheading}
           </h2>
           
        
@@ -156,7 +168,7 @@ const PackageSection = () => {
 
         {/* 3. THE 3D CARD SPREAD */}
         <div className="flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-6 perspective-2000">
-          {PACKAGES.map((pkg, i) => (
+          {content.packages.map((pkg, i) => (
             <motion.div
               key={pkg.id}
               initial={{ opacity: 0, y: 50 }}
@@ -167,7 +179,7 @@ const PackageSection = () => {
               className={`relative w-full max-w-[380px] group ${pkg.popular ? 'z-40 scale-105 lg:scale-110' : 'z-10'}`}
             >
               {/* Popular Badge */}
-              {pkg.popular && (
+              {pkg.popular && pkg.label && (
                 <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap">
                   <motion.div 
                     initial={{ y: 10, opacity: 0 }}
@@ -188,13 +200,13 @@ const PackageSection = () => {
               >
                 {/* Background Alchemy Watermark */}
                 <span className="absolute -top-6 -right-6 text-[12rem] opacity-[0.03] text-white pointer-events-none italic group-hover:opacity-[0.06] transition-opacity duration-1000">
-                  {pkg.symbol}
+                  {SYMBOLS_LIST[i % SYMBOLS_LIST.length]}
                 </span>
 
                 {/* Header Content */}
                 <div className="relative z-10 mb-8">
                   <span className="text-4xl mb-6" style={{ color: pkg.popular ? COLORS.secondary : COLORS.primary }}>
-                    {pkg.symbol}
+                    {SYMBOLS_LIST[i % SYMBOLS_LIST.length]}
                   </span>
                   <h3     style={{ fontFamily: TYPOGRAPHY.fontFamily.heading}}className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
                     {pkg.title}

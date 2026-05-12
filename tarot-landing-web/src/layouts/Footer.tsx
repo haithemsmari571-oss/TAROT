@@ -4,14 +4,39 @@ import { useRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../theme";
 import CoverImg from "../assets/Cover.png";
+import axiosClient from "../lib/axiosClient";
+
+const DEFAULT_FOOTER = {
+  brandName: "The Alchemical Exchange",
+  description: "A sanctuary for those ready to transcend. Bridging the gap between mundane reality and celestial clarity through raw, unfiltered, intuitive revelation.",
+  socialLinks: [
+    { platform: "instagram", url: "#", icon: "ph:instagram-logo-fill" },
+    { platform: "youtube", url: "#", icon: "ph:youtube-logo-fill" },
+    { platform: "tiktok", url: "#", icon: "ph:tiktok-logo-fill" },
+  ],
+  copyright: "\u00a9 2026 The Alchemical Exchange",
+  navLinks: [
+    { name: "Sanctuary", path: "/home" },
+    { name: "Psychics", path: "/psychics" },
+    { name: "Life Path & Zodiac", path: "/oracle" },
+    { name: "About Us", path: "/about" },
+  ],
+};
 
 const Footer = () => {
   const navigate = useNavigate();
   const footerRef = useRef(null);
+  const [content, setContent] = useState(DEFAULT_FOOTER);
   
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const [alchemicalTime, setAlchemicalTime] = useState("");
+
+  useEffect(() => {
+    axiosClient.get("/landing/footer").then((res) => {
+      if (res.data?.content) setContent({ ...DEFAULT_FOOTER, ...res.data.content });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -42,14 +67,8 @@ const Footer = () => {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
-  const navLinks = [
-    { name: "Sanctuary", path: "/home" },
-    { name: "Psychics", path: "/psychics" },
-    { name: "Life Path & Zodiac", path: "/oracle" },
-    { name: "About Us", path: "/about" },
-  ];
-
   const legalLinks = [
+    { name: "About Us", path: "/about" },
     { name: "Privacy", path: "/privacy" },
     { name: "Terms", path: "/terms" },
   ];
@@ -77,11 +96,11 @@ const Footer = () => {
             <div className="flex items-center gap-4">
               <Icon icon="ph:star-four-fill" style={{ color: COLORS.primary }} className="text-2xl" />
               <h1 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }} className="text-xl font-black uppercase italic tracking-tighter text-white">
-                The Alchemical <span style={{ color: COLORS.primary }}>Exchange</span>
+                {content.brandName.split(" ").slice(0, -1).join(" ")} <span style={{ color: COLORS.primary }}>{content.brandName.split(" ").pop()}</span>
               </h1>
             </div>
             <p className="text-sm leading-relaxed max-w-sm text-white/40">
-              A sanctuary for those ready to transcend. Bridging the gap between mundane reality and celestial clarity through raw, unfiltered, intuitive revelation.
+              {content.description}
             </p>
             <div className="flex items-baseline gap-4 border-l border-primary/20 pl-6">
                 <span className="text-3xl font-black text-white italic tracking-tighter" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>{alchemicalTime}</span>
@@ -93,7 +112,7 @@ const Footer = () => {
           <div className="lg:col-span-3 space-y-8">
             <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Explore</h4>
             <ul className="space-y-4">
-              {navLinks.map((link) => (
+              {content.navLinks.map((link) => (
                 <li key={link.name}>
                   <button 
                     onClick={() => navigate(link.path)}
@@ -106,31 +125,15 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* NEWSLETTER */}
-          <div className="lg:col-span-4 p-8 rounded-[2.5rem] border border-white/5 bg-white/[0.02] backdrop-blur-3xl space-y-6">
-            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Join the Pulse</h4>
-            <p className="text-[11px] leading-relaxed text-white/40">
-              Receive lunar updates, cosmic alignments, and early access to deep guidance directly to your digital vessel.
-            </p>
-            <div className="relative">
-              <input 
-                type="email" 
-                placeholder="Receive your destiny..." 
-                className="w-full bg-white/40 border border-white/10 py-4 px-6 rounded-xl text-xs focus:outline-none focus:border-primary/50 transition-all text-white"
-              />
-              <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-primary transition-colors">
-                <Icon icon="ph:arrow-right-bold" />
-              </button>
-            </div>
-          </div>
+          {/* SPACER - newsletter removed */}
         </div>
 
         {/* BOTTOM BAR */}
         <div className="flex flex-col md:flex-row justify-between items-center pt-12 border-t border-white/5 gap-8">
           <div className="flex gap-6 items-center">
-            <p className="text-[9px] uppercase tracking-widest text-white/20 font-bold">© 2026 The Alchemical Exchange</p>
+            <p className="text-[9px] uppercase tracking-widest text-white/20 font-bold">{content.copyright}</p>
             {legalLinks.map((link) => (
-              <button key={link.name} className="text-[9px] uppercase tracking-widest text-white/20 hover:text-white transition-colors">{link.name}</button>
+              <button key={link.name} onClick={() => navigate(link.path)} className="text-[9px] uppercase tracking-widest text-white/20 hover:text-primary transition-colors cursor-pointer">{link.name}</button>
             ))}
           </div>
           
@@ -146,9 +149,9 @@ const Footer = () => {
           </motion.button>
 
           <div className="flex gap-6">
-            {["instagram", "youtube", "tiktok"].map((social) => (
-              <motion.a key={social} href="#" whileHover={{ scale: 1.2, color: COLORS.primary }} className="text-lg text-white/20">
-                <Icon icon={`ph:${social}-logo-fill`} />
+            {content.socialLinks.map((social, i) => (
+              <motion.a key={i} href={social.url} target="_blank" rel="noopener noreferrer" whileHover={{ scale: 1.2, color: COLORS.primary }} className="text-lg text-white/20 cursor-pointer hover:text-primary transition-colors">
+                <Icon icon={social.icon || `ph:${social.platform}-logo-fill`} />
               </motion.a>
             ))}
           </div>

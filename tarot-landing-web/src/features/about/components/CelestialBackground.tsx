@@ -1,4 +1,4 @@
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { COLORS } from "../../../theme";
 
 const CelestialBackground = ({ scrollY }) => {
@@ -45,7 +45,7 @@ const CelestialBackground = ({ scrollY }) => {
             top: star.top,
             left: star.left,
             // Individual stars move at different speeds based on their 'depth'
-            y: useTransform(scrollY || { get: () => 0 }, (v) => v * star.depth),
+            y: 0,
           }}
           animate={{
             opacity: [0.1, 0.4, 0.1],

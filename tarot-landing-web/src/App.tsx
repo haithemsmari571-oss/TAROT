@@ -58,6 +58,9 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
       location.pathname === "/home" ||
       location.pathname === "/psychics-browse" ||
       location.pathname === "/oracle" ||
+      location.pathname === "/about" ||
+      location.pathname === "/privacy" ||
+      location.pathname === "/terms" ||
       location.pathname.startsWith("/psychics/");
 
     if (!isGuestAllowed) {

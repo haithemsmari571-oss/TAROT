@@ -1,0 +1,152 @@
+[
+  {
+    "section": "hero",
+    "content": {
+      "badge": "Psychic & Intuitive Readings",
+      "name": "Haithem Smari",
+      "headline": "Clarity, Guidance",
+      "headlineHighlighted": "& Divine Truth",
+      "subtitle": "Navigate life's complexity with insights you can trust. Reveal the deeper truths that matter most.",
+      "primaryCta": "HIRE ME",
+      "secondaryCta": "THE ARCHIVE"
+    }
+  },
+  {
+    "section": "services",
+    "content": {
+      "badge": "The Sacred Offerings",
+      "heading": "What you'll",
+      "headingHighlighted": "Receive",
+      "cards": [
+        {
+          "icon": "ph:star-four-fill",
+          "title": "Personal\nReading",
+          "desc": "Direct answers to your specific soul questions. Focused clarity for immediate crossroads.",
+          "energy": "High Focus"
+        },
+        {
+          "icon": "ph:eye-closed-fill",
+          "title": "Deep\nInsight",
+          "desc": "An intuitive dive into your current energy cycle. Uncover subconscious patterns.",
+          "energy": "Deep Flow"
+        },
+        {
+          "icon": "ph:lightning-fill",
+          "title": "Fast\nReply",
+          "desc": "Urgent clarity delivered within 24\u201348 hours. High-priority divine intervention.",
+          "energy": "Rapid"
+        },
+        {
+          "icon": "mdi:crystal-ball",
+          "title": "Divine\nPath",
+          "desc": "Long-term guidance for your spiritual journey. A map for your soul's evolution.",
+          "energy": "Eternal"
+        }
+      ],
+      "cta": "Claim Your Destiny",
+      "stats": [
+        { "label": "Turnaround", "value": "24-48 Hours" },
+        { "label": "Channel", "value": "Digital Link" },
+        { "label": "Format", "value": "Video/PDF" }
+      ]
+    }
+  },
+  {
+    "section": "packages",
+    "content": {
+      "badge": "The Sacred Offerings",
+      "heading": "Choose the",
+      "headingHighlighted": "Depth",
+      "subheading": "of Your Insight",
+      "packages": [
+        {
+          "title": "Whisper Message",
+          "price": "15",
+          "tagline": "A quiet message from spirit, just for you.",
+          "features": ["1 Psychic Question Answered", "Clear and honest intuitive insight", "Energy-focused response"],
+          "footer": "Perfect for when you need one clear answer.",
+          "cta": "Receive My Whisper Message",
+          "popular": false,
+          "label": ""
+        },
+        {
+          "title": "Two-Fold Truth",
+          "price": "20",
+          "tagline": "Double the clarity. Double the alignment.",
+          "features": ["2 Psychic Questions Answered", "Additional energy message", "Expanded soul-connected detail"],
+          "footer": "For those pulled between two options or paths.",
+          "cta": "Reveal My Two-Fold Truth",
+          "popular": true,
+          "label": "Most Chosen by Returning Clients"
+        },
+        {
+          "title": "Deep Soul Access",
+          "price": "70",
+          "tagline": "Your full energetic reading \u2014 raw and real.",
+          "features": ["Ask up to 10 questions", "Full spiritual overview (Audio/Written)", "Channeled card spread image", "1 Follow-up question (48h)"],
+          "footer": "Unlock deep guidance and the full picture.",
+          "cta": "Access Deep Soul Reading",
+          "popular": false,
+          "label": ""
+        }
+      ]
+    }
+  },
+  {
+    "section": "testimonials",
+    "content": {
+      "testimonials": [
+        { "name": "Aria Vance", "role": "Soul Seeker", "content": "The Two-Fold Truth reading felt like she was reading the very blueprint of my heart." },
+        { "name": "Julian Thorne", "role": "Returning Client", "content": "Deep Soul Access is an understatement. The 10 questions covered every corner of my life." },
+        { "name": "Elena Rossi", "role": "Artist", "content": "A Whisper Message was all I needed. Short, piercingly accurate, and delivered with grace." },
+        { "name": "Marcus K.", "role": "Mentor", "content": "Rarely do I find an intuitive with this level of raw, unfiltered accuracy. No fluff." },
+        { "name": "Sasha L.", "role": "Seeker", "content": "The channeled card spread is now my daily meditation. It speaks to me daily." }
+      ]
+    }
+  },
+  {
+    "section": "footer",
+    "content": {
+      "brandName": "The Alchemical Exchange",
+      "description": "A sanctuary for those ready to transcend. Bridging the gap between mundane reality and celestial clarity through raw, unfiltered, intuitive revelation.",
+      "socialLinks": [
+        { "platform": "instagram", "url": "#", "icon": "ph:instagram-logo-fill" },
+        { "platform": "youtube", "url": "#", "icon": "ph:youtube-logo-fill" },
+        { "platform": "tiktok", "url": "#", "icon": "ph:tiktok-logo-fill" }
+      ],
+      "copyright": "\u00a9 2026 The Alchemical Exchange",
+      "navLinks": [
+        { "name": "Sanctuary", "path": "/home" },
+        { "name": "Psychics", "path": "/psychics" },
+        { "name": "Life Path & Zodiac", "path": "/oracle" },
+        { "name": "About Us", "path": "/about" }
+      ]
+    }
+  },
+  {
+    "section": "psychics",
+    "content": {
+      "heading": "Find the psychic reader who",
+      "headingHighlighted": "feels right",
+      "subtitle": "Ready to feel clearer? Your Nebula spiritual advisor is waiting",
+      "subtitleLine2": "Find a spiritual advisor online for your needs",
+      "featuredPsychicIds": []
+    }
+  },
+  {
+    "section": "about",
+    "content": {
+      "badge": "The Foundation",
+      "title": "OUR",
+      "titleHighlighted": "ETHOS",
+      "established": "Established 2026",
+      "tagline": "Guided by the absolute resonance of the stars",
+      "leftTag": "Celestial Navigation System v1.0",
+      "rightTag": "Deciphering the Void",
+      "bodyTitle": "Our Mission",
+      "bodyContent": "We are dedicated to bridging the gap between the mundane and the celestial. Every reading is a journey into the depths of your soul, guided by ancient wisdom and modern intuition.",
+      "missionTitle": "The Vision",
+      "missionContent": "To create a sanctuary where seekers can find clarity, guidance, and divine truth. We believe in the power of intuitive revelation to transform lives."
+    }
+  }
+]

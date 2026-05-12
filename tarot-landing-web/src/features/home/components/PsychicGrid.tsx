@@ -1,9 +1,17 @@
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useRef, useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom"; // Added useNavigate
+import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
-import { PSYCHICS } from "../../about/data/Psychics";
+import axiosClient from "../../../lib/axiosClient";
+
+const DEFAULT_PSYCHICS_SECTION = {
+  heading: "Find the psychic reader who",
+  headingHighlighted: "feels right",
+  subtitle: "Ready to feel clearer? Your Nebula spiritual advisor is waiting",
+  subtitleLine2: "Find a spiritual advisor online for your needs",
+  featuredPsychicIds: [] as number[],
+};
 
 const hideScrollbarStyle = {
   msOverflowStyle: 'none',
@@ -15,10 +23,30 @@ const TarotCouncil = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [psychics, setPsychics] = useState<any[]>([]);
+  const [sectionContent, setSectionContent] = useState(DEFAULT_PSYCHICS_SECTION);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    Promise.all([
+      axiosClient.get("/landing/psychics").catch(() => null),
+      axiosClient.get("/psychic", { params: { limit: 100 } }).catch(() => null),
+    ]).then(([landingRes, psychicsRes]) => {
+      if (landingRes?.data?.content) {
+        setSectionContent({ ...DEFAULT_PSYCHICS_SECTION, ...landingRes.data.content });
+      }
+      const allPsychics: any[] = psychicsRes?.data?.items || [];
+      const featuredIds: number[] = landingRes?.data?.content?.featuredPsychicIds || [];
+      const filtered = featuredIds.length > 0
+        ? allPsychics.filter((p: any) => featuredIds.includes(p.id))
+        : allPsychics;
+      setPsychics(filtered);
+    });
+  }, []);
 
   // --- REFINED AUTOSCROLL ---
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || psychics.length === 0) return;
 
     const interval = setInterval(() => {
       if (scrollRef.current) {
@@ -26,7 +54,6 @@ const TarotCouncil = () => {
         const cardWidth = 380; 
         const maxScroll = scrollWidth - clientWidth;
         
-        // If at the end, jump back to start, else move forward
         const nextScroll = scrollLeft >= maxScroll - 50 ? 0 : scrollLeft + cardWidth;
         
         scrollRef.current.scrollTo({ 
@@ -37,7 +64,7 @@ const TarotCouncil = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, [isPaused, psychics.length]);
 
   const handleScroll = () => {
     if (scrollRef.current) {
@@ -53,6 +80,8 @@ const TarotCouncil = () => {
       scrollRef.current.scrollBy({ left: distance, behavior: "smooth" });
     }
   };
+
+  if (psychics.length === 0) return null;
 
   return (
     <section 
@@ -74,11 +103,11 @@ const TarotCouncil = () => {
           style={{ ...TYPOGRAPHY.headings.h2, fontSize: "clamp(2rem, 5vw, 3.5rem)" }} 
           className="tracking-tighter leading-[1] lg:px-20"
         >
-          Find the psychic reader who <span style={{ color: COLORS.primary }}>feels right</span>
+          {sectionContent.heading} <span style={{ color: COLORS.primary }}>{sectionContent.headingHighlighted}</span>
         </motion.h2>
         <p className="text-sm md:text-base opacity-50 leading-relaxed mx-auto max-w-xl font-medium" style={{ color: COLORS.neutralWhite }}>
-          Ready to feel clearer? Your Nebula spiritual advisor is waiting <br/>
-          Find a spiritual advisor online for your needs
+          {sectionContent.subtitle} <br/>
+          {sectionContent.subtitleLine2}
         </p>
       </div>
 
@@ -96,13 +125,13 @@ const TarotCouncil = () => {
         style={hideScrollbarStyle}
         className="flex gap-6 overflow-x-auto pt-4 pb-12 snap-x px-[10%] md:px-[15%] xl:px-[20%] [&::-webkit-scrollbar]:hidden"
       >
-        {PSYCHICS.map((psychic) => (
+        {psychics.map((psychic) => (
           <TarotCard key={psychic.id} psychic={psychic} />
         ))}
       </div>
 
       <div className="flex justify-center gap-2 mt-2">
-        {PSYCHICS.map((_, i) => (
+        {psychics.map((_, i) => (
           <div key={i} className="h-1 rounded-full transition-all duration-500"
             style={{ 
               width: i === activeIndex ? "32px" : "8px", 
@@ -119,6 +148,8 @@ const TarotCouncil = () => {
 const TarotCard = ({ psychic }: { psychic: any }) => {
   const [isBtnHovered, setIsBtnHovered] = useState(false);
   const navigate = useNavigate();
+  const specialties = psychic.categories?.map((c: any) => c.title) || [];
+  const pricePerMinute = psychic.price_per_second ? (psychic.price_per_second * 60).toFixed(2) : "0.00";
 
   return (
     <motion.div
@@ -136,30 +167,30 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
 
       <div className="relative h-[42%] w-full overflow-hidden rounded-[1.6rem] mb-5">
         <motion.img 
-          src={psychic.image} 
+          src={psychic.profile_picture_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(psychic.username)}&background=5D3A9B&color=fff`} 
           whileHover={{ scale: 1.05 }}
-          className="w-full h-full object-cover transition-all duration-700  " 
+          className="w-full h-full object-cover transition-all duration-700" 
         />
         <div className="absolute inset-0 bg-gradient-to-t from-surface/80 via-transparent to-transparent" />
         
         <div className="absolute top-3 right-3 px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 flex items-center gap-1.5">
           <Icon icon="ph:star-fill" style={{ color: COLORS.starGold }} className="text-[10px]" />
-          <span className="text-[11px] font-bold text-white">{psychic.rating}</span>
+          <span className="text-[11px] font-bold text-white">{psychic.is_verified ? "4.8" : "4.5"}</span>
         </div>
 
         <div className="absolute bottom-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-          <span className="text-[9px] uppercase font-bold tracking-widest text-white">Online</span>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: psychic.is_online ? "#4ADE80" : COLORS.neutralGray }} />
+          <span className="text-[9px] uppercase font-bold tracking-widest text-white">{psychic.is_online ? "Online" : "Away"}</span>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center text-center space-y-4 px-1">
         <div className="space-y-2">
           <h3 className="uppercase tracking-tight" style={{ ...TYPOGRAPHY.headings.h3, color: COLORS.neutralWhite, fontSize: "1.5rem" }}>
-            {psychic.name}
+            {psychic.username}
           </h3>
           <div className="flex flex-wrap justify-center gap-1.5">
-            {psychic.specialties.map((s: string) => (
+            {specialties.map((s: string) => (
               <span key={s} className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] uppercase font-bold text-white/70">
                 {s}
               </span>
@@ -170,16 +201,16 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
         <div className="w-full grid grid-cols-2 gap-px border-y border-white/5 py-3 mt-1">
           <div className="text-center">
             <span className="block text-[8px] uppercase tracking-widest opacity-40 text-white mb-0.5">Exp.</span>
-            <span className="text-xs text-white font-bold">{psychic.experience}</span>
+            <span className="text-xs text-white font-bold">{psychic.is_verified ? "Elite" : "Rising"}</span>
           </div>
           <div className="text-center border-l border-white/5">
-            <span className="block text-[8px] uppercase tracking-widest opacity-40 text-white mb-0.5">Consults</span>
-            <span className="text-xs text-white font-bold">{psychic.consultations}</span>
+            <span className="block text-[8px] uppercase tracking-widest opacity-40 text-white mb-0.5">Status</span>
+            <span className="text-xs text-white font-bold">{psychic.is_online ? "Available" : "Unavailable"}</span>
           </div>
         </div>
 
         <p className="text-[10px] leading-relaxed opacity-40 line-clamp-2 italic px-2" style={{ color: COLORS.neutralWhite }}>
-          "{psychic.bio}"
+          "{psychic.bio || "A skilled spiritual guide ready to help you find clarity."}"
         </p>
 
         <div className="mt-auto w-full relative">
@@ -200,7 +231,7 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
                 Start Reading
               </span>
               <span className="text-[8px] opacity-60 uppercase font-medium" style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}>
-                   Instant Connection
+                Instant Connection
               </span>
             </div>
 
@@ -210,7 +241,7 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
               />
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black" style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}>
-                  ${psychic.price}
+                  ${pricePerMinute}
                 </span>
                 <span className="text-[7px] uppercase font-bold" style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}>
                   / Min

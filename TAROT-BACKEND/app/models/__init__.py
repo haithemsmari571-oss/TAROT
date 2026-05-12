@@ -15,6 +15,7 @@ from .life_path_compatibility import LifePathCompatibility
 from .review import Review
 from .notification import Notification
 from .buy_option import BuyOption
+from .landing_content import LandingContent
 
 __all__ = [
     "User",
@@ -34,4 +35,5 @@ __all__ = [
     "Review",
     "Notification",
     "BuyOption",
+    "LandingContent",
 ]

@@ -3,8 +3,17 @@ import { Icon } from "@iconify/react";
 import { useRef, useEffect, useMemo, useState } from "react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useNavigate } from "react-router-dom";
+import axiosClient from "../../../lib/axiosClient";
 
-// Inside your component:
+const DEFAULT_HERO = {
+  badge: "Psychic & Intuitive Readings",
+  name: "Haithem Smari",
+  headline: "Clarity, Guidance",
+  headlineHighlighted: "& Divine Truth",
+  subtitle: "Navigate life's complexity with insights you can trust. Reveal the deeper truths that matter most.",
+  primaryCta: "HIRE ME",
+  secondaryCta: "THE ARCHIVE",
+};
 
 const TAROT_ASSETS = [
   "0.png", "1.png", "2.png", "4.png", "5.png", "23.png", "24.png", "25.png", 
@@ -40,7 +49,14 @@ const HeroSection = () => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 });
+  const [content, setContent] = useState(DEFAULT_HERO);
 const navigate = useNavigate();
+
+  useEffect(() => {
+    axiosClient.get("/landing/hero").then((res) => {
+      if (res.data?.content) setContent({ ...DEFAULT_HERO, ...res.data.content });
+    }).catch(() => {});
+  }, []);
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const springX = useSpring(mouseX, { stiffness: 80, damping: 25 });
@@ -247,13 +263,13 @@ const navigate = useNavigate();
             className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-3xl mb-8 bg-white/5"
           >
             <span className="uppercase tracking-[0.4em] text-[9px]  text-white/80">
-                Psychic & Intuitive Readings
+                {content.badge}
             </span>
           </motion.div>
 
           <div className="mb-2">
             <motion.span className="block text-xl md:text-3xl mb-2 font-light  text-white/50">
-                Haithem Smari
+                {content.name}
             </motion.span>
             
             <h1 className="leading-[1.0] tracking-tighter" style={{ 
@@ -262,19 +278,19 @@ const navigate = useNavigate();
               fontWeight: 900,
               color: COLORS.neutralWhite,
             }}>
-              Clarity, Guidance <br /> 
+              {content.headline} <br /> 
               <span className="inline-block" style={{
                 background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
               }}>
-                & Divine Truth
+                {content.headlineHighlighted}
               </span>
             </h1>
           </div>
 
           <p className="text-base md:text-xl max-w-xl mb-6 leading-relaxed font-light text-white/60">
-            Navigate life’s complexity with insights you can trust. Reveal the deeper truths that matter most.
+            {content.subtitle}
           </p>
 
          <div className="flex flex-col sm:flex-row justify-center gap-6">
@@ -289,7 +305,7 @@ const navigate = useNavigate();
     className="px-12 py-5 rounded-full font-bold text-[11px] tracking-[0.2em] uppercase transition-all shadow-xl"
     style={{ backgroundColor: COLORS.primary, color: COLORS.dark }}
   >
-    HIRE ME
+    {content.primaryCta}
   </motion.button>
 
   {/* SECONDARY BUTTON: THE ARCHIVE */}
@@ -312,7 +328,7 @@ const navigate = useNavigate();
       }
     }}
   >
-    THE ARCHIVE 
+    {content.secondaryCta}
     <motion.div
       variants={{
         initial: { x: 0 },
