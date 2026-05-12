@@ -22,7 +22,7 @@ export const transactionsApi = {
     if (filters?.limit) params.append("limit", String(filters.limit));
 
     const response = await axiosClient.get(
-      `/transactions/admin/users/${userId}/transactions?${params.toString()}`
+      `/admin/transactions/users/${userId}/transactions?${params.toString()}`
     );
 
     return {
@@ -51,7 +51,7 @@ export const transactionsApi = {
     if (filters?.limit) params.append("limit", String(filters.limit));
 
     const response = await axiosClient.get(
-      `/transactions/admin/all?${params.toString()}`
+      `/admin/transactions/all?${params.toString()}`
     );
 
     return {
@@ -68,7 +68,7 @@ export const transactionsApi = {
    */
   getUserBalance: async (userId: number): Promise<UserBalance> => {
     const response = await axiosClient.get(
-      `/transactions/admin/users/${userId}/balance`
+      `/admin/transactions/users/${userId}/balance`
     );
     return response.data;
   },
@@ -83,7 +83,7 @@ export const transactionsApi = {
     // Note: The backend doesn't have a dedicated admin endpoint for single transaction
     // We'll get all user transactions and find the specific one
     const response = await axiosClient.get(
-      `/transactions/admin/users/${userId}/transactions?limit=1000`
+      `/admin/transactions/users/${userId}/transactions?limit=1000`
     );
     const transactions = response.data.transactions || [];
     const transaction = transactions.find((t: Transaction) => t.id === transactionId);

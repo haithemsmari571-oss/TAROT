@@ -7,6 +7,7 @@ const profileRoutes: RouteConfig[] = [
     name: "Client Profile",
     component: ClientProfile,
     layout: "public",
+    requiresAuth: true,
   },
 ];
 

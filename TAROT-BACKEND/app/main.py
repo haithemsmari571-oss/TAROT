@@ -24,6 +24,8 @@ from app.routers import (
     notification_router,
     buy_option_router,
     admin_buy_option_router,
+    admin_transaction_router,
+    admin_psychic_router,
 )
 import app.models
 
@@ -174,6 +176,18 @@ app.include_router(
     admin_buy_option_router,
     prefix="/admin",
     tags=["Admin - Buy Options"],
+)
+
+app.include_router(
+    admin_transaction_router,
+    prefix="/admin",
+    tags=["Admin - Transactions"],
+)
+
+app.include_router(
+    admin_psychic_router,
+    prefix="/admin",
+    tags=["Admin - Psychics"],
 )
 
 

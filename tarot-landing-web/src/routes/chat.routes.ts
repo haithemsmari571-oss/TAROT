@@ -24,6 +24,7 @@ const chatRoutes: RouteConfig[] = [
     name: "Client Chats",
     component: ClientChatPage,
     layout: "public",
+    requiresAuth: true,
   },
 ];
 

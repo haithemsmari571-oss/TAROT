@@ -21,7 +21,7 @@ export const earningsApi = {
     if (filters?.limit) params.append("limit", String(filters.limit));
 
     const response = await axiosClient.get(
-      `/transactions/me/earnings?${params.toString()}`
+      `/admin/psychics/earnings?${params.toString()}`
     );
     
     return {
@@ -37,7 +37,7 @@ export const earningsApi = {
    * Get earnings summary for the current psychic
    */
   getEarningsSummary: async (): Promise<EarningsSummary> => {
-    const response = await axiosClient.get("/transactions/me/earnings/summary");
+    const response = await axiosClient.get("/admin/psychics/earnings/summary");
     return response.data;
   },
 };

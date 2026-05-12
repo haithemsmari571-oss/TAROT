@@ -19,8 +19,8 @@ function useScrollToTop() {
   }, [pathname]);
 }
 
-// --- PSYCHIC REDIRECT COMPONENT ---
-function PsychicGuard({ children }: { children: React.ReactNode }) {
+// --- ROUTE GUARD ---
+function RouteGuard({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
@@ -32,9 +32,38 @@ function PsychicGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If user is a PSYCHIC and trying to access non-admin routes, redirect to /admin/chats
-  if (isAuthenticated && user?.role === UserRole.PSYCHIC && !location.pathname.startsWith("/admin")) {
+  // PSYCHIC, ADMIN, SUPERADMIN must stay within /admin/*
+  if (
+    isAuthenticated &&
+    user &&
+    (user.role === UserRole.PSYCHIC || user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) &&
+    !location.pathname.startsWith("/admin")
+  ) {
     return <Navigate to="/admin/chats" replace />;
+  }
+
+  // Logged-in USER role
+  if (isAuthenticated && user?.role === UserRole.USER) {
+    // / and /home redirect to /psychics-browse as their home page
+    if (location.pathname === "/" || location.pathname === "/home") {
+      return <Navigate to="/psychics-browse" replace />;
+    }
+    return <>{children}</>;
+  }
+
+  // Guest (unauthenticated): only allow specific paths
+  if (!isAuthenticated) {
+    const isGuestAllowed =
+      location.pathname === "/" ||
+      location.pathname === "/home" ||
+      location.pathname === "/psychics-browse" ||
+      location.pathname === "/oracle" ||
+      location.pathname.startsWith("/psychics/");
+
+    if (!isGuestAllowed) {
+      return <Navigate to="/home" replace />;
+    }
+    return <>{children}</>;
   }
 
   return <>{children}</>;
@@ -50,7 +79,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public Layout Routes (Landing pages without sidebar) */}
-      <Route element={<PsychicGuard><PublicLayout /></PsychicGuard>}>
+      <Route element={<RouteGuard><PublicLayout /></RouteGuard>}>
         {publicRoutes.map((r: RouteConfig) => {
           if (r.requiresAuth) {
             return (
