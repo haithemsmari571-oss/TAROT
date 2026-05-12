@@ -26,6 +26,7 @@ from app.routers import (
     admin_buy_option_router,
     admin_transaction_router,
     admin_psychic_router,
+    dashboard_router,
 )
 import app.models
 
@@ -188,6 +189,12 @@ app.include_router(
     admin_psychic_router,
     prefix="/admin",
     tags=["Admin - Psychics"],
+)
+
+app.include_router(
+    dashboard_router,
+    prefix="/admin",
+    tags=["Admin - Dashboard"],
 )
 
 

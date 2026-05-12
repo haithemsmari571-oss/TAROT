@@ -92,27 +92,86 @@ const Sidebar = () => {
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
-  const allMenuItems = useMemo(() => [
-    { label: "Users", path: "/admin/users", icon: "solar:users-group-rounded-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Psychics", path: "/admin/psychics", icon: "solar:magic-stick-3-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Chats", path: "/admin/chats", icon: "solar:chat-round-line-bold-duotone", badge: pendingChatsCount > 0 ? pendingChatsCount.toString() : undefined, roles: [UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Notifications", path: "/admin/notifications", icon: "solar:bell-bold-duotone", roles: [UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Earnings", path: "/admin/earnings", icon: "solar:dollar-bold-duotone", roles: [UserRole.PSYCHIC] },
-    { label: "Reviews", path: "/admin/my-reviews", icon: "solar:star-bold-duotone", roles: [UserRole.PSYCHIC] },
-    { label: "My Profile", path: "/admin/my-profile", icon: "solar:user-id-bold-duotone", roles: [UserRole.PSYCHIC] },
-    { label: "Ledger", path: "/admin/ledger", icon: "solar:wallet-money-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Buy Options", path: "/admin/buy-options", icon: "solar:cart-large-2-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Categories", path: "/admin/categories", icon: "solar:folder-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Zodiac", path: "/admin/zodiac", icon: "solar:stars-minimalistic-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Life Path", path: "/admin/lifepath", icon: "solar:calculator-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
-    { label: "Settings", path: "/admin/settings", icon: "solar:settings-bold-duotone", roles: [UserRole.SUPERADMIN] },
+  interface MenuItem {
+    label: string;
+    path: string;
+    icon: string;
+    roles: UserRole[];
+    badge?: string;
+  }
+
+  interface MenuGroup {
+    label: string;
+    items: MenuItem[];
+  }
+
+  const menuGroups: MenuGroup[] = useMemo(() => [
+    {
+      label: "Overview",
+      items: [
+        { label: "Dashboard", path: "/admin/dashboard", icon: "solar:widget-5-bold-duotone", roles: [UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN] },
+      ],
+    },
+    {
+      label: "Management",
+      items: [
+        { label: "Users", path: "/admin/users", icon: "solar:users-group-rounded-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Psychics", path: "/admin/psychics", icon: "solar:magic-stick-3-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Categories", path: "/admin/categories", icon: "solar:folder-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+      ],
+    },
+    {
+      label: "Content",
+      items: [
+        { label: "Zodiac", path: "/admin/zodiac", icon: "solar:stars-minimalistic-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Life Path", path: "/admin/lifepath", icon: "solar:calculator-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Buy Options", path: "/admin/buy-options", icon: "solar:cart-large-2-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+      ],
+    },
+    {
+      label: "Finance",
+      items: [
+        { label: "Ledger", path: "/admin/ledger", icon: "solar:wallet-money-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+      ],
+    },
+    {
+      label: "Communication",
+      items: [
+        { label: "Chats", path: "/admin/chats", icon: "solar:chat-round-line-bold-duotone", badge: pendingChatsCount > 0 ? pendingChatsCount.toString() : undefined, roles: [UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Notifications", path: "/admin/notifications", icon: "solar:bell-bold-duotone", roles: [UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN] },
+      ],
+    },
+    {
+      label: "Performance",
+      items: [
+        { label: "Earnings", path: "/admin/earnings", icon: "solar:dollar-bold-duotone", roles: [UserRole.PSYCHIC] },
+        { label: "Reviews", path: "/admin/my-reviews", icon: "solar:star-bold-duotone", roles: [UserRole.PSYCHIC] },
+      ],
+    },
+    {
+      label: "Profile",
+      items: [
+        { label: "My Profile", path: "/admin/my-profile", icon: "solar:user-id-bold-duotone", roles: [UserRole.PSYCHIC] },
+      ],
+    },
+    {
+      label: "System",
+      items: [
+        { label: "Settings", path: "/admin/settings", icon: "solar:settings-bold-duotone", roles: [UserRole.SUPERADMIN] },
+      ],
+    },
   ], [pendingChatsCount]);
 
-  // Filter menu items based on user role
-  const menuItems = useMemo(() => {
+  // Filter groups and items based on user role
+  const filteredGroups = useMemo(() => {
     if (!user) return [];
-    return allMenuItems.filter(item => item.roles.includes(user.role));
-  }, [user, allMenuItems]);
+    return menuGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => item.roles.includes(user.role)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [user, menuGroups]);
 
   return (
     <aside 
@@ -146,63 +205,94 @@ const Sidebar = () => {
       </div>
 
       {/* 2. NAVIGATION */}
-      <nav className="flex-1 space-y-2 relative z-10">
-        {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <button
-              key={item.label}
-              onClick={() => navigate(item.path)}
-              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 relative group"
-              style={{ 
-                backgroundColor: isActive ? COLORS.surfaceAccent : 'transparent',
-              }}
+      <nav className="flex-1 space-y-1 overflow-y-auto relative z-10">
+        {filteredGroups.map((group) => (
+          <div key={group.label} className="mb-3">
+            <p
+              className="px-4 pb-1 text-[8px] font-black uppercase tracking-[0.25em]"
+              style={{ color: `${COLORS.neutralGray}60` }}
             >
-              {isActive && (
-                <>
-                  <motion.div 
-                    layoutId="nav-glow" 
-                    className="absolute inset-0 rounded-2xl"
-                    style={{
-                      border: `1px solid ${COLORS.primary}`,
-                      boxShadow: `0 0 20px ${COLORS.primary}40, inset 0 0 20px ${COLORS.primary}10`,
+              {group.label}
+            </p>
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => navigate(item.path)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-[10px] transition-all duration-300 relative group overflow-hidden"
+                    style={{ 
+                      background: isActive 
+                        ? `linear-gradient(90deg, ${COLORS.primary}12 0%, ${COLORS.surfaceAccent} 50%)` 
+                        : 'transparent',
                     }}
-                  />
-                  <div 
-                    className="absolute inset-0 rounded-2xl blur-sm"
-                    style={{
-                      border: `1px solid ${COLORS.primary}60`,
-                      opacity: 0.3,
-                    }}
-                  />
-                </>
-              )}
-              
-              <div className="flex items-center gap-4 relative z-10">
-                <Icon 
-                  icon={item.icon} 
-                  className="text-2xl transition-transform duration-300 group-hover:scale-110" 
-                  style={{ color: isActive ? COLORS.primary : COLORS.neutralGray }} 
-                />
-                <span 
-                  className="text-[11px] font-black uppercase tracking-widest transition-colors"
-                  style={{ color: isActive ? COLORS.neutralWhite : COLORS.neutralGray }}
-                >
-                  {item.label}
-                </span>
-              </div>
+                  >
+                    {isActive && (
+                      <motion.div 
+                        layoutId="nav-neon"
+                        className="absolute inset-0 rounded-[10px]"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        {/* Neon glow halo (behind) */}
+                        <div
+                          className="absolute left-0 top-0 w-3 h-full"
+                          style={{
+                            background: COLORS.primary,
+                            filter: 'blur(6px)',
+                            opacity: 0.5,
+                          }}
+                        />
+                        {/* Neon tube core */}
+                        <div
+                          className="absolute left-0 top-0 w-[5px] h-full"
+                          style={{
+                            background: COLORS.primary,
+                            boxShadow: `0 0 6px ${COLORS.primary}, 0 0 20px ${COLORS.primary}80`,
+                          }}
+                        />
+                        {/* Bottom neon glow accent */}
+                        <div
+                          className="absolute bottom-0 left-0 w-full h-[1px]"
+                          style={{
+                            background: `linear-gradient(90deg, ${COLORS.primary}, transparent 80%)`,
+                            opacity: 0.6,
+                          }}
+                        />
+                      </motion.div>
+                    )}
+                    
+                    <div className="flex items-center gap-4 relative z-10">
+                      <Icon 
+                        icon={item.icon} 
+                        className="text-lg transition-all duration-300 group-hover:scale-110" 
+                        style={{ 
+                          color: isActive ? COLORS.primaryLight : COLORS.neutralGray,
+                          filter: isActive ? `drop-shadow(0 0 8px ${COLORS.primary})` : 'none',
+                        }} 
+                      />
+                      <span 
+                        className="text-[10px] font-black uppercase tracking-widest transition-colors"
+                        style={{ color: isActive ? COLORS.neutralWhite : COLORS.neutralGray }}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
 
-              {item.badge && (
-                <span 
-                  className="relative z-10 text-[9px] px-2 py-0.5 rounded-lg font-black"
-                  style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
-                >
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+                    {item.badge && (
+                      <span 
+                        className="relative z-10 text-[8px] px-2 py-0.5 rounded-lg font-black"
+                        style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* 3. FOOTER ACTIONS */}
@@ -243,8 +333,8 @@ const Sidebar = () => {
 
           <button 
             onClick={handleLogout}
-            className="p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white/5" 
-            style={{ color: COLORS.neutralGray }}
+            className="p-2 rounded-lg transition-all hover:bg-white/5" 
+            style={{ color: COLORS.primary }}
           >
             <Icon icon="solar:logout-3-bold-duotone" className="text-xl" />
           </button>

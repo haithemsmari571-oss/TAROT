@@ -17,6 +17,7 @@ from .buy_options import router as buy_option_router
 from .admin_buy_options import router as admin_buy_option_router
 from .admin_transactions import router as admin_transaction_router
 from .admin_psychics import router as admin_psychic_router
+from .dashboard import router as dashboard_router
 
 __all__ = [
     "auth_router",
@@ -38,4 +39,5 @@ __all__ = [
     "admin_buy_option_router",
     "admin_transaction_router",
     "admin_psychic_router",
+    "dashboard_router",
 ]

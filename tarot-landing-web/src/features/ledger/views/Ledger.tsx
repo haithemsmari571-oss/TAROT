@@ -7,6 +7,7 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useTransactions } from "../hooks/useTransactions";
 import { TransactionType, TransactionStatus } from "../types/transaction.types";
 import type { Transaction } from "../types/transaction.types";
+import { paymentApi } from "../../payment/api/paymentApi";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -37,6 +38,11 @@ const Ledger = () => {
   const [typeFilter, setTypeFilter] = useState<TransactionType | "All">("All");
   const [statusFilter, setStatusFilter] = useState<TransactionStatus | "All">("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [unitPriceCents, setUnitPriceCents] = useState(100);
+
+  useEffect(() => {
+    paymentApi.getUnitPrice().then((res) => setUnitPriceCents(res.unit_price_cents)).catch(() => {});
+  }, []);
 
   // Debounce search to avoid too many API calls
   const debouncedSearch = useDebounce(search, 500);
@@ -89,12 +95,13 @@ const Ledger = () => {
     };
   }, [transactions]);
 
-  // Format currency
+  // Format currency (amount is in points, convert to dollars using unit_price_cents)
   const formatCurrency = (amount: number) => {
+    const dollars = (amount * unitPriceCents) / 100;
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format(amount / 100);
+    }).format(dollars);
   };
 
   // Format date

@@ -10,7 +10,7 @@ const dashboardRoutes: RouteConfig[] = [
     name: "Dashboard Page",
     component: DashboardPage,
     layout: "private",
-    allowedRoles: [UserRole.ADMIN, UserRole.SUPERADMIN],
+    allowedRoles: [UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN],
   },
     
 ];
