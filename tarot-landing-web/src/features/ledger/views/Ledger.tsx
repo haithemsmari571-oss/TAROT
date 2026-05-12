@@ -518,15 +518,8 @@ const Ledger = () => {
       />
 
       {/* Custom Pagination */}
-      {!loading && transactions.length > 0 && (
+      {!loading && transactions.length > 0 && (transactionsData?.pages || 1) > 1 && (
         <div className="flex items-center justify-between mt-6 px-4">
-          <div
-            className="text-[9px] font-black uppercase tracking-[0.2em]"
-            style={{ color: COLORS.neutralGray }}
-          >
-            Page {currentPage} of {transactionsData?.pages || 1} • Total:{" "}
-            {totalTransactions} transactions
-          </div>
 
           <div
             className="flex items-center gap-2 p-1.5 rounded-2xl border"

@@ -1,0 +1,31 @@
+[
+  {
+    "username": "superadmin",
+    "email": "SUPERADMIN@TAROT.COM",
+    "is_verified": true,
+    "balance": 999999,
+    "role": "SUPERADMIN"
+  },
+  {
+    "username": "admin",
+    "email": "ADMIN@TAROT.COM",
+    "is_verified": true,
+    "balance": 50000,
+    "role": "ADMIN"
+  },
+  {
+    "username": "user",
+    "email": "USER@TAROT.COM",
+    "is_verified": true,
+    "balance": 10000,
+    "role": "USER"
+  },
+  {
+    "username": "psychic",
+    "email": "PSYCHIC@TAROT.COM",
+    "is_verified": true,
+    "balance": 0,
+    "role": "PSYCHIC",
+    "price_per_second": 0.05
+  }
+]

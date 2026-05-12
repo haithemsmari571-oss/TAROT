@@ -104,3 +104,19 @@ def require_permission(permission: Permission):
         return user
 
     return _check_permission
+
+
+def verify_admin_target_authority(admin: User, target_user: User):
+    """
+    Verify that an admin has authority over the target user.
+
+    SUPERADMIN can manage anyone. ADMIN can only manage USER and PSYCHIC roles.
+    Raises HTTPException 403 if the admin lacks authority.
+    """
+    if admin.role == Role.SUPERADMIN:
+        return
+    if target_user.role in (Role.ADMIN, Role.SUPERADMIN):
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot manage other admins or superadmins",
+        )

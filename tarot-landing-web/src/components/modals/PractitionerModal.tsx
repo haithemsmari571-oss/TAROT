@@ -266,7 +266,7 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
                       <PrimaryInput
                         type="number"
                         step="0.01"
-                        value={pricePerSecond.toString()}
+                        value={(pricePerSecond ?? 0).toString()}
                         onChange={(e) => setPricePerSecond(parseFloat(e.target.value) || 0)}
                       />
                     </div>

@@ -359,7 +359,7 @@ class SessionManager:
 
             psychic_name = chat.psychic.username if chat.psychic else "Psychic"
             await broadcast_system_message(
-                db, chat_id, f"{psychic_name} has accepted your chat request."
+                db, chat_id, f"{psychic_name} accepted the chat request."
             )
 
             return info

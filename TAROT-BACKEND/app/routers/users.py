@@ -9,6 +9,7 @@ from app.database.client import get_db
 from app.dependencies.authorization import (
     require_permission,
     require_superadmin,
+    verify_admin_target_authority,
 )
 from app.enums.permissions import Permission
 from app.enums.role import Role
@@ -92,12 +93,15 @@ def list_users(
     - sort_by: Field to sort by (created_at, username, email, balance)
     - sort_order: Sort order (asc, desc)
     """
+    exclude_roles = [Role.ADMIN, Role.SUPERADMIN] if admin.role == Role.ADMIN else None
+
     users, total = get_users_with_filters(
         db=db,
         search=search,
         role=role,
         status=status,
         is_verified=is_verified,
+        exclude_roles=exclude_roles,
         page=page,
         limit=limit,
         sort_by=sort_by,
@@ -133,6 +137,7 @@ def get_user_detail(
     **Note:** Profile picture URL is transformed to full URL.
     """
     user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, user)
     user_detail = AdminUserDetail.model_validate(user)
     return transform_user_profile_picture(user_detail)
 
@@ -147,10 +152,13 @@ def create_user(
     Create a new user with role assignment.
 
     **Permissions:** Admin, Superadmin
-
-    **Note:** Admin can create users with any role including ADMIN.
-    Only Superadmin can create SUPERADMIN users (validated in service layer if needed).
     """
+    if admin.role == Role.ADMIN and user_data.role in (Role.ADMIN, Role.SUPERADMIN):
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot create users with admin or superadmin role",
+        )
+
     user = create_user_admin(db, user_data)
     user_detail = AdminUserDetail.model_validate(user)
     return transform_user_profile_picture(user_detail)
@@ -171,11 +179,14 @@ def update_user(
     **Note:** Can update all user fields except password.
     To change role, use the dedicated /users/{user_id}/role endpoint.
     """
-    # Prevent admin from updating their own critical fields accidentally
-    if user_id == admin.id and user_data.role is not None:
+    target_user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, target_user)
+
+    # Only superadmin can change roles
+    if user_data.role is not None and admin.role != Role.SUPERADMIN:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot change your own role. Use /users/{user_id}/role endpoint.",
+            status_code=403,
+            detail="Only superadmin can change user roles",
         )
 
     user = update_user_admin(db, user_id, user_data)
@@ -217,6 +228,9 @@ def suspend_user_endpoint(
 
     **Note:** Suspended users cannot log in or perform actions.
     """
+    target_user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, target_user)
+
     # Prevent suspending yourself
     if user_id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot suspend your own account")
@@ -237,6 +251,9 @@ def activate_user_endpoint(
 
     **Permissions:** Admin, Superadmin
     """
+    target_user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, target_user)
+
     user = activate_user(db, user_id)
     user_detail = AdminUserDetail.model_validate(user)
     return transform_user_profile_picture(user_detail)
@@ -294,6 +311,7 @@ def adjust_user_balance(
 
     # Get user to verify exists
     user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, user)
 
     adjustment_type = "credit" if adjustment.amount > 0 else "debit"
 
@@ -396,6 +414,9 @@ def verify_user_endpoint(
 
     **Note:** Bypasses normal email verification flow.
     """
+    target_user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, target_user)
+
     user = verify_user(db, user_id)
     user_detail = AdminUserDetail.model_validate(user)
     return transform_user_profile_picture(user_detail)

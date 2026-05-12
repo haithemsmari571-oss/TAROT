@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
-import type { AdminUserListItem } from "../../features/users/types/user.types";
+import type { AdminUserDetail } from "../../features/users/types/user.types";
 import { Role } from "../../features/users/types/user.types";
 import PrimaryInput from "../CustomInputs/PrimaryInput";
 import PrimarySelect from "../CustomInputs/PrimarySelect";
@@ -20,7 +20,7 @@ interface UserModalProps {
   onClose: () => void;
   onSave: (data: UserFormData) => void;
   onVerifyUser?: (userId: number) => Promise<void>;
-  initialData: AdminUserListItem | null;
+  initialData: AdminUserDetail | null;
 }
 
 const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserModalProps) => {
@@ -39,7 +39,7 @@ const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserM
         username: initialData.username,
         email: initialData.email,
         role: initialData.role,
-        bio: "",
+        bio: initialData.bio || "",
         password: undefined, // Don't show password for existing users
       });
     } else {

@@ -254,12 +254,12 @@ const Practitioners = () => {
       render: (p) => (
         <div className="flex flex-col">
           <span className="text-white font-bold text-xs">
-            {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(p.price_per_second * 60)}/min
+            {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((p.price_per_second ?? 0) * 60)}/min
           </span>
           <div className="flex items-center gap-1 mt-0.5">
              <Icon icon="solar:dollar-bold-duotone" className="text-[10px] text-white/20" />
              <span className="text-[9px] text-white/30 uppercase font-black">
-               ${(p.price_per_second).toFixed(3)}/sec
+               ${(p.price_per_second ?? 0).toFixed(3)}/sec
              </span>
           </div>
         </div>

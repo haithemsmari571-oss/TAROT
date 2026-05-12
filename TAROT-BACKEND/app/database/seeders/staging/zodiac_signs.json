@@ -1,0 +1,134 @@
+[
+  {
+    "name": "Aries",
+    "element": "Fire",
+    "modality": "Cardinal",
+    "ruling_planet": "Mars",
+    "date_range_start": "03-21",
+    "date_range_end": "04-19",
+    "core_trait": "Bold",
+    "signature_trait": "Bold & Courageous by nature, Aries brings fire energy to every connection — ruled by Mars, their cosmic fingerprint is unmistakable.",
+    "description": "The fearless pioneer of the zodiac, Aries charges forward with passion and determination."
+  },
+  {
+    "name": "Taurus",
+    "element": "Earth",
+    "modality": "Fixed",
+    "ruling_planet": "Venus",
+    "date_range_start": "04-20",
+    "date_range_end": "05-20",
+    "core_trait": "Steadfast",
+    "signature_trait": "Steadfast & Sensual by nature, Taurus brings earth energy to every connection — ruled by Venus, their cosmic fingerprint is unmistakable.",
+    "description": "The reliable builder who values stability, beauty, and the pleasures of life."
+  },
+  {
+    "name": "Gemini",
+    "element": "Air",
+    "modality": "Mutable",
+    "ruling_planet": "Mercury",
+    "date_range_start": "05-21",
+    "date_range_end": "06-20",
+    "core_trait": "Witty",
+    "signature_trait": "Witty & Expressive by nature, Gemini brings air energy to every connection — ruled by Mercury, their cosmic fingerprint is unmistakable.",
+    "description": "The quick-witted communicator who thrives on variety and intellectual stimulation."
+  },
+  {
+    "name": "Cancer",
+    "element": "Water",
+    "modality": "Cardinal",
+    "ruling_planet": "Moon",
+    "date_range_start": "06-21",
+    "date_range_end": "07-22",
+    "core_trait": "Nurturing",
+    "signature_trait": "Nurturing & Intuitive by nature, Cancer brings water energy to every connection — ruled by the Moon, their cosmic fingerprint is unmistakable.",
+    "description": "The compassionate caretaker with deep emotional intelligence and loyalty."
+  },
+  {
+    "name": "Leo",
+    "element": "Fire",
+    "modality": "Fixed",
+    "ruling_planet": "Sun",
+    "date_range_start": "07-23",
+    "date_range_end": "08-22",
+    "core_trait": "Confident",
+    "signature_trait": "Confident & Generous by nature, Leo brings fire energy to every connection — ruled by the Sun, their cosmic fingerprint is unmistakable.",
+    "description": "The radiant leader who shines with warmth, creativity, and natural charisma."
+  },
+  {
+    "name": "Virgo",
+    "element": "Earth",
+    "modality": "Mutable",
+    "ruling_planet": "Mercury",
+    "date_range_start": "08-23",
+    "date_range_end": "09-22",
+    "core_trait": "Analytical",
+    "signature_trait": "Analytical & Precise by nature, Virgo brings earth energy to every connection — ruled by Mercury, their cosmic fingerprint is unmistakable.",
+    "description": "The meticulous perfectionist dedicated to service and continuous improvement."
+  },
+  {
+    "name": "Libra",
+    "element": "Air",
+    "modality": "Cardinal",
+    "ruling_planet": "Venus",
+    "date_range_start": "09-23",
+    "date_range_end": "10-22",
+    "core_trait": "Diplomatic",
+    "signature_trait": "Diplomatic & Harmonious by nature, Libra brings air energy to every connection — ruled by Venus, their cosmic fingerprint is unmistakable.",
+    "description": "The graceful peacemaker who seeks balance, beauty, and fairness in all things."
+  },
+  {
+    "name": "Scorpio",
+    "element": "Water",
+    "modality": "Fixed",
+    "ruling_planet": "Pluto",
+    "date_range_start": "10-23",
+    "date_range_end": "11-21",
+    "core_trait": "Intense",
+    "signature_trait": "Intense & Transformative by nature, Scorpio brings water energy to every connection — ruled by Pluto, their cosmic fingerprint is unmistakable.",
+    "description": "The powerful transformer with magnetic intensity and profound insight."
+  },
+  {
+    "name": "Sagittarius",
+    "element": "Fire",
+    "modality": "Mutable",
+    "ruling_planet": "Jupiter",
+    "date_range_start": "11-22",
+    "date_range_end": "12-21",
+    "core_trait": "Adventurous",
+    "signature_trait": "Adventurous & Optimistic by nature, Sagittarius brings fire energy to every connection — ruled by Jupiter, their cosmic fingerprint is unmistakable.",
+    "description": "The enthusiastic explorer seeking truth, wisdom, and new horizons."
+  },
+  {
+    "name": "Capricorn",
+    "element": "Earth",
+    "modality": "Cardinal",
+    "ruling_planet": "Saturn",
+    "date_range_start": "12-22",
+    "date_range_end": "01-19",
+    "core_trait": "Ambitious",
+    "signature_trait": "Ambitious & Disciplined by nature, Capricorn brings earth energy to every connection — ruled by Saturn, their cosmic fingerprint is unmistakable.",
+    "description": "The determined achiever who climbs steadily toward success with unwavering resolve."
+  },
+  {
+    "name": "Aquarius",
+    "element": "Air",
+    "modality": "Fixed",
+    "ruling_planet": "Uranus",
+    "date_range_start": "01-20",
+    "date_range_end": "02-18",
+    "core_trait": "Innovative",
+    "signature_trait": "Innovative & Humanitarian by nature, Aquarius brings air energy to every connection — ruled by Uranus, their cosmic fingerprint is unmistakable.",
+    "description": "The visionary rebel who champions progress and celebrates individuality."
+  },
+  {
+    "name": "Pisces",
+    "element": "Water",
+    "modality": "Mutable",
+    "ruling_planet": "Neptune",
+    "date_range_start": "02-19",
+    "date_range_end": "03-20",
+    "core_trait": "Empathetic",
+    "signature_trait": "Empathetic & Imaginative by nature, Pisces brings water energy to every connection — ruled by Neptune, their cosmic fingerprint is unmistakable.",
+    "description": "The mystical dreamer with boundless compassion and artistic soul."
+  }
+]

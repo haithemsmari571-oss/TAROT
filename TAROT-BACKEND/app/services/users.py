@@ -44,6 +44,7 @@ def get_users_with_filters(
     role: Optional[Role] = None,
     status: Optional[UserStatus] = None,
     is_verified: Optional[bool] = None,
+    exclude_roles: Optional[List[Role]] = None,
     page: int = 1,
     limit: int = 20,
     sort_by: str = "created_at",
@@ -84,6 +85,9 @@ def get_users_with_filters(
 
     if is_verified is not None:
         query = query.where(User.is_verified == is_verified)
+
+    if exclude_roles:
+        query = query.where(User.role.notin_(exclude_roles))
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())

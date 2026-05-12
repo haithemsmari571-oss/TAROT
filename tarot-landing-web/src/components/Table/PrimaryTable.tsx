@@ -257,10 +257,8 @@ export const PrimaryTable = <T extends Record<string, any>>({
       </div>
 
       {/* 4. PAGINATION FOOTER */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-4">
-        <div className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: COLORS.neutralGray }}>
-          Registry Range: <span style={{ color: COLORS.neutralWhite }}>{activePage * pageSize - pageSize + 1}</span> — <span style={{ color: COLORS.neutralWhite }}>{Math.min(activePage * pageSize, data.length)}</span>
-        </div>
+      {totalPages > 1 && (
+      <div className="flex flex-col md:flex-row items-center justify-end gap-4 px-4">
 
         <div className="flex items-center gap-2 p-1.5 rounded-2xl border mb-4" style={{ backgroundColor: COLORS.surface, borderColor: COLORS.neutralDarkGray }}>
           <button 
@@ -279,7 +277,7 @@ export const PrimaryTable = <T extends Record<string, any>>({
                 className={`w-8 h-8 rounded-xl text-[10px] font-black transition-all border ${activePage === i + 1 ? 'shadow-lg' : 'border-transparent'}`}
                 style={{ 
                     backgroundColor: activePage === i + 1 ? COLORS.primary : 'transparent',
-                    color: activePage === i + 1 ? COLORS.dark : COLORS.neutralGray,
+                    color: activePage === i + 1 ? COLORS.dark : "#fff",
                     borderColor: activePage === i + 1 ? COLORS.primary : 'transparent',
                     boxShadow: activePage === i + 1 ? `0 0 15px ${COLORS.primary}40` : 'none'
                 }}
@@ -298,6 +296,8 @@ export const PrimaryTable = <T extends Record<string, any>>({
           </button>
         </div>
       </div>
+      )}
+
     </div>
   );
 };

@@ -37,7 +37,12 @@ logger = get_logger(__name__)
 def _validate_user(db: Session, user_data: UserSignup):
     user = (
         db.query(User)
-        .filter(or_(User.username == user_data.username, User.email == user_data.email))
+        .filter(
+            or_(
+                User.username == user_data.username,
+                User.email.ilike(user_data.email),
+            )
+        )
         .first()
     )
     if user:
@@ -54,6 +59,7 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
     _validate_user(db, user_data)
 
     user_dict = user_data.model_dump()
+    user_dict["email"] = user_dict["email"].lower()
 
     password_hash = hash_password(user_dict["password"])
 
@@ -187,7 +193,7 @@ def verify_account(db: Session, token: str):
 
 
 def sign_in(db: Session, user_data: UserLogin) -> dict:
-    user = db.query(User).filter(User.email == user_data.email).first()
+    user = db.query(User).filter(User.email.ilike(user_data.email)).first()
     if not user:
         logger.warning(
             "signin_failed_user_not_found",
@@ -234,7 +240,7 @@ def sign_in(db: Session, user_data: UserLogin) -> dict:
 
 
 async def resend_verify_link(db: Session, email: str):
-    user = db.query(User).filter_by(email=email).first()
+    user = db.query(User).filter(User.email.ilike(email)).first()
     if not user:
         logger.warning(
             "resend_verify_failed_user_not_found",
@@ -278,7 +284,7 @@ async def resend_verify_link(db: Session, email: str):
 async def forgot_password(db: Session, email: EmailStr) -> str:
     message = "If theres an email associated with the user, a reset link will be sent"
 
-    user = db.query(User).filter_by(email=email).first()
+    user = db.query(User).filter(User.email.ilike(email)).first()
 
     if not user:
         logger.info(

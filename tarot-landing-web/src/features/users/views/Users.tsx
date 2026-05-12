@@ -9,7 +9,7 @@ import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useUsers } from "../hooks/useUsers";
 import { Role, UserStatus } from "../types/user.types";
-import type { AdminUserListItem } from "../types/user.types";
+import type { AdminUserDetail, AdminUserListItem } from "../types/user.types";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -41,7 +41,7 @@ const Users = () => {
   } = useUsers();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<AdminUserListItem | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewUser, setViewUser] = useState<AdminUserListItem | null>(null);
   
@@ -255,7 +255,7 @@ const Users = () => {
              placeholder="Search by username or email..."
              value={search}
              onChange={(e) => setSearch(e.target.value)}
-             iconLeft={<Icon icon="solar:magnifer-linear" className="text-xl opacity-20" />}
+             iconLeft={<Icon icon="solar:magnifer-linear" className="text-xl" style={{ color: COLORS.primary }} />}
           />
         </div>
 
@@ -325,7 +325,16 @@ const Users = () => {
 
               <button 
                 className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all"
-                onClick={() => { setSelectedUser(user); setIsModalOpen(true); }}
+                onClick={async () => {
+                  try {
+                    const detail = await getUserById(user.id);
+                    setSelectedUser(detail);
+                    setIsModalOpen(true);
+                  } catch {
+                    setSelectedUser(user as AdminUserDetail);
+                    setIsModalOpen(true);
+                  }
+                }}
                 title="Edit User"
               >
                 <Icon icon="solar:pen-new-round-bold-duotone" className="text-lg" />

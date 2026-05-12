@@ -487,7 +487,7 @@ async def update_chat_status_endpoint(
                 "type": "notification",
                 "notification_type": NotificationType.CHAT_ACCEPTED,
                 "title": "Chat Accepted",
-                "message": f"{psychic_name} has accepted your chat request!",
+                "message": f"{psychic_name} accepted the chat request!",
                 "data": {
                     "chat_id": chat_id,
                     "psychic_id": chat_obj.psychic_id,
