@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
-from app.dependencies.authorization import require_admin
+from app.dependencies.authorization import require_permission
+from app.dependencies.get_current_user import get_current_user
+from app.enums.permissions import Permission
 from app.enums.transaction_status import TransactionStatus
 from app.enums.transaction_type import TransactionType
 from app.logging_config import bind_user_to_context, get_logger
@@ -21,7 +23,9 @@ from app.services.transactions import (
     get_transaction_history,
 )
 
-router = APIRouter(dependencies=[Depends(require_admin)])
+router = APIRouter(
+    dependencies=[Depends(require_permission(Permission.MANAGE_TRANSACTIONS))]
+)
 logger = get_logger(__name__)
 
 
@@ -36,7 +40,7 @@ def get_user_transactions_admin(
     transaction_type: Optional[TransactionType] = Query(
         None, description="Filter by transaction type"
     ),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     bind_user_to_context(admin.id)
@@ -73,7 +77,7 @@ def get_user_transactions_admin(
 @router.get("/transactions/users/{user_id}/balance", response_model=BalanceResponse)
 def get_user_balance_admin(
     user_id: int,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     bind_user_to_context(admin.id)
@@ -104,7 +108,7 @@ def get_all_transactions_admin(
     search: Optional[str] = Query(
         None, description="Search by username, email, or description"
     ),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     bind_user_to_context(admin.id)

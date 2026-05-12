@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
-from app.dependencies.authorization import require_admin
-from app.models.user import User
+from app.dependencies.authorization import require_permission
+from app.enums.permissions import Permission
 from app.schemas.buy_option import (
     BuyOptionCreate,
     BuyOptionResponse,
@@ -21,7 +21,9 @@ from app.services.buy_options import (
     update_buy_option,
 )
 
-router = APIRouter(dependencies=[Depends(require_admin)])
+router = APIRouter(
+    dependencies=[Depends(require_permission(Permission.MANAGE_BUY_OPTIONS))]
+)
 
 
 @router.get("/buy-options", response_model=List[BuyOptionResponse])

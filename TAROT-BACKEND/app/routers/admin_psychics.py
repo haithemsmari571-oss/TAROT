@@ -1,12 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
-from app.dependencies.get_current_user import get_current_user
-from app.enums.role import Role
+from app.dependencies.authorization import require_permission
+from app.enums.permissions import Permission
 from app.enums.transaction_status import TransactionStatus
 from app.enums.transaction_type import TransactionType
 from app.logging_config import bind_user_to_context, get_logger
@@ -25,13 +25,10 @@ logger = get_logger(__name__)
 
 @router.get("/psychics/earnings/summary")
 def get_my_earnings_summary(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission(Permission.VIEW_EARNINGS)),
     db: Session = Depends(get_db),
 ):
     bind_user_to_context(user.id)
-
-    if user.role != Role.PSYCHIC:
-        raise HTTPException(status_code=403, detail="Only psychics can access earnings")
 
     total_completed = (
         db.query(func.sum(Transaction.amount))
@@ -93,13 +90,10 @@ def get_my_earnings(
     search: Optional[str] = Query(
         None, description="Search by username, email, or description"
     ),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission(Permission.VIEW_EARNINGS)),
     db: Session = Depends(get_db),
 ):
     bind_user_to_context(user.id)
-
-    if user.role != Role.PSYCHIC:
-        raise HTTPException(status_code=403, detail="Only psychics can access earnings")
 
     transactions, total = get_psychic_earnings(
         db=db,

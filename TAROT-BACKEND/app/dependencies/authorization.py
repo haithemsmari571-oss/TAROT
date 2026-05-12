@@ -3,7 +3,8 @@ from typing import List
 from fastapi import Depends, HTTPException
 
 from app.dependencies.get_current_user import get_current_user
-from app.enums.role import Role
+from app.enums.permissions import Permission
+from app.enums.role import ROLE_PERMISSIONS, Role
 from app.models.user import User
 
 
@@ -72,3 +73,34 @@ def require_roles(allowed_roles: List[Role]):
         return user
 
     return _check_role
+
+
+def require_permission(permission: Permission):
+    """
+    Dependency factory to require a specific permission.
+
+    Checks the user's role against ROLE_PERMISSIONS to determine if
+    the user has the required permission.
+
+    Usage:
+        @router.get("/endpoint")
+        def my_endpoint(user: User = Depends(require_permission(Permission.MANAGE_USERS))):
+            ...
+
+    Args:
+        permission: The required Permission enum value
+
+    Returns:
+        Dependency function
+    """
+
+    def _check_permission(user: User = Depends(get_current_user)) -> User:
+        allowed = ROLE_PERMISSIONS.get(user.role, [])
+        if permission not in allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied. Requires permission: {permission.value}",
+            )
+        return user
+
+    return _check_permission

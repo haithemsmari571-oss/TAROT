@@ -53,6 +53,14 @@ async def requset_chat_endpoint(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    from app.enums.role import Role
+
+    if user.role == Role.PSYCHIC:
+        return JSONResponse(
+            content={"detail": "Psychics cannot request chats"},
+            status_code=403,
+        )
+
     # Check if user has any paused chats
     paused_chat = (
         db.query(Chat)
@@ -436,6 +444,15 @@ async def update_chat_status_endpoint(
 
     # Handle status change to ACTIVE (psychic accepts chat)
     if chat.status == ChatStatus.ACTIVE and chat_obj:
+        if (
+            user.role not in [Role.ADMIN, Role.SUPERADMIN]
+            and user.id != chat_obj.psychic_id
+        ):
+            return JSONResponse(
+                content={"detail": "Only the assigned psychic can accept this chat"},
+                status_code=403,
+            )
+
         try:
             # Use SessionManager to start the session
             session_info = await session_manager.start_session(chat_id)
@@ -576,10 +593,13 @@ async def update_chat_status_endpoint(
         await broadcast_system_message(db, chat_id, termination_message)
 
     elif chat.status == ChatStatus.ARCHIVED and chat_obj:
-        # Only the client who made the request can cancel it
-        if user.id != chat_obj.user_id:
+        # Only the client, psychic, or admin can cancel/reject a request
+        if user.role not in [Role.ADMIN, Role.SUPERADMIN] and user.id not in (
+            chat_obj.user_id,
+            chat_obj.psychic_id,
+        ):
             return JSONResponse(
-                content={"detail": "Only the client can cancel their chat request"},
+                content={"detail": "Only participants can cancel this chat request"},
                 status_code=403,
             )
 
@@ -598,41 +618,68 @@ async def update_chat_status_endpoint(
 
         logger.info("chat_request_cancelled", chat_id=chat_id, user_id=user.id)
 
-        # Send notification to psychic
+        # Determine if cancelled by client or rejected by psychic
+        is_psychic_rejection = user.id == chat_obj.psychic_id
+        cancel_reason = "rejected" if is_psychic_rejection else "cancelled"
+        cancel_message = (
+            f"{user.username} has rejected the chat request."
+            if is_psychic_rejection
+            else f"{user.username} has cancelled their chat request."
+        )
+        notify_user_id = (
+            chat_obj.user_id if is_psychic_rejection else chat_obj.psychic_id
+        )
+
+        # Send notification
         from app.notification_manager import notification_manager
         from app.models.notification import Notification
         from app.enums.notification_type import NotificationType
 
-        psychic_notification = Notification(
-            user_id=chat_obj.psychic_id,
+        notification = Notification(
+            user_id=notify_user_id,
             type=NotificationType.CHAT_REQUEST_CANCELLED,
             title="Chat Request Cancelled",
-            message=f"{user.username} has cancelled their chat request.",
+            message=cancel_message,
             data={
                 "chat_id": chat_id,
-                "client_id": user.id,
+                "user_id": user.id,
+                "reason": cancel_reason,
             },
         )
-        db.add(psychic_notification)
+        db.add(notification)
         db.commit()
 
         notification_data = {
             "type": "notification",
             "notification_type": NotificationType.CHAT_REQUEST_CANCELLED,
             "title": "Chat Request Cancelled",
-            "message": f"{user.username} has cancelled their chat request.",
+            "message": cancel_message,
             "data": {
                 "chat_id": chat_id,
-                "client_id": user.id,
+                "user_id": user.id,
+                "reason": cancel_reason,
             },
             "timestamp": datetime.now().isoformat(),
         }
-        await notification_manager.send_to_user(notification_data, chat_obj.psychic_id)
+        await notification_manager.send_to_user(notification_data, notify_user_id)
 
         # Broadcast and store system message
         from app.services.chats import broadcast_system_message
 
-        await broadcast_system_message(db, chat_id, "Chat request cancelled by client.")
+        system_msg = (
+            "Chat request rejected by psychic."
+            if is_psychic_rejection
+            else "Chat request cancelled by client."
+        )
+        await broadcast_system_message(db, chat_id, system_msg)
+
+    else:
+        return JSONResponse(
+            content={
+                "detail": f"Status transition to {chat.status.value} is not supported"
+            },
+            status_code=400,
+        )
 
     return JSONResponse(content=None, status_code=201)
 

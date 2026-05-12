@@ -49,6 +49,32 @@ export enum UserRole {
   SUPERADMIN = "SUPERADMIN",
 }
 
+export enum Permission {
+  MANAGE_USERS = "manage_users",
+  MANAGE_PSYCHICS = "manage_psychics",
+  MANAGE_TRANSACTIONS = "manage_transactions",
+  MANAGE_ZODIAC = "manage_zodiac",
+  MANAGE_BUY_OPTIONS = "manage_buy_options",
+  MANAGE_SETTINGS = "manage_settings",
+  VIEW_EARNINGS = "view_earnings",
+  VIEW_TRANSACTIONS = "view_transactions",
+}
+
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  [UserRole.SUPERADMIN]: Object.values(Permission),
+  [UserRole.ADMIN]: [
+    Permission.MANAGE_USERS,
+    Permission.MANAGE_PSYCHICS,
+    Permission.MANAGE_TRANSACTIONS,
+    Permission.MANAGE_ZODIAC,
+    Permission.MANAGE_BUY_OPTIONS,
+    Permission.MANAGE_SETTINGS,
+    Permission.VIEW_TRANSACTIONS,
+  ],
+  [UserRole.PSYCHIC]: [Permission.VIEW_EARNINGS],
+  [UserRole.USER]: [],
+};
+
 export interface ForgotPasswordRequest {
   email: string;
 }

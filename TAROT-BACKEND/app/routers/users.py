@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.config import get_app_settings
 from app.database.client import get_db
-from app.dependencies.authorization import require_admin, require_superadmin
+from app.dependencies.authorization import (
+    require_permission,
+    require_superadmin,
+)
+from app.enums.permissions import Permission
 from app.enums.role import Role
 from app.enums.user_status import UserStatus
 from app.logging_config import bind_user_to_context, get_logger
@@ -70,7 +74,7 @@ def list_users(
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -118,7 +122,7 @@ def list_users(
 @router.get("/users/{user_id}", response_model=AdminUserDetail)
 def get_user_detail(
     user_id: int,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -136,7 +140,7 @@ def get_user_detail(
 @router.post("/users", response_model=AdminUserDetail)
 def create_user(
     user_data: AdminUserCreate,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -156,7 +160,7 @@ def create_user(
 def update_user(
     user_id: int,
     user_data: AdminUserUpdate,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -203,7 +207,7 @@ def delete_user(
 @router.patch("/users/{user_id}/suspend", response_model=AdminUserDetail)
 def suspend_user_endpoint(
     user_id: int,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -225,7 +229,7 @@ def suspend_user_endpoint(
 @router.patch("/users/{user_id}/activate", response_model=AdminUserDetail)
 def activate_user_endpoint(
     user_id: int,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -265,7 +269,7 @@ def change_user_role(
 def adjust_user_balance(
     user_id: int,
     adjustment: AdminBalanceAdjustment,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_TRANSACTIONS)),
     db: Session = Depends(get_db),
 ):
     """
@@ -382,7 +386,7 @@ def adjust_user_balance(
 @router.post("/users/{user_id}/verify", response_model=AdminUserDetail)
 def verify_user_endpoint(
     user_id: int,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_USERS)),
     db: Session = Depends(get_db),
 ):
     """

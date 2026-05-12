@@ -14,14 +14,16 @@ from app.schemas.settings import (
     SettingsListResponse,
 )
 from app.database.client import get_db
-from app.dependencies.authorization import require_superadmin
+from app.dependencies.authorization import require_permission
+from app.enums.permissions import Permission
 
 router = APIRouter()
 
 
 @router.get("/settings", response_model=SettingsListResponse)
 def admin_list_settings(
-    db: Session = Depends(get_db), _: None = Depends(require_superadmin)
+    db: Session = Depends(get_db),
+    _: None = Depends(require_permission(Permission.MANAGE_SETTINGS)),
 ):
     """Admin: Get all settings. Only accessible by superadmin."""
     settings = get_all_settings(db)
@@ -33,7 +35,7 @@ def admin_update_setting(
     key: str,
     setting: SettingUpdate,
     db: Session = Depends(get_db),
-    _: None = Depends(require_superadmin),
+    _: None = Depends(require_permission(Permission.MANAGE_SETTINGS)),
 ):
     """Admin: Update a setting by key. Only accessible by superadmin."""
     updated_setting = update_setting(db, key, setting)

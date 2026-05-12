@@ -6,3 +6,4 @@ export * from "./useForgotPassword";
 export * from "./useResetPassword";
 export * from "./useVerifyAccount";
 export * from "./useResendVerify";
+export * from "./usePermission";

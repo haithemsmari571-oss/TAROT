@@ -45,9 +45,10 @@ from app.schemas.life_path import (
     LifePathCompatibilityResponse,
 )
 from app.database.client import get_db
-from app.dependencies.authorization import require_admin
+from app.dependencies.authorization import require_permission
+from app.enums.permissions import Permission
 
-router = APIRouter(dependencies=[Depends(require_admin)])
+router = APIRouter(dependencies=[Depends(require_permission(Permission.MANAGE_ZODIAC))])
 
 
 # Zodiac Signs Admin CRUD

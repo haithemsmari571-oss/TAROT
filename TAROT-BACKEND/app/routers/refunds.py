@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
-from app.dependencies.authorization import require_admin
+from app.dependencies.authorization import require_permission
+from app.enums.permissions import Permission
 from app.logging_config import bind_user_to_context, get_logger
 from app.models.user import User
 from app.schemas.transaction import RefundRequest, RefundResponse
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 @router.post("/", response_model=RefundResponse)
 def issue_refund(
     refund_request: RefundRequest,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_permission(Permission.MANAGE_TRANSACTIONS)),
     db: Session = Depends(get_db),
 ):
     """
