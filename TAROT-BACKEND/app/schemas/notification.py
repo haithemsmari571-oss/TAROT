@@ -24,3 +24,12 @@ class NotificationOut(NotificationBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedNotifications(BaseModel):
+    notifications: list[NotificationOut]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    unread_count: int

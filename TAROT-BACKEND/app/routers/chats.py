@@ -1046,6 +1046,54 @@ async def resume_paused_chat(
 
         await session_mgr._broadcast_session_resumed(chat_id, session_info)
 
+        # Send CHAT_RESUMED notification to both users
+        from app.notification_manager import notification_manager
+        from app.models.notification import Notification
+        from app.enums.notification_type import NotificationType
+
+        chat_obj = db.query(Chat).filter(Chat.id == chat_id).first()
+
+        client_resume_notification = Notification(
+            user_id=user.id,
+            type=NotificationType.CHAT_RESUMED,
+            title="Chat Resumed",
+            message="Your session has resumed.",
+            data={
+                "chat_id": chat_id,
+                "remaining_seconds": session_info.remaining_seconds,
+            },
+        )
+        db.add(client_resume_notification)
+
+        if chat_obj and chat_obj.psychic_id:
+            psychic_resume_notification = Notification(
+                user_id=chat_obj.psychic_id,
+                type=NotificationType.CHAT_RESUMED,
+                title="Chat Resumed",
+                message="Client has resumed the session.",
+                data={
+                    "chat_id": chat_id,
+                    "remaining_seconds": session_info.remaining_seconds,
+                },
+            )
+            db.add(psychic_resume_notification)
+        db.commit()
+
+        resume_ws_data = {
+            "type": "notification",
+            "notification_type": NotificationType.CHAT_RESUMED,
+            "title": "Chat Resumed",
+            "message": "The session has resumed.",
+            "data": {
+                "chat_id": chat_id,
+                "remaining_seconds": session_info.remaining_seconds,
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+        await notification_manager.send_to_user(resume_ws_data, user.id)
+        if chat_obj and chat_obj.psychic_id:
+            await notification_manager.send_to_user(resume_ws_data, chat_obj.psychic_id)
+
         from app.services.chats import broadcast_system_message
 
         await broadcast_system_message(db, chat_id, "Your session has resumed.")

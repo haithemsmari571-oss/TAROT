@@ -224,7 +224,7 @@ async def pause_chat_insufficient_funds(
     from app.notification_manager import notification_manager
     from app.enums.chat_status import ChatStatus
     from app.enums.notification_type import NotificationType
-    from app.models import Chat, ChatSession, SessionInterval
+    from app.models import Chat, ChatSession, SessionInterval, Notification
     from datetime import datetime
     from sqlalchemy import desc
 
@@ -296,6 +296,40 @@ async def pause_chat_insufficient_funds(
             "timestamp": datetime.now().isoformat(),
         }
         await manager.send_to_chat(message=system_message, chat_id=str(chat_id))
+
+        # Create persisted CHAT_PAUSED_INSUFFICIENT_FUNDS notification in DB
+        from app.models.notification import Notification
+
+        client_db_notification = Notification(
+            user_id=chat.user_id,
+            type=NotificationType.CHAT_PAUSED_INSUFFICIENT_FUNDS,
+            title="Chat Paused - Balance Depleted",
+            message="Your balance is insufficient. Please top up to continue the session.",
+            data={
+                "chat_id": chat_id,
+                "reason": "INSUFFICIENT_BALANCE",
+                "elapsed_seconds": int(elapsed_seconds),
+                "estimated_cost": round(estimated_cost, 2),
+                "client_balance": float(chat.user.balance),
+            },
+        )
+        db.add(client_db_notification)
+
+        psychic_db_notification = Notification(
+            user_id=chat.psychic_id,
+            type=NotificationType.CHAT_PAUSED_INSUFFICIENT_FUNDS,
+            title="Chat Paused - Client Balance Depleted",
+            message="Client's balance is insufficient. Session paused.",
+            data={
+                "chat_id": chat_id,
+                "reason": "CLIENT_INSUFFICIENT_BALANCE",
+                "elapsed_seconds": int(elapsed_seconds),
+                "estimated_cost": round(estimated_cost, 2),
+                "client_balance": float(chat.user.balance),
+            },
+        )
+        db.add(psychic_db_notification)
+        db.commit()
 
         # Send CHAT_PAUSED_INSUFFICIENT_FUNDS notification to client via notification WebSocket
         pause_notification_data = {

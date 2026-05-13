@@ -1,7 +1,9 @@
 import asyncio
 import json
 from datetime import datetime
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import jwt
 from pydantic import ValidationError
@@ -13,32 +15,109 @@ from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.models.user import User
 from app.models.notification import Notification
-from app.schemas.notification import NotificationOut
+from app.schemas.notification import NotificationOut, PaginatedNotifications
+from app.enums.notification_type import NotificationType
 
 router = APIRouter()
 settings = get_app_settings()
 logger = get_logger(__name__)
 
 
+CHAT_NOTIFICATION_TYPES = {
+    NotificationType.CHAT_ACCEPTED,
+    NotificationType.CHAT_ENDED,
+    NotificationType.CHAT_REQUESTED,
+    NotificationType.CHAT_REQUEST_CANCELLED,
+    NotificationType.CHAT_PAUSED,
+    NotificationType.CHAT_PAUSED_INSUFFICIENT_FUNDS,
+    NotificationType.CHAT_RESUMED,
+}
+
+PAYMENT_NOTIFICATION_TYPES = {
+    NotificationType.TOPUP_SUCCESS,
+    NotificationType.INSUFFICIENT_BALANCE_AFTER_PAYMENT,
+    NotificationType.PAYMENT_SUCCESS_CHAT_NEEDS_MANUAL_RESUME,
+    NotificationType.RESUME_ERROR_AFTER_PAYMENT,
+    NotificationType.BALANCE_LOW,
+}
+
+
 @router.get("/")
 def get_notifications_endpoint(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    type: Optional[str] = Query(None, description="Filter by notification type"),
+    is_read: Optional[bool] = Query(None, description="Filter by read status"),
+    tab: Optional[str] = Query(None, description="Filter tab: unread, chats, payments"),
 ):
-    """Get all notifications for the current user"""
-    notifications = (
+    """Get paginated notifications for the current user with filters"""
+    query = db.query(Notification).filter(Notification.user_id == user.id)
+
+    # Apply type filter
+    if type:
+        query = query.filter(Notification.type == type)
+
+    # Apply read status filter
+    if is_read is not None:
+        query = query.filter(Notification.is_read == is_read)
+
+    # Apply tab filter
+    if tab == "unread":
+        query = query.filter(Notification.is_read == False)
+    elif tab == "chats":
+        query = query.filter(Notification.type.in_(CHAT_NOTIFICATION_TYPES))
+    elif tab == "payments":
+        query = query.filter(Notification.type.in_(PAYMENT_NOTIFICATION_TYPES))
+
+    # Get total count before pagination
+    total = query.count()
+
+    # Get unread count (always against full user scope)
+    unread_count = (
         db.query(Notification)
-        .filter(Notification.user_id == user.id)
-        .order_by(Notification.created_at.desc())
-        .limit(50)
-        .all()
+        .filter(Notification.user_id == user.id, Notification.is_read == False)
+        .count()
     )
 
-    notifications_list = [
-        NotificationOut.model_validate(notification) for notification in notifications
-    ]
+    # Apply pagination
+    total_pages = max(1, (total + limit - 1) // limit)
+    offset = (page - 1) * limit
 
-    return [notif.model_dump() for notif in notifications_list]
+    notifications = (
+        query.order_by(Notification.created_at.desc()).offset(offset).limit(limit).all()
+    )
+
+    notifications_list = [NotificationOut.model_validate(n) for n in notifications]
+
+    return PaginatedNotifications(
+        notifications=notifications_list,
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+        unread_count=unread_count,
+    ).model_dump()
+
+
+@router.post("/read-all")
+def mark_all_notifications_read_endpoint(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark all notifications as read for the current user"""
+    result = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user.id,
+            Notification.is_read == False,
+        )
+        .update({"is_read": True})
+    )
+    db.commit()
+
+    return {"success": True, "marked_count": result}
 
 
 @router.post("/{notification_id}/read")

@@ -1,8 +1,8 @@
 """init
 
-Revision ID: e3d31034a414
+Revision ID: dff106583c95
 Revises: 
-Create Date: 2026-05-12 11:58:04.522901
+Create Date: 2026-05-13 10:23:09.308443
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e3d31034a414'
+revision: str = 'dff106583c95'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -132,7 +132,7 @@ def upgrade() -> None:
     op.create_table('notifications',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('type', sa.Enum('CHAT_ACCEPTED', 'CHAT_ENDED', 'CHAT_REQUESTED', 'CHAT_REQUEST_CANCELLED', 'CHAT_PAUSED', 'CHAT_PAUSED_INSUFFICIENT_FUNDS', 'CHAT_RESUMED', 'MESSAGE_RECEIVED', 'BALANCE_LOW', 'SESSION_ENDING_SOON', 'SESSION_ENDED_NO_BALANCE', name='notificationtype'), nullable=False),
+    sa.Column('type', sa.Enum('CHAT_ACCEPTED', 'CHAT_ENDED', 'CHAT_REQUESTED', 'CHAT_REQUEST_CANCELLED', 'CHAT_PAUSED', 'CHAT_PAUSED_INSUFFICIENT_FUNDS', 'CHAT_RESUMED', 'BALANCE_LOW', 'INSUFFICIENT_BALANCE_AFTER_PAYMENT', 'PAYMENT_SUCCESS_CHAT_NEEDS_MANUAL_RESUME', 'RESUME_ERROR_AFTER_PAYMENT', 'TOPUP_SUCCESS', name='notificationtype'), nullable=False),
     sa.Column('title', sa.String(length=255), nullable=False),
     sa.Column('message', sa.String(length=1000), nullable=False),
     sa.Column('is_read', sa.Boolean(), nullable=False),

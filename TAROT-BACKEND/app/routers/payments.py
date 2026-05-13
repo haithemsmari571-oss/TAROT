@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -258,6 +260,41 @@ async def stripe_webhook(
                         idempotency_key=idempotency_key,
                     )
 
+                    # Send TOPUP_SUCCESS notification to the user
+                    from app.models.notification import Notification
+                    from app.enums.notification_type import NotificationType
+
+                    topup_notification = Notification(
+                        user_id=user_id,
+                        type=NotificationType.TOPUP_SUCCESS,
+                        title="Points Added",
+                        message=f"{points_to_add} points have been added to your account.",
+                        data={
+                            "points_added": points_to_add,
+                            "balance_after": transaction.balance_after,
+                            "stripe_session_id": session["id"],
+                        },
+                    )
+                    db.add(topup_notification)
+                    db.commit()
+
+                    topup_notification_data = {
+                        "type": "notification",
+                        "notification_type": NotificationType.TOPUP_SUCCESS,
+                        "title": "Points Added",
+                        "message": f"{points_to_add} points have been added to your account.",
+                        "data": {
+                            "points_added": points_to_add,
+                            "balance_after": transaction.balance_after,
+                        },
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                    from app.notification_manager import notification_manager
+
+                    await notification_manager.send_to_user(
+                        topup_notification_data, user_id
+                    )
+
                     # Check if user has a paused chat session and resume it
                     from app.models.chat import Chat
                     from app.enums.chat_status import ChatStatus
@@ -296,6 +333,63 @@ async def stripe_webhook(
                                 paused_chat.id, session_info
                             )
 
+                            # Send CHAT_RESUMED notification to both users
+                            from app.models.notification import Notification
+                            from app.enums.notification_type import NotificationType
+
+                            client_resume_notification = Notification(
+                                user_id=user_id,
+                                type=NotificationType.CHAT_RESUMED,
+                                title="Chat Resumed",
+                                message="Your session has resumed after top-up.",
+                                data={
+                                    "chat_id": paused_chat.id,
+                                    "remaining_seconds": session_info.remaining_seconds,
+                                },
+                            )
+                            db.add(client_resume_notification)
+
+                            from app.models.user import User
+
+                            chat_obj = (
+                                db.query(Chat).filter(Chat.id == paused_chat.id).first()
+                            )
+                            if chat_obj and chat_obj.psychic_id:
+                                psychic_resume_notification = Notification(
+                                    user_id=chat_obj.psychic_id,
+                                    type=NotificationType.CHAT_RESUMED,
+                                    title="Chat Resumed",
+                                    message="Client has resumed the session after top-up.",
+                                    data={
+                                        "chat_id": paused_chat.id,
+                                        "remaining_seconds": session_info.remaining_seconds,
+                                    },
+                                )
+                                db.add(psychic_resume_notification)
+                            db.commit()
+
+                            # Send real-time WebSocket notifications
+                            from app.notification_manager import notification_manager
+
+                            resume_ws_data = {
+                                "type": "notification",
+                                "notification_type": NotificationType.CHAT_RESUMED,
+                                "title": "Chat Resumed",
+                                "message": "Your session has resumed after top-up.",
+                                "data": {
+                                    "chat_id": paused_chat.id,
+                                    "remaining_seconds": session_info.remaining_seconds,
+                                },
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                            await notification_manager.send_to_user(
+                                resume_ws_data, user_id
+                            )
+                            if chat_obj and chat_obj.psychic_id:
+                                await notification_manager.send_to_user(
+                                    resume_ws_data, chat_obj.psychic_id
+                                )
+
                             # Store and broadcast system message for resume
                             from app.services.chats import broadcast_system_message
 
@@ -319,13 +413,25 @@ async def stripe_webhook(
                             )
                             # Notify user about insufficient balance
                             from app.notification_manager import notification_manager
+                            from app.enums.notification_type import NotificationType
+
+                            insufficient_notification = Notification(
+                                user_id=user_id,
+                                type=NotificationType.INSUFFICIENT_BALANCE_AFTER_PAYMENT,
+                                title="Additional Balance Needed",
+                                message="Payment received but more balance needed to resume chat.",
+                                data={"chat_id": paused_chat.id},
+                            )
+                            db.add(insufficient_notification)
+                            db.commit()
 
                             notification_data = {
                                 "type": "notification",
-                                "notification_type": "INSUFFICIENT_BALANCE_AFTER_PAYMENT",
+                                "notification_type": NotificationType.INSUFFICIENT_BALANCE_AFTER_PAYMENT,
                                 "title": "Additional Balance Needed",
                                 "message": "Payment received but more balance needed to resume chat.",
                                 "data": {"chat_id": paused_chat.id},
+                                "timestamp": datetime.now().isoformat(),
                             }
                             await notification_manager.send_to_user(
                                 notification_data, user_id
@@ -341,13 +447,25 @@ async def stripe_webhook(
                             )
                             # Notify user about manual intervention needed
                             from app.notification_manager import notification_manager
+                            from app.enums.notification_type import NotificationType
+
+                            session_not_found_notification = Notification(
+                                user_id=user_id,
+                                type=NotificationType.PAYMENT_SUCCESS_CHAT_NEEDS_MANUAL_RESUME,
+                                title="Payment Successful",
+                                message="Your payment was processed. Please refresh the page to continue your chat.",
+                                data={"chat_id": paused_chat.id},
+                            )
+                            db.add(session_not_found_notification)
+                            db.commit()
 
                             notification_data = {
                                 "type": "notification",
-                                "notification_type": "PAYMENT_SUCCESS_CHAT_NEEDS_MANUAL_RESUME",
+                                "notification_type": NotificationType.PAYMENT_SUCCESS_CHAT_NEEDS_MANUAL_RESUME,
                                 "title": "Payment Successful",
                                 "message": "Your payment was processed. Please refresh the page to continue your chat.",
                                 "data": {"chat_id": paused_chat.id},
+                                "timestamp": datetime.now().isoformat(),
                             }
                             await notification_manager.send_to_user(
                                 notification_data, user_id
@@ -362,13 +480,25 @@ async def stripe_webhook(
                             )
                             # Notify user about error
                             from app.notification_manager import notification_manager
+                            from app.enums.notification_type import NotificationType
+
+                            resume_error_notification = Notification(
+                                user_id=user_id,
+                                type=NotificationType.RESUME_ERROR_AFTER_PAYMENT,
+                                title="Resume Error",
+                                message="Payment successful but chat failed to resume. Please contact support.",
+                                data={"chat_id": paused_chat.id},
+                            )
+                            db.add(resume_error_notification)
+                            db.commit()
 
                             notification_data = {
                                 "type": "notification",
-                                "notification_type": "RESUME_ERROR_AFTER_PAYMENT",
+                                "notification_type": NotificationType.RESUME_ERROR_AFTER_PAYMENT,
                                 "title": "Resume Error",
                                 "message": "Payment successful but chat failed to resume. Please contact support.",
                                 "data": {"chat_id": paused_chat.id},
+                                "timestamp": datetime.now().isoformat(),
                             }
                             await notification_manager.send_to_user(
                                 notification_data, user_id

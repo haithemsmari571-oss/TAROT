@@ -1187,6 +1187,41 @@ class SessionManager:
         if remaining <= 300 and not session_state.warning_5min_sent:
             session_state.warning_5min_sent = True
             await self._broadcast_warning(session_state.chat_id, remaining, "5_minutes")
+
+            # Persist BALANCE_LOW notification
+            from app.models.notification import Notification
+            from app.enums.notification_type import NotificationType
+            from app.notification_manager import notification_manager
+            from datetime import datetime
+
+            balance_low_notif = Notification(
+                user_id=session_state.client_id,
+                type=NotificationType.BALANCE_LOW,
+                title="Balance Low",
+                message="Your balance is running low. Please top up to avoid interruption.",
+                data={
+                    "chat_id": session_state.chat_id,
+                    "remaining_seconds": remaining,
+                },
+            )
+            db.add(balance_low_notif)
+            db.commit()
+
+            balance_low_ws = {
+                "type": "notification",
+                "notification_type": NotificationType.BALANCE_LOW,
+                "title": "Balance Low",
+                "message": "Your balance is running low. Please top up to avoid interruption.",
+                "data": {
+                    "chat_id": session_state.chat_id,
+                    "remaining_seconds": remaining,
+                },
+                "timestamp": datetime.now().isoformat(),
+            }
+            await notification_manager.send_to_user(
+                balance_low_ws, session_state.client_id
+            )
+
             await broadcast_system_message(
                 db,
                 session_state.chat_id,
