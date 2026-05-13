@@ -61,21 +61,25 @@ async def requset_chat_endpoint(
             status_code=403,
         )
 
-    # Check if user has any paused chats
-    paused_chat = (
-        db.query(Chat)
-        .filter(Chat.user_id == user.id, Chat.status == ChatStatus.PAUSED)
-        .first()
-    )
-
-    if paused_chat:
-        return JSONResponse(
-            content={
-                "detail": "You have a paused chat session. Please resume or end it before starting a new chat.",
-                "paused_chat_id": paused_chat.id,
-            },
-            status_code=400,
+    # Only admins/superadmins can have multiple active/paused chats
+    if user.role not in (Role.ADMIN, Role.SUPERADMIN):
+        existing_active_or_paused = (
+            db.query(Chat)
+            .filter(
+                Chat.user_id == user.id,
+                Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
+            )
+            .first()
         )
+
+        if existing_active_or_paused:
+            return JSONResponse(
+                content={
+                    "detail": "You already have an active or paused chat. Please end or resume it before starting a new one.",
+                    "existing_chat_id": existing_active_or_paused.id,
+                },
+                status_code=400,
+            )
 
     # Create/update chat and get chat_id
     chat_id = req_start_chat(db, user.id, chat_data)
@@ -453,6 +457,27 @@ async def update_chat_status_endpoint(
                 status_code=403,
             )
 
+        # Only admins/superadmins can have multiple active/paused chats
+        if user.role not in (Role.ADMIN, Role.SUPERADMIN):
+            existing_active_or_paused = (
+                db.query(Chat)
+                .filter(
+                    Chat.psychic_id == user.id,
+                    Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
+                    Chat.id != chat_id,
+                )
+                .first()
+            )
+
+            if existing_active_or_paused:
+                return JSONResponse(
+                    content={
+                        "detail": "You already have an active or paused chat. Please end it before accepting a new one.",
+                        "existing_chat_id": existing_active_or_paused.id,
+                    },
+                    status_code=400,
+                )
+
         try:
             # Use SessionManager to start the session
             session_info = await session_manager.start_session(chat_id)
@@ -515,6 +540,73 @@ async def update_chat_status_endpoint(
 
     # Handle status change to ENDED (user/psychic ends chat)
     elif chat.status == ChatStatus.ENDED and chat_obj:
+        # If the chat was still REQUESTED, treat this as a decline/rejection
+        if chat_obj.status == ChatStatus.REQUESTED:
+            await session_manager.end_session(
+                chat_id, ChatTerminationReason.MANUAL_EXIT, ended_by_user_id=user.id
+            )
+
+            is_psychic_rejection = user.id == chat_obj.psychic_id
+
+            from app.notification_manager import notification_manager
+            from app.models.notification import Notification
+            from app.enums.notification_type import NotificationType
+
+            notify_user_id = (
+                chat_obj.user_id if is_psychic_rejection else chat_obj.psychic_id
+            )
+            cancel_message = (
+                f"{user.username} has rejected the chat request."
+                if is_psychic_rejection
+                else f"{user.username} has cancelled their chat request."
+            )
+
+            notification = Notification(
+                user_id=notify_user_id,
+                type=NotificationType.CHAT_REQUEST_CANCELLED,
+                title="Chat Request Declined",
+                message=cancel_message,
+                data={
+                    "chat_id": chat_id,
+                    "user_id": user.id,
+                    "reason": "rejected" if is_psychic_rejection else "cancelled",
+                },
+            )
+            db.add(notification)
+            db.commit()
+
+            notification_data = {
+                "type": "notification",
+                "notification_type": NotificationType.CHAT_REQUEST_CANCELLED,
+                "title": "Chat Request Declined",
+                "message": cancel_message,
+                "data": {
+                    "chat_id": chat_id,
+                    "user_id": user.id,
+                    "reason": "rejected" if is_psychic_rejection else "cancelled",
+                },
+                "timestamp": datetime.now().isoformat(),
+            }
+            await notification_manager.send_to_user(notification_data, notify_user_id)
+
+            from app.services.chats import broadcast_system_message
+
+            system_msg = (
+                "Chat request rejected by psychic."
+                if is_psychic_rejection
+                else "Chat request cancelled by client."
+            )
+            await broadcast_system_message(db, chat_id, system_msg)
+
+            logger.info(
+                "chat_request_declined_via_endpoint",
+                chat_id=chat_id,
+                user_id=user.id,
+                is_psychic_rejection=is_psychic_rejection,
+            )
+
+            return JSONResponse(content=None, status_code=201)
+
         # Use SessionManager to end the session
         await session_manager.end_session(
             chat_id, ChatTerminationReason.MANUAL_EXIT, ended_by_user_id=user.id
