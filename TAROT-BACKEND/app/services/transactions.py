@@ -44,6 +44,7 @@ def create_credit_transaction(
     stripe_payment_intent_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
     metadata: Optional[dict] = None,
+    transaction_type: TransactionType = TransactionType.CREDIT,
 ) -> Transaction:
     """
     Create a CREDIT transaction (add points to user balance).
@@ -96,7 +97,7 @@ def create_credit_transaction(
         # Create transaction record
         transaction = Transaction(
             user_id=user_id,
-            transaction_type=TransactionType.CREDIT,
+            transaction_type=transaction_type,
             amount=amount,
             balance_before=balance_before,
             balance_after=balance_after,

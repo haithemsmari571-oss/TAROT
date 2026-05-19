@@ -87,3 +87,9 @@ export interface AdminBalanceAdjustment {
   amount: number;
   reason: string;
 }
+
+// Gift balance payload
+export interface GiftBalancePayload {
+  amount: number;
+  message: string;
+}

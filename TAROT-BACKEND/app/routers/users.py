@@ -1,4 +1,5 @@
 import math
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,13 +12,17 @@ from app.dependencies.authorization import (
     require_superadmin,
     verify_admin_target_authority,
 )
+from app.enums.notification_type import NotificationType
 from app.enums.permissions import Permission
 from app.enums.role import Role
+from app.enums.transaction_type import TransactionType
 from app.enums.user_status import UserStatus
 from app.logging_config import bind_user_to_context, get_logger
+from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.user import (
     AdminBalanceAdjustment,
+    AdminGiftBalance,
     AdminUserCreate,
     AdminUserDetail,
     AdminUserListItem,
@@ -397,6 +402,108 @@ def adjust_user_balance(
         "amount": adjustment.amount,
         "new_balance": user.balance,
         "reason": adjustment.reason,
+        "status": "success",
+    }
+
+
+@router.post("/users/{user_id}/gift")
+async def gift_user_balance(
+    user_id: int,
+    gift_data: AdminGiftBalance,
+    admin: User = Depends(require_permission(Permission.MANAGE_TRANSACTIONS)),
+    db: Session = Depends(get_db),
+):
+    """
+    Gift balance to a user.
+
+    Creates a GIFT transaction and sends a notification to the user.
+
+    **Permissions:** Admin, Superadmin
+    """
+    # Bind admin to context
+    bind_user_to_context(admin.id)
+
+    # Get user to verify exists
+    user = get_user_by_id(db, user_id)
+    verify_admin_target_authority(admin, user)
+
+    logger.info(
+        "admin_gift_requested",
+        admin_user_id=admin.id,
+        admin_username=admin.username,
+        target_user_id=user_id,
+        target_username=user.username,
+        gift_amount=gift_data.amount,
+        gift_message=gift_data.message,
+        current_balance=user.balance,
+    )
+
+    # Create GIFT transaction
+    transaction = create_credit_transaction(
+        db=db,
+        user_id=user_id,
+        amount=gift_data.amount,
+        description=f"Admin gift: {gift_data.message}" if gift_data.message else "Admin gift",
+        transaction_type=TransactionType.GIFT,
+        metadata={
+            "admin_id": admin.id,
+            "admin_username": admin.username,
+        },
+    )
+
+    db.refresh(user)
+
+    # Create persisted notification
+    notification_message = (
+        f"You have been gifted {gift_data.amount} points."
+        + (f" Message: {gift_data.message}" if gift_data.message else "")
+    )
+    db_notification = Notification(
+        user_id=user_id,
+        type=NotificationType.GIFT_BALANCE_RECEIVED,
+        title="You received a gift!",
+        message=notification_message,
+        data={
+            "amount": gift_data.amount,
+            "new_balance": user.balance,
+        },
+    )
+    db.add(db_notification)
+    db.commit()
+    db.refresh(db_notification)
+
+    # Send real-time WebSocket notification
+    from app.notification_manager import notification_manager
+
+    ws_data = {
+        "type": "notification",
+        "notification_type": NotificationType.GIFT_BALANCE_RECEIVED,
+        "title": "You received a gift!",
+        "message": notification_message,
+        "data": {
+            "amount": gift_data.amount,
+            "new_balance": user.balance,
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+    await notification_manager.send_to_user(ws_data, user_id)
+
+    logger.info(
+        "admin_gift_completed",
+        transaction_id=transaction.id,
+        admin_user_id=admin.id,
+        target_user_id=user_id,
+        amount=gift_data.amount,
+        balance_before=transaction.balance_before,
+        balance_after=transaction.balance_after,
+    )
+
+    return {
+        "transaction_id": transaction.id,
+        "user_id": user_id,
+        "amount": gift_data.amount,
+        "new_balance": user.balance,
+        "message": gift_data.message,
         "status": "success",
     }
 

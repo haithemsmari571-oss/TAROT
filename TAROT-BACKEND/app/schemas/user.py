@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.enums.role import Role
 from app.enums.user_status import UserStatus
@@ -148,9 +148,14 @@ class UserRoleUpdate(BaseModel):
     role: Role
 
 
+class AdminGiftBalance(BaseModel):
+    """Schema for admin gift balance"""
+    amount: int = Field(gt=0, description="Amount of points to gift")
+    message: str = Field(default="", max_length=500, description="Optional gift message")
+
+
 class AdminBalanceAdjustment(BaseModel):
     """Schema for admin balance adjustment"""
-
     amount: int
     reason: str
 

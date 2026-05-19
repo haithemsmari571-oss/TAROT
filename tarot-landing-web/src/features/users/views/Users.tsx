@@ -4,6 +4,7 @@ import { PrimaryTable, type Column } from "../../../components/Table/PrimaryTabl
 import UserModal from "../../../components/modals/UserModal";
 import ViewUserModal from "../../../components/modals/ViewUserModal";
 import DeleteModal from "../../../components/modals/DeleteModal";
+import GiftBalanceModal from "../../../components/modals/GiftBalanceModal";
 import PrimarySelect from "../../../components/CustomInputs/PrimarySelect";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
@@ -37,7 +38,8 @@ const Users = () => {
     deleteUser,
     createUser,
     updateUser,
-    verifyUser 
+    verifyUser,
+    giftBalance 
   } = useUsers();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,6 +47,10 @@ const Users = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewUser, setViewUser] = useState<AdminUserListItem | null>(null);
   
+  // --- Gift State ---
+  const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+  const [userToGift, setUserToGift] = useState<AdminUserListItem | null>(null);
+
   // --- Deletion State ---
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToPurge, setUserToPurge] = useState<AdminUserListItem | null>(null);
@@ -111,6 +117,18 @@ const Users = () => {
         const errorMessage = err.response?.data?.detail || err.message || "Failed to delete user";
         alert(`Error: ${errorMessage}`);
       }
+    }
+  };
+
+  // Handle gift balance
+  const handleGiftBalance = async (userId: number, amount: number, message: string) => {
+    try {
+      await giftBalance(userId, { amount, message });
+    } catch (err: any) {
+      console.error("Failed to gift balance:", err);
+      const errorMessage = err.response?.data?.detail || err.message || "Failed to gift balance";
+      alert(`Error: ${errorMessage}`);
+      throw err;
     }
   };
 
@@ -324,6 +342,14 @@ const Users = () => {
               </button>
 
               <button 
+                className="p-3 rounded-xl text-white/20 hover:text-starGold hover:bg-starGold/5 transition-all"
+                onClick={() => { setUserToGift(user); setIsGiftModalOpen(true); }}
+                title="Gift Balance"
+              >
+                <Icon icon="solar:gift-bold-duotone" className="text-lg" />
+              </button>
+
+              <button 
                 className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all"
                 onClick={async () => {
                   try {
@@ -360,6 +386,14 @@ const Users = () => {
         onSave={handleSaveUser}
         onVerifyUser={handleVerifyUser}
         initialData={selectedUser}
+      />
+
+      {/* Gift Balance Modal */}
+      <GiftBalanceModal
+        isOpen={isGiftModalOpen}
+        onClose={() => { setIsGiftModalOpen(false); setUserToGift(null); }}
+        onGift={handleGiftBalance}
+        user={userToGift}
       />
 
       {/* View User Modal */}

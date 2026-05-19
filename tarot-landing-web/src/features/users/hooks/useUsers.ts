@@ -8,6 +8,7 @@ import type {
   AdminUserUpdate,
   UserRoleUpdate,
   AdminBalanceAdjustment,
+  GiftBalancePayload,
 } from "../types/user.types";
 
 export const useUsers = () => {
@@ -187,6 +188,26 @@ export const useUsers = () => {
     [fetchUsers]
   );
 
+  // Gift balance to user
+  const giftBalance = useCallback(
+    async (userId: number, payload: GiftBalancePayload) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await usersApi.giftBalance(userId, payload);
+        await fetchUsers();
+        return data;
+      } catch (err: any) {
+        const errorMessage = err.response?.data?.detail || "Failed to gift balance";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchUsers]
+  );
+
   // Verify user
   const verifyUser = useCallback(
     async (userId: number) => {
@@ -220,6 +241,7 @@ export const useUsers = () => {
     activateUser,
     updateUserRole,
     adjustBalance,
+    giftBalance,
     verifyUser,
   };
 };

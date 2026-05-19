@@ -7,3 +7,4 @@ class TransactionType(enum.Enum):
     REFUND = "REFUND"  # Refund to user
     REVERSAL = "REVERSAL"  # Reversing a transaction
     BONUS = "BONUS"  # Free points awarded at signup
+    GIFT = "GIFT"  # Admin gift to user

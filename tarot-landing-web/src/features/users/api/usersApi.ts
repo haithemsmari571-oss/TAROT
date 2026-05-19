@@ -7,6 +7,7 @@ import type {
   AdminUserUpdate,
   UserRoleUpdate,
   AdminBalanceAdjustment,
+  GiftBalancePayload,
 } from "../types/user.types";
 
 export const usersApi = {
@@ -104,6 +105,17 @@ export const usersApi = {
       `/admin/users/${userId}/balance/adjust`,
       adjustment
     );
+    return response.data;
+  },
+
+  /**
+   * Gift balance to a user
+   */
+  giftBalance: async (
+    userId: number,
+    payload: GiftBalancePayload
+  ): Promise<{ transaction_id: number; user_id: number; amount: number; new_balance: number; message: string; status: string }> => {
+    const response = await axiosClient.post(`/admin/users/${userId}/gift`, payload);
     return response.data;
   },
 
