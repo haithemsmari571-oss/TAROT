@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.cache import Cache, Value
 from app.config import get_app_settings
 from app.enums.email_template_key import MailTemplateKey
+from app.enums.transaction_type import TransactionType
 from app.exceptions.auth import AccountNotVerified, BadCredentials, InvalidResetLink
 from app.exceptions.email import EmailServiceUnavailable
 from app.exceptions.users import (
@@ -17,10 +18,12 @@ from app.exceptions.users import (
     UserNotFoundError,
 )
 from app.logging_config import bind_user_to_context, get_logger
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.auth import ResetPasswordReq, SignupResponse, UserLogin, UserSignup
 from app.schemas.user import UserRead
 from app.services.email import send_email
+from app.services.settings import get_setting_value
 from app.utils.security import (
     create_access_token,
     create_refresh_token,
@@ -79,6 +82,34 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
 
     # Commit user first - don't let email failures block user creation
     db.commit()
+
+    # Apply signup bonus if configured
+    try:
+        signup_bonus_str = get_setting_value(db, "signup_bonus")
+        if signup_bonus_str is not None:
+            bonus_amount = int(signup_bonus_str)
+            if bonus_amount > 0:
+                user.balance = bonus_amount
+                transaction = Transaction(
+                    user_id=user.id,
+                    transaction_type=TransactionType.BONUS,
+                    amount=bonus_amount,
+                    balance_before=0,
+                    balance_after=bonus_amount,
+                    description="Signup bonus",
+                )
+                db.add(transaction)
+                db.commit()
+                logger.info(
+                    "signup_bonus_awarded",
+                    user_id=user.id,
+                    bonus_amount=bonus_amount,
+                )
+    except (ValueError, TypeError):
+        logger.warning(
+            "signup_bonus_invalid_value",
+            user_id=user.id,
+        )
 
     # Try to send verification email (non-fatal if it fails)
     email_sent = True

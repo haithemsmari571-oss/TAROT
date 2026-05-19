@@ -169,17 +169,23 @@ const Practitioners = () => {
       render: (p) => (
         <div className="flex items-center gap-4">
           <div
-            className="w-11 h-11 rounded-[14px] overflow-hidden border transition-all hover:scale-110"
+            className="w-11 h-11 rounded-[14px] overflow-hidden border transition-all hover:scale-110 shrink-0"
             style={{
               backgroundColor: `rgba(255,255,255,0.02)`,
               borderColor: `rgba(255,255,255,0.05)`,
             }}
           >
-            <img 
-              src={p.profile_picture_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop"} 
-              alt={p.username} 
-              className="w-full h-full object-cover grayscale-[0.3] hover:grayscale-0 transition-all" 
-            />
+            {p.profile_picture_url ? (
+              <img 
+                src={p.profile_picture_url} 
+                alt={p.username} 
+                className="w-full h-full object-cover grayscale-[0.3] hover:grayscale-0 transition-all" 
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center grayscale">
+                <Icon icon="ph:user-fill" className="text-white/20 text-xl" />
+              </div>
+            )}
           </div>
           <div className="flex flex-col">
             <span className="text-white font-bold leading-tight" style={{ fontSize: TYPOGRAPHY.fontSize.sm }}>

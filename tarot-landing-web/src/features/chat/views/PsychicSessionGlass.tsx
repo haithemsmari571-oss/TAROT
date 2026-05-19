@@ -686,6 +686,11 @@ const PsychicSessionGlass = () => {
     }
   };
 
+  const statusPriority: Record<string, number> = {
+    ACTIVE: 0,
+    REQUESTED: 1,
+  };
+
   const filteredChats =
     (activeTab === "ALL"
       ? chats
@@ -693,7 +698,11 @@ const PsychicSessionGlass = () => {
     ).filter((chat) =>
       (chat.user_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (chat.psychic_name || "").toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    ).sort((a, b) => {
+      const pa = statusPriority[a.status] ?? 2;
+      const pb = statusPriority[b.status] ?? 2;
+      return pa - pb;
+    });
 
   const formatTime = (totalSeconds: number | null | undefined) => {
     const secs = totalSeconds || 0;

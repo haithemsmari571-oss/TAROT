@@ -1,11 +1,30 @@
 import axiosClient from "@/lib/axiosClient";
-import { Notification } from "../types/notification.types";
+import { Notification, NotificationType } from "../types/notification.types";
+
+export interface GetNotificationsParams {
+  page?: number;
+  limit?: number;
+  type?: NotificationType;
+  is_read?: boolean;
+  tab?: "unread" | "chats" | "payments";
+}
+
+export interface PaginatedNotifications {
+  notifications: Notification[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  unread_count: number;
+}
 
 /**
- * Get all notifications for the current user
+ * Get paginated notifications for the current user with filters
  */
-export const getNotifications = async (): Promise<Notification[]> => {
-  const response = await axiosClient.get("/notifications/");
+export const getNotifications = async (
+  params?: GetNotificationsParams
+): Promise<PaginatedNotifications> => {
+  const response = await axiosClient.get("/notifications/", { params });
   return response.data;
 };
 
@@ -16,6 +35,16 @@ export const markNotificationRead = async (
   notificationId: number
 ): Promise<void> => {
   await axiosClient.post(`/notifications/${notificationId}/read`);
+};
+
+/**
+ * Mark all notifications as read
+ */
+export const markAllNotificationsRead = async (): Promise<{
+  marked_count: number;
+}> => {
+  const response = await axiosClient.post("/notifications/read-all");
+  return response.data;
 };
 
 /**

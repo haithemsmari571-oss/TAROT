@@ -12,6 +12,10 @@
     "value": "whsec_8e7c58d95e98f4998a4f66e99911bf1244e1da3db74dae7106309f7d827af697"
   },
   {
+    "key": "signup_bonus",
+    "value": "100"
+  },
+  {
     "key": "privacy_policy",
     "value": "# Privacy Policy\n\nLast updated: April 28, 2026\n\n## Introduction\n\nWelcome to our Tarot reading application. We respect your privacy and are committed to protecting your personal data.\n\n## Information We Collect\n\n- Personal identification information (name, email address)\n- Payment information (processed securely through Stripe)\n- Reading history and preferences\n- Usage data and analytics\n\n## How We Use Your Information\n\n- To provide and maintain our service\n- To process your transactions\n- To send you notifications about your readings\n- To improve our application\n- To comply with legal obligations\n\n## Data Security\n\nWe implement appropriate security measures to protect your personal information. Your payment information is processed securely through Stripe and we do not store credit card details.\n\n## Your Rights\n\nYou have the right to:\n- Access your personal data\n- Correct inaccurate data\n- Request deletion of your data\n- Object to processing of your data\n- Data portability\n\n## Contact Us\n\nIf you have any questions about this Privacy Policy, please contact us."
   },

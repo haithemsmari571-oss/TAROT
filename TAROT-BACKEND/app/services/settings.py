@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -22,6 +22,15 @@ def get_setting_by_key(db: Session, key: str) -> Settings:
             status_code=404, detail=f"Setting with key '{key}' not found"
         )
     return setting
+
+
+def get_setting_value(db: Session, key: str, default: Optional[str] = None) -> Optional[str]:
+    """Get a setting value by key. Returns default if not found."""
+    stmt = select(Settings).where(Settings.key == key)
+    setting = db.scalar(stmt)
+    if setting is None:
+        return default
+    return setting.value
 
 
 def update_setting(db: Session, key: str, setting_data: SettingUpdate) -> Settings:

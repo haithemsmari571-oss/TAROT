@@ -74,13 +74,6 @@ export const useChatEventToasts = (chatId: number | null, userRole: 'CLIENT' | '
       })
     );
 
-    unsubs.push(
-      onNotification(NotificationType.SESSION_ENDING_SOON, (n) => {
-        if (n.data?.chat_id !== chatId) return;
-        fireOnce(`ending-soon-${chatId}`, 'Low balance! Please top up soon to avoid interruption.', 'warning');
-      })
-    );
-
     return () => unsubs.forEach((u) => u());
   }, [chatId, userRole]);
 };

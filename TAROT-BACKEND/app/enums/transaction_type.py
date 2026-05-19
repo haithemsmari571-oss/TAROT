@@ -6,3 +6,4 @@ class TransactionType(enum.Enum):
     DEBIT = "DEBIT"  # Removing points (chat billing)
     REFUND = "REFUND"  # Refund to user
     REVERSAL = "REVERSAL"  # Reversing a transaction
+    BONUS = "BONUS"  # Free points awarded at signup

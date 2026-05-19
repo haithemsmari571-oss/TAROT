@@ -112,9 +112,19 @@ const PsychicSession = () => {
   };
 
   // Filter chats based on active tab
-  const filteredChats = activeTab === 'ALL' 
+  const statusPriority: Record<string, number> = {
+    ACTIVE: 0,
+    REQUESTED: 1,
+  };
+
+  const filteredChats = (activeTab === 'ALL' 
     ? chats 
-    : chats.filter(chat => chat.status === activeTab);
+    : chats.filter(chat => chat.status === activeTab)
+  ).sort((a, b) => {
+    const pa = statusPriority[a.status] ?? 2;
+    const pb = statusPriority[b.status] ?? 2;
+    return pa - pb;
+  });
   
   // Debug logging
   useEffect(() => {
