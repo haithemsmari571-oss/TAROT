@@ -11,6 +11,25 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { dashboardApi } from "../api/dashboardApi";
 import type { AdminDashboardStats, TopPsychic, EarningsSummary, MyChat } from "../api/dashboardApi";
 
+function getVisiblePages(current: number, total: number, siblings: number = 1): (number | "...")[] {
+  if (total <= siblings * 2 + 4) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const pages: Set<number> = new Set();
+  pages.add(1);
+  pages.add(total);
+  for (let i = Math.max(2, current - siblings); i <= Math.min(total - 1, current + siblings); i++) {
+    pages.add(i);
+  }
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  const result: (number | "...")[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push("...");
+    result.push(sorted[i]);
+  }
+  return result;
+}
+
 const formatAmount = (points: number, unitPriceCents: number) => {
   const dollars = (points * unitPriceCents) / 100;
   if (dollars >= 1000) return `$${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -333,23 +352,27 @@ const AdminView = () => {
               >
                 <Icon icon="solar:alt-arrow-left-bold" className="text-lg" />
               </button>
-              {Array.from(
-                { length: Math.ceil(stats.topPsychics.total / stats.topPsychics.perPage) },
-                (_, i) => i + 1
-              ).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setPsychicsPage(page)}
-                  className="min-w-[40px] h-10 rounded-2xl text-sm font-black transition-all"
-                  style={{
-                    backgroundColor: psychicsPage === page ? COLORS.primary : 'transparent',
-                    border: `1px solid ${psychicsPage === page ? COLORS.primary : COLORS.neutralDarkGray}`,
-                    color: psychicsPage === page ? COLORS.neutralWhite : COLORS.neutralGray,
-                  }}
-                >
-                  {page}
-                </button>
-              ))}
+              {getVisiblePages(
+                psychicsPage,
+                Math.ceil(stats.topPsychics.total / stats.topPsychics.perPage)
+              ).map((page, idx) =>
+                page === "..." ? (
+                  <span key={`e-${idx}`} className="px-2 text-sm font-black" style={{ color: COLORS.neutralGray }}>...</span>
+                ) : (
+                  <button
+                    key={page}
+                    onClick={() => setPsychicsPage(page)}
+                    className="min-w-[40px] h-10 rounded-2xl text-sm font-black transition-all"
+                    style={{
+                      backgroundColor: psychicsPage === page ? COLORS.primary : 'transparent',
+                      border: `1px solid ${psychicsPage === page ? COLORS.primary : COLORS.neutralDarkGray}`,
+                      color: psychicsPage === page ? COLORS.neutralWhite : COLORS.neutralGray,
+                    }}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
               <button
                 onClick={() => setPsychicsPage((p) => p + 1)}
                 disabled={psychicsPage >= Math.ceil(stats.topPsychics.total / stats.topPsychics.perPage)}
@@ -412,23 +435,27 @@ const AdminView = () => {
               >
                 <Icon icon="solar:alt-arrow-left-bold" className="text-lg" />
               </button>
-              {Array.from(
-                { length: Math.ceil(stats.recentTransactions.total / stats.recentTransactions.perPage) },
-                (_, i) => i + 1
-              ).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setTransactionsPage(page)}
-                  className="min-w-[40px] h-10 rounded-2xl text-sm font-black transition-all"
-                  style={{
-                    backgroundColor: transactionsPage === page ? COLORS.primary : 'transparent',
-                    border: `1px solid ${transactionsPage === page ? COLORS.primary : COLORS.neutralDarkGray}`,
-                    color: transactionsPage === page ? COLORS.neutralWhite : COLORS.neutralGray,
-                  }}
-                >
-                  {page}
-                </button>
-              ))}
+              {getVisiblePages(
+                transactionsPage,
+                Math.ceil(stats.recentTransactions.total / stats.recentTransactions.perPage)
+              ).map((page, idx) =>
+                page === "..." ? (
+                  <span key={`e-${idx}`} className="px-2 text-sm font-black" style={{ color: COLORS.neutralGray }}>...</span>
+                ) : (
+                  <button
+                    key={page}
+                    onClick={() => setTransactionsPage(page)}
+                    className="min-w-[40px] h-10 rounded-2xl text-sm font-black transition-all"
+                    style={{
+                      backgroundColor: transactionsPage === page ? COLORS.primary : 'transparent',
+                      border: `1px solid ${transactionsPage === page ? COLORS.primary : COLORS.neutralDarkGray}`,
+                      color: transactionsPage === page ? COLORS.neutralWhite : COLORS.neutralGray,
+                    }}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
               <button
                 onClick={() => setTransactionsPage((p) => p + 1)}
                 disabled={transactionsPage >= Math.ceil(stats.recentTransactions.total / stats.recentTransactions.perPage)}
