@@ -7,6 +7,10 @@ echo "=== Deploying TAROT ==="
 echo ">>> Pulling latest code..."
 git pull
 
+# Clean up stale containers to avoid name conflicts
+echo ">>> Cleaning up stale containers..."
+docker container prune -f --filter "name=tarot-" 2>/dev/null || true
+
 # Rebuild and start (using docker compose v2, not deprecated docker-compose v1)
 echo ">>> Building and starting containers..."
 docker compose --file docker-compose.yml --file docker-compose.prod.yml up --build -d

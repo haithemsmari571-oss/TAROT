@@ -49,7 +49,7 @@ const PsychicsBrowse = () => {
     const fetchCategories = async () => {
       try {
         const data = await categoriesApi.getCategories();
-        setCategories(data);
+        setCategories(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error fetching categories:", err);
       }

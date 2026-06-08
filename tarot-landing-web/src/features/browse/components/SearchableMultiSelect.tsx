@@ -39,11 +39,12 @@ export const SearchableMultiSelect = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter((option) =>
+  const safeOptions = options ?? [];
+  const filteredOptions = safeOptions.filter((option) =>
     option.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const selectedOptions = options.filter((option) => selectedIds.includes(option.id));
+  const selectedOptions = safeOptions.filter((option) => selectedIds.includes(option.id));
 
   const toggleOption = (id: number) => {
     if (selectedIds.includes(id)) {
