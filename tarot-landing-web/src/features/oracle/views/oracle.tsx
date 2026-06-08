@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { COLORS } from "../../../theme";
 import { SIGNS } from "../data/Signs";
 import { LIFE_PATH_MEANINGS } from "../data/LifePath";
-import { oracleApi, ZodiacSign as ApiZodiacSign } from "../api/oracleApi";
+import { oracleApi } from "../api/oracleApi";
+import type { ZodiacSign as ApiZodiacSign } from "../api/oracleApi";
 
 // ─── THEME ───────────────────────────────────────────────────────────────────
 

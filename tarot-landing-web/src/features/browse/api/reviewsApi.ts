@@ -1,5 +1,5 @@
 import axiosClient from "@/lib/axiosClient";
-import { Review, PsychicReviewSummary, ReviewCreate, ReviewUpdate } from "../types/review.types";
+import type { Review, PsychicReviewSummary, ReviewCreate, ReviewUpdate } from "../types/review.types";
 
 export const reviewsApi = {
   /**

@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { reviewsApi } from "../api/reviewsApi";
-import { Review } from "../types/review.types";
+import type { Review } from "../types/review.types";
 import { requestChat } from "@/features/chat/api/chatApi";
 import { useToast } from "@/components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
