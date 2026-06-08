@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tarot-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tarot
+      POSTGRES_PASSWORD: tarot
+      POSTGRES_DB: tarot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tarot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./TAROT-BACKEND
@@ -11,7 +28,7 @@ services:
     env_file:
       - ./TAROT-BACKEND/.env
     environment:
-      - DATABASE_URL=sqlite:///./dev.db
+      - DATABASE_URL=postgresql://tarot:tarot@postgres:5432/tarot
       - MAIL_SERVER=mailpit
       - MAIL_PORT=1025
       - RELOAD=true
@@ -19,7 +36,10 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     depends_on:
-      - mailpit
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
 
   frontend:
     build:
@@ -53,3 +73,19 @@ services:
       - STRIPE_API_KEY=sk_test_51RgQoeCid9Y1wSHuYA9QLh9bcR2BJG3FIXabkRk4OZwK23f4f3Kkvs0o5FNfys2BqG7SyyUVTNlSzTg8ZkHFZrcj00JD8473Dy
     depends_on:
       - backend
+
+  locust:
+    build:
+      context: ./locust
+    container_name: tarot-locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locust:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --host=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:

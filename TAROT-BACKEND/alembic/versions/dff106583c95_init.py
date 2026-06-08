@@ -229,7 +229,7 @@ def upgrade() -> None:
     op.create_table('transactions',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('transaction_type', sa.Enum('CREDIT', 'DEBIT', 'REFUND', 'REVERSAL', name='transactiontype'), nullable=False),
+    sa.Column('transaction_type', sa.Enum('CREDIT', 'DEBIT', 'REFUND', 'REVERSAL', 'BONUS', name='transactiontype'), nullable=False),
     sa.Column('amount', sa.Integer(), nullable=False),
     sa.Column('balance_before', sa.Integer(), nullable=False),
     sa.Column('balance_after', sa.Integer(), nullable=False),

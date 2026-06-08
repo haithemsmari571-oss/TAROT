@@ -83,6 +83,11 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
     # Commit user first - don't let email failures block user creation
     db.commit()
 
+    # Auto-verify in non-production environments
+    if settings.ENVIRONMENT != "production":
+        user.is_verified = True
+        db.commit()
+
     # Apply signup bonus if configured
     try:
         signup_bonus_str = get_setting_value(db, "signup_bonus")

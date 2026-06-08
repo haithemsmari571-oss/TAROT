@@ -11,7 +11,7 @@ class AppSettings(BaseSettings):
     VERIFY_ACCOUNT_BASE_URL: str = "http://localhost:8000/auth/verify-account"
     VERIFY_ACCOUNT_REDIRECT_URL: str = "http://localhost:5173/verify-account"
 
-    DATABASE_URL: str = "sqlite:///./dev.db"
+    DATABASE_URL: str = "postgresql://tarot:tarot@localhost:5432/tarot"
 
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: SecretStr = SecretStr("")

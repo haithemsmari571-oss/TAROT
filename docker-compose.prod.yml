@@ -1,24 +1,45 @@
 services:
+  postgres:
+    ports: []
+    restart: unless-stopped
+
   backend:
     build:
       context: ./TAROT-BACKEND
       dockerfile: Dockerfile
     container_name: tarot-backend
-    ports:
-      - "8000:8000"
+    ports: []
+    volumes: []
     env_file:
       - ./TAROT-BACKEND/.env
     environment:
       - ENVIRONMENT=production
+      - RELOAD=
+      - MAIL_SERVER=
+      - MAIL_PORT=
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./tarot-landing-web
       dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ""
     container_name: tarot-frontend
     ports:
       - "80:80"
     restart: unless-stopped
     depends_on:
       - backend
+
+  mailpit:
+    ports: []
+
+  stripe-cli:
+    ports: []
+
+  locust:
+    ports: []

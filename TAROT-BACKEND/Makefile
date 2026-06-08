@@ -1,5 +1,3 @@
-SQLITE_DB=./dev.db
-
 UVRUN=uv run
 
 .PHONY: run
@@ -15,8 +13,8 @@ debug:
 
 .PHONY: reset
 reset:
-	@echo "[DB] Dropping database..."
-	@if [ -f $(SQLITE_DB) ]; then rm $(SQLITE_DB); fi
+	@echo "[DB] Dropping all tables..."
+	@$(UVRUN) alembic downgrade base
 	@echo "[DB] Stamping database as base..."
 	@$(UVRUN) alembic stamp base
 	@echo "[DB] Generating initial migration..."
