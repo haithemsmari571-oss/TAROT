@@ -80,7 +80,7 @@ const PsychicsBrowse = () => {
         };
 
         const data = await psychicsApi.getPsychics(filters);
-        setPsychics(data.items);
+        setPsychics(data.items ?? []);
         setTotalCount(data.total);
         setTotalPages(Math.ceil(data.total / ITEMS_PER_PAGE));
       } catch (err) {
@@ -299,7 +299,7 @@ const PsychicsBrowse = () => {
         {!loading && !error && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-12">
-              {psychics.map((psychic, index) => (
+              {psychics?.map((psychic, index) => (
                 <div
                   key={psychic.id}
                   onClick={() => navigate(`/psychics/${psychic.id}/details`)}
@@ -390,7 +390,7 @@ const PsychicsBrowse = () => {
                   <div className="relative flex flex-col flex-1 p-4 sm:p-6 space-y-3 sm:space-y-4">
                     {/* SPECIALTIES */}
                     <div className="flex flex-wrap gap-2">
-                      {psychic.categories.slice(0, 3).map((category) => (
+                      {(psychic.categories ?? []).slice(0, 3).map((category) => (
                         <span
                           key={category.id}
                           className="px-3 py-1.5 rounded-full text-[10px] uppercase font-bold tracking-wider"
@@ -403,7 +403,7 @@ const PsychicsBrowse = () => {
                           {category.title}
                         </span>
                       ))}
-                      {psychic.categories.length > 3 && (
+                      {(psychic.categories?.length ?? 0) > 3 && (
                         <span
                           className="px-3 py-1.5 rounded-full text-[10px] uppercase font-bold tracking-wider"
                           style={{
@@ -412,7 +412,7 @@ const PsychicsBrowse = () => {
                             opacity: 0.6,
                           }}
                         >
-                          +{psychic.categories.length - 3}
+                          +{(psychic.categories?.length ?? 0) - 3}
                         </span>
                       )}
                     </div>
@@ -440,7 +440,7 @@ const PsychicsBrowse = () => {
                           style={{ color: COLORS.primary }} 
                         />
                         <span className="text-xs font-medium" style={{ color: COLORS.neutralWhite }}>
-                          {psychic.availability.length > 0 ? `${psychic.availability.length} slots` : "No availability"}
+                          {(psychic.availability?.length ?? 0) > 0 ? `${psychic.availability.length} slots` : "No availability"}
                         </span>
                       </div>
                       <div className="h-4 w-px" style={{ backgroundColor: `${COLORS.neutralWhite}20` }} />

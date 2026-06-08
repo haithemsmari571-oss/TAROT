@@ -24,7 +24,7 @@ services:
       context: ./tarot-landing-web
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_URL: ""
+        VITE_API_URL: "http://72.61.17.226"
     container_name: tarot-frontend
     ports:
       - "80:80"
