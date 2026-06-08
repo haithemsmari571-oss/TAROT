@@ -209,11 +209,12 @@ async def notification_websocket(
     except asyncio.TimeoutError:
         await websocket.close(code=4001, reason="Auth timeout")
     except WebSocketDisconnect:
-        notification_manager.disconnect(user.id)
-        logger.info(
-            "notification_websocket_disconnected",
-            user_id=user.id,
-        )
+        if 'user' in locals():
+            notification_manager.disconnect(user.id)
+            logger.info(
+                "notification_websocket_disconnected",
+                user_id=user.id,
+            )
     except jwt.PyJWTError:
         await websocket.close(code=4001, reason="Invalid token")
     except ValueError as e:
