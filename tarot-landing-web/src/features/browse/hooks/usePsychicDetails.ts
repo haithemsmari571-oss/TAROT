@@ -27,7 +27,7 @@ export const usePsychicReviews = (
   return useQuery({
     queryKey: ["psychic-reviews", psychicId, page, perPage],
     queryFn: () =>
-      reviewsApi.getPsychicReviews(psychicId!, page * perPage, perPage),
+      reviewsApi.getPsychicReviews(psychicId!, page * perPage, perPage).then((d) => d ?? []),
     enabled: !!psychicId,
   });
 };
@@ -35,7 +35,7 @@ export const usePsychicReviews = (
 export const useMyReviews = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ["my-reviews"],
-    queryFn: () => reviewsApi.getMyReviews(),
+    queryFn: () => reviewsApi.getMyReviews().then((d) => d ?? []),
     enabled,
   });
 };
@@ -43,7 +43,7 @@ export const useMyReviews = (enabled: boolean = true) => {
 export const useChats = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ["chats"],
-    queryFn: getChats,
+    queryFn: () => getChats().then((d) => d ?? []),
     enabled,
   });
 };

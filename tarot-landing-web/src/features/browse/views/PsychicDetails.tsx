@@ -27,18 +27,21 @@ const PsychicDetails = () => {
   const { data: reviewSummary, isLoading: summaryLoading } = usePsychicReviewSummary(psychicId);
   const [reviewsPage, setReviewsPage] = useState(0);
   const [reviewsPerPage] = useState(5);
-  const { data: reviews = [], isLoading: reviewsLoading } = usePsychicReviews(psychicId, reviewsPage, reviewsPerPage);
-  const { data: myReviews = [] } = useMyReviews(!!user);
-  const { data: chats = [] } = useChats(!!user);
+  const { data: reviewsRaw, isLoading: reviewsLoading } = usePsychicReviews(psychicId, reviewsPage, reviewsPerPage);
+  const { data: myReviewsRaw } = useMyReviews(!!user);
+  const { data: chatsRaw } = useChats(!!user);
+  const reviews = reviewsRaw ?? [];
+  const myReviews = myReviewsRaw ?? [];
+  const chats = chatsRaw ?? [];
   
   // Derived state
   const myReview = useMemo(() => {
-    if (!psychicId || !myReviews.length) return null;
+    if (!psychicId || !Array.isArray(myReviews) || !myReviews.length) return null;
     return myReviews.find((review) => review.psychic_id === psychicId) || null;
   }, [myReviews, psychicId]);
   
   const chatWithPsychic = useMemo(() => {
-    if (!psychicId || !chats.length) return null;
+    if (!psychicId || !Array.isArray(chats) || !chats.length) return null;
     return chats.find((chat) => chat.psychic_id === psychicId) || null;
   }, [chats, psychicId]);
   
@@ -223,7 +226,7 @@ const PsychicDetails = () => {
   };
 
   // Group availability by day
-  const groupedAvailability = psychic?.availability.reduce((acc, slot) => {
+  const groupedAvailability = (psychic?.availability ?? []).reduce((acc, slot) => {
     const day = slot.day_of_the_week;
     if (!acc[day]) {
       acc[day] = [];
@@ -430,7 +433,7 @@ const PsychicDetails = () => {
                   Specialties
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {psychic.categories.map((category) => (
+                  {(psychic.categories ?? []).map((category) => (
                     <span
                       key={category.id}
                       className="px-3 py-1.5 rounded-full text-xs uppercase font-bold"
@@ -518,7 +521,7 @@ const PsychicDetails = () => {
             </div>
 
             {/* AVAILABILITY SECTION */}
-            {psychic.availability.length > 0 && (
+            {(psychic.availability?.length ?? 0) > 0 && (
               <div
                 className="rounded-2xl p-4 sm:p-6 lg:p-8"
                 style={{

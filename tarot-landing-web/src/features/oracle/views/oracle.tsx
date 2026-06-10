@@ -236,7 +236,7 @@ export default function oracle() {
     const fetchSigns = async () => {
       try {
         const signs = await oracleApi.getZodiacSigns();
-        setApiSigns(signs);
+        setApiSigns(signs ?? []);
       } catch (error) {
         console.error("Failed to fetch zodiac signs:", error);
       }
@@ -417,10 +417,10 @@ export default function oracle() {
               <div className="signs-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 32 }}>
                 <div>
                   <div style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: COLORS.primary, marginBottom: 16 }}>
-                    Sign One {manualSign1 && apiSigns.length > 0 && `— ${apiSigns.find(s => s.id === manualSign1)?.name}`}
+                    Sign One {manualSign1 && (apiSigns ?? []).length > 0 && `— ${(apiSigns ?? []).find(s => s.id === manualSign1)?.name}`}
                   </div>
                   <div className="sign-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                    {(apiSigns.length > 0 ? apiSigns : SIGNS).map(s => {
+                    {((apiSigns ?? []).length > 0 ? apiSigns : SIGNS).map(s => {
                       const signId = 'id' in s ? s.id : SIGNS.findIndex(sign => sign.name === s.name) + 1;
                       return <SignCard key={signId} sign={s} selected={manualSign1 === signId} onClick={() => { setManualSign1(signId); setManualResult(null); }} />;
                     })}
@@ -428,10 +428,10 @@ export default function oracle() {
                 </div>
                 <div>
                   <div style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: COLORS.secondary, marginBottom: 16 }}>
-                    Sign Two {manualSign2 && apiSigns.length > 0 && `— ${apiSigns.find(s => s.id === manualSign2)?.name}`}
+                    Sign Two {manualSign2 && (apiSigns ?? []).length > 0 && `— ${(apiSigns ?? []).find(s => s.id === manualSign2)?.name}`}
                   </div>
                   <div className="sign-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                    {(apiSigns.length > 0 ? apiSigns : SIGNS).map(s => {
+                    {((apiSigns ?? []).length > 0 ? apiSigns : SIGNS).map(s => {
                       const signId = 'id' in s ? s.id : SIGNS.findIndex(sign => sign.name === s.name) + 1;
                       return <SignCard key={signId} sign={s} selected={manualSign2 === signId} onClick={() => { setManualSign2(signId); setManualResult(null); }} />;
                     })}

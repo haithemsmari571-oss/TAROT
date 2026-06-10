@@ -60,7 +60,7 @@ const PrimarySelect: FC<PrimarySelectProps> = ({
     if (!disabled) setOpen((prev) => !prev);
   };
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedOption = (options ?? []).find((opt) => opt.value === value);
 
   return (
     <div className="flex flex-col" style={{ width: computedWidth, fontFamily: TYPOGRAPHY.fontFamily.body }} ref={selectRef}>

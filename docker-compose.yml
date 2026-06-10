@@ -74,18 +74,6 @@ services:
     depends_on:
       - backend
 
-  locust:
-    build:
-      context: ./locust
-    container_name: tarot-locust
-    ports:
-      - "8089:8089"
-    volumes:
-      - ./locust:/mnt/locust
-    command: -f /mnt/locust/locustfile.py --host=http://backend:8000
-    depends_on:
-      backend:
-        condition: service_started
 
 volumes:
   postgres_data:
