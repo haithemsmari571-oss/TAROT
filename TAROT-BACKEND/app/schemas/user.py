@@ -134,6 +134,15 @@ class AdminUserUpdate(BaseModel):
     is_online: Optional[bool] = None
     price_per_second: Optional[float] = None
     bio: Optional[str] = None
+    password: Optional[str] = None
+    balance: Optional[int] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if v is not None and len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
 
 
 class UserStatusUpdate(BaseModel):

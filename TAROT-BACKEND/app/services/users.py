@@ -185,8 +185,14 @@ def update_user_admin(db: Session, user_id: int, user_data: AdminUserUpdate) -> 
     """
     user = get_user_by_id(db, user_id)
 
-    # Update only provided fields
-    for field, value in user_data.model_dump(exclude_unset=True).items():
+    # Handle password separately
+    update_data = user_data.model_dump(exclude_unset=True)
+    password = update_data.pop("password", None)
+    if password:
+        user.password_hash = hash_password(password)
+
+    # Update remaining fields
+    for field, value in update_data.items():
         setattr(user, field, value)
 
     try:

@@ -70,6 +70,7 @@ export interface AdminUserCreate {
 export interface AdminUserUpdate {
   username?: string;
   email?: string;
+  password?: string;
   balance?: number;
   bio?: string;
   price_per_second?: number;

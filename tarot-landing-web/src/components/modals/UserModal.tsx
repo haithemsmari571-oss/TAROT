@@ -13,6 +13,7 @@ interface UserFormData {
   password?: string;
   role: Role;
   bio?: string;
+  balance: number;
 }
 
 interface UserModalProps {
@@ -21,15 +22,17 @@ interface UserModalProps {
   onSave: (data: UserFormData) => void;
   onVerifyUser?: (userId: number) => Promise<void>;
   initialData: AdminUserDetail | null;
+  currentUserRole?: Role;
 }
 
-const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserModalProps) => {
+const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData, currentUserRole }: UserModalProps) => {
   const [formData, setFormData] = useState<UserFormData>({
     username: "",
     email: "",
     password: "",
     role: Role.USER,
     bio: "",
+    balance: 0,
   });
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -40,7 +43,8 @@ const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserM
         email: initialData.email,
         role: initialData.role,
         bio: initialData.bio || "",
-        password: undefined, // Don't show password for existing users
+        password: undefined,
+        balance: initialData.balance,
       });
     } else {
       setFormData({
@@ -49,13 +53,15 @@ const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserM
         password: "",
         role: Role.USER,
         bio: "",
+        balance: 0,
       });
     }
   }, [initialData, isOpen]);
 
   const isFormValid = () => {
     if (!formData.username || !formData.email) return false;
-    if (!initialData && !formData.password) return false; // Password required for new users
+    if (!initialData && !formData.password) return false;
+    if (initialData && formData.password && formData.password.length < 8) return false;
     return true;
   };
 
@@ -133,9 +139,9 @@ const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserM
 
             {/* Row 2: Password & Role */}
             <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 grid grid-cols-2 gap-8 items-end">
-              {!initialData && (
+              {(!initialData || currentUserRole === Role.SUPERADMIN) && (
                 <div className="flex flex-col gap-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-white/20 ml-1">Password</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/20 ml-1">{initialData ? "New Password (optional)" : "Password"}</label>
                   <PrimaryInput 
                     fullWidth
                     type="password"
@@ -145,7 +151,7 @@ const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserM
                   />
                 </div>
               )}
-              <div className="flex flex-col gap-3">
+              <div className={`flex flex-col gap-3 ${!initialData || currentUserRole === Role.SUPERADMIN ? "" : "col-span-2"}`}>
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/20 ml-1">User Role</label>
                 <PrimarySelect 
                   value={formData.role}
@@ -159,6 +165,20 @@ const UserModal = ({ isOpen, onClose, onSave, onVerifyUser, initialData }: UserM
                 />
               </div>
             </div>
+
+            {/* Row 3: Balance - Only for superadmin editing */}
+            {initialData && currentUserRole === Role.SUPERADMIN && (
+              <div className="flex flex-col gap-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/20 ml-1">Balance (points)</label>
+                <PrimaryInput 
+                  fullWidth
+                  type="number"
+                  value={String(formData.balance)} 
+                  onChange={(e) => setFormData({...formData, balance: parseInt(e.target.value) || 0})}
+                  placeholder="0"
+                />
+              </div>
+            )}
 
             {/* Row 3: Bio */}
             <div className="flex flex-col gap-3">

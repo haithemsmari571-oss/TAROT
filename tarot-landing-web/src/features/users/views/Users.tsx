@@ -8,6 +8,7 @@ import GiftBalanceModal from "../../../components/modals/GiftBalanceModal";
 import PrimarySelect from "../../../components/CustomInputs/PrimarySelect";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { useAuth } from "../../auth/hooks/useAuth";
 import { useUsers } from "../hooks/useUsers";
 import { Role, UserStatus } from "../types/user.types";
 import type { AdminUserDetail, AdminUserListItem } from "../types/user.types";
@@ -30,6 +31,8 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const Users = () => {
+  const { user: currentUser } = useAuth();
+
   const { 
     users: usersData, 
     loading, 
@@ -81,11 +84,18 @@ const Users = () => {
     try {
       if (selectedUser) {
         // Update existing user
-        await updateUser(selectedUser.id, {
+        const updateData: any = {
           username: userData.username,
           email: userData.email,
           bio: userData.bio,
-        });
+        };
+        if (userData.password) {
+          updateData.password = userData.password;
+        }
+        if (userData.balance !== undefined) {
+          updateData.balance = userData.balance;
+        }
+        await updateUser(selectedUser.id, updateData);
       } else {
         // Create new user
         await createUser({
@@ -386,6 +396,7 @@ const Users = () => {
         onSave={handleSaveUser}
         onVerifyUser={handleVerifyUser}
         initialData={selectedUser}
+        currentUserRole={currentUser?.role}
       />
 
       {/* Gift Balance Modal */}

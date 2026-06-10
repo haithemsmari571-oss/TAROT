@@ -194,6 +194,13 @@ def update_user(
             detail="Only superadmin can change user roles",
         )
 
+    # Only superadmin can change password or balance
+    if (user_data.password is not None or user_data.balance is not None) and admin.role != Role.SUPERADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Only superadmin can change password or balance",
+        )
+
     user = update_user_admin(db, user_id, user_data)
     user_detail = AdminUserDetail.model_validate(user)
     return transform_user_profile_picture(user_detail)
