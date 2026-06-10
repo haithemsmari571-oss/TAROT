@@ -84,7 +84,7 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
     db.commit()
 
     # Auto-verify in non-production environments
-    if settings.ENVIRONMENT != "production":
+    if settings.ENVIRONMENT != "prod":
         user.is_verified = True
         db.commit()
 

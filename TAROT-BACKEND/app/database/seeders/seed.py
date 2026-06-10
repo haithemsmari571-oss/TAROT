@@ -41,7 +41,8 @@ from app.utils.life_path_calculator import get_life_path_compatibility_score
 
 
 def read_seeders():
-    env = os.getenv("ENV", "dev").lower()
+    raw_env = os.getenv("ENV", "dev").lower()
+    env = {"production": "prod", "development": "dev", "staging": "staging"}.get(raw_env, raw_env)
 
     base_path = Path(__file__).parent / env
     seed_data = {}

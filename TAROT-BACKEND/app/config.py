@@ -1,11 +1,17 @@
 from functools import lru_cache
 from pathlib import Path
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppSettings(BaseSettings):
     ENVIRONMENT: str = "dev"
+
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def normalize_environment(cls, v):
+        mapping = {"production": "prod", "development": "dev"}
+        return mapping.get(v.lower(), v.lower())
 
     RESET_PASSWORD_BASE_URL: str = "http://localhost:5173/reset-password"
     VERIFY_ACCOUNT_BASE_URL: str = "http://localhost:8000/auth/verify-account"

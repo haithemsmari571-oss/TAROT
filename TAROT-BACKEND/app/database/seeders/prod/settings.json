@@ -1,0 +1,26 @@
+[
+  {
+    "key": "unit_price_cents",
+    "value": "100"
+  },
+  {
+    "key": "stripe_api_key",
+    "value": "sk_test_51RgQoeCid9Y1wSHuYA9QLh9bcR2BJG3FIXabkRk4OZwK23f4f3Kkvs0o5FNfys2BqG7SyyUVTNlSzTg8ZkHFZrcj00JD8473Dy"
+  },
+  {
+    "key": "stripe_endpoint_secret",
+    "value": "whsec_8e7c58d95e98f4998a4f66e99911bf1244e1da3db74dae7106309f7d827af697"
+  },
+  {
+    "key": "signup_bonus",
+    "value": "100"
+  },
+  {
+    "key": "privacy_policy",
+    "value": "# Privacy Policy\n\nLast updated: April 28, 2026\n\n## Introduction\n\nWelcome to our Tarot reading application. We respect your privacy and are committed to protecting your personal data.\n\n## Information We Collect\n\n- Personal identification information (name, email address)\n- Payment information (processed securely through Stripe)\n- Reading history and preferences\n- Usage data and analytics\n\n## How We Use Your Information\n\n- To provide and maintain our service\n- To process your transactions\n- To send you notifications about your readings\n- To improve our application\n- To comply with legal obligations\n\n## Data Security\n\nWe implement appropriate security measures to protect your personal information. Your payment information is processed securely through Stripe and we do not store credit card details.\n\n## Your Rights\n\nYou have the right to:\n- Access your personal data\n- Correct inaccurate data\n- Request deletion of your data\n- Object to processing of your data\n- Data portability\n\n## Contact Us\n\nIf you have any questions about this Privacy Policy, please contact us."
+  },
+  {
+    "key": "terms_of_service",
+    "value": "# Terms of Service\n\nLast updated: April 28, 2026\n\n## Acceptance of Terms\n\nBy accessing and using this Tarot reading application, you accept and agree to be bound by the terms and provision of this agreement.\n\n## Use License\n\n- Permission is granted to use this application for personal, non-commercial purposes\n- You must not modify or copy the materials\n- You must not use the materials for any commercial purpose\n- You must not attempt to reverse engineer any software contained in this application\n\n## Service Description\n\nOur application provides Tarot reading services for entertainment and spiritual guidance purposes. Readings are for informational purposes only and should not be considered as professional advice.\n\n## User Accounts\n\n- You are responsible for maintaining the confidentiality of your account\n- You are responsible for all activities that occur under your account\n- You must notify us immediately of any unauthorized use\n\n## Payment Terms\n\n- Prices are subject to change with notice\n- All payments are processed securely through Stripe\n- Refunds are handled on a case-by-case basis\n\n## Limitation of Liability\n\nThe application and readings are provided \"as is\" without any warranties. We shall not be liable for any damages arising from the use of this service.\n\n## Disclaimer\n\nTarot readings are for entertainment and spiritual guidance purposes only. They should not replace professional advice from qualified practitioners in legal, financial, medical, or other professional services.\n\n## Changes to Terms\n\nWe reserve the right to modify these terms at any time. Continued use of the application after changes constitutes acceptance of the modified terms.\n\n## Governing Law\n\nThese terms shall be governed by and construed in accordance with applicable laws.\n\n## Contact Us\n\nIf you have any questions about these Terms of Service, please contact us."
+  }
+]

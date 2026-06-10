@@ -1,0 +1,23 @@
+[
+  {
+    "username": "superadmin",
+    "email": "superadmin@tarot.com",
+    "is_verified": true,
+    "balance": 0,
+    "role": "SUPERADMIN"
+  },
+  {
+    "username": "admin",
+    "email": "admin@tarot.com",
+    "is_verified": true,
+    "balance": 0,
+    "role": "ADMIN"
+  },
+  {
+    "username": "user",
+    "email": "user@tarot.com",
+    "is_verified": true,
+    "balance": 0,
+    "role": "USER"
+  }
+]
