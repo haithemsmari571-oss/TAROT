@@ -21,7 +21,7 @@ export const useLogin = () => {
         throw new Error("Failed to decode token");
       }
 
-      const userResponse = await axiosClient.get<User>("/profile/me/", {
+      const userResponse = await axiosClient.get<User>("/profile/me", {
         headers: {
           Authorization: `Bearer ${response.access_token}`,
         },

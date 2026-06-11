@@ -36,7 +36,7 @@ export const signUp = async (
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const response = await axiosClient.get<User>("/profile/me/");
+  const response = await axiosClient.get<User>("/profile/me");
   return response.data;
 };
 
