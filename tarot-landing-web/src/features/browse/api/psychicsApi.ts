@@ -7,7 +7,7 @@ export const psychicsApi = {
    */
   getPsychics: async (filters?: PsychicFilters): Promise<PaginatedResponse<Psychic>> => {
     const params = new URLSearchParams();
-    
+
     if (filters?.is_online !== undefined) {
       params.append("is_online", String(filters.is_online));
     }
@@ -30,7 +30,7 @@ export const psychicsApi = {
       params.append("limit", String(filters.limit));
     }
 
-    const response = await axiosClient.get<PaginatedResponse<Psychic>>(`/psychic?${params.toString()}`);
+    const response = await axiosClient.get<PaginatedResponse<Psychic>>(`/psychic/?${params.toString()}`);
     return response.data;
   },
 
@@ -38,7 +38,7 @@ export const psychicsApi = {
    * Get a single psychic by ID
    */
   getPsychicById: async (id: number): Promise<Psychic> => {
-    const response = await axiosClient.get<Psychic>(`/psychic/${id}`);
+    const response = await axiosClient.get<Psychic>(`/psychic/${id}/`);
     return response.data;
   },
 
@@ -47,10 +47,10 @@ export const psychicsApi = {
    */
   createPsychic: async (data: PsychicCreate, profilePicture: File): Promise<Psychic> => {
     const formData = new FormData();
-    
+
     // Append the psychic data as JSON string
     formData.append("psychic_data", JSON.stringify(data));
-    
+
     // Append the profile picture file
     formData.append("profile_picture", profilePicture);
 
@@ -67,16 +67,16 @@ export const psychicsApi = {
    */
   updatePsychic: async (id: number, data: PsychicUpdate, profilePicture?: File): Promise<Psychic> => {
     const formData = new FormData();
-    
+
     // Append the psychic update data as JSON string
     formData.append("psychic_data", JSON.stringify(data));
-    
+
     // Append the profile picture file if provided
     if (profilePicture) {
       formData.append("profile_picture", profilePicture);
     }
 
-    const response = await axiosClient.patch<Psychic>(`/psychic/${id}`, formData, {
+    const response = await axiosClient.patch<Psychic>(`/psychic/${id}/`, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -88,6 +88,6 @@ export const psychicsApi = {
    * Delete a psychic
    */
   deletePsychic: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/psychic/${id}`);
+    await axiosClient.delete(`/psychic/${id}/`);
   },
 };

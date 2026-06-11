@@ -6,7 +6,7 @@ export const categoriesApi = {
    * Get all categories
    */
   getCategories: async (skip: number = 0, limit: number = 100): Promise<Category[]> => {
-    const response = await axiosClient.get<Category[]>(`/category?skip=${skip}&limit=${limit}`);
+    const response = await axiosClient.get<Category[]>(`/category/?skip=${skip}&limit=${limit}`);
     return response.data;
   },
 
@@ -14,7 +14,7 @@ export const categoriesApi = {
    * Get a single category by ID
    */
   getCategoryById: async (id: number): Promise<Category> => {
-    const response = await axiosClient.get<Category>(`/category/${id}`);
+    const response = await axiosClient.get<Category>(`/category/${id}/`);
     return response.data;
   },
 };

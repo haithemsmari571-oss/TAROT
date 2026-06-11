@@ -24,13 +24,20 @@ const AboutPage = () => {
   const [content, setContent] = useState(DEFAULT_ABOUT);
 
   useEffect(() => {
-    axiosClient.get("/landing/about").then((res) => {
-      if (res.data?.content) setContent({ ...DEFAULT_ABOUT, ...res.data.content });
-    }).catch(() => {});
+    axiosClient
+      .get("/landing/about/")
+      .then((res) => {
+        if (res.data?.content)
+          setContent({ ...DEFAULT_ABOUT, ...res.data.content });
+      })
+      .catch(() => {});
   }, []);
 
   return (
-    <div className="relative min-h-screen" style={{ backgroundColor: COLORS.dark }}>
+    <div
+      className="relative min-h-screen"
+      style={{ backgroundColor: COLORS.dark }}
+    >
       <CelestialBackground scrollY={0} />
       <div className="relative z-10">
         <AboutHero content={content} />
@@ -44,11 +51,17 @@ const AboutPage = () => {
             >
               <h2
                 className="text-4xl md:text-5xl font-black uppercase tracking-tighter"
-                style={{ ...TYPOGRAPHY.headings.h2, color: COLORS.neutralWhite }}
+                style={{
+                  ...TYPOGRAPHY.headings.h2,
+                  color: COLORS.neutralWhite,
+                }}
               >
                 {content.bodyTitle}
               </h2>
-              <p className="text-base md:text-lg leading-relaxed max-w-2xl" style={{ color: COLORS.neutralGray }}>
+              <p
+                className="text-base md:text-lg leading-relaxed max-w-2xl"
+                style={{ color: COLORS.neutralGray }}
+              >
                 {content.bodyContent}
               </p>
             </motion.div>
@@ -62,11 +75,17 @@ const AboutPage = () => {
             >
               <h2
                 className="text-4xl md:text-5xl font-black uppercase tracking-tighter"
-                style={{ ...TYPOGRAPHY.headings.h2, color: COLORS.neutralWhite }}
+                style={{
+                  ...TYPOGRAPHY.headings.h2,
+                  color: COLORS.neutralWhite,
+                }}
               >
                 {content.missionTitle}
               </h2>
-              <p className="text-base md:text-lg leading-relaxed max-w-2xl" style={{ color: COLORS.neutralGray }}>
+              <p
+                className="text-base md:text-lg leading-relaxed max-w-2xl"
+                style={{ color: COLORS.neutralGray }}
+              >
                 {content.missionContent}
               </p>
             </motion.div>

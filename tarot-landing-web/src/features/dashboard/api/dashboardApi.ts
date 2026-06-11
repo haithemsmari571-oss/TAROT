@@ -71,7 +71,7 @@ export interface UnitPriceResponse {
 
 export const dashboardApi = {
   getUnitPrice: async (): Promise<UnitPriceResponse> => {
-    const response = await axiosClient.get("/payment/unit-price");
+    const response = await axiosClient.get("/payment/unit-price/");
     return response.data;
   },
   getAdminStats: async (params?: {
@@ -80,17 +80,17 @@ export const dashboardApi = {
     transactions_page?: number;
     transactions_per_page?: number;
   }): Promise<AdminDashboardStats> => {
-    const response = await axiosClient.get("/admin/dashboard/stats", { params });
+    const response = await axiosClient.get("/admin/dashboard/stats/", { params });
     return response.data;
   },
 
   getEarningsSummary: async (): Promise<EarningsSummary> => {
-    const response = await axiosClient.get("/admin/psychics/earnings/summary");
+    const response = await axiosClient.get("/admin/psychics/earnings/summary/");
     return response.data;
   },
 
   getMyChats: async (): Promise<MyChat[]> => {
-    const response = await axiosClient.get("/chat/my-chats");
+    const response = await axiosClient.get("/chat/my-chats/");
     return response.data;
   },
 };

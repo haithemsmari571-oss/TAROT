@@ -14,21 +14,21 @@ export const useLogin = () => {
   return useMutation({
     mutationFn: async (credentials: LoginRequest) => {
       const response = await signIn(credentials);
-      
+
       // Decode JWT to get the role
       const decodedToken = decodeToken(response.access_token);
       if (!decodedToken) {
         throw new Error("Failed to decode token");
       }
-      
-      const userResponse = await axiosClient.get<User>("/profile/me", {
+
+      const userResponse = await axiosClient.get<User>("/profile/me/", {
         headers: {
           Authorization: `Bearer ${response.access_token}`,
         },
       });
-      
-      return { 
-        token: response.access_token, 
+
+      return {
+        token: response.access_token,
         refreshToken: response.refresh_token,
         user: userResponse.data,
         role: decodedToken.role
@@ -36,11 +36,11 @@ export const useLogin = () => {
     },
     onSuccess: (data) => {
       login(data.token, data.user, data.refreshToken);
-      
+
       console.log("Login success - Role from JWT:", data.role);
       console.log("Login success - User role:", data.user.role);
       console.log("UserRole enum:", UserRole);
-      
+
       // Redirect based on user role from JWT
       if (data.role === UserRole.PSYCHIC) {
         console.log("Redirecting to /admin/earnings");

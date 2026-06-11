@@ -6,7 +6,7 @@ export const reviewsApi = {
    * Get all reviews for a specific psychic
    */
   getPsychicReviews: async (psychicId: number, skip: number = 0, limit: number = 100): Promise<Review[]> => {
-    const response = await axiosClient.get<Review[]>(`/reviews/psychic/${psychicId}`, {
+    const response = await axiosClient.get<Review[]>(`/reviews/psychic/${psychicId}/`, {
       params: { skip, limit }
     });
     return response.data;
@@ -16,7 +16,7 @@ export const reviewsApi = {
    * Get review summary statistics for a psychic
    */
   getPsychicReviewSummary: async (psychicId: number): Promise<PsychicReviewSummary> => {
-    const response = await axiosClient.get<PsychicReviewSummary>(`/reviews/psychic/${psychicId}/summary`);
+    const response = await axiosClient.get<PsychicReviewSummary>(`/reviews/psychic/${psychicId}/summary/`);
     return response.data;
   },
 
@@ -24,7 +24,7 @@ export const reviewsApi = {
    * Get all reviews by the current user
    */
   getMyReviews: async (skip: number = 0, limit: number = 100): Promise<Review[]> => {
-    const response = await axiosClient.get<Review[]>(`/reviews/my-reviews`, {
+    const response = await axiosClient.get<Review[]>(`/reviews/my-reviews/`, {
       params: { skip, limit }
     });
     return response.data;
@@ -42,7 +42,7 @@ export const reviewsApi = {
    * Update an existing review
    */
   updateReview: async (reviewId: number, data: ReviewUpdate): Promise<Review> => {
-    const response = await axiosClient.put<Review>(`/reviews/${reviewId}`, data);
+    const response = await axiosClient.put<Review>(`/reviews/${reviewId}/`, data);
     return response.data;
   },
 
@@ -50,6 +50,6 @@ export const reviewsApi = {
    * Delete a review
    */
   deleteReview: async (reviewId: number): Promise<void> => {
-    await axiosClient.delete(`/reviews/${reviewId}`);
+    await axiosClient.delete(`/reviews/${reviewId}/`);
   },
 };
