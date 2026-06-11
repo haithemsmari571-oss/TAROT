@@ -24,10 +24,11 @@ services:
       context: ./tarot-landing-web
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_URL: "http://72.61.17.226"
+        VITE_API_URL: "https://askvalentina.co.uk"
     container_name: tarot-frontend
     ports:
       - "80:80"
+      - "443:443"
     restart: unless-stopped
     depends_on:
       - backend
@@ -37,4 +38,3 @@ services:
 
   stripe-cli:
     ports: []
-
