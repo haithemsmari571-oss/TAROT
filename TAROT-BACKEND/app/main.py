@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
         logger.error("error_stopping_session_manager", error=str(e))
 
 
-app = FastAPI(lifespan=lifespan, redirect_slashes=False)
+app = FastAPI(lifespan=lifespan)
 
 # Add CORS middleware - allow all origins for development
 app.add_middleware(

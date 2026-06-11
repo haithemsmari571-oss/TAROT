@@ -19,7 +19,7 @@ export const signIn = async (
   credentials: LoginRequest
 ): Promise<LoginResponse> => {
   const response = await axiosClient.post<LoginResponse>(
-    "/auth/sign-in/",
+    "/auth/sign-in",
     credentials
   );
   return response.data;
@@ -29,7 +29,7 @@ export const signUp = async (
   userData: RegisterRequest
 ): Promise<RegisterResponse> => {
   const response = await axiosClient.post<RegisterResponse>(
-    "/auth/sign-up/",
+    "/auth/sign-up",
     userData
   );
   return response.data;
@@ -44,7 +44,7 @@ export const verifyAccount = async (
   token: string
 ): Promise<VerifyAccountResponse> => {
   const response = await axiosClient.post<VerifyAccountResponse>(
-    `/auth/verify-account/${token}/`
+    `/auth/verify-account/${token}`
   );
   return response.data;
 };
@@ -53,7 +53,7 @@ export const resendVerifyEmail = async (
   email: string
 ): Promise<ResendVerifyResponse> => {
   const response = await axiosClient.post<ResendVerifyResponse>(
-    "/auth/resend-verify-email/",
+    "/auth/resend-verify-email",
     { email }
   );
   return response.data;
@@ -63,7 +63,7 @@ export const forgotPassword = async (
   data: ForgotPasswordRequest
 ): Promise<ForgotPasswordResponse> => {
   const response = await axiosClient.post<ForgotPasswordResponse>(
-    "/auth/forgot-password/",
+    "/auth/forgot-password",
     data
   );
   return response.data;
@@ -72,11 +72,11 @@ export const forgotPassword = async (
 export const resetPassword = async (
   data: ResetPasswordRequest
 ): Promise<void> => {
-  await axiosClient.post("/auth/reset-password/", data);
+  await axiosClient.post("/auth/reset-password", data);
 };
 
 export const updateProfile = async (data: Partial<User>): Promise<User> => {
-  const response = await axiosClient.patch<User>("/profile/me/", data);
+  const response = await axiosClient.patch<User>("/profile/me", data);
   return response.data;
 };
 
@@ -84,7 +84,7 @@ export const refreshToken = async (
   refreshToken: string
 ): Promise<RefreshTokenResponse> => {
   const response = await axiosClient.post<RefreshTokenResponse>(
-    "/auth/refresh-token/",
+    "/auth/refresh-token",
     { refresh_token: refreshToken }
   );
   return response.data;
