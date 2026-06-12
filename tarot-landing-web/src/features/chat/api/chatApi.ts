@@ -62,7 +62,7 @@ export interface ChatMessage {
  * - USER: Their chats (where they are the client)
  */
 export const getChats = async (): Promise<Chat[]> => {
-  const response = await axiosClient.get("/chat/");
+  const response = await axiosClient.get("/chat");
   return response.data;
 };
 
@@ -71,7 +71,7 @@ export const getChats = async (): Promise<Chat[]> => {
  * Get chats with full user details (for admin/psychic views)
  */
 export const getMyChatsWithDetails = async (): Promise<any[]> => {
-  const response = await axiosClient.get("/chat/my-chats/");
+  const response = await axiosClient.get("/chat/my-chats");
   return response.data;
 };
 
@@ -79,7 +79,7 @@ export const getMyChatsWithDetails = async (): Promise<any[]> => {
  * Request a new chat session with a psychic
  */
 export const requestChat = async (data: ChatStartRequest): Promise<void> => {
-  await axiosClient.post("/chat/request/", data);
+  await axiosClient.post("/chat/request", data);
 };
 
 /**
@@ -107,7 +107,7 @@ export interface ChatDetails {
 }
 
 export const getChatDetails = async (chatId: number): Promise<ChatDetails> => {
-  const response = await axiosClient.get(`/chat/${chatId}/details/`);
+  const response = await axiosClient.get(`/chat/${chatId}/details`);
   return response.data;
 };
 
@@ -131,7 +131,7 @@ export const getChatMessages = async (
   if (before_id !== undefined) {
     params.before_id = before_id;
   }
-  const response = await axiosClient.get(`/chat/${chatId}/messages/`, { params });
+  const response = await axiosClient.get(`/chat/${chatId}/messages`, { params });
   return response.data;
 };
 
@@ -148,7 +148,7 @@ export interface ChatSessionTime {
 export const getChatSessionTime = async (
   chatId: number
 ): Promise<ChatSessionTime> => {
-  const response = await axiosClient.get(`/chat/${chatId}/session-time/`);
+  const response = await axiosClient.get(`/chat/${chatId}/session-time`);
   return response.data;
 };
 
@@ -160,14 +160,14 @@ export const updateChatStatus = async (
   chatId: number,
   data: ChatStatusUpdate
 ): Promise<void> => {
-  await axiosClient.post(`/chat/${chatId}/status/`, data);
+  await axiosClient.post(`/chat/${chatId}/status`, data);
 };
 
 /**
  * Pause a chat session (for top-up)
  */
 export const pauseChat = async (chatId: number) => {
-  const response = await axiosClient.post(`/chat/${chatId}/pause/`);
+  const response = await axiosClient.post(`/chat/${chatId}/pause`);
   return response.data;
 };
 
@@ -175,7 +175,7 @@ export const pauseChat = async (chatId: number) => {
  * Resume a paused chat session
  */
 export const resumeChat = async (chatId: number) => {
-  const response = await axiosClient.post(`/chat/${chatId}/resume/`);
+  const response = await axiosClient.post(`/chat/${chatId}/resume`);
   return response.data;
 };
 
@@ -183,7 +183,7 @@ export const resumeChat = async (chatId: number) => {
  * Get psychic details by ID
  */
 export const getPsychicDetails = async (psychicId: number): Promise<PsychicDetails> => {
-  const response = await axiosClient.get(`/psychic/${psychicId}/`);
+  const response = await axiosClient.get(`/psychic/${psychicId}`);
   return response.data;
 };
 

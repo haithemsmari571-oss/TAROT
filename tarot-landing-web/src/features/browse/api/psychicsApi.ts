@@ -38,7 +38,7 @@ export const psychicsApi = {
    * Get a single psychic by ID
    */
   getPsychicById: async (id: number): Promise<Psychic> => {
-    const response = await axiosClient.get<Psychic>(`/psychic/${id}/`);
+    const response = await axiosClient.get<Psychic>(`/psychic/${id}`);
     return response.data;
   },
 
