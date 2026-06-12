@@ -54,7 +54,7 @@ export const psychicsApi = {
     // Append the profile picture file
     formData.append("profile_picture", profilePicture);
 
-    const response = await axiosClient.post<Psychic>("/psychic/", formData, {
+    const response = await axiosClient.post<Psychic>("/psychic", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -76,7 +76,7 @@ export const psychicsApi = {
       formData.append("profile_picture", profilePicture);
     }
 
-    const response = await axiosClient.patch<Psychic>(`/psychic/${id}/`, formData, {
+    const response = await axiosClient.patch<Psychic>(`/psychic/${id}`, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -88,6 +88,6 @@ export const psychicsApi = {
    * Delete a psychic
    */
   deletePsychic: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/psychic/${id}/`);
+    await axiosClient.delete(`/psychic/${id}`);
   },
 };
