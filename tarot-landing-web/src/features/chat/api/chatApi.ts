@@ -62,7 +62,7 @@ export interface ChatMessage {
  * - USER: Their chats (where they are the client)
  */
 export const getChats = async (): Promise<Chat[]> => {
-  const response = await axiosClient.get("/chat");
+  const response = await axiosClient.get("/chat/");
   return response.data;
 };
 
