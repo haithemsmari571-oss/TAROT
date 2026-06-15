@@ -8,7 +8,7 @@ export const categoriesApi = {
   },
 
   getCategory: async (id: number): Promise<Category> => {
-    const response = await axiosClient.get(`/category/${id}/`);
+    const response = await axiosClient.get(`/category/${id}`);
     return response.data;
   },
 
@@ -18,11 +18,11 @@ export const categoriesApi = {
   },
 
   updateCategory: async (id: number, data: CategoryUpdate): Promise<Category> => {
-    const response = await axiosClient.put(`/category/${id}/`, data);
+    const response = await axiosClient.put(`/category/${id}`, data);
     return response.data;
   },
 
   deleteCategory: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/category/${id}/`);
+    await axiosClient.delete(`/category/${id}`);
   },
 };

@@ -164,10 +164,10 @@ export const updateChatStatus = async (
 };
 
 /**
- * Pause a chat session (for top-up)
+ * Pause a chat session for top-up (uses the topup endpoint — the only supported pause path)
  */
 export const pauseChat = async (chatId: number) => {
-  const response = await axiosClient.post(`/chat/${chatId}/pause`);
+  const response = await axiosClient.post(`/chat/${chatId}/topup`);
   return response.data;
 };
 

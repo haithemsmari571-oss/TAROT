@@ -14,7 +14,7 @@ export const categoriesApi = {
    * Get a single category by ID
    */
   getCategoryById: async (id: number): Promise<Category> => {
-    const response = await axiosClient.get<Category>(`/category/${id}/`);
+    const response = await axiosClient.get<Category>(`/category/${id}`);
     return response.data;
   },
 };

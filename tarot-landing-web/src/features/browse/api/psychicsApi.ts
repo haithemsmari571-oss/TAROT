@@ -54,7 +54,7 @@ export const psychicsApi = {
     // Append the profile picture file
     formData.append("profile_picture", profilePicture);
 
-    const response = await axiosClient.post<Psychic>("/psychic", formData, {
+    const response = await axiosClient.post<Psychic>("/psychic/", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

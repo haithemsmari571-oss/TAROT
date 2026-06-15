@@ -59,7 +59,8 @@ axiosClient.interceptors.response.use(
     const originalRequest = error.config as typeof error.config & { _retry?: boolean };
 
     // Don't try to refresh if we're already on the login page or if this is a login/refresh request
-    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || 
+    const isAuthEndpoint = originalRequest?.url?.includes('/auth/sign-in') ||
+                           originalRequest?.url?.includes('/auth/sign-up') ||
                            originalRequest?.url?.includes('/auth/refresh-token');
     
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {

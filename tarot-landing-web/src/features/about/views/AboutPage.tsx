@@ -25,7 +25,7 @@ const AboutPage = () => {
 
   useEffect(() => {
     axiosClient
-      .get("/landing/about/")
+      .get("/landing/about")
       .then((res) => {
         if (res.data?.content)
           setContent({ ...DEFAULT_ABOUT, ...res.data.content });

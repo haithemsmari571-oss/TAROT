@@ -34,7 +34,7 @@ export const reviewsApi = {
    * Create a new review
    */
   createReview: async (data: ReviewCreate): Promise<Review> => {
-    const response = await axiosClient.post<Review>(`/reviews`, data);
+    const response = await axiosClient.post<Review>(`/reviews/`, data);
     return response.data;
   },
 

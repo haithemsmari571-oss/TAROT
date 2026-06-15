@@ -32,7 +32,7 @@ const TarotCouncil = () => {
   useEffect(() => {
     Promise.all([
       axiosClient.get("/landing/psychics").catch(() => null),
-      axiosClient.get("/psychic", { params: { limit: 100 } }).catch(() => null),
+      axiosClient.get("/psychic/", { params: { limit: 100 } }).catch(() => null),
     ]).then(([landingRes, psychicsRes]) => {
       if (landingRes?.data?.content) {
         setSectionContent({

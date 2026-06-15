@@ -43,10 +43,9 @@ export const getCurrentUser = async (): Promise<User> => {
 export const verifyAccount = async (
   token: string
 ): Promise<VerifyAccountResponse> => {
-  const response = await axiosClient.post<VerifyAccountResponse>(
-    `/auth/verify-account/${token}`
-  );
-  return response.data;
+  // Backend verifies via GET and redirects back to the frontend with ?status=success|error
+  window.location.href = `${import.meta.env.VITE_API_URL}/auth/verify-account/${token}`;
+  return { message: "Redirecting to verify your account..." };
 };
 
 export const resendVerifyEmail = async (
