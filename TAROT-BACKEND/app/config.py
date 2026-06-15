@@ -13,9 +13,9 @@ class AppSettings(BaseSettings):
         mapping = {"production": "prod", "development": "dev"}
         return mapping.get(v.lower(), v.lower())
 
-    RESET_PASSWORD_BASE_URL: str = "http://localhost:5173/reset-password"
-    VERIFY_ACCOUNT_BASE_URL: str = "http://localhost:8000/auth/verify-account"
-    VERIFY_ACCOUNT_REDIRECT_URL: str = "http://localhost:5173/verify-account"
+    RESET_PASSWORD_BASE_URL: str = "https://askvalentina.co.uk/reset-password"
+    VERIFY_ACCOUNT_BASE_URL: str = "https://askvalentina.co.uk/api/auth/verify-account"
+    VERIFY_ACCOUNT_REDIRECT_URL: str = "https://askvalentina.co.uk/verify-account"
 
     DATABASE_URL: str = "postgresql://tarot:tarot@localhost:5432/tarot"
 
@@ -31,8 +31,8 @@ class AppSettings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_TOKEN_EXPIRE_MINUTES: int = 9999
 
-    APP_BASE_URL: str = "http://localhost:8000"
-    FRONT_BASE_URL: str = "http://localhost:5173"
+    APP_BASE_URL: str = "https://askvalentina.co.uk/api/"
+    FRONT_BASE_URL: str = "https://askvalentina.co.uk/"
 
     MEDIA_DIR: Path = Path("media/uploads")
 
