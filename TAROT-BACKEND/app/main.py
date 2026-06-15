@@ -81,133 +81,133 @@ app.add_middleware(RequestContextMiddleware)
 
 app.include_router(
     auth_router,
-    prefix="/auth",
+    prefix="/api/auth",
     tags=["Auth"],
 )
 
 app.include_router(
     psychic_router,
-    prefix="/psychic",
+    prefix="/api/psychic",
     tags=["Psychic"],
 )
 
 app.include_router(
     categories_router,
-    prefix="/category",
+    prefix="/api/category",
     tags=["Category"],
 )
 
 app.include_router(
     chat_router,
-    prefix="/chat",
+    prefix="/api/chat",
     tags=["Chat"],
 )
 
 app.include_router(
     medias_router,
-    prefix="/media",
+    prefix="/api/media",
     tags=["Media"],
 )
 
 app.include_router(
     payment_router,
-    prefix="/payment",
+    prefix="/api/payment",
     tags=["Payment"],
 )
 
 app.include_router(
     transaction_router,
-    prefix="/transactions",
+    prefix="/api/transactions",
     tags=["Transactions"],
 )
 
 app.include_router(
     refund_router,
-    prefix="/admin/refunds",
+    prefix="/api/admin/refunds",
     tags=["Admin - Refunds"],
 )
 
 app.include_router(
     user_router,
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["Admin - Users"],
 )
 
 app.include_router(
     profile_router,
-    prefix="/profile",
+    prefix="/api/profile",
     tags=["User Profile"],
 )
 
 app.include_router(
     zodiac_router,
-    prefix="/zodiac",
+    prefix="/api/zodiac",
     tags=["Zodiac & Life Path"],
 )
 
 app.include_router(
     admin_zodiac_router,
-    prefix="/admin/zodiac",
+    prefix="/api/admin/zodiac",
     tags=["Admin - Zodiac & Life Path"],
 )
 
 app.include_router(
     review_router,
-    prefix="/reviews",
+    prefix="/api/reviews",
     tags=["Reviews"],
 )
 
 app.include_router(
     settings_router,
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["Admin - Settings"],
 )
 
 app.include_router(
     notification_router,
-    prefix="/notifications",
+    prefix="/api/notifications",
     tags=["Notifications"],
 )
 
 app.include_router(
     buy_option_router,
-    prefix="/buy-options",
+    prefix="/api/buy-options",
     tags=["Buy Options"],
 )
 
 app.include_router(
     admin_buy_option_router,
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["Admin - Buy Options"],
 )
 
 app.include_router(
     admin_transaction_router,
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["Admin - Transactions"],
 )
 
 app.include_router(
     admin_psychic_router,
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["Admin - Psychics"],
 )
 
 app.include_router(
     dashboard_router,
-    prefix="/admin",
+    prefix="/api/admin",
     tags=["Admin - Dashboard"],
 )
 
 app.include_router(
     landing_router,
-    prefix="",
+    prefix="/api",
     tags=["Landing Content"],
 )
 
 app.include_router(
     public_settings_router,
-    prefix="",
+    prefix="/api",
     tags=["Public Settings"],
 )
 

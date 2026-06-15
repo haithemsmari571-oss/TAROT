@@ -73,7 +73,7 @@ export class NotificationWebSocket {
     }
 
     const wsUrl = import.meta.env.VITE_API_URL.replace("http", "ws");
-    const fullWsUrl = `${wsUrl}/notifications/ws`;
+    const fullWsUrl = `${wsUrl}/api/notifications/ws`;
     console.log("Connecting to Notification WebSocket:", fullWsUrl);
     this.ws = new WebSocket(fullWsUrl);
 

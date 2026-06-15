@@ -208,7 +208,7 @@ export class ChatWebSocket {
 
   connect() {
     const wsUrl = import.meta.env.VITE_API_URL.replace("http", "ws");
-    const fullWsUrl = `${wsUrl}/chat/ws/${this.chatId}`;
+    const fullWsUrl = `${wsUrl}/api/chat/ws/${this.chatId}`;
     console.log("Connecting to WebSocket:", fullWsUrl);
     this.ws = new WebSocket(fullWsUrl);
 

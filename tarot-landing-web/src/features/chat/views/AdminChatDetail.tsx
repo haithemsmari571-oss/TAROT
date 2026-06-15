@@ -116,7 +116,7 @@ const AdminChatDetail = () => {
     if (!chatDetails?.psychic_token || !chatId) return;
 
     const wsUrl = import.meta.env.VITE_API_URL.replace("http", "ws");
-    const fullWsUrl = `${wsUrl}/chat/ws/${chatId}`;
+    const fullWsUrl = `${wsUrl}/api/chat/ws/${chatId}`;
     
     setConnectionStatus("Connecting...");
     const ws = new WebSocket(fullWsUrl);

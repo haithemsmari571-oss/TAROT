@@ -67,7 +67,7 @@ services:
     container_name: tarot-stripe-cli
     command:
       - listen
-      - --forward-to=http://backend:8000/payment/webhook
+      - --forward-to=http://backend:8000/api/payment/webhook
       - --log-level=debug
     environment:
       - STRIPE_API_KEY=sk_test_51RgQoeCid9Y1wSHuYA9QLh9bcR2BJG3FIXabkRk4OZwK23f4f3Kkvs0o5FNfys2BqG7SyyUVTNlSzTg8ZkHFZrcj00JD8473Dy

@@ -9,7 +9,7 @@ import {
 } from "@/features/auth/utils";
 
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: `${import.meta.env.VITE_API_URL}/api`,
   withCredentials: false,
   headers: {
     Accept: "application/json",
@@ -98,7 +98,7 @@ axiosClient.interceptors.response.use(
         console.log("Attempting to refresh token...");
         // Try to refresh the token
         const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/auth/refresh-token`,
+          `${import.meta.env.VITE_API_URL}/api/auth/refresh-token`,
           { refresh_token: refreshToken }
         );
 
