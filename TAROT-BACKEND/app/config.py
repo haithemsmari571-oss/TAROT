@@ -19,11 +19,12 @@ class AppSettings(BaseSettings):
 
     DATABASE_URL: str = "postgresql://tarot:tarot@localhost:5432/tarot"
 
-    MAIL_USERNAME: str = ""
-    MAIL_PASSWORD: SecretStr = SecretStr("")
-    MAIL_FROM: str = ""
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = ""
+    MAIL_USERNAME: str = "support@askvalentina.co.uk"
+    MAIL_PASSWORD: str = "BarCoffeeMirror21@"
+    MAIL_FROM: str = "support@askvalentina.co.uk"
+    MAIL_PORT: int = 465
+    MAIL_SERVER: str = "mail.privateemail.com"
+    MAIL_ENCRYPTION: str = "tls"
 
     JWT_SECRET_KEY: str = (
         "b3bdc70d9d8fb5594b135a7a45d148ab51947cb29508655af27ff84e7492b257"
