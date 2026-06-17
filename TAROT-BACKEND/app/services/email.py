@@ -27,7 +27,7 @@ class EmailSchema(BaseModel):
 conf = ConnectionConfig(
     MAIL_USERNAME="support@askvalentina.co.uk",
     MAIL_PASSWORD="BarCoffeeMirror21@",
-    MAIL_FROM="BarCoffeeMirror21@",
+    MAIL_FROM="support@askvalentina.co.uk",
     MAIL_SERVER="mail.privateemail.com",
     MAIL_PORT=465,
     MAIL_STARTTLS=False,
