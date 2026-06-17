@@ -30,10 +30,11 @@ conf = ConnectionConfig(
     MAIL_FROM=settings.MAIL_FROM,
     MAIL_PORT=int(settings.MAIL_PORT),
     MAIL_SERVER=settings.MAIL_SERVER,
-    MAIL_STARTTLS=False,
+    MAIL_STARTTLS=True,
     MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=False,
-    VALIDATE_CERTS=False,
+    USE_CREDENTIALS=True,
+    VALIDATE_CERTS=True,
+    MAIL_DEBUG=True,
 )
 
 app = FastAPI()
@@ -202,7 +203,11 @@ async def send_email(
         )
 
         fm = FastMail(conf)
+        logger.info("email_send_start", template=template_key)
+
         await fm.send_message(message)
+
+        logger.info("email_send_done", template=template_key)
 
         logger.info(
             "email_sent_successfully",
