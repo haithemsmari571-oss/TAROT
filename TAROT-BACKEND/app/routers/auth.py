@@ -22,6 +22,38 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+@router.post("/test-email")
+async def test_email(to: str):
+    from fastapi_mail import NameEmail
+    from app.services.email import send_email  # adjust import
+
+    await send_email(
+        recepientEmail=[NameEmail(email=to, name="Test User")],
+        template_key="verify_account",
+        vars={"username": "TestUser", "verify_link": "https://example.com/test-link"},
+    )
+
+    return {"status": "sent"}
+
+
+@router.post("/test-email-raw")
+async def test_email_raw(to: str):
+    from fastapi_mail import MessageSchema, MessageType, FastMail, NameEmail
+    from app.services.email import conf
+
+    message = MessageSchema(
+        subject="SMTP TEST",
+        recipients=[NameEmail(email=to, name="Tester")],
+        body="<h1>It works 🚀</h1>",
+        subtype=MessageType.html,
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+    return {"status": "raw_sent"}
+
+
 @router.post("/sign-up")
 async def signup_endpoint(user_data: UserSignup, db: Session = Depends(get_db)):
     try:
