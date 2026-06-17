@@ -189,8 +189,14 @@ async def send_email(
 
         mail_body = _fill_body_variables(template, vars)
 
+        email_subjects = {
+            MailTemplateKey.FORGOT_PASSWORD.value: "Reset your password",
+            MailTemplateKey.VERIFY_ACCOUNT.value: "Verify your AskValentina account",
+        }
+        subject = email_subjects.get(template_key, "AskValentina Notification")
+
         message = MessageSchema(
-            subject="Fastapi-Mail module",
+            subject=subject,
             recipients=recepientEmail,
             body=mail_body,
             subtype=MessageType.html,
