@@ -9,7 +9,15 @@ import { AuthInitializer } from './features/auth/components'
 import { ToastProvider } from './components/Toast'
 import { NotificationProvider } from './features/notifications/context/NotificationContext'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient(
+  {defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 0
+    },
+  },}
+)
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
