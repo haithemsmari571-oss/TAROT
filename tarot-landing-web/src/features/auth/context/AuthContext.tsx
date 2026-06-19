@@ -1,22 +1,17 @@
+import { createContext, useState, useEffect, type ReactNode } from "react";
 import {
-  createContext,
-  useState,
-  useEffect,
-  type ReactNode,
-} from "react";
-import { 
-  getToken, 
-  saveToken, 
-  clearTokens, 
-  isTokenExpired, 
-  getUser, 
+  getToken,
+  saveToken,
+  clearTokens,
+  isTokenExpired,
+  getUser,
   saveUser,
-  saveRefreshToken 
+  saveRefreshToken,
 } from "../utils";
 import type { User, AuthContextType } from "../types";
 
 export const AuthContext = createContext<AuthContextType | undefined>(
-  undefined
+  undefined,
 );
 
 interface AuthProviderProps {
@@ -99,9 +94,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = () => {
+    console.log("Before logout", localStorage);
     clearTokens();
     setToken(null);
     setUser(null);
+    console.log("After logout", localStorage);
   };
 
   const updateUser = (newUser: User) => {
