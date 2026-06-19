@@ -107,7 +107,7 @@ const Billing = () => {
     if (!ctx) return;
     
     let animationFrameId: number;
-    let stars = Array.from({ length: 150 }, () => ({
+    const stars = Array.from({ length: 150 }, () => ({
       x: Math.random() * window.innerWidth,
       y: Math.random() * window.innerHeight,
       size: Math.random() * 1.5,
@@ -224,45 +224,63 @@ const Billing = () => {
 
   // Get transaction type icon and color
   const getTypeDisplay = (type: TransactionType) => {
-    switch (type) {
+    const typeStr = (type as unknown as string || "").toUpperCase();
+    switch (typeStr) {
+      case "CREDIT":
       case TransactionType.CREDIT:
         return {
           icon: "solar:card-receive-bold-duotone",
           color: "#4ADE80",
           label: "Credit",
         };
+      case "DEBIT":
       case TransactionType.DEBIT:
         return {
           icon: "solar:card-send-bold-duotone",
           color: "#F87171",
           label: "Debit",
         };
+      case "REFUND":
       case TransactionType.REFUND:
         return {
           icon: "solar:restart-bold-duotone",
           color: COLORS.starGold,
           label: "Refund",
         };
+      case "REVERSAL":
       case TransactionType.REVERSAL:
         return {
           icon: "solar:undo-left-bold-duotone",
           color: COLORS.secondary,
           label: "Reversal",
         };
+      default:
+        return {
+          icon: "solar:question-circle-bold-duotone",
+          color: COLORS.neutralGray,
+          label: typeof type === 'string' ? type : "Unknown",
+        };
     }
   };
 
   // Get status display
   const getStatusDisplay = (status: TransactionStatus) => {
-    switch (status) {
+    const statusStr = (status as unknown as string || "").toUpperCase();
+    switch (statusStr) {
+      case "COMPLETED":
       case TransactionStatus.COMPLETED:
         return { color: "#4ADE80", label: "Completed" };
+      case "PENDING":
       case TransactionStatus.PENDING:
         return { color: COLORS.starGold, label: "Pending" };
+      case "FAILED":
       case TransactionStatus.FAILED:
         return { color: "#F87171", label: "Failed" };
+      case "REVERSED":
       case TransactionStatus.REVERSED:
         return { color: COLORS.secondary, label: "Reversed" };
+      default:
+        return { color: COLORS.neutralGray, label: typeof status === 'string' ? status : "Unknown" };
     }
   };
 
@@ -877,7 +895,7 @@ const Billing = () => {
           ) : (
             <>
               <div className="space-y-4">
-                {transactions.map((transaction: Transaction, idx) => {
+                {transactions.map((transaction: Transaction) => {
                   const typeDisplay = getTypeDisplay(transaction.transaction_type);
                   const statusDisplay = getStatusDisplay(transaction.status);
                   const isCredit =
