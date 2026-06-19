@@ -39,9 +39,9 @@ const LoginPage = () => {
   const parallaxX = useTransform(mouseX, [-0.5, 0.5], [-20, 20]);
   const parallaxY = useTransform(mouseY, [-0.5, 0.5], [-20, 20]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    login({ email, password });
+    await login({ email, password });
   };
 
   const inputClasses = 
