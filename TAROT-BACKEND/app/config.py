@@ -32,7 +32,7 @@ class AppSettings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_TOKEN_EXPIRE_MINUTES: int = 9999
 
-    APP_BASE_URL: str = "https://askvalentina.co.uk/api/"
+    APP_BASE_URL: str = "https://askvalentina.co.uk/api"
     FRONT_BASE_URL: str = "https://askvalentina.co.uk/"
 
     MEDIA_DIR: Path = Path("media/uploads")
