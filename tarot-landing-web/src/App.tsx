@@ -32,23 +32,27 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // PSYCHIC, ADMIN, SUPERADMIN must stay within /admin/*
-  if (
-    isAuthenticated &&
-    user &&
-    (user.role === UserRole.PSYCHIC ||
-      user.role === UserRole.ADMIN ||
-      user.role === UserRole.SUPERADMIN) &&
-    !location.pathname.startsWith("/admin")
-  ) {
-    console.log("ADMIN REDIRECT", {
-      path: location.pathname,
-      role: user.role,
-    });
-
-    return <Navigate to="/admin/chats" replace />;
+  if (isLoading || !user) {
+    return <>{children}</>;
   }
+  // PSYCHIC, ADMIN, SUPERADMIN must stay within /admin/*
+  const role = user.role;
 
+  const isAdminRole =
+    role === UserRole.PSYCHIC ||
+    role === UserRole.ADMIN ||
+    role === UserRole.SUPERADMIN;
+
+  if (isAuthenticated && isAdminRole) {
+    if (!location.pathname.startsWith("/admin")) {
+      console.log("ADMIN REDIRECT", {
+        path: location.pathname,
+        role,
+      });
+
+      return <Navigate to="/admin/chats" replace />;
+    }
+  }
   // Logged-in USER role
   if (isAuthenticated && user?.role === UserRole.USER) {
     // / and /home redirect to /psychics-browse as their home page
