@@ -36,9 +36,16 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   if (
     isAuthenticated &&
     user &&
-    (user.role === UserRole.PSYCHIC || user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) &&
+    (user.role === UserRole.PSYCHIC ||
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPERADMIN) &&
     !location.pathname.startsWith("/admin")
   ) {
+    console.log("ADMIN REDIRECT", {
+      path: location.pathname,
+      role: user.role,
+    });
+
     return <Navigate to="/admin/chats" replace />;
   }
 
@@ -82,14 +89,24 @@ export default function App() {
   return (
     <Routes>
       {/* Public Layout Routes (Landing pages without sidebar) */}
-      <Route element={<RouteGuard><PublicLayout /></RouteGuard>}>
+      <Route
+        element={
+          <RouteGuard>
+            <PublicLayout />
+          </RouteGuard>
+        }
+      >
         {publicRoutes.map((r: RouteConfig) => {
           if (r.requiresAuth) {
             return (
-              <Route 
-                key={r.path} 
-                path={r.path} 
-                element={<ProtectedRoute><r.component /></ProtectedRoute>} 
+              <Route
+                key={r.path}
+                path={r.path}
+                element={
+                  <ProtectedRoute>
+                    <r.component />
+                  </ProtectedRoute>
+                }
               />
             );
           }
@@ -98,7 +115,13 @@ export default function App() {
       </Route>
 
       {/* Private / Admin Layout Routes */}
-      <Route element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+      <Route
+        element={
+          <ProtectedRoute>
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
         {privateRoutes.map((r: RouteConfig) => {
           if (r.allowedRoles && r.allowedRoles.length > 0) {
             return (
@@ -106,7 +129,7 @@ export default function App() {
                 key={r.path}
                 path={r.path}
                 element={
-                  <RoleProtectedRoute 
+                  <RoleProtectedRoute
                     allowedRoles={r.allowedRoles}
                     redirectTo="/admin/chats"
                   >
@@ -131,20 +154,29 @@ export default function App() {
       <Route
         path="*"
         element={
-          <div className="flex flex-col items-center justify-center w-full h-screen text-center"
-               style={{ backgroundColor: COLORS.Dark }}>
-            <h1 className="text-8xl font-black mb-2" 
-                style={{ color: COLORS.primary, fontFamily: 'Oswald' }}>
+          <div
+            className="flex flex-col items-center justify-center w-full h-screen text-center"
+            style={{ backgroundColor: COLORS.Dark }}
+          >
+            <h1
+              className="text-8xl font-black mb-2"
+              style={{ color: COLORS.primary, fontFamily: "Oswald" }}
+            >
               404
             </h1>
-            <p className="text-xl uppercase tracking-widest mb-8" 
-               style={{ color: COLORS.neutralGray, fontFamily: 'Montserrat' }}>
+            <p
+              className="text-xl uppercase tracking-widest mb-8"
+              style={{ color: COLORS.neutralGray, fontFamily: "Montserrat" }}
+            >
               Node Not Found
             </p>
             <a
               href="/home"
               className="px-8 py-3 text-white rounded-xl transition-all hover:scale-105 font-bold uppercase tracking-widest"
-              style={{ backgroundColor: COLORS.primary, boxShadow: `0 10px 20px ${COLORS.primary}40` }}
+              style={{
+                backgroundColor: COLORS.primary,
+                boxShadow: `0 10px 20px ${COLORS.primary}40`,
+              }}
             >
               Return to System
             </a>
