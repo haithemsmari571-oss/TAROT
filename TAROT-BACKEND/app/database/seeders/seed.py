@@ -254,7 +254,7 @@ def seed_life_path_compatibility(db: Session):
 
 
 def seed_users(db: Session, users_list: List[Dict]):
-    default_password = hash_password("password")
+    default_password = hash_password("password@2026")
     now = datetime.utcnow()
     for i, user_data in enumerate(users_list):
         # Check if user already exists
@@ -542,10 +542,10 @@ def seed_all():
         # seed_psychics(db, psychic_list)
         # print("[SEED] Psychics seeded")
 
-        # # Seed regular users
-        # users_list = seed_data.get("users", [])
-        # seed_users(db, users_list)
-        # print("[SEED] Users seeded")
+        # Seed regular users
+        users_list = seed_data.get("users", [])
+        seed_users(db, users_list)
+        print("[SEED] Users seeded")
 
         # # Seed chats (requires users and psychics)
         # chats_list = seed_data.get("chats", [])
