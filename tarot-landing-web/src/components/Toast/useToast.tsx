@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import ToastContainer from "./ToastContainer";
 import type { ToastType, ToastProps } from "./Toast";
@@ -15,12 +16,46 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastProps[]>([]);
 
+  // Web Audio API chime generator for pleasant notification sounds
+  const playNotificationSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      const playTone = (freq: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, startTime);
+        
+        gain.gain.setValueAtTime(0.15, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+
+      const now = ctx.currentTime;
+      // Pleasant dual-tone chime
+      playTone(587.33, now, 0.4); // D5
+      playTone(880, now + 0.08, 0.6); // A5
+    } catch (error) {
+      console.warn("Failed to play notification sound:", error);
+    }
+  };
+
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
   const showToast = useCallback(
     (message: string, type: ToastType, duration = 3000) => {
+      playNotificationSound();
       setToasts((prev) => {
         const existing = prev.find((t) => t.message === message && t.type === type);
         if (existing) {
