@@ -41,8 +41,14 @@ from app.utils.life_path_calculator import get_life_path_compatibility_score
 
 
 def read_seeders():
-    raw_env = os.getenv("ENV", "dev").lower()
-    env = {"production": "prod", "development": "dev", "staging": "staging"}.get(raw_env, raw_env)
+    raw_env = (os.getenv("ENV") or os.getenv("ENVIRONMENT") or "dev").lower()
+    env = {
+        "production": "prod",
+        "prod": "prod",
+        "development": "dev",
+        "dev": "dev",
+        "staging": "staging",
+    }.get(raw_env, "dev")
 
     base_path = Path(__file__).parent / env
     seed_data = {}
@@ -252,7 +258,7 @@ def seed_life_path_compatibility(db: Session):
 
 
 def seed_users(db: Session, users_list: List[Dict]):
-    default_password = hash_password("password")
+    default_password = hash_password("password@2026")
     now = datetime.utcnow()
     for i, user_data in enumerate(users_list):
         # Check if user already exists
@@ -535,45 +541,45 @@ def seed_all():
         seed_category(db, categories_list)
         print("[SEED] Categories seeded")
 
-        # Seed psychics (must come before users to ensure role ordering)
-        psychic_list = seed_data.get("psychics", [])
-        seed_psychics(db, psychic_list)
-        print("[SEED] Psychics seeded")
+        # # Seed psychics (must come before users to ensure role ordering)
+        # psychic_list = seed_data.get("psychics", [])
+        # seed_psychics(db, psychic_list)
+        # print("[SEED] Psychics seeded")
 
         # Seed regular users
         users_list = seed_data.get("users", [])
         seed_users(db, users_list)
         print("[SEED] Users seeded")
 
-        # Seed chats (requires users and psychics)
-        chats_list = seed_data.get("chats", [])
-        seed_chats(db, chats_list)
-        print("[SEED] Chats seeded")
+        # # Seed chats (requires users and psychics)
+        # chats_list = seed_data.get("chats", [])
+        # seed_chats(db, chats_list)
+        # print("[SEED] Chats seeded")
 
-        # Seed messages (requires chats)
-        messages_list = seed_data.get("messages", [])
-        seed_messages(db, messages_list)
-        print("[SEED] Messages seeded")
+        # # Seed messages (requires chats)
+        # messages_list = seed_data.get("messages", [])
+        # seed_messages(db, messages_list)
+        # print("[SEED] Messages seeded")
 
-        # Seed chat sessions (requires chats)
-        sessions_list = seed_data.get("chat_sessions", [])
-        seed_chat_sessions(db, sessions_list)
-        print("[SEED] Chat sessions seeded")
+        # # Seed chat sessions (requires chats)
+        # sessions_list = seed_data.get("chat_sessions", [])
+        # seed_chat_sessions(db, sessions_list)
+        # print("[SEED] Chat sessions seeded")
 
-        # Seed session intervals (requires sessions)
-        intervals_list = seed_data.get("session_intervals", [])
-        seed_session_intervals(db, intervals_list)
-        print("[SEED] Session intervals seeded")
+        # # Seed session intervals (requires sessions)
+        # intervals_list = seed_data.get("session_intervals", [])
+        # seed_session_intervals(db, intervals_list)
+        # print("[SEED] Session intervals seeded")
 
-        # Seed transactions (requires users, chats, and intervals)
-        transactions_list = seed_data.get("transactions", [])
-        seed_transactions(db, transactions_list)
-        print("[SEED] Transactions seeded")
+        # # Seed transactions (requires users, chats, and intervals)
+        # transactions_list = seed_data.get("transactions", [])
+        # seed_transactions(db, transactions_list)
+        # print("[SEED] Transactions seeded")
 
-        # Seed reviews (requires users and psychics)
-        reviews_list = seed_data.get("reviews", [])
-        seed_reviews(db, reviews_list)
-        print("[SEED] Reviews seeded")
+        # # Seed reviews (requires users and psychics)
+        # reviews_list = seed_data.get("reviews", [])
+        # seed_reviews(db, reviews_list)
+        # print("[SEED] Reviews seeded")
 
         # Seed zodiac data
         zodiac_signs_list = seed_data.get("zodiac_signs", [])

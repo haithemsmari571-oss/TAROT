@@ -12,12 +12,5 @@
     "is_verified": true,
     "balance": 0,
     "role": "ADMIN"
-  },
-  {
-    "username": "user",
-    "email": "user@tarot.com",
-    "is_verified": true,
-    "balance": 0,
-    "role": "USER"
   }
 ]
