@@ -334,12 +334,12 @@ export default function Navbar() {
             className="absolute inset-0 bg-black/90 backdrop-blur-md"
           />
           <div 
-            className="relative w-full max-w-md p-8 rounded-[32px] border border-white/10 overflow-hidden shadow-2xl"
+            className="relative w-full max-w-md max-h-[90vh] flex flex-col p-6 md:p-8 rounded-[32px] border border-white/10 overflow-hidden shadow-2xl"
             style={{ backgroundColor: COLORS.surface }}
           >
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/20 blur-[100px] -z-10" />
               
-              <div className="flex justify-between items-start mb-10">
+              <div className="flex justify-between items-start mb-6 md:mb-8 flex-shrink-0">
                 <div>
                   <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }} className="text-4xl font-black text-white italic uppercase tracking-tighter leading-none">
                     Gather <span style={{ color: COLORS.primary }}>Stardust</span>
@@ -351,7 +351,7 @@ export default function Navbar() {
                 </button>
               </div>
 
-              <div className="grid gap-4">
+              <div className="grid gap-4 overflow-y-auto pr-1 flex-grow custom-scrollbar max-h-[45vh] md:max-h-[55vh] pt-2 pb-2">
                 {(buyOptions.length > 0 ? buyOptions : [
                   { amount: 500, label: "Stardust Mote" },
                   { amount: 1200, label: "Stardust Cluster" },
@@ -382,12 +382,14 @@ export default function Navbar() {
                 })}
               </div>
 
-              <div className="mt-10 flex items-center justify-center gap-3 opacity-20">
-                <div className="h-[1px] flex-1 bg-white" />
-                <Icon icon="ph:shield-check-bold" className="text-white text-xl" />
-                <div className="h-[1px] flex-1 bg-white" />
+              <div className="mt-6 md:mt-8 flex-shrink-0">
+                <div className="flex items-center justify-center gap-3 opacity-20">
+                  <div className="h-[1px] flex-1 bg-white" />
+                  <Icon icon="ph:shield-check-bold" className="text-white text-xl" />
+                  <div className="h-[1px] flex-1 bg-white" />
+                </div>
+                <p className="text-[9px] text-center text-white/30 font-black mt-4 uppercase tracking-[0.3em]">Encrypted Astral Transaction</p>
               </div>
-              <p className="text-[9px] text-center text-white/30 font-black mt-4 uppercase tracking-[0.3em]">Encrypted Astral Transaction</p>
             </div>
           </div>
       )}

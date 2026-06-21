@@ -143,6 +143,13 @@ const Ledger = () => {
           color: COLORS.secondary,
           label: "Reversal",
         };
+      default:
+        // Fallback for unexpected types
+        return {
+          icon: "solar:question-circle-bold-duotone",
+          color: COLORS.neutralGray,
+          label: typeof type === "string" ? type : "Unknown",
+        };
     }
   };
 
