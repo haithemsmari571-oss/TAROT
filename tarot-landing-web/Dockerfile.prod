@@ -5,16 +5,16 @@ ENV VITE_API_URL=$VITE_API_URL
 
 WORKDIR /app
 
-# 1. Only copy package.json and yarn.lock
-COPY package.json yarn.lock ./
+# 1. Copy package.json and package-lock.json (Drop yarn.lock since it's deleted)
+COPY package.json package-lock.json ./
 
-# 2. Use yarn install with frozen-lockfile (Yarn's equivalent to npm ci)
-RUN yarn install --frozen-lockfile
+# 2. Use clean npm install
+RUN npm ci
 
 COPY . .
 
-# 3. Build using yarn
-RUN yarn build
+# 3. Build using npm
+RUN npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
