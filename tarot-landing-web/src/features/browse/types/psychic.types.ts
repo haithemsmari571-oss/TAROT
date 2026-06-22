@@ -27,6 +27,7 @@ export interface Psychic {
   availability: PsychicAvailability[];
   profile_picture_url: string;
   is_online: boolean;
+  order?: number;
 }
 
 export interface PsychicCreate {
@@ -46,7 +47,8 @@ export interface PsychicUpdate {
   price_per_second?: number;
   categories_ids?: number[];
   availabilities_create?: PsychicAvailabilityCreate[];
-  availabilities_ids_to_remove?: number[];
+  order?: number;
+
   bio?: string;
 }
 

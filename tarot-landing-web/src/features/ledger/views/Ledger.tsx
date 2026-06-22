@@ -454,7 +454,7 @@ const Ledger = () => {
             placeholder="Search by user, description, or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            icon="solar:magnifer-bold-duotone"
+            iconLeft="solar:magnifer-bold-duotone"
           />
         </div>
 
