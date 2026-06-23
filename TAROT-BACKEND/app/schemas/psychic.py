@@ -1,18 +1,17 @@
 from datetime import time
 import json
 from typing import List, Optional, Generic, TypeVar
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 from app.schemas.psychic_availability import PsychicAvailiabilityCreate
 
 T = TypeVar("T")
-
 
 class PsychicBase(BaseModel):
     username: str
     email: EmailStr
     price_per_second: float | None = None
     bio: str | None = None
+    order: int | None = 9999
 
 
 class PsychicCategoryRead(BaseModel):
@@ -61,6 +60,15 @@ class PsychicUpdate(BaseModel):
     availabilities_create: List[PsychicAvailiabilityCreate] | None = None
     availabilities_ids_to_remove: List[int] | None = None
     bio: str | None = None
+    order: int | None = None  # ✅ Captured field
+
+    @field_validator("order", mode="before")
+    @classmethod
+    def prevent_empty_string_crash(cls, value):
+        # 💡 If frontend sends an empty string for cleared inputs, map safely to default fallback sequence
+        if value == "" or value is None:
+            return 9999
+        return int(value)
 
     @model_validator(mode="before")
     @classmethod

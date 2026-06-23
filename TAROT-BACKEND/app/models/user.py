@@ -1,6 +1,6 @@
 from typing import List
 
-from sqlalchemy import Enum
+from sqlalchemy import Enum, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.role import Role
@@ -10,6 +10,7 @@ from app.models.base import Base
 
 class User(Base):
     __tablename__ = "users"
+    
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     role: Mapped[Role] = mapped_column(default=Role.USER)
     email: Mapped[str] = mapped_column(unique=True)
@@ -21,10 +22,16 @@ class User(Base):
     price_per_second: Mapped[float] = mapped_column(nullable=True)
     profile_picture_path: Mapped[str] = mapped_column(nullable=True)
     bio: Mapped[str] = mapped_column(nullable=True)
+    
+    # 💡 Added: Dynamic display order field
+    # Default is 9999 so un-ordered psychics go to the end
+    order: Mapped[int] = mapped_column(Integer, default=9999, nullable=False)
+    
     status: Mapped[UserStatus] = mapped_column(
         Enum(UserStatus), default=UserStatus.ACTIVE
     )
 
+    # Relationships
     categories: Mapped[List["PsychicCategory"]] = relationship(
         "PsychicCategory",
         back_populates="psychics",

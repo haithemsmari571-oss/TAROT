@@ -8,6 +8,8 @@ export interface Psychic {
   consultations: string;
   bio: string;
   price: number;
+  order?: number;
+
 }
 
 export const PSYCHICS: Psychic[] = [

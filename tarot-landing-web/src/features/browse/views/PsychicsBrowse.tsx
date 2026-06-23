@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { psychicsApi } from "../api/psychicsApi";
@@ -11,8 +11,6 @@ import { NumericPagination } from "../components/NumericPagination";
 import { PriceRangeFilter } from "../components/PriceRangeFilter";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import "../../../styles/starfield.css";
-
-
 
 const ITEMS_PER_PAGE = 12;
 
@@ -107,12 +105,6 @@ const PsychicsBrowse = () => {
     setCurrentPage(1); // Reset to first page on filter change
   }, []);
 
-  // Handle online filter toggle
-  const toggleOnlineFilter = useCallback(() => {
-    setIsOnlineOnly((prev) => !prev);
-    setCurrentPage(1); // Reset to first page on filter change
-  }, []);
-
   // Clear all filters
   const clearFilters = useCallback(() => {
     setSelectedCategories([]);
@@ -123,13 +115,27 @@ const PsychicsBrowse = () => {
     setCurrentPage(1);
   }, []);
 
-  // Convert price per second to price per minute
-  const getPricePerMinute = (pricePerSecond: number) => {
+  // Convert price per second to price per minute with zero safety guard
+  const getPricePerMinute = (pricePerSecond: number | undefined | null) => {
+    if (!pricePerSecond) return "0.00";
     return (pricePerSecond * 60).toFixed(2);
   };
 
   // Check if any filters are active
   const hasActiveFilters = selectedCategories.length > 0 || searchQuery || minPrice !== undefined || maxPrice !== undefined || isOnlineOnly;
+
+  // ✅ Computed values: Explicitly map sequence orders descending/ascending safely
+  const sortedPsychics = useMemo(() => {
+    return [...psychics].sort((a, b) => {
+      const orderA = a.order ?? 9999;
+      const orderB = b.order ?? 9999;
+      
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return b.id - a.id; // Fallback sorting priority for same values: Newest first
+    });
+  }, [psychics]);
 
   return (
     <div 
@@ -239,7 +245,6 @@ const PsychicsBrowse = () => {
 
           {/* Results Count and Clear Filters */}
           <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-            {/* Results Count */}
             {!loading && (
               <span className="text-sm font-medium" style={{ color: COLORS.neutralWhite }}>
                 <span style={{ color: COLORS.primary }} className="font-bold">{totalCount}</span>{" "}
@@ -247,7 +252,6 @@ const PsychicsBrowse = () => {
               </span>
             )}
 
-            {/* Clear Filters Button */}
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -299,7 +303,8 @@ const PsychicsBrowse = () => {
         {!loading && !error && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-12">
-              {psychics?.map((psychic, index) => (
+              {/* ✅ FIX: Swapped out raw psychics list array mapping block for sortedPsychics */}
+              {sortedPsychics.map((psychic) => (
                 <div
                   key={psychic.id}
                   onClick={() => navigate(`/psychics/${psychic.id}/details`)}
@@ -352,7 +357,7 @@ const PsychicsBrowse = () => {
                       </div>
                     )}
 
-                    {/* ONLINE STATUS - Floating badge */}
+                    {/* ONLINE STATUS BADGE */}
                     {psychic.is_online && (
                       <div 
                         className="absolute top-4 right-4 px-3 py-1.5 rounded-full border flex items-center gap-2 backdrop-blur-xl"
@@ -463,7 +468,7 @@ const PsychicsBrowse = () => {
                     <button
                       className="w-full py-3 sm:py-4 rounded-2xl flex items-center justify-center gap-2 sm:gap-3 relative overflow-hidden transition-opacity duration-200 hover:opacity-90"
                       style={{
-                        background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                        background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary}100%)`,
                         fontFamily: TYPOGRAPHY.fontFamily.heading,
                         boxShadow: `0 8px 20px ${COLORS.primary}30`,
                       }}

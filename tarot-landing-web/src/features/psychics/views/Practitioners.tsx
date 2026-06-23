@@ -1,9 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
-import { type Psychic } from "../data/PractitionersUsers";
+import { type Psychic, getCategoryColor } from "../data/PractitionersUsers";
+import { PrimaryTable, type Column } from "../../../components/Table/PrimaryTable";
 import PractitionerModal from "../../../components/modals/PractitionerModal";
 import DeleteModal from "../../../components/modals/DeleteModal";
 import PsychicDetailsModal from "../../../components/modals/PsychicDetailsModal";
@@ -14,13 +12,16 @@ import { psychicsApi } from "../../browse/api/psychicsApi";
 import { categoriesApi } from "../../browse/api/categoriesApi";
 import type { PsychicCategory } from "../../browse/types/psychic.types";
 import { useToast } from "../../../components/Toast";
-
+import PsychicOrderController from "./PsychicOrderController";
 
 const Practitioners = () => {
+  // --- Core Lifecycle & Cache States ---
   const [psychics, setPsychics] = useState<Psychic[]>([]);
   const [categories, setCategories] = useState<PsychicCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // --- Modal Visibility States ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPsychic, setSelectedPsychic] = useState<Psychic | null>(null);
 
@@ -39,20 +40,28 @@ const Practitioners = () => {
 
   const toast = useToast();
 
-  // Fetch data on mount
+  // --- 1. Fetch System Data on Mount ---
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // Fetch both psychics and categories
         const [psychicsData, categoriesData] = await Promise.all([
-          psychicsApi.getPsychics({ limit: 100 }), // Fetch all psychics
+          psychicsApi.getPsychics({ limit: 100 }), 
           categoriesApi.getCategories()
         ]);
         
-        setPsychics(psychicsData.items);
+        // 💡 FIX: Keep the database order if it exists. Fall back to a safe default high bounds integer
+        // so unassigned elements position cleanly at the bottom without shifting existing rows.
+        const initializedPsychics = (psychicsData.items || []).map((item: Psychic) => ({
+          ...item,
+          order: (item.order === null || item.order === undefined || item.order === 9999) 
+            ? 9999 
+            : item.order
+        }));
+        
+        setPsychics(initializedPsychics);
         setCategories(categoriesData);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -65,7 +74,7 @@ const Practitioners = () => {
     fetchData();
   }, []);
 
-  // Apply filters first
+  // --- 2. Filter Logic (Unconditional Hook) ---
   const filteredPsychics = useMemo(() => {
     return psychics.filter((p) => {
       const matchesSearch =
@@ -73,75 +82,181 @@ const Practitioners = () => {
         p.email.toLowerCase().includes(search.toLowerCase()) ||
         p.bio.toLowerCase().includes(search.toLowerCase()) ||
         p.id.toString().includes(search);
-
-      const matchesCategory = categoryFilter === "All" || p.categories.some(cat => cat.title === categoryFilter);
-
-      const matchesOnline =
+      
+      const matchesCategory = categoryFilter === "All" || 
+        p.categories.some(cat => cat.title === categoryFilter);
+      
+      const matchesOnline = 
         onlineFilter === "all" ||
         (onlineFilter === "online" && p.is_online) ||
         (onlineFilter === "offline" && !p.is_online);
-
+      
       return matchesSearch && matchesCategory && matchesOnline;
     });
   }, [psychics, search, categoryFilter, onlineFilter]);
 
-  // Sort by manual order if present, otherwise by username
+  // --- 3. Display Priority Sequence Sorting Logic ---
   const sortedPsychics = useMemo(() => {
-    const list = [...filteredPsychics];
-    list.sort((a, b) => {
-      const aOrder = a.order ?? Number.MAX_SAFE_INTEGER;
-      const bOrder = b.order ?? Number.MAX_SAFE_INTEGER;
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      return a.username.localeCompare(b.username);
+    return [...filteredPsychics].sort((a, b) => {
+      const orderA = a.order ?? 9999;
+      const orderB = b.order ?? 9999;
+      
+      // If order priorities are identical, fall back to sorting by ID descending
+      if (orderA === orderB) {
+        return b.id - a.id;
+      }
+      return orderA - orderB;
     });
-    return list;
   }, [filteredPsychics]);
 
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
-    if (active.id !== over?.id) {
-      const oldIndex = sortedPsychics.findIndex(p => p.id === active.id);
-      const newIndex = sortedPsychics.findIndex(p => p.id === over?.id);
-      const newOrder = arrayMove(sortedPsychics, oldIndex, newIndex);
-      setPsychics(newOrder);
-      // Update order on backend
-      const moved = newOrder[newIndex];
-      psychicsApi.updatePsychic(moved.id, { ...moved, order: newIndex }).catch(() => {});
-    }
-  };
-
-  const SortableItem = ({ id, psychic }: { id: number, psychic: Psychic }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-    return (
-      <div ref={setNodeRef} style={style} className="border-b border-white/10 p-4 flex items-center justify-between bg-transparent">
-        <div className="flex-1 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-[14px] overflow-hidden border" style={{ backgroundColor: `rgba(255,255,255,0.02)`, borderColor: `rgba(255,255,255,0.05)` }}>
-            {psychic.profile_picture_url ? (
-              <img src={psychic.profile_picture_url} alt={psychic.username} className="w-full h-full object-cover grayscale-[0.3] hover:grayscale-0 transition-all" />
+  // --- 4. Columns Schema Definition ---
+  const columns: Column<Psychic>[] = [
+    {
+      key: "username",
+      label: "Psychic",
+      sortable: true,
+      render: (p) => (
+        <div className="flex items-center gap-4">
+          <div
+            className="w-11 h-11 rounded-[14px] overflow-hidden border transition-all hover:scale-110 shrink-0"
+            style={{
+              backgroundColor: `rgba(255,255,255,0.02)`,
+              borderColor: `rgba(255,255,255,0.05)`,
+            }}
+          >
+            {p.profile_picture_url ? (
+              <img 
+                src={p.profile_picture_url} 
+                alt={p.username} 
+                className="w-full h-full object-cover grayscale-[0.3] hover:grayscale-0 transition-all" 
+              />
             ) : (
-              <div className="w-full h-full flex items-center justify-center grayscale"><Icon icon="ph:user-fill" className="text-white/20 text-xl" /></div>
+              <div className="w-full h-full flex items-center justify-center grayscale">
+                <Icon icon="ph:user-fill" className="text-white/20 text-xl" />
+              </div>
             )}
           </div>
           <div className="flex flex-col">
-            <span className="text-white font-bold" style={{ fontSize: TYPOGRAPHY.fontSize.sm }}>{psychic.username}</span>
-            <span style={{ color: COLORS.primary, fontSize: "9px" }} className="uppercase font-black tracking-widest opacity-60">{psychic.is_verified && "✓ "}@{psychic.username}</span>
+            <span className="text-white font-bold leading-tight" style={{ fontSize: TYPOGRAPHY.fontSize.sm }}>
+              {p.username}
+            </span>
+            <span style={{ color: COLORS.primary, fontSize: "9px" }} className="uppercase font-black tracking-widest opacity-60">
+              {p.is_verified && "✓ "}@{p.username}
+            </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all" onClick={() => { setPsychicToView(psychic); setIsDetailsModalOpen(true); }} title="View Details"><Icon icon="solar:eye-bold-duotone" className="text-lg" /></button>
-          <button className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all" onClick={() => { setSelectedPsychic(psychic); setIsModalOpen(true); }} title="Edit"><Icon icon="solar:pen-new-round-bold-duotone" className="text-lg" /></button>
-          <button className="p-3 rounded-xl text-white/20 hover:text-starGold hover:bg-starGold/5 transition-all" onClick={() => { setPsychicToDelete(psychic); setIsDeleteModalOpen(true); }} title="Delete"><Icon icon="solar:trash-bin-trash-bold-duotone" className="text-lg" /></button>
-          <div className="cursor-grab text-white/30" {...listeners} {...attributes}><Icon icon="solar:drag-horizontal-bold" className="text-lg" /></div>
+      ),
+    },
+    {
+      key: "categories",
+      label: "Categories",
+      render: (p) => (
+        <div className="flex flex-col gap-1">
+          {p.categories.length > 0 ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:magic-stick-3-bold-duotone" className="text-xs text-primary" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/80">
+                  {p.categories[0].title}
+                </span>
+              </div>
+              {p.categories.length > 1 && (
+                <span className="text-[9px] text-white/20 uppercase font-black">
+                  + {p.categories.length - 1} more
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-[9px] text-white/30 italic">No specialty</span>
+          )}
         </div>
-      </div>
-    );
-  };
+      ),
+    },
+    {
+      key: "availability",
+      label: "Availability",
+      render: (p) => (
+        <div className="flex flex-col gap-1">
+          {p.availability && p.availability.length > 0 ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <div className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 flex items-center gap-1">
+                   <Icon icon="solar:calendar-minimalistic-bold-duotone" className="text-[10px] text-primary" />
+                   <span className="text-[9px] text-white/70 font-black uppercase tracking-tighter">
+                     {p.availability[0].day_of_the_week}
+                   </span>
+                </div>
+                <span className="text-[9px] text-white/30 font-bold">
+                  {p.availability[0].start_at.split(':')[0]}:00 — {p.availability[0].end_at.split(':')[0]}:00
+                </span>
+              </div>
+              {p.availability.length > 1 && (
+                <span className="text-[8px] text-white/10 uppercase font-black ml-1">
+                  + {p.availability.length - 1} additional slots
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-[9px] text-white/40 italic">Not set</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "price_per_second",
+      label: "Rate",
+      sortable: true,
+      render: (p) => (
+        <div className="flex flex-col">
+          <span className="text-white font-bold text-xs">
+            {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((p.price_per_second ?? 0) * 60)}/min
+          </span>
+          <div className="flex items-center gap-1 mt-0.5">
+             <Icon icon="solar:dollar-bold-duotone" className="text-[10px] text-white/20" />
+             <span className="text-[9px] text-white/30 uppercase font-black">
+               ${(p.price_per_second ?? 0).toFixed(3)}/sec
+             </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "is_online",
+      label: "Status",
+      render: (p) => {
+        const color = p.is_online ? COLORS.primary : COLORS.starGold;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
+            <span style={{ color, fontSize: "9px" }} className="font-black uppercase tracking-widest">
+              {p.is_online ? "Live" : "Standby"}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "order",
+      label: "Order Priority",
+      sortable: true,
+      render: (p) => (
+        <PsychicOrderController
+          psychicId={p.id}
+          currentOrder={p.order === 9999 ? "" : p.order}
+          onUpdated={(newOrder) => {
+            // 💡 Fix: Real-time atomic update over state engine cleanly re-evaluates useMemo hooks
+            setPsychics((prev) =>
+              prev.map((item) =>
+                item.id === p.id ? { ...item, order: newOrder === "" ? 9999 : Number(newOrder) } : item
+              )
+            );
+          }}
+        />
+      ),
+    },
+  ];
 
+  // --- 5. Data Mutations & Event Handlers ---
   const handleSave = async (formData: FormData) => {
     try {
       setLoading(true);
@@ -152,8 +267,19 @@ const Practitioners = () => {
 
       if (isUpdate) {
         const psychicId = parseInt(formData.get("psychicId") as string);
-        const updated = await psychicsApi.updatePsychic(psychicId, parsedData, profilePicture || undefined);
-        setPsychics(psychics.map((p) => (p.id === psychicId ? updated : p)));
+        const updated = await psychicsApi.updatePsychic(
+          psychicId,
+          parsedData,
+          profilePicture || undefined
+        );
+        
+        setPsychics((prev) =>
+          prev.map((p) =>
+            p.id === psychicId 
+              ? { ...p, ...updated, order: updated.order === null || updated.order === 9999 ? 9999 : updated.order } 
+              : p
+          )
+        );
         toast.success("Psychic updated successfully!");
       } else {
         if (!profilePicture) {
@@ -161,10 +287,17 @@ const Practitioners = () => {
           setLoading(false);
           return;
         }
+
         const created = await psychicsApi.createPsychic(parsedData, profilePicture);
-        setPsychics([created, ...psychics]);
+        const normalizedCreated = {
+          ...created,
+          order: created.order === null || created.order === undefined || created.order === 9999 ? 9999 : created.order
+        };
+
+        setPsychics((prev) => [normalizedCreated, ...prev]);
         toast.success("Psychic created successfully!");
       }
+      
       setIsModalOpen(false);
       setSelectedPsychic(null);
     } catch (err: any) {
@@ -192,34 +325,166 @@ const Practitioners = () => {
     }
   };
 
-  if (loading) return <div className="p-12 min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.dark }}><div className="flex flex-col items-center gap-4"><Icon icon="solar:spinner-bold-duotone" className="text-5xl text-primary animate-spin" /></div></div>;
+  // --- 6. Early Render Safety Handlers ---
+  if (loading) {
+    return (
+      <div className="p-12 min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.dark }}>
+        <div className="flex flex-col items-center gap-4">
+          <Icon icon="solar:spinner-bold-duotone" className="text-5xl text-primary animate-spin" />
+          <span className="text-white/60 font-bold uppercase tracking-widest text-sm">Loading Psychics...</span>
+        </div>
+      </div>
+    );
+  }
 
+  if (error) {
+    return (
+      <div className="p-12 min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.dark }}>
+        <div className="flex flex-col items-center gap-4 max-w-md">
+          <Icon icon="solar:danger-circle-bold-duotone" className="text-5xl text-starGold" />
+          <span className="text-white font-bold text-lg">{error}</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 rounded-xl bg-primary text-dark font-bold uppercase text-xs tracking-wider hover:scale-105 transition-transform"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 7. Primary Component Layout Render ---
   return (
     <div className="p-12 min-h-screen" style={{ backgroundColor: COLORS.dark, fontFamily: TYPOGRAPHY.fontFamily.body }}>
+      
+      {/* Header */}
       <div className="mb-12">
-        <h1 style={TYPOGRAPHY.headings.h2} className="uppercase italic tracking-tighter text-white">Manage <span style={{ color: COLORS.primary }}>Psychics</span></h1>
+        <h1 style={TYPOGRAPHY.headings.h2} className="uppercase italic tracking-tighter">
+          Manage <span style={{ color: COLORS.primary }}>Psychics</span>
+        </h1>
+        <p style={{ color: COLORS.neutralGray }} className="text-[10px] font-bold uppercase tracking-widest mt-2 opacity-50">
+          Psychic Management Dashboard
+        </p>
       </div>
-      <div className="p-6 rounded-[32px] border border-white/5 mb-10 flex flex-wrap items-end gap-10 shadow-2xl backdrop-blur-sm" style={{ backgroundColor: `${COLORS.surface}80` }}>
+
+      {/* Control Strip */}
+      <div
+        className="p-6 rounded-[32px] border border-white/5 mb-10 flex flex-wrap items-end gap-10 shadow-2xl backdrop-blur-sm"
+        style={{ backgroundColor: `${COLORS.surface}80` }}
+      >
         <div className="flex-1 min-w-[300px]">
           <label className="block text-[9px] font-black uppercase text-white/20 mb-3 ml-1 tracking-widest">Search</label>
-          <PrimaryInput fullWidth placeholder="Search by username, email, or bio..." value={search} onChange={(e) => setSearch(e.target.value)} iconLeft={<Icon icon="solar:magnifer-linear" className="text-xl opacity-20" />} />
+          <PrimaryInput
+            fullWidth
+            placeholder="Search by username, email, or bio..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            iconLeft={<Icon icon="solar:magnifer-linear" className="text-xl opacity-20" />}
+          />
         </div>
-        <div className="w-52"><PrimarySelect label="Category" value={categoryFilter} options={[{ label: "All Categories", value: "All" }, ...categories.map(cat => ({ label: cat.title, value: cat.title }))]} onChange={setCategoryFilter} /></div>
-        <div className="w-48"><PrimarySelect label="Status" value={onlineFilter} options={[{ label: "All Status", value: "all" }, { label: "Online", value: "online" }, { label: "Offline", value: "offline" }]} onChange={setOnlineFilter} /></div>
-        <button onClick={() => { setSelectedPsychic(null); setIsModalOpen(true); }} className="h-[52px] px-12 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] transition-all hover:scale-[1.02] active:scale-95 shadow-xl group" style={{ backgroundColor: COLORS.primary, color: COLORS.dark, fontFamily: TYPOGRAPHY.fontFamily.heading }}>
-          <span className="flex items-center gap-2">Add Psychic <Icon icon="solar:add-circle-bold" className="text-lg" /></span>
+
+        <div className="w-52">
+          <PrimarySelect
+            label="Category"
+            value={categoryFilter}
+            options={[
+              { label: "All Categories", value: "All" },
+              ...categories.map(cat => ({
+                label: cat.title,
+                value: cat.title
+              }))
+            ]}
+            onChange={setCategoryFilter}
+          />
+        </div>
+
+        <div className="w-48">
+          <PrimarySelect
+            label="Status"
+            value={onlineFilter}
+            options={[
+              { label: "All Status", value: "all" },
+              { label: "Online", value: "online" },
+              { label: "Offline", value: "offline" },
+            ]}
+            onChange={setOnlineFilter}
+          />
+        </div>
+
+        <button
+          onClick={() => { setSelectedPsychic(null); setIsModalOpen(true); }}
+          className="h-[52px] px-12 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] transition-all hover:scale-[1.02] active:scale-95 shadow-xl group"
+          style={{
+            backgroundColor: COLORS.primary,
+            color: COLORS.dark,
+            fontFamily: TYPOGRAPHY.fontFamily.heading,
+          }}
+        >
+          <span className="flex items-center gap-2">
+            Add Psychic
+            <Icon icon="solar:add-circle-bold" className="text-lg group-hover:rotate-90 transition-transform" />
+          </span>
         </button>
       </div>
+
+      {/* Main Table */}
       <div className="rounded-[32px] overflow-hidden border border-white/5 bg-transparent shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
-        <DndContext sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor))} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={sortedPsychics.map(p => p.id)} strategy={verticalListSortingStrategy}>
-            {sortedPsychics.map((psychic) => <SortableItem key={psychic.id} id={psychic.id} psychic={psychic} />)}
-          </SortableContext>
-        </DndContext>
+        <PrimaryTable
+          title="PSYCHICS LIST"
+          data={sortedPsychics}
+          columns={columns}
+          actionsColumn={(p) => (
+            <div className="flex items-center justify-end gap-1 pr-4">
+              <button 
+                className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all"
+                onClick={() => { setPsychicToView(p); setIsDetailsModalOpen(true); }}
+                title="View Details"
+              >
+                <Icon icon="solar:eye-bold-duotone" className="text-lg" />
+              </button>
+              <button
+                className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all"
+                onClick={() => { setSelectedPsychic(p); setIsModalOpen(true); }}
+                title="Edit"
+              >
+                <Icon icon="solar:pen-new-round-bold-duotone" className="text-lg" />
+              </button>
+              <button
+                className="p-3 rounded-xl text-white/20 hover:text-starGold hover:bg-starGold/5 transition-all"
+                onClick={() => { setPsychicToDelete(p); setIsDeleteModalOpen(true); }}
+                title="Delete"
+              >
+                <Icon icon="solar:trash-bin-trash-bold-duotone" className="text-lg" />
+              </button>
+            </div>
+          )}
+        />
       </div>
-      <PractitionerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={selectedPsychic} categories={categories} />
-      <PsychicDetailsModal isOpen={isDetailsModalOpen} onClose={() => { setIsDetailsModalOpen(false); setPsychicToView(null); }} psychic={psychicToView} />
-      <DeleteModal isOpen={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setPsychicToDelete(null); }} onConfirm={handleConfirmPurge} title="Delete Psychic" itemName={psychicToDelete?.username} description="Are you sure you want to delete this psychic? This action cannot be undone." />
+
+      {/* Modals Container */}
+      <PractitionerModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSave={handleSave} 
+        initialData={selectedPsychic}
+        categories={categories}
+      />
+
+      <PsychicDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => { setIsDetailsModalOpen(false); setPsychicToView(null); }}
+        psychic={psychicToView}
+      />
+
+      <DeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setPsychicToDelete(null); }}
+        onConfirm={handleConfirmPurge}
+        title="Delete Psychic"
+        itemName={psychicToDelete?.username}
+        description="Are you sure you want to delete this psychic? This action cannot be undone."
+      />
     </div>
   );
 };

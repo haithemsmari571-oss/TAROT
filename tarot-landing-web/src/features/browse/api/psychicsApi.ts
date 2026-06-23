@@ -1,5 +1,5 @@
-import axiosClient from "@/lib/axiosClient";
-import { Psychic, PsychicFilters, PaginatedResponse, PsychicCreate, PsychicUpdate } from "../types/psychic.types";
+import axiosClient from "../../../lib/axiosClient";
+import type { PaginatedResponse, Psychic, PsychicCreate, PsychicFilters, PsychicUpdate } from "../types/psychic.types";
 
 export const psychicsApi = {
   /**

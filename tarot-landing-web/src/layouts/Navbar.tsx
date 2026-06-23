@@ -7,6 +7,17 @@ import { paymentApi } from "../features/payment/api/paymentApi";
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
 import "../styles/starfield.css";
 
+// Interface mirroring the complete package structure used by your billing page handler
+interface PurchasePackage {
+  _id?: string;
+  id: string;
+  amount: number; // maps to points for modal render
+  points: number;
+  label: string;
+  price: number;
+  currency?: string;
+}
+
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -14,17 +25,38 @@ export default function Navbar() {
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [isCurrencyModalOpen, setIsCurrencyModalOpen] = useState(false);
-  const [buyOptions, setBuyOptions] = useState<{ amount: number; label: string }[]>([]);
+  const [buyOptions, setBuyOptions] = useState<PurchasePackage[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [loadingTierId, setLoadingTierId] = useState<string | null>(null);
 
-  // Fetch balance when authenticated
+  // Fallback formatter matching your billing page currency utility
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // Fetch balance and packages when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       paymentApi.getMyBalance()
         .then(data => setBalance(data.balance))
         .catch(() => setBalance(null));
+        
       paymentApi.getBuyOptions()
-        .then(data => setBuyOptions(data.map(o => ({ amount: o.points, label: o.label }))))
+        .then(data => {
+          // Normalize options to ensure fallback IDs and consistent rendering properties exist
+          const mapped = data.map((o: any, idx: number) => ({
+            ...o,
+            id: o.id || o._id || `tier-${idx}`,
+            amount: o.points || 0,
+            label: o.label || "Stardust Pack",
+            price: o.price || 0
+          }));
+          setBuyOptions(mapped);
+        })
         .catch(() => {});
     }
   }, [isAuthenticated, location.pathname]);
@@ -34,6 +66,36 @@ export default function Navbar() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Directly initiates the transaction stream using your native payment API logic
+  const handleDirectPurchase = async (pkg: PurchasePackage) => {
+    try {
+      setLoadingTierId(pkg.id);
+      
+      // Hit your backend Stripe checkout generator directly from the modal view
+      if (paymentApi && typeof (paymentApi as any).createCheckoutSession === "function") {
+        const response = await (paymentApi as any).createCheckoutSession(pkg.id);
+        if (response?.url) {
+          window.location.href = response.url;
+          return;
+        }
+      }
+      
+      // Fallback: If your app uses custom state management in paymentApi, execute it natively
+      if (typeof (paymentApi as any).handlePurchase === "function") {
+        await (paymentApi as any).handlePurchase(pkg);
+        return;
+      }
+
+      // Route Fallback: Pass package parameters forward to fallback view if needed
+      navigate("/billing", { state: { autoInitiate: pkg } });
+      setIsCurrencyModalOpen(false);
+    } catch (error) {
+      console.error("Direct checkout failed:", error);
+    } finally {
+      setLoadingTierId(null);
+    }
+  };
 
   const navItems = isAuthenticated
     ? [
@@ -168,65 +230,66 @@ export default function Navbar() {
              <Icon icon="ph:list-bold" className="text-xl" style={{ color: COLORS.primary }} />
            </button>
          </div>
-       </header>
+      </header>
 
-       {mobileNavOpen && (
-         <div 
-           className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md lg:hidden"
-           onClick={() => setMobileNavOpen(false)}
-         />
-       )}
+      {mobileNavOpen && (
+        <div 
+          className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
 
-       <div 
-         className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] z-[70] transform transition-transform duration-300 lg:hidden ${
-           mobileNavOpen ? "translate-x-0" : "translate-x-full"
-         }`}
-         style={{ backgroundColor: COLORS.surface }}
-       >
-         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
-           <div className="starfield-dense"></div>
-         </div>
+      {/* Mobile Drawer menu container */}
+      <div 
+        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] z-[70] transform transition-transform duration-300 lg:hidden ${
+          mobileNavOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+        style={{ backgroundColor: COLORS.surface }}
+      >
+        <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
+          <div className="starfield-dense"></div>
+        </div>
 
-         <div className="relative z-10 h-full flex flex-col">
-           <div className="flex items-center justify-between p-4 border-b border-white/5">
-             <div onClick={() => { navigate("/home"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-2">
-               <Icon icon="ph:eye-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
-               <span 
-                 className="font-black text-sm uppercase tracking-wider"
-                 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
-               >
-                 Tarot
-               </span>
-             </div>
-             <button
-               onClick={() => setMobileNavOpen(false)}
-               className="flex items-center justify-center w-9 h-9 rounded-full bg-white/[0.03] border border-white/5 hover:bg-white/10 transition-all"
-             >
-               <Icon icon="ph:x-bold" className="text-lg text-white/60" />
-             </button>
-           </div>
+        <div className="relative z-10 h-full flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-white/5">
+            <div onClick={() => { navigate("/home"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-2">
+              <Icon icon="ph:eye-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
+              <span 
+                className="font-black text-sm uppercase tracking-wider"
+                style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
+              >
+                Tarot
+              </span>
+            </div>
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/[0.03] border border-white/5 hover:bg-white/10 transition-all"
+            >
+              <Icon icon="ph:x-bold" className="text-lg text-white/60" />
+            </button>
+          </div>
 
-           <div className="flex-1 overflow-y-auto p-4">
-             <div className="space-y-1">
-               {navItems.map((item) => {
-                 const isActive = location.pathname === item.path;
-                 return (
-                   <button
-                     key={item.name}
-                     onClick={() => { navigate(item.path); setMobileNavOpen(false); }}
-                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-white/5"
-                     style={{
-                       fontFamily: TYPOGRAPHY.fontFamily.heading,
-                       backgroundColor: isActive ? "rgba(210, 185, 255, 0.08)" : "transparent",
-                     }}
-                   >
-                      <Icon 
-                        icon={item.name === "Sanctuary" ? "ph:house-duotone" : 
-                              item.name === "Psychics" ? "ph:sparkle-duotone" :
-                              item.name === "Chats" ? "ph:chat-circle-duotone" :
-                              item.name === "Billing" ? "ph:credit-card-duotone" :
-                              item.name === "Life Path & Zodiac" ? "ph:compass-duotone" :
-                              "ph:stars-duotone"} 
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-1">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <button
+                    key={item.name}
+                    onClick={() => { navigate(item.path); setMobileNavOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-white/5"
+                    style={{
+                      fontFamily: TYPOGRAPHY.fontFamily.heading,
+                      backgroundColor: isActive ? "rgba(210, 185, 255, 0.08)" : "transparent",
+                    }}
+                  >
+                     <Icon 
+                       icon={item.name === "Sanctuary" ? "ph:house-duotone" : 
+                             item.name === "Psychics" ? "ph:sparkle-duotone" :
+                             item.name === "Chats" ? "ph:chat-circle-duotone" :
+                             item.name === "Billing" ? "ph:credit-card-duotone" :
+                             item.name === "Life Path & Zodiac" ? "ph:compass-duotone" :
+                             "ph:stars-duotone"} 
                        className="text-xl"
                        style={{ color: isActive ? COLORS.primary : "rgba(255,255,255,0.3)" }}
                      />
@@ -236,162 +299,219 @@ export default function Navbar() {
                      >
                        {item.name}
                      </span>
-                   </button>
-                 );
-               })}
-             </div>
-           </div>
-
-           <div className="p-4 border-t border-white/5">
-             {isAuthenticated ? (
-               <div className="space-y-3">
-                 <div 
-                   onClick={() => { setIsCurrencyModalOpen(true); setMobileNavOpen(false); }}
-                   style={{ backgroundColor: COLORS.primary }}
-                   className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
-                 >
-                   <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
-                   <span className="text-sm font-black text-black tracking-wider uppercase">
-                     {balance !== null ? balance.toLocaleString() : '...'} Stardust
-                   </span>
-                   <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
-                 </div>
-
-                 <button 
-                   onClick={() => { navigate("/profile"); setMobileNavOpen(false); }}
-                   className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/10 transition-all"
-                 >
-                   <div className="w-10 h-10 rounded-full border border-primary/30 overflow-hidden relative">
-                     {user?.profile_picture ? (
-                       <img src={user.profile_picture} alt="Profile" className="w-full h-full object-cover" />
-                     ) : (
-                       <div className="w-full h-full flex items-center justify-center bg-primary/20">
-                         <Icon icon="ph:user-fill" style={{ color: COLORS.neutralWhite }} />
-                       </div>
-                     )}
-                   </div>
-                   <div className="flex flex-col items-start">
-                     <span className="text-xs font-black text-white/80 uppercase tracking-wider">
-                       {user?.username || 'User'}
-                     </span>
-                     <span className="text-[10px] font-bold text-white/30 uppercase">View Profile</span>
-                   </div>
-                   <Icon icon="ph:caret-right" className="ml-auto text-white/20" />
-                 </button>
-
-                 <button 
-                   onClick={() => { navigate("/notifications"); setMobileNavOpen(false); }}
-                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02] hover:bg-white/5 transition-all"
-                 >
-                   <Icon icon="ph:bell-duotone" className="text-xl" style={{ color: "rgba(255,255,255,0.3)" }} />
-                   <span className="text-sm font-bold uppercase tracking-wider text-white/50">Notifications</span>
-                 </button>
-
-                 <button 
-                   onClick={() => { logout(); setMobileNavOpen(false); }}
-                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
-                 >
-                   <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: COLORS.error }} />
-                   <span className="text-sm font-bold uppercase tracking-wider" style={{ color: COLORS.error }}>Sign Out</span>
-                 </button>
-               </div>
-             ) : (
-               <div className="space-y-3">
-                 <button
-                   onClick={() => { navigate("/login"); setMobileNavOpen(false); }}
-                   className="w-full px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all hover:scale-105"
-                   style={{
-                     color: COLORS.neutralWhite,
-                     border: `1px solid ${COLORS.neutralWhite}20`,
-                     backgroundColor: "transparent",
-                   }}
-                 >
-                   Login
-                 </button>
-
-                 <button
-                   onClick={() => { navigate("/register"); setMobileNavOpen(false); }}
-                   className="w-full px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all hover:scale-105"
-                   style={{
-                     color: COLORS.dark,
-                     backgroundColor: COLORS.primary,
-                     boxShadow: `0 10px 30px ${COLORS.primary}40`,
-                   }}
-                 >
-                   Get Started
-                 </button>
-               </div>
-             )}
-           </div>
-         </div>
-       </div>
-
-      {/* --- CURRENCY MODAL --- */}
-      {isCurrencyModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div 
-            onClick={() => setIsCurrencyModalOpen(false)}
-            className="absolute inset-0 bg-black/90 backdrop-blur-md"
-          />
-          <div 
-            className="relative w-full max-w-md max-h-[90vh] flex flex-col p-6 md:p-8 rounded-[32px] border border-white/10 overflow-hidden shadow-2xl"
-            style={{ backgroundColor: COLORS.surface }}
-          >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-primary/20 blur-[100px] -z-10" />
-              
-              <div className="flex justify-between items-start mb-6 md:mb-8 flex-shrink-0">
-                <div>
-                  <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }} className="text-4xl font-black text-white italic uppercase tracking-tighter leading-none">
-                    Gather <span style={{ color: COLORS.primary }}>Stardust</span>
-                  </h2>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black mt-2 opacity-80">Fuel your cosmic journey</p>
-                </div>
-                <button onClick={() => setIsCurrencyModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/40 hover:text-white transition-all">
-                  <Icon icon="ph:x-bold" className="text-xl" />
-                </button>
-              </div>
-
-              <div className="grid gap-4 overflow-y-auto pr-1 flex-grow custom-scrollbar max-h-[45vh] md:max-h-[55vh] pt-2 pb-2">
-                {(buyOptions.length > 0 ? buyOptions : [
-                  { amount: 500, label: "Stardust Mote" },
-                  { amount: 1200, label: "Stardust Cluster" },
-                  { amount: 3000, label: "Stardust Nebula" },
-                ]).map((tier, idx) => {
-                  const isPopular = idx === 1;
-                  return (
-                    <button 
-                      key={tier.amount} 
-                      onClick={() => navigate("/billing")}
-                      style={{ borderColor: isPopular ? `${COLORS.primary}40` : "rgba(255,255,255,0.05)" }}
-                      className="group relative flex items-center justify-between p-6 rounded-2xl border bg-white/[0.02] hover:bg-primary/[0.08] transition-all text-left"
-                    >
-                      {isPopular && (
-                        <span style={{ backgroundColor: COLORS.primary }} className="absolute -top-2 right-6 px-3 py-1 text-black text-[9px] font-black rounded-full uppercase tracking-[0.2em] shadow-lg">
-                          Council's Choice
-                        </span>
-                      )}
-                      <div>
-                        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-2 group-hover:text-primary transition-colors">{tier.label}</p>
-                        <div className="flex items-center gap-3">
-                          <Icon icon="ph:sparkle-fill" style={{ color: COLORS.primary }} className="text-xl" />
-                          <span className="text-2xl font-black text-white tracking-tighter">{tier.amount}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6 md:mt-8 flex-shrink-0">
-                <div className="flex items-center justify-center gap-3 opacity-20">
-                  <div className="h-[1px] flex-1 bg-white" />
-                  <Icon icon="ph:shield-check-bold" className="text-white text-xl" />
-                  <div className="h-[1px] flex-1 bg-white" />
-                </div>
-                <p className="text-[9px] text-center text-white/30 font-black mt-4 uppercase tracking-[0.3em]">Encrypted Astral Transaction</p>
-              </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          <div className="p-4 border-t border-white/5">
+            {isAuthenticated ? (
+              <div className="space-y-3">
+                <div 
+                  onClick={() => { setIsCurrencyModalOpen(true); setMobileNavOpen(false); }}
+                  style={{ backgroundColor: COLORS.primary }}
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
+                >
+                  <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
+                  <span className="text-sm font-black text-black tracking-wider uppercase">
+                    {balance !== null ? balance.toLocaleString() : '...'} Stardust
+                  </span>
+                  <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
+                </div>
+
+                <button 
+                  onClick={() => { navigate("/profile"); setMobileNavOpen(false); }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/10 transition-all"
+                >
+                  <div className="w-10 h-10 rounded-full border border-primary/30 overflow-hidden relative">
+                    {user?.profile_picture ? (
+                      <img src={user.profile_picture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-primary/20">
+                        <Icon icon="ph:user-fill" style={{ color: COLORS.neutralWhite }} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs font-black text-white/80 uppercase tracking-wider">
+                      {user?.username || 'User'}
+                    </span>
+                    <span className="text-[10px] font-bold text-white/30 uppercase">View Profile</span>
+                  </div>
+                  <Icon icon="ph:caret-right" className="ml-auto text-white/20" />
+                </button>
+
+                <button 
+                  onClick={() => { navigate("/notifications"); setMobileNavOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02] hover:bg-white/5 transition-all"
+                >
+                  <Icon icon="ph:bell-duotone" className="text-xl" style={{ color: "rgba(255,255,255,0.3)" }} />
+                  <span className="text-sm font-bold uppercase tracking-wider text-white/50">Notifications</span>
+                </button>
+
+                <button 
+                  onClick={() => { logout(); setMobileNavOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
+                >
+                  <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: COLORS.error }} />
+                  <span className="text-sm font-bold uppercase tracking-wider" style={{ color: COLORS.error }}>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <button
+                  onClick={() => { navigate("/login"); setMobileNavOpen(false); }}
+                  className="w-full px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all hover:scale-105"
+                  style={{
+                    color: COLORS.neutralWhite,
+                    border: `1px solid ${COLORS.neutralWhite}20`,
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  Login
+                </button>
+
+                <button
+                  onClick={() => { navigate("/register"); setMobileNavOpen(false); }}
+                  className="w-full px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all hover:scale-105"
+                  style={{
+                    color: COLORS.dark,
+                    backgroundColor: COLORS.primary,
+                    boxShadow: `0 10px 30px ${COLORS.primary}40`,
+                  }}
+                >
+                  Get Started
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* --- REDESIGNED STARDUST CURRENCY MODAL --- */}
+      {isCurrencyModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+          <div 
+            onClick={() => !loadingTierId && setIsCurrencyModalOpen(false)}
+            className="absolute inset-0 bg-black/95 backdrop-blur-md transition-opacity duration-300"
+          />
+          
+          <div 
+            className="relative w-full max-w-lg max-h-[85vh] sm:max-h-[90vh] flex flex-col rounded-[32px] border border-white/10 overflow-hidden shadow-2xl transition-all transform duration-300 scale-100"
+            style={{ backgroundColor: COLORS.surface }}
+          >
+            {/* Top Glow Accent Accent */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-36 bg-primary/10 blur-[80px] pointer-events-none -z-10" />
+
+            {/* Header Area */}
+            <div className="flex justify-between items-start p-6 sm:p-8 border-b border-white/5 flex-shrink-0">
+              <div>
+                <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }} className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-none">
+                  Gather <span style={{ color: COLORS.primary }}>Stardust</span>
+                </h2>
+                <p className="text-[9px] uppercase tracking-[0.25em] text-white/50 font-bold mt-2.5">Select an astral tier to reload credit</p>
+              </div>
+              <button 
+                disabled={loadingTierId !== null}
+                onClick={() => setIsCurrencyModalOpen(false)} 
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/40 hover:text-white border border-white/5 hover:border-white/10 transition-all disabled:opacity-30 cursor-pointer"
+              >
+                <Icon icon="ph:x-bold" className="text-base" />
+              </button>
+            </div>
+
+            {/* Scrollable Package List View */}
+            <div className="flex-grow overflow-y-auto p-6 sm:p-8 space-y-4 custom-scrollbar max-h-[45vh] sm:max-h-[50vh]">
+              {(buyOptions.length > 0 ? buyOptions : [
+                { id: "fallback-1", amount: 500, points: 500, label: "Stardust Mote", price: 4.99 },
+                { id: "fallback-2", amount: 1200, points: 1200, label: "Stardust Cluster", price: 9.99 },
+                { id: "fallback-3", amount: 3000, points: 3000, label: "Stardust Nebula", price: 24.99 },
+              ]).map((pkg, idx) => {
+                const isPopular = idx === 1; // Highlight centerpiece cluster
+                const isCurrentLoading = loadingTierId === pkg.id;
+                
+                return (
+                  <div 
+                    key={pkg.id} 
+                    style={{ borderColor: isPopular ? `${COLORS.primary}30` : "rgba(255,255,255,0.05)" }}
+                    className={`relative flex flex-col sm:flex-row sm:items-center justify-between p-5 sm:p-6 rounded-2xl border bg-white/[0.01] hover:bg-white/[0.03] transition-all group overflow-hidden ${
+                      isPopular ? 'shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]' : ''
+                    }`}
+                  >
+                    {/* Corner gradient visual highlight */}
+                    <div 
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                      style={{ background: `radial-gradient(circle at 0% 0%, ${COLORS.primary}08 0%, transparent 60%)` }}
+                    />
+
+                    {/* Popular Choice Tag */}
+                    {isPopular && (
+                      <span 
+                        style={{ backgroundColor: COLORS.primary, color: COLORS.dark }} 
+                        className="absolute top-0 right-6 px-3 py-0.5 text-[8px] font-black rounded-b-md uppercase tracking-[0.15em] shadow-md"
+                      >
+                        Council Choice
+                      </span>
+                    )}
+
+                    {/* Meta Text details block */}
+                    <div className="relative z-10 flex flex-col mb-4 sm:mb-0">
+                      <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-1.5 group-hover:text-primary/70 transition-colors">
+                        {pkg.label}
+                      </span>
+                      <div className="flex items-center gap-2.5">
+                        <Icon icon="ph:sparkle-fill" style={{ color: COLORS.primary }} className="text-lg animate-pulse" />
+                        <span className="text-2xl sm:text-3xl font-black text-white tracking-tighter">
+                          {(pkg.points || pkg.amount).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] font-bold text-white/30 uppercase tracking-wider ml-1 mt-1">Stardust</span>
+                      </div>
+                    </div>
+
+                    {/* Call to action element layout */}
+                    <div className="relative z-10 flex items-center justify-between sm:justify-end gap-4 border-t border-white/5 sm:border-0 pt-3 sm:pt-0">
+                      <div className="text-xl sm:text-2xl font-black tracking-tight text-white/90">
+                        {formatCurrency(pkg.price)}
+                      </div>
+                      <button 
+                        disabled={loadingTierId !== null}
+                        onClick={() => handleDirectPurchase(pkg)}
+                        style={{ 
+                          backgroundColor: COLORS.primary,
+                          color: COLORS.dark,
+                          boxShadow: `0 4px 20px ${COLORS.primary}25`
+                        }}
+                        className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed flex items-center gap-2 min-w-[100px] justify-center cursor-pointer"
+                      >
+                        {isCurrentLoading ? (
+                          <Icon icon="line-md:loading-twotone-loop" className="text-base" />
+                        ) : (
+                          <>
+                            <span>Buy</span>
+                            <Icon icon="ph:arrow-right-bold" className="text-xs group-hover:translate-x-0.5 transition-transform" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer / Protection Details */}
+            <div className="p-6 sm:p-8 border-t border-white/5 bg-white/[0.01] flex-shrink-0">
+              <div className="flex items-center justify-center gap-3 opacity-20 mb-3">
+                <div className="h-[1px] flex-1 bg-white" />
+                <Icon icon="ph:shield-check-bold" className="text-white text-lg" />
+                <div className="h-[1px] flex-1 bg-white" />
+              </div>
+              <p className="text-[8px] text-center text-white/40 font-bold uppercase tracking-[0.25em]">
+                Encrypted via Stripe Authentication
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

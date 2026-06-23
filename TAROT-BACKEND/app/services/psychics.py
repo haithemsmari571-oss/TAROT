@@ -25,7 +25,8 @@ settings = get_app_settings()
 
 
 def get_psychics(db: Session, filters: list, skip: int = 0, limit: int = 0):
-    stmt = select(User).where(User.role == Role.PSYCHIC)
+    # 💡 Ordered explicitly by display priority sequence ascending, then by newest practitioner ID descending
+    stmt = select(User).where(User.role == Role.PSYCHIC).order_by(User.order.asc(), User.id.desc())
 
     if filters:
         stmt = stmt.where(*filters)
@@ -64,6 +65,7 @@ def create_psychic(
         password_hash=password_hash,
         bio=psychic_data.bio,
         profile_picture_path=profile_picture_path,
+        order=psychic_data.order if psychic_data.order is not None else 9999,
     )
 
     db.add(psychic)
@@ -108,6 +110,7 @@ def _psychic_to_out(psychic: User) -> PsychicRead:
         bio=psychic.bio,
         profile_picture_url=_pdp_path_to_url(psychic.profile_picture_path),
         is_online=psychic.is_online,
+        order=psychic.order,
     )
 
 
@@ -163,14 +166,14 @@ def update_psychic(
         psychic.profile_picture_path = profile_picture_path
 
     if psychic_data:
-        if psychic_data.categories_ids:
+        if psychic_data.categories_ids is not None:
             sync_categories(
                 db=db, psychic_id=psychic_id, category_ids=psychic_data.categories_ids
             )
 
         if (
-            psychic_data.availabilities_create
-            or psychic_data.availabilities_ids_to_remove
+            psychic_data.availabilities_create is not None
+            or psychic_data.availabilities_ids_to_remove is not None
         ):
             sync_availability(
                 db=db,
@@ -179,7 +182,16 @@ def update_psychic(
                 availabilities_ids_to_remove=psychic_data.availabilities_ids_to_remove,
             )
 
-        for field, value in psychic_data.model_dump(exclude_unset=True).items():
+        # ✅ FIX: Extract properties into a clean dictionary
+        update_dict = psychic_data.model_dump(exclude_unset=True)
+        
+        # ✅ FIX: Strip out the list relationship structures before mapping scalar fields onto the model
+        update_dict.pop("categories_ids", None)
+        update_dict.pop("availabilities_create", None)
+        update_dict.pop("availabilities_ids_to_remove", None)
+
+        # Apply remaining safe data fields (including 'order') straight into model tracking fields
+        for field, value in update_dict.items():
             setattr(psychic, field, value)
 
     db.commit()

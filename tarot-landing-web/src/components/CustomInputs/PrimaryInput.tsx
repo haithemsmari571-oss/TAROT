@@ -3,8 +3,9 @@ import { Icon } from "@iconify/react";
 import styles from "./css/PrimaryInput.module.css";
 import { COLORS, TYPOGRAPHY } from "../../theme";
 
-type PrimaryInputProps = {
-  value: string;
+// 1. Extend React's native InputHTMLAttributes, but omit things we are manually redefining
+interface PrimaryInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size" | "onChange" | "value"> {
+  value: string | number; // Now accepts numbers cleanly
   placeholder?: string;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   disabled?: boolean;
@@ -15,7 +16,7 @@ type PrimaryInputProps = {
   error?: string;
   size?: "sm" | "md" | "lg";
   fullWidth?: boolean;
-};
+}
 
 const sizeMap = {
   sm: { fontSize: TYPOGRAPHY.fontSize.xs, padding: "8px 12px" },
@@ -35,6 +36,8 @@ const PrimaryInput: FC<PrimaryInputProps> = ({
   error,
   size = "md",
   fullWidth = false,
+  className, // Captured from native props if passed
+  ...props   // Collects everything else safely (like step, min, max, etc.)
 }) => {
   const { fontSize, padding } = sizeMap[size];
 
@@ -64,12 +67,13 @@ const PrimaryInput: FC<PrimaryInputProps> = ({
 
         {/* Input Field */}
         <input
+          {...props} // Spreads native HTML properties down safely (handles step={0.0001})
           type={type}
           value={value}
           placeholder={placeholder}
           onChange={onChange}
           disabled={disabled}
-          className={`${styles.primaryInput} ${size} ${error ? 'error' : ''}`}
+          className={`${styles.primaryInput} ${size} ${error ? 'error' : ''} ${className || ''}`}
           style={{
             fontFamily: TYPOGRAPHY.fontFamily.body,
             fontSize,
