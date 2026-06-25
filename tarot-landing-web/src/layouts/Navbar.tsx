@@ -5,13 +5,13 @@ import { TYPOGRAPHY, COLORS } from "../theme";
 import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
+import { StardustModal } from "./StardustModal"; // Adjust path layout as necessary
 import "../styles/starfield.css";
 
-// Interface mirroring the complete package structure used by your billing page handler
 interface PurchasePackage {
   _id?: string;
   id: string;
-  amount: number; // maps to points for modal render
+  amount: number;
   points: number;
   label: string;
   price: number;
@@ -29,7 +29,6 @@ export default function Navbar() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loadingTierId, setLoadingTierId] = useState<string | null>(null);
 
-  // Fallback formatter matching your billing page currency utility
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -38,7 +37,6 @@ export default function Navbar() {
     }).format(value);
   };
 
-  // Fetch balance and packages when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       paymentApi.getMyBalance()
@@ -47,7 +45,6 @@ export default function Navbar() {
         
       paymentApi.getBuyOptions()
         .then(data => {
-          // Normalize options to ensure fallback IDs and consistent rendering properties exist
           const mapped = data.map((o: any, idx: number) => ({
             ...o,
             id: o.id || o._id || `tier-${idx}`,
@@ -67,12 +64,10 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Directly initiates the transaction stream using your native payment API logic
   const handleDirectPurchase = async (pkg: PurchasePackage) => {
     try {
-      setLoadingTierId(pkg.id);
+      setLoadingTierId(pkg.id); // Fixed typo here (was function loop crash)
       
-      // Hit your backend Stripe checkout generator directly from the modal view
       if (paymentApi && typeof (paymentApi as any).createCheckoutSession === "function") {
         const response = await (paymentApi as any).createCheckoutSession(pkg.id);
         if (response?.url) {
@@ -81,13 +76,11 @@ export default function Navbar() {
         }
       }
       
-      // Fallback: If your app uses custom state management in paymentApi, execute it natively
       if (typeof (paymentApi as any).handlePurchase === "function") {
         await (paymentApi as any).handlePurchase(pkg);
         return;
       }
 
-      // Route Fallback: Pass package parameters forward to fallback view if needed
       navigate("/billing", { state: { autoInitiate: pkg } });
       setIsCurrencyModalOpen(false);
     } catch (error) {
@@ -130,7 +123,7 @@ export default function Navbar() {
          <div className="max-w-[1440px] mx-auto px-4 md:px-6 flex items-center justify-between relative z-10">
            
            <div onClick={() => navigate("/home")} className="cursor-pointer group relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12">
-             <Icon icon="ph:eye-duotone" className="text-3xl md:text-4xl transition-all duration-500 group-hover:text-white" style={{ color: COLORS.primary }} />
+             <img src="/logo short normal.svg" alt="Tarot Logo" className="w-full h-full object-contain transition-all duration-500 group-hover:brightness-125" />
              <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full -z-10 opacity-50 group-hover:opacity-100 transition-opacity" />
            </div>
 
@@ -252,8 +245,8 @@ export default function Navbar() {
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-white/5">
-            <div onClick={() => { navigate("/home"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-2">
-              <Icon icon="ph:eye-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
+            <div onClick={() => { navigate("/home"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-3">
+              <img src="/logo short normal.svg" alt="Tarot Logo" className="w-6 h-6 object-contain" />
               <span 
                 className="font-black text-sm uppercase tracking-wider"
                 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
@@ -389,130 +382,15 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* --- REDESIGNED STARDUST CURRENCY MODAL --- */}
-      {isCurrencyModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-fade-in">
-          <div 
-            onClick={() => !loadingTierId && setIsCurrencyModalOpen(false)}
-            className="absolute inset-0 bg-black/95 backdrop-blur-md transition-opacity duration-300"
-          />
-          
-          <div 
-            className="relative w-full max-w-lg max-h-[85vh] sm:max-h-[90vh] flex flex-col rounded-[32px] border border-white/10 overflow-hidden shadow-2xl transition-all transform duration-300 scale-100"
-            style={{ backgroundColor: COLORS.surface }}
-          >
-            {/* Top Glow Accent Accent */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-36 bg-primary/10 blur-[80px] pointer-events-none -z-10" />
-
-            {/* Header Area */}
-            <div className="flex justify-between items-start p-6 sm:p-8 border-b border-white/5 flex-shrink-0">
-              <div>
-                <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }} className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-none">
-                  Gather <span style={{ color: COLORS.primary }}>Stardust</span>
-                </h2>
-                <p className="text-[9px] uppercase tracking-[0.25em] text-white/50 font-bold mt-2.5">Select an astral tier to reload credit</p>
-              </div>
-              <button 
-                disabled={loadingTierId !== null}
-                onClick={() => setIsCurrencyModalOpen(false)} 
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/40 hover:text-white border border-white/5 hover:border-white/10 transition-all disabled:opacity-30 cursor-pointer"
-              >
-                <Icon icon="ph:x-bold" className="text-base" />
-              </button>
-            </div>
-
-            {/* Scrollable Package List View */}
-            <div className="flex-grow overflow-y-auto p-6 sm:p-8 space-y-4 custom-scrollbar max-h-[45vh] sm:max-h-[50vh]">
-              {(buyOptions.length > 0 ? buyOptions : [
-                { id: "fallback-1", amount: 500, points: 500, label: "Stardust Mote", price: 4.99 },
-                { id: "fallback-2", amount: 1200, points: 1200, label: "Stardust Cluster", price: 9.99 },
-                { id: "fallback-3", amount: 3000, points: 3000, label: "Stardust Nebula", price: 24.99 },
-              ]).map((pkg, idx) => {
-                const isPopular = idx === 1; // Highlight centerpiece cluster
-                const isCurrentLoading = loadingTierId === pkg.id;
-                
-                return (
-                  <div 
-                    key={pkg.id} 
-                    style={{ borderColor: isPopular ? `${COLORS.primary}30` : "rgba(255,255,255,0.05)" }}
-                    className={`relative flex flex-col sm:flex-row sm:items-center justify-between p-5 sm:p-6 rounded-2xl border bg-white/[0.01] hover:bg-white/[0.03] transition-all group overflow-hidden ${
-                      isPopular ? 'shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]' : ''
-                    }`}
-                  >
-                    {/* Corner gradient visual highlight */}
-                    <div 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                      style={{ background: `radial-gradient(circle at 0% 0%, ${COLORS.primary}08 0%, transparent 60%)` }}
-                    />
-
-                    {/* Popular Choice Tag */}
-                    {isPopular && (
-                      <span 
-                        style={{ backgroundColor: COLORS.primary, color: COLORS.dark }} 
-                        className="absolute top-0 right-6 px-3 py-0.5 text-[8px] font-black rounded-b-md uppercase tracking-[0.15em] shadow-md"
-                      >
-                        Council Choice
-                      </span>
-                    )}
-
-                    {/* Meta Text details block */}
-                    <div className="relative z-10 flex flex-col mb-4 sm:mb-0">
-                      <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-1.5 group-hover:text-primary/70 transition-colors">
-                        {pkg.label}
-                      </span>
-                      <div className="flex items-center gap-2.5">
-                        <Icon icon="ph:sparkle-fill" style={{ color: COLORS.primary }} className="text-lg animate-pulse" />
-                        <span className="text-2xl sm:text-3xl font-black text-white tracking-tighter">
-                          {(pkg.points || pkg.amount).toLocaleString()}
-                        </span>
-                        <span className="text-[10px] font-bold text-white/30 uppercase tracking-wider ml-1 mt-1">Stardust</span>
-                      </div>
-                    </div>
-
-                    {/* Call to action element layout */}
-                    <div className="relative z-10 flex items-center justify-between sm:justify-end gap-4 border-t border-white/5 sm:border-0 pt-3 sm:pt-0">
-                      <div className="text-xl sm:text-2xl font-black tracking-tight text-white/90">
-                        {formatCurrency(pkg.price)}
-                      </div>
-                      <button 
-                        disabled={loadingTierId !== null}
-                        onClick={() => handleDirectPurchase(pkg)}
-                        style={{ 
-                          backgroundColor: COLORS.primary,
-                          color: COLORS.dark,
-                          boxShadow: `0 4px 20px ${COLORS.primary}25`
-                        }}
-                        className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed flex items-center gap-2 min-w-[100px] justify-center cursor-pointer"
-                      >
-                        {isCurrentLoading ? (
-                          <Icon icon="line-md:loading-twotone-loop" className="text-base" />
-                        ) : (
-                          <>
-                            <span>Buy</span>
-                            <Icon icon="ph:arrow-right-bold" className="text-xs group-hover:translate-x-0.5 transition-transform" />
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer / Protection Details */}
-            <div className="p-6 sm:p-8 border-t border-white/5 bg-white/[0.01] flex-shrink-0">
-              <div className="flex items-center justify-center gap-3 opacity-20 mb-3">
-                <div className="h-[1px] flex-1 bg-white" />
-                <Icon icon="ph:shield-check-bold" className="text-white text-lg" />
-                <div className="h-[1px] flex-1 bg-white" />
-              </div>
-              <p className="text-[8px] text-center text-white/40 font-bold uppercase tracking-[0.25em]">
-                Encrypted via Stripe Authentication
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* IMPLEMENTED SEPARATE STARDUST MODAL */}
+      <StardustModal 
+        isOpen={isCurrencyModalOpen}
+        onClose={() => setIsCurrencyModalOpen(false)}
+        buyOptions={buyOptions}
+        loadingTierId={loadingTierId}
+        onPurchase={handleDirectPurchase}
+        formatCurrency={formatCurrency}
+      />
     </>
   );
 }
