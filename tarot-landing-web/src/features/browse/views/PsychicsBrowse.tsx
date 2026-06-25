@@ -465,20 +465,39 @@ const PsychicsBrowse = () => {
                     </div>
 
                     {/* CTA BUTTON */}
-                    <button
-                      className="w-full py-3 sm:py-4 rounded-2xl flex items-center justify-center gap-2 sm:gap-3 relative overflow-hidden transition-opacity duration-200 hover:opacity-90"
-                      style={{
-                        background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary}100%)`,
-                        fontFamily: TYPOGRAPHY.fontFamily.heading,
-                        boxShadow: `0 8px 20px ${COLORS.primary}30`,
-                      }}
-                    >
-                      <Icon icon="ph:chat-circle-dots-fill" className="text-xl" style={{ color: COLORS.dark }} />
-                      <span className="text-sm font-black uppercase tracking-wider" style={{ color: COLORS.dark }}>
-                        Start Reading
-                      </span>
-                      <Icon icon="ph:arrow-right" className="text-lg" style={{ color: COLORS.dark }} />
-                    </button>
+                  <button
+  className="w-full py-4 sm:py-5 rounded-2xl flex items-center justify-center gap-3 relative overflow-hidden group transition-all duration-300"
+  style={{
+    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+    fontFamily: TYPOGRAPHY.fontFamily.heading,
+    // Soften the shadow for a more "floating" effect
+    boxShadow: `0 10px 25px -5px ${COLORS.primary}40`,
+    // Add a subtle border to define the shape against dark backgrounds
+    border: `1px solid rgba(255,255,255,0.1)`,
+  }}
+>
+  {/* Inner Glow/Glint effect */}
+  <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+  
+  <Icon 
+    icon="ph:chat-circle-dots-fill" 
+    className="text-xl transition-transform duration-300 group-hover:scale-110" 
+    style={{ color: COLORS.dark }} 
+  />
+  
+  <span 
+    className="text-sm font-black uppercase tracking-[0.2em]" 
+    style={{ color: COLORS.dark }}
+  >
+    Start Reading
+  </span>
+  
+  <Icon 
+    icon="ph:arrow-right" 
+    className="text-lg transition-transform duration-300 group-hover:translate-x-1" 
+    style={{ color: COLORS.dark }} 
+  />
+</button>
                   </div>
                 </div>
               ))}
