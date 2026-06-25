@@ -418,233 +418,93 @@ const Billing = () => {
         </div>
 
         {/* ── Buy Points carousel ── */}
-        <div
-          className="mb-8 sm:mb-16 relative overflow-hidden rounded-[24px] sm:rounded-[40px] p-6 sm:p-10 md:p-16 backdrop-blur-xl border border-white/5"
-          style={{ backgroundColor: `${COLORS.surface}dd`, boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}
-        >
-          <div className="absolute inset-0 opacity-5 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-96 h-96">
-              <Icon icon="solar:wallet-money-bold-duotone" className="w-full h-full" style={{ color: COLORS.primary }} />
-            </div>
-          </div>
+<div
+  className="mb-8 sm:mb-16 relative overflow-hidden rounded-[24px] sm:rounded-[40px] p-6 sm:p-10 md:p-16 backdrop-blur-xl border border-white/5"
+  style={{ backgroundColor: `${COLORS.surface}dd`, boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}
+>
+  <div className="relative z-10">
+    <h2
+      className="text-2xl sm:text-3xl md:text-4xl font-black uppercase tracking-tight mb-3 flex items-center justify-center gap-3"
+      style={{ color: COLORS.neutralWhite }}
+    >
+      <Icon icon="solar:bag-smile-bold-duotone" style={{ color: COLORS.primary }} className="text-2xl sm:text-4xl" />
+      Buy Points
+    </h2>
 
-          <div className="relative z-10">
-            <h2
-              className="text-2xl sm:text-3xl md:text-4xl font-black uppercase tracking-tight mb-3 flex items-center justify-center gap-3"
-              style={{ color: COLORS.neutralWhite }}
+    {/* Scrollable Container */}
+    <div className="mt-10 overflow-hidden" ref={carouselContainerRef}>
+      <div
+        className="flex transition-transform duration-500 ease-out"
+        style={{ transform: `translateX(-${carouselIndex * (100 / cardsPerView)}%)` }}
+      >
+        {apiPackages.map((pkg) => {
+          // Compare using 'label' and 'points' since PointsPackage lacks an 'id'
+          const isSelected = selectedPackage?.label === pkg.label && selectedPackage?.points === pkg.points;
+          const isProcessing = combinedLoading && isSelected;
+          
+          return (
+            <div
+              key={pkg.id}
+              className="flex-shrink-0"
+              style={{ width: `${100 / cardsPerView}%`, padding: "0 0.75rem" }}
             >
-              <Icon icon="solar:bag-smile-bold-duotone" style={{ color: COLORS.primary }} className="text-2xl sm:text-4xl" />
-              Buy Points
-            </h2>
-            <p className="text-center text-sm mb-10 opacity-60" style={{ color: COLORS.neutralGray }}>
-              Choose the perfect package for your spiritual journey
-            </p>
-
-            {/* Cards */}
-            <div className="overflow-hidden" ref={carouselContainerRef}>
               <div
-                className="flex transition-transform duration-500 ease-out"
-                style={{ transform: `translateX(-${carouselIndex * (100 / cardsPerView)}%)` }}
+                className={`p-8 rounded-[28px] border transition-all duration-300 flex flex-col h-full ${
+                  isSelected ? "border-primary shadow-[0_0_40px_rgba(var(--primary-rgb),0.3)]" : "border-white/10"
+                }`}
+                style={{ backgroundColor: `${COLORS.dark}dd` }}
               >
-                {pointsPackages.map((pkg, idx) => {
-                  const sourceApiPkg = apiPackages.find(opt => opt.label === pkg.label && opt.points === pkg.points);
-                  const isSelected = selectedPackage?.label === pkg.label;
-                  const isProcessing = combinedLoading && isSelected;
-                  const paddingStyle =
-                    idx === 0
-                      ? "0 0.75rem 0 0"
-                      : idx === pointsPackages.length - 1
-                      ? "0 0 0 0.75rem"
-                      : "0 0.75rem";
+                <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-4">
+                  {pkg.label}
+                </span>
+                
+                <div className="flex items-center gap-3 mb-8">
+                  <Icon icon="ph:sparkle-fill" style={{ color: COLORS.primary }} className="text-2xl animate-pulse" />
+                  <span className="text-4xl font-black text-white tracking-tighter">
+                    {pkg.points.toLocaleString()}
+                  </span>
+                  <span className="text-xs font-bold text-white/30 uppercase tracking-wider">Points</span>
+                </div>
 
-                  return (
-                    <div
-                      key={`${pkg.label}-${idx}`}
-                      className="flex-shrink-0"
-                      style={{ width: `${100 / cardsPerView}%`, padding: paddingStyle }}
-                    >
-                      <div
-                        className={`p-6 sm:p-8 md:p-10 rounded-[20px] sm:rounded-[28px] cursor-pointer relative overflow-hidden group flex flex-col h-full transition-all duration-300 ${
-                          isSelected ? "border-2" : "border border-white/10"
-                        }`}
-                        style={{
-                          backgroundColor: `${COLORS.surface}80`,
-                          backdropFilter: "blur(20px)",
-                          borderColor: isSelected ? COLORS.primary : "rgba(255,255,255,0.05)",
-                          boxShadow: isSelected
-                            ? `0 0 40px ${COLORS.primary}30, 0 20px 50px rgba(0,0,0,0.5)`
-                            : "0 10px 30px rgba(0,0,0,0.3)",
-                          minHeight: "420px",
-                        }}
-                        onClick={() => setSelectedPackage(pkg)}
-                      >
-                        {/* Hover gradient */}
-                        <div
-                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                          style={{ background: `radial-gradient(circle at 50% 0%, ${COLORS.primary}15 0%, transparent 70%)` }}
-                        />
+                <div className="mt-auto text-3xl font-black text-white mb-8">
+                  {/* Using standard currency formatting for the API price */}
+                  {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((pkg as any).price_cents / 100)}
+                </div>
 
-                        <div className="relative z-10 flex flex-col h-full">
-                          {/* Label badge */}
-                          <div className="flex items-start justify-between gap-3 mb-6">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm border-2 transition-all group-hover:scale-110"
-                                style={{
-                                  backgroundColor: `${COLORS.primary}15`,
-                                  borderColor: `${COLORS.primary}40`,
-                                  color: COLORS.primary,
-                                }}
-                              >
-                                {pkg.label.substring(0, 2).toUpperCase()}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-white font-bold leading-tight text-sm">
-                                  {pkg.label}
-                                </span>
-                                {sourceApiPkg?.sort_order !== undefined && (
-                                  <span
-                                    style={{ color: COLORS.neutralGray, fontSize: "9px" }}
-                                    className="uppercase font-black tracking-widest opacity-40 mt-0.5"
-                                  >
-                                    Tier Position: {sourceApiPkg.sort_order}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 bg-[#4ADE80]/10 px-2.5 py-1 rounded-full border border-[#4ADE80]/20">
-                              <div
-                                className="w-1.5 h-1.5 rounded-full"
-                                style={{
-                                  backgroundColor: "#4ADE80",
-                                  boxShadow: "0 0 8px #4ADE80",
-                                }}
-                              />
-                              <span className="text-[8px] font-black uppercase tracking-widest text-[#4ADE80]">
-                                Verified
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Points amount */}
-                          <div className="mb-6 sm:mb-8">
-                            <div
-                              className="text-4xl sm:text-6xl md:text-7xl font-black mb-1 tracking-tight"
-                              style={{
-                                background: `linear-gradient(135deg, ${COLORS.neutralWhite} 0%, ${COLORS.primary} 100%)`,
-                                WebkitBackgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                                backgroundClip: "text",
-                              }}
-                            >
-                              {pkg.points.toLocaleString()}
-                            </div>
-                            <div className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: COLORS.neutralGray }}>
-                              Tokens Loaded
-                            </div>
-                          </div>
-
-                          {/* Price */}
-                          <div className="mt-auto">
-                            <div className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-1" style={{ color: COLORS.neutralGray }}>
-                              One-Time Charge
-                            </div>
-                            <div className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight" style={{ color: COLORS.primary }}>
-                              {formatCurrency(pkg.price)}
-                            </div>
-                          </div>
-
-                          {/* Buy button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePurchase(pkg);
-                            }}
-                            disabled={combinedLoading}
-                            className="w-full px-4 sm:px-6 py-4 sm:py-5 rounded-2xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group/btn mt-6 sm:mt-8"
-                            style={{
-                              backgroundColor: COLORS.primary,
-                              color: COLORS.dark,
-                              boxShadow: `0 10px 30px ${COLORS.primary}30`,
-                              fontFamily: TYPOGRAPHY.fontFamily.heading,
-                            }}
-                          >
-                            <span className="relative z-10 flex items-center justify-center gap-2">
-                              {isProcessing ? (
-                                <>
-                                  <Icon icon="svg-spinners:3-dots-fade" className="text-base" />
-                                  Securing Session…
-                                </>
-                              ) : (
-                                <>
-                                  Proceed to Payment
-                                  <Icon icon="solar:arrow-right-linear" className="text-sm group-hover/btn:translate-x-1 transition-transform" />
-                                </>
-                              )}
-                            </span>
-                            <div
-                              className="absolute inset-0 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"
-                              style={{
-                                background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-                              }}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                <button
+                  disabled={combinedLoading}
+                  onClick={() => {
+                    // Create a mapped object that satisfies the PointsPackage type
+                    const packageToSelect: PointsPackage = {
+                      points: pkg.points,
+                      price: (pkg as any).price_cents / 100,
+                      label: pkg.label
+                    };
+                    handlePurchase(packageToSelect);
+                  }}
+                  className="w-full py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                  style={{ backgroundColor: COLORS.primary, color: COLORS.dark }}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Icon icon="svg-spinners:3-dots-fade" className="text-base" />
+                      Securing...
+                    </>
+                  ) : (
+                    <>
+                      <span>Buy Now</span>
+                      <Icon icon="ph:arrow-right-bold" className="text-xs" />
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            {/* Carousel navigation */}
-            <div className="flex items-center justify-center gap-6 mt-10">
-              <button
-                onClick={() => setCarouselIndex((i) => Math.max(0, i - 1))}
-                disabled={carouselIndex === 0}
-                className="w-14 h-14 rounded-2xl border flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed backdrop-blur-xl"
-                style={{
-                  backgroundColor: `${COLORS.dark}dd`,
-                  borderColor: COLORS.primary,
-                  boxShadow: `0 5px 20px ${COLORS.primary}20`,
-                }}
-              >
-                <Icon icon="ph:caret-left-bold" className="text-2xl" style={{ color: COLORS.primary }} />
-              </button>
-
-              <div className="flex gap-2">
-                {Array.from({ length: maxCarouselIndex + 1 }).map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCarouselIndex(index)}
-                    style={{
-                      width: carouselIndex === index ? "40px" : "10px",
-                      height: "10px",
-                      borderRadius: "5px",
-                      backgroundColor: carouselIndex === index ? COLORS.primary : `${COLORS.neutralGray}30`,
-                      boxShadow: carouselIndex === index ? `0 0 15px ${COLORS.primary}50` : "none",
-                      transition: "all 0.3s ease",
-                    }}
-                  />
-                ))}
-              </div>
-
-              <button
-                onClick={() => setCarouselIndex((i) => Math.min(maxCarouselIndex, i + 1))}
-                disabled={carouselIndex >= maxCarouselIndex}
-                className="w-14 h-14 rounded-2xl border flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed backdrop-blur-xl"
-                style={{
-                  backgroundColor: `${COLORS.dark}dd`,
-                  borderColor: COLORS.primary,
-                  boxShadow: `0 5px 20px ${COLORS.primary}20`,
-                }}
-              >
-                <Icon icon="ph:caret-right-bold" className="text-2xl" style={{ color: COLORS.primary }} />
-              </button>
-            </div>
-          </div>
-        </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* ── Global error banner ── */}
         {combinedError && (

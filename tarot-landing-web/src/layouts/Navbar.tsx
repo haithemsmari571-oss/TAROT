@@ -4,39 +4,27 @@ import { Icon } from "@iconify/react";
 import { TYPOGRAPHY, COLORS } from "../theme";
 import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
+import { usePayment } from "../features/payment/hooks/usePayment"; // Imported hook from payment features
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
-import { StardustModal } from "./StardustModal"; // Adjust path layout as necessary
+import { StardustModal, type PurchasePackage } from "./StardustModal"; 
 import "../styles/starfield.css";
-
-interface PurchasePackage {
-  _id?: string;
-  id: string;
-  amount: number;
-  points: number;
-  label: string;
-  price: number;
-  currency?: string;
-}
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
+  
+  // Connect explicitly to the shared payment hook engine
+  const { createCheckoutSession, loading: paymentLoading, fetchMyBalance } = usePayment();
+
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [isCurrencyModalOpen, setIsCurrencyModalOpen] = useState(false);
   const [buyOptions, setBuyOptions] = useState<PurchasePackage[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [loadingTierId, setLoadingTierId] = useState<string | null>(null);
+  const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
-
+  // Sync internal layout balance with background ledger fetches
   useEffect(() => {
     if (isAuthenticated) {
       paymentApi.getMyBalance()
@@ -48,9 +36,10 @@ export default function Navbar() {
           const mapped = data.map((o: any, idx: number) => ({
             ...o,
             id: o.id || o._id || `tier-${idx}`,
-            amount: o.points || 0,
+            points: o.points || o.amount || 0,
+            amount: o.points || o.amount || 0,
             label: o.label || "Stardust Pack",
-            price: o.price || 0
+            price: o.price_cents || o.price || (o.points ? o.points * 10 : 0)
           }));
           setBuyOptions(mapped);
         })
@@ -64,31 +53,28 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // CAROUSEL LOGIC MIGRATION: Connects actions to the Stripe session creation method
   const handleDirectPurchase = async (pkg: PurchasePackage) => {
-    try {
-      setLoadingTierId(pkg.id); // Fixed typo here (was function loop crash)
-      
-      if (paymentApi && typeof (paymentApi as any).createCheckoutSession === "function") {
-        const response = await (paymentApi as any).createCheckoutSession(pkg.id);
-        if (response?.url) {
-          window.location.href = response.url;
-          return;
-        }
-      }
-      
-      if (typeof (paymentApi as any).handlePurchase === "function") {
-        await (paymentApi as any).handlePurchase(pkg);
-        return;
-      }
+    const targetId = pkg.id || pkg._id;
+    if (!targetId) return;
 
-      navigate("/billing", { state: { autoInitiate: pkg } });
+    try {
+      setSelectedPkgId(targetId);
+      
+      // Matches payload structure expected by createCheckoutSession in usePayment
+      await createCheckoutSession({
+        points_amount: pkg.points,
+        return_url: window.location.origin + "/billing?status=success", 
+      });
+
       setIsCurrencyModalOpen(false);
     } catch (error) {
-      console.error("Direct checkout failed:", error);
-    } finally {
-      setLoadingTierId(null);
+      console.error("Navbar modal session routing execution failed:", error);
     }
   };
+
+  // Computes active processing layer indicators dynamically
+  const loadingTierId = paymentLoading ? selectedPkgId : null;
 
   const navItems = isAuthenticated
     ? [
@@ -232,7 +218,7 @@ export default function Navbar() {
         />
       )}
 
-      {/* Mobile Drawer menu container */}
+      {/* Mobile Drawer */}
       <div 
         className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] z-[70] transform transition-transform duration-300 lg:hidden ${
           mobileNavOpen ? "translate-x-0" : "translate-x-full"
@@ -299,97 +285,38 @@ export default function Navbar() {
           </div>
 
           <div className="p-4 border-t border-white/5">
-            {isAuthenticated ? (
-              <div className="space-y-3">
-                <div 
-                  onClick={() => { setIsCurrencyModalOpen(true); setMobileNavOpen(false); }}
-                  style={{ backgroundColor: COLORS.primary }}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
-                >
-                  <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
-                  <span className="text-sm font-black text-black tracking-wider uppercase">
-                    {balance !== null ? balance.toLocaleString() : '...'} Stardust
-                  </span>
-                  <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
-                </div>
-
-                <button 
-                  onClick={() => { navigate("/profile"); setMobileNavOpen(false); }}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/10 transition-all"
-                >
-                  <div className="w-10 h-10 rounded-full border border-primary/30 overflow-hidden relative">
-                    {user?.profile_picture ? (
-                      <img src={user.profile_picture} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-primary/20">
-                        <Icon icon="ph:user-fill" style={{ color: COLORS.neutralWhite }} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-start">
-                    <span className="text-xs font-black text-white/80 uppercase tracking-wider">
-                      {user?.username || 'User'}
-                    </span>
-                    <span className="text-[10px] font-bold text-white/30 uppercase">View Profile</span>
-                  </div>
-                  <Icon icon="ph:caret-right" className="ml-auto text-white/20" />
-                </button>
-
-                <button 
-                  onClick={() => { navigate("/notifications"); setMobileNavOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02] hover:bg-white/5 transition-all"
-                >
-                  <Icon icon="ph:bell-duotone" className="text-xl" style={{ color: "rgba(255,255,255,0.3)" }} />
-                  <span className="text-sm font-bold uppercase tracking-wider text-white/50">Notifications</span>
-                </button>
-
-                <button 
-                  onClick={() => { logout(); setMobileNavOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
-                >
-                  <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: COLORS.error }} />
-                  <span className="text-sm font-bold uppercase tracking-wider" style={{ color: COLORS.error }}>Sign Out</span>
-                </button>
+            <div className="space-y-3">
+              <div 
+                onClick={() => { setIsCurrencyModalOpen(true); setMobileNavOpen(false); }}
+                style={{ backgroundColor: COLORS.primary }}
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
+              >
+                <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
+                <span className="text-sm font-black text-black tracking-wider uppercase">
+                  {balance !== null ? balance.toLocaleString() : '...'} Stardust
+                </span>
+                <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
               </div>
-            ) : (
-              <div className="space-y-3">
-                <button
-                  onClick={() => { navigate("/login"); setMobileNavOpen(false); }}
-                  className="w-full px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all hover:scale-105"
-                  style={{
-                    color: COLORS.neutralWhite,
-                    border: `1px solid ${COLORS.neutralWhite}20`,
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  Login
-                </button>
 
-                <button
-                  onClick={() => { navigate("/register"); setMobileNavOpen(false); }}
-                  className="w-full px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-widest transition-all hover:scale-105"
-                  style={{
-                    color: COLORS.dark,
-                    backgroundColor: COLORS.primary,
-                    boxShadow: `0 10px 30px ${COLORS.primary}40`,
-                  }}
-                >
-                  Get Started
-                </button>
-              </div>
-            )}
+              <button 
+                onClick={() => { logout(); setMobileNavOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
+              >
+                <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: COLORS.error }} />
+                <span className="text-sm font-bold uppercase tracking-wider" style={{ color: COLORS.error }}>Sign Out</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* IMPLEMENTED SEPARATE STARDUST MODAL */}
+      {/* Synchronized Modal Portal */}
       <StardustModal 
         isOpen={isCurrencyModalOpen}
         onClose={() => setIsCurrencyModalOpen(false)}
         buyOptions={buyOptions}
         loadingTierId={loadingTierId}
         onPurchase={handleDirectPurchase}
-        formatCurrency={formatCurrency}
       />
     </>
   );

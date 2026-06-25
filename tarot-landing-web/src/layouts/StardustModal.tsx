@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../theme";
 
-// Explicit interface match for your PurchasePackage type shape
 export interface PurchasePackage {
   id: string; 
   points: number;
-  price: number; // Represents price in cents (e.g., 500 = $5.00)
+  price: number; // Price in cents (e.g., 500 = $5.00)
   label: string;
+  // TODO: Add any new data properties here (e.g., originalPrice, discountPct, badgeText)
 }
 
 interface StardustModalProps {
@@ -16,6 +16,9 @@ interface StardustModalProps {
   buyOptions: PurchasePackage[];
   loadingTierId: string | null;
   onPurchase: (pkg: PurchasePackage) => Promise<void>;
+  // NEW FUNCTIONALITY HOOKS (Add your new prop definitions below)
+  // currentBalance?: number;
+  // promoCodeActive?: boolean;
 }
 
 export function StardustModal({
@@ -25,22 +28,21 @@ export function StardustModal({
   loadingTierId,
   onPurchase,
 }: StardustModalProps) {
-  // Local state to keep track of loading inside the modal action context independently
+  // Local state for independent loading boundaries
   const [localLoadingId, setLocalLoadingId] = useState<string | null>(null);
+  
+  // NEW STATE: Place any new local reactive hooks here (e.g., activeTab, promoInput)
 
   if (!isOpen) return null;
 
-  // Active sync between global lock state and local modal redirection operations
   const isAnyLoading = loadingTierId !== null || localLoadingId !== null;
 
-  // Formats currency accurately directly from currency cents (e.g., 1000 cents -> $10.00)
   const formatCurrency = (amountInCents: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amountInCents / 100);
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amountInCents / 1000);
 
   const handleLocalPurchase = async (pkg: PurchasePackage) => {
     try {
       setLocalLoadingId(pkg.id);
-      // Fires the identical Stripe session creation method linked to your usePayment hook architecture
       await onPurchase(pkg);
     } catch (err) {
       console.error("Stripe modal redirection error:", err);
@@ -90,9 +92,12 @@ export function StardustModal({
           </button>
         </div>
 
+        {/* INSERT NEW FEATURE COMPONENT HERE (e.g., Tab selectors, Balance bars) */}
+
         {/* Scrollable Core Packages Container */}
         <div className="flex-grow overflow-y-auto p-6 sm:p-8 space-y-4 custom-scrollbar max-h-[45vh] sm:max-h-[50vh]">
           {buyOptions.map((pkg, idx) => {
+            // Business logic for badges
             const isPopular = idx === 2 || pkg.points === 50;
             const isCurrentItemLoading = loadingTierId === pkg.id || localLoadingId === pkg.id;
 
@@ -107,6 +112,7 @@ export function StardustModal({
                   isPopular ? "shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]" : ""
                 } ${isAnyLoading && !isCurrentItemLoading ? "opacity-40" : ""}`}
               >
+                {/* Hover Glow Effect */}
                 <div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
                   style={{
@@ -123,6 +129,7 @@ export function StardustModal({
                   </span>
                 )}
 
+                {/* Package Metrics */}
                 <div className="relative z-10 flex flex-col mb-4 sm:mb-0">
                   <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-1.5 group-hover:text-primary/70 transition-colors">
                     {pkg.label}
@@ -142,8 +149,8 @@ export function StardustModal({
                   </div>
                 </div>
 
+                {/* Pricing Controls Action Row */}
                 <div className="relative z-10 flex items-center justify-between sm:justify-end gap-4 border-t border-white/5 sm:border-0 pt-3 sm:pt-0">
-                  {/* Display section converted to standard $ Dollar denominations cleanly */}
                   <div className="text-xl sm:text-2xl font-black tracking-tight text-white/90">
                     {formatCurrency(pkg.price)}
                   </div>
@@ -178,7 +185,7 @@ export function StardustModal({
           })}
         </div>
 
-        {/* Footer Processing Guard Safeguard Panel */}
+        {/* Footer Processing Safeguard Guard Panel */}
         <div className="p-6 sm:p-8 border-t border-white/5 bg-white/[0.01] flex-shrink-0">
           <div className="flex items-center justify-center gap-3 opacity-20 mb-3">
             <div className="h-[1px] flex-1 bg-white" />
