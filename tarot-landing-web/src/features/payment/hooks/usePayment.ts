@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { paymentApi } from "../api/paymentApi";
-import type { CreateCheckoutSessionRequest, UnitPriceResponse, BuyOptionResponse } from "../types/payment.types";
-import type { 
-  TransactionListResponse, 
+import type { CreateCheckoutSessionRequest, UnitPriceResponse, BuyOptionResponse, CreateCheckoutPackageSessionRequest } from "../types/payment.types";
+import type {
+  TransactionListResponse,
   TransactionFilters,
-  UserBalance 
+  UserBalance
 } from "@/features/ledger/types/transaction.types";
 
 export const usePayment = () => {
@@ -20,6 +20,22 @@ export const usePayment = () => {
     setError(null);
     try {
       const response = await paymentApi.createCheckoutSession(request);
+      // Redirect to Stripe checkout
+      window.location.href = response.url;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to create checkout session";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createCheckoutPackageSession = async (request: CreateCheckoutPackageSessionRequest) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await paymentApi.createCheckoutPackageSession(request);
       // Redirect to Stripe checkout
       window.location.href = response.url;
     } catch (err: unknown) {
@@ -119,6 +135,7 @@ export const usePayment = () => {
     unitPrice,
     buyOptions,
     createCheckoutSession,
+    createCheckoutPackageSession,
     fetchMyTransactions,
     fetchMyBalance,
     fetchUnitPrice,

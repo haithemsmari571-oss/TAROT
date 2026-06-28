@@ -10,7 +10,12 @@ from app.dependencies.get_current_user import get_current_user
 from app.logging_config import bind_user_to_context, get_logger
 from app.models.settings import Settings
 from app.models.user import User
-from app.schemas.payment import CreateCheckoutSessionRequest, UnitPriceResponse
+from app.schemas.payment import (
+    CreateCheckoutSessionRequest,
+    UnitPriceResponse,
+    CreateCheckoutPackageSessionRequest,
+)
+from app.services.landing import get_section
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -155,6 +160,106 @@ async def create_checkout_session(
         )
         raise HTTPException(
             status_code=400, detail=f"Error creating checkout session: {str(e)}"
+        )
+
+
+@router.post("/create-package-checkout-session")
+async def create_checkout_session(
+    request: CreateCheckoutPackageSessionRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    bind_user_to_context(user.id)
+
+    logger.info(
+        "checkout_session_requested",
+        user_id=user.id,
+        title=request.title,
+    )
+
+    try:
+        stripe_api_key_setting = (
+            db.query(Settings).filter(Settings.key == "stripe_api_key").first()
+        )
+
+        if not stripe_api_key_setting or not stripe_api_key_setting.value:
+            raise HTTPException(500, "Stripe API key not configured")
+
+        stripe.api_key = stripe_api_key_setting.value
+
+        entry = get_section(db, "packages")
+        packages = entry.content["packages"]
+
+        package = next(
+            (
+                p
+                for p in packages
+                if p["title"].strip().lower() == request.title.strip().lower()
+            ),
+            None,
+        )
+
+        if not package:
+            raise HTTPException(status_code=404, detail="Package not found")
+
+        price_cents = int(float(package["price"]) * 100)
+        points = package["points"]
+
+        success_url = (
+            f"{settings.FRONT_BASE_URL}{request.return_url}&status=success"
+            if request.return_url
+            else f"{settings.FRONT_BASE_URL}/billing?status=success"
+        )
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": package["title"],
+                        },
+                        "unit_amount": price_cents,
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",
+            metadata={
+                "user_id": str(user.id),
+                "title": package["title"],
+                "points": str(points),
+            },
+            success_url=success_url,
+            cancel_url=f"{settings.FRONT_BASE_URL}/billing?status=cancelled",
+        )
+
+        logger.info(
+            "checkout_session_created",
+            user_id=user.id,
+            points_amount=points,
+            total_amount_cents=price_cents,
+            total_amount_usd=price_cents / 100,
+            session_id=session.id,
+            currency="usd",
+        )
+
+        return {"url": session.url}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "checkout_session_creation_failed",
+            user_id=user.id,
+            title=request.title,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error creating checkout session: {str(e)}",
         )
 
 

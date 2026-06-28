@@ -13,5 +13,10 @@ class CreateCheckoutSessionRequest(BaseModel):
         return v
 
 
+class CreateCheckoutPackageSessionRequest(BaseModel):
+    title: str
+    return_url: str | None = None
+
+
 class UnitPriceResponse(BaseModel):
     unit_price_cents: int

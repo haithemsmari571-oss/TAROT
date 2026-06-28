@@ -5,6 +5,11 @@ export interface CreateCheckoutSessionRequest {
   return_url?: string;
 }
 
+export interface CreateCheckoutPackageSessionRequest {
+  title: string;
+  return_url?: string;
+}
+
 export interface CreateCheckoutSessionResponse {
   url: string;
 }

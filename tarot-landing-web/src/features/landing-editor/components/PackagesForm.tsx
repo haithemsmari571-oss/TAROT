@@ -124,19 +124,46 @@ export const PackagesForm = ({ content, onChange }: PackagesFormProps) => {
                 />
               </FieldSet>
 
-              <FieldSet label="Price (USD)">
-                <input
-                  value={pkg.price}
-                  onChange={(e) => updatePackage(i, { ...pkg, price: e.target.value })}
-                  placeholder="15"
-                  className="w-full px-4 py-3 rounded-xl outline-none transition-all"
-                  style={{
-                    backgroundColor: COLORS.surface,
-                    border: `1px solid ${COLORS.neutralDarkGray}`,
-                    color: COLORS.neutralWhite,
-                  }}
-                />
-              </FieldSet>
+              <div className="grid grid-cols-2 gap-4">
+                <FieldSet label="Price (USD)">
+                  <input
+                    value={pkg.price}
+                    onChange={(e) =>
+                      updatePackage(i, {
+                        ...pkg,
+                        price: e.target.value,
+                      })
+                    }
+                    placeholder="15"
+                    className="w-full px-4 py-3 rounded-xl outline-none transition-all"
+                    style={{
+                      backgroundColor: COLORS.surface,
+                      border: `1px solid ${COLORS.neutralDarkGray}`,
+                      color: COLORS.neutralWhite,
+                    }}
+                  />
+                </FieldSet>
+
+                <FieldSet label="Points">
+                  <input
+                    type="number"
+                    value={pkg.points}
+                    onChange={(e) =>
+                      updatePackage(i, {
+                        ...pkg,
+                        points: Number(e.target.value),
+                      })
+                    }
+                    placeholder="150"
+                    className="w-full px-4 py-3 rounded-xl outline-none transition-all"
+                    style={{
+                      backgroundColor: COLORS.surface,
+                      border: `1px solid ${COLORS.neutralDarkGray}`,
+                      color: COLORS.neutralWhite,
+                    }}
+                  />
+                </FieldSet>
+              </div>
 
               <FieldSet label="Tagline">
                 <textarea
@@ -185,7 +212,7 @@ export const PackagesForm = ({ content, onChange }: PackagesFormProps) => {
                         className="p-1.5 rounded-lg hover:bg-white/5 transition-all"
                         style={{ color: COLORS.error }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
                       </button>
                     </div>
                   ))}

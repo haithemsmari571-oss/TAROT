@@ -5,11 +5,12 @@ import type {
   TopUpResponse,
   UnitPriceResponse,
   BuyOptionResponse,
+  CreateCheckoutPackageSessionRequest,
 } from "../types/payment.types";
-import type { 
-  TransactionListResponse, 
+import type {
+  TransactionListResponse,
   TransactionFilters,
-  UserBalance 
+  UserBalance
 } from "@/features/ledger/types/transaction.types";
 
 export const paymentApi = {
@@ -29,6 +30,19 @@ export const paymentApi = {
   ): Promise<CreateCheckoutSessionResponse> => {
     const response = await axiosClient.post(
       "/payment/create-checkout-session",
+      request
+    );
+    return response.data;
+  },
+
+  /**
+ * Create a Stripe checkout session for purchasing points
+ */
+  createCheckoutPackageSession: async (
+    request: CreateCheckoutPackageSessionRequest
+  ): Promise<CreateCheckoutSessionResponse> => {
+    const response = await axiosClient.post(
+      "/payment/create-package-checkout-session",
       request
     );
     return response.data;

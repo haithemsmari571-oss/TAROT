@@ -79,6 +79,7 @@ export interface ServiceContent {
 export interface PackageItem {
   title: string;
   price: string;
+  points: number;
   tagline: string;
   features: string[];
   footer: string;
