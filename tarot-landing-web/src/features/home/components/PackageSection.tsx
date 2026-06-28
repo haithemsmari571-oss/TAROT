@@ -74,7 +74,7 @@ const PackageSection = () => {
         if (res.data?.content)
           setContent({ ...DEFAULT_PACKAGES, ...res.data.content });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const { scrollYProgress } = useScroll({
@@ -244,11 +244,10 @@ const PackageSection = () => {
 
               {/* Card Container */}
               <div
-                className={`relative p-10 rounded-[3rem] border transition-all duration-700 h-full backdrop-blur-3xl overflow-hidden shadow-2xl ${
-                  pkg.popular
+                className={`relative p-10 rounded-[3rem] border transition-all duration-700 h-full backdrop-blur-3xl overflow-hidden shadow-2xl ${pkg.popular
                     ? "border-primary/40 bg-white/[0.06]"
                     : "border-white/5 bg-white/[0.02] group-hover:bg-white/[0.04]"
-                } group-hover:border-primary/60`}
+                  } group-hover:border-primary/60`}
               >
                 {/* Background Alchemy Watermark */}
                 <span className="absolute -top-6 -right-6 text-[12rem] opacity-[0.03] text-white pointer-events-none italic group-hover:opacity-[0.06] transition-opacity duration-1000">
@@ -273,7 +272,7 @@ const PackageSection = () => {
                   </h3>
                   <div className="flex items-baseline gap-1 mb-4">
                     <span className="text-5xl font-black text-white">
-                      {pkg.price}
+                      ${pkg.price}
                     </span>
                     <span className="text-white/20 text-xs uppercase tracking-widest font-light">
                       USD
@@ -318,11 +317,10 @@ const PackageSection = () => {
                       : () => console.log("clicked")
                   }
                   className={`relative z-10 w-full py-3 rounded-2xl overflow-hidden uppercase transition-all duration-500 border
-                          ${
-                            pkg.popular
-                              ? "bg-primary text-dark border-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]"
-                              : "bg-transparent text-primary border-primary/50 hover:border-primary"
-                          }
+                          ${pkg.popular
+                      ? "bg-primary text-dark border-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]"
+                      : "bg-transparent text-primary border-primary/50 hover:border-primary"
+                    }
                         `}
                   style={{
                     // Using inline style only for the custom color variable if not in Tailwind config

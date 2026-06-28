@@ -1094,7 +1094,7 @@ const Billing = () => {
                     </h3>
                     <div className="flex items-baseline gap-1 mb-4">
                       <span className="text-5xl font-black text-white">
-                        {pkg.price}
+                        ${pkg.price}
                       </span>
                       <span className="text-white/20 text-xs uppercase tracking-widest font-light">
                         USD
