@@ -174,12 +174,14 @@ def update_psychic(
         if (
             psychic_data.availabilities_create is not None
             or psychic_data.availabilities_ids_to_remove is not None
+            or psychic_data.replace_availabilities is not None
         ):
             sync_availability(
                 db=db,
                 psychic_id=psychic_id,
                 availabilities_create=psychic_data.availabilities_create,
                 availabilities_ids_to_remove=psychic_data.availabilities_ids_to_remove,
+                replace_availabilities=psychic_data.replace_availabilities,
             )
 
         # ✅ FIX: Extract properties into a clean dictionary
@@ -189,6 +191,7 @@ def update_psychic(
         update_dict.pop("categories_ids", None)
         update_dict.pop("availabilities_create", None)
         update_dict.pop("availabilities_ids_to_remove", None)
+        update_dict.pop("replace_availabilities", None)
 
         # Apply remaining safe data fields (including 'order') straight into model tracking fields
         for field, value in update_dict.items():

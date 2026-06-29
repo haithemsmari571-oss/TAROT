@@ -23,10 +23,32 @@ const TarotCouncil = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [psychics, setPsychics] = useState<any[]>([]);
-  const [sectionContent, setSectionContent] = useState(
-    DEFAULT_PSYCHICS_SECTION,
-  );
+  
+  const getInitialSectionContent = () => {
+    const cached = localStorage.getItem("landing_psychics_section_content");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return DEFAULT_PSYCHICS_SECTION;
+  };
+
+  const getInitialPsychicsList = () => {
+    const cached = localStorage.getItem("landing_psychics_list");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return [];
+  };
+
+  const [psychics, setPsychics] = useState<any[]>(getInitialPsychicsList);
+  const [sectionContent, setSectionContent] = useState(getInitialSectionContent);
+  const [isLoaded, setIsLoaded] = useState(() => {
+    return !!localStorage.getItem("landing_psychics_section_content") && !!localStorage.getItem("landing_psychics_list");
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,11 +56,14 @@ const TarotCouncil = () => {
       axiosClient.get("/landing/psychics").catch(() => null),
       axiosClient.get("/psychic/", { params: { limit: 100 } }).catch(() => null),
     ]).then(([landingRes, psychicsRes]) => {
+      let currentSectionContent = DEFAULT_PSYCHICS_SECTION;
       if (landingRes?.data?.content) {
-        setSectionContent({
+        currentSectionContent = {
           ...DEFAULT_PSYCHICS_SECTION,
           ...landingRes.data.content,
-        });
+        };
+        setSectionContent(currentSectionContent);
+        localStorage.setItem("landing_psychics_section_content", JSON.stringify(currentSectionContent));
       }
       const allPsychics: any[] = psychicsRes?.data?.items || [];
       const featuredIds: number[] =
@@ -48,6 +73,10 @@ const TarotCouncil = () => {
           ? allPsychics.filter((p: any) => featuredIds.includes(p.id))
           : allPsychics;
       setPsychics(filtered);
+      localStorage.setItem("landing_psychics_list", JSON.stringify(filtered));
+      setIsLoaded(true);
+    }).catch(() => {
+      setIsLoaded(true);
     });
   }, []);
 
@@ -89,8 +118,6 @@ const TarotCouncil = () => {
     }
   };
 
-  if (psychics.length === 0) return null;
-
   return (
     <section
       className="relative py-12 overflow-hidden"
@@ -98,7 +125,14 @@ const TarotCouncil = () => {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* Background Glows */}
+      {isLoaded && psychics.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="w-full h-full"
+        >
+          {/* Background Glows */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full opacity-10 pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary blur-[120px] rounded-full" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary blur-[120px] rounded-full" />
@@ -166,6 +200,8 @@ const TarotCouncil = () => {
           />
         ))}
       </div>
+        </motion.div>
+      )}
     </section>
   );
 };

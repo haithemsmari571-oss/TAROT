@@ -22,13 +22,21 @@ def sync_availability(
     psychic_id: int,
     availabilities_create: Optional[list[PsychicAvailiabilityCreate]],
     availabilities_ids_to_remove: Optional[list[int]] = None,
+    replace_availabilities: Optional[bool] = False,
 ):
     get_psychic(db, psychic_id)
 
-    # 1. Remove availabilities
-    if availabilities_ids_to_remove:
-        for av_id in availabilities_ids_to_remove:
-            remove_availability(db, av_id, psychic_id)
+    if replace_availabilities:
+        # Delete all existing availabilities
+        db.query(PsychicAvailability).filter(
+            PsychicAvailability.psychic_id == psychic_id
+        ).delete(synchronize_session=False)
+        db.commit()
+    else:
+        # 1. Remove availabilities
+        if availabilities_ids_to_remove:
+            for av_id in availabilities_ids_to_remove:
+                remove_availability(db, av_id, psychic_id)
 
     # 2. Create new availabilities
     if availabilities_create:

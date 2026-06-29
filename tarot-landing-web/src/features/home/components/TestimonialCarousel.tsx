@@ -22,12 +22,32 @@ const POSITIONS = [
 
 const TestimonialCarousel = () => {
   const containerRef = useRef(null);
-  const [testimonials, setTestimonials] = useState(DEFAULT_TESTIMONIALS);
+  
+  const getInitialTestimonials = () => {
+    const cached = localStorage.getItem("landing_testimonials_content");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return DEFAULT_TESTIMONIALS;
+  };
+
+  const [testimonials, setTestimonials] = useState(getInitialTestimonials);
+  const [isLoaded, setIsLoaded] = useState(() => {
+    return !!localStorage.getItem("landing_testimonials_content");
+  });
 
   useEffect(() => {
     axiosClient.get("/landing/testimonials").then((res) => {
-      if (res.data?.content?.testimonials) setTestimonials(res.data.content.testimonials);
-    }).catch(() => {});
+      if (res.data?.content?.testimonials) {
+        setTestimonials(res.data.content.testimonials);
+        localStorage.setItem("landing_testimonials_content", JSON.stringify(res.data.content.testimonials));
+      }
+      setIsLoaded(true);
+    }).catch(() => {
+      setIsLoaded(true);
+    });
   }, []);
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -47,15 +67,22 @@ const TestimonialCarousel = () => {
  
 
       {/* 2. THE FLOATING FIELD */}
-      <div className="absolute inset-0 z-10 w-full h-full">
-        {testimonials.slice(0, POSITIONS.length).map((item, idx) => (
-          <FloatingCard 
-            key={idx} 
-            data={{ ...item, ...POSITIONS[idx] }} 
-            progress={smoothProgress} 
-          />
-        ))}
-      </div>
+      {isLoaded && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="absolute inset-0 z-10 w-full h-full"
+        >
+          {testimonials.slice(0, POSITIONS.length).map((item, idx) => (
+            <FloatingCard 
+              key={idx} 
+              data={{ ...item, ...POSITIONS[idx] }} 
+              progress={smoothProgress} 
+            />
+          ))}
+        </motion.div>
+      )}
 
       {/* 3. BACKGROUND AMBIENCE */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-30 pointer-events-none">

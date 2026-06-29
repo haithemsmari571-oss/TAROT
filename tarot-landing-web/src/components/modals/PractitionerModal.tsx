@@ -96,11 +96,9 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
         categories_ids: selectedCategories,
         bio,
         order,
+        availabilities_create: availability,
+        replace_availabilities: true,
       };
-      
-      if (availability.length > 0) {
-        updateData.availabilities_create = availability;
-      }
 
       formData.append("data", JSON.stringify(updateData));
       formData.append("isUpdate", "true");

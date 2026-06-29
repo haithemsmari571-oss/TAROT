@@ -19,7 +19,17 @@ class NotificationManager:
     async def send_to_user(self, message: dict, user_id: int):
         """Send a notification message to a specific user"""
         if user_id in self.active_connections:
-            await self.active_connections[user_id].send_json(message)
+            try:
+                await self.active_connections[user_id].send_json(message)
+            except Exception as e:
+                from app.logging_config import get_logger
+                logger = get_logger(__name__)
+                logger.warning(
+                    "failed_to_send_websocket_notification",
+                    user_id=user_id,
+                    error=str(e),
+                )
+                self.disconnect(user_id)
 
     def is_user_connected(self, user_id: int) -> bool:
         """Check if a user is connected"""

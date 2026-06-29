@@ -65,16 +65,35 @@ const PackageSection = () => {
   const containerRef = useRef(null);
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [content, setContent] = useState(DEFAULT_PACKAGES);
+  const getInitialPackagesContent = () => {
+    const cached = localStorage.getItem("landing_packages_content");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return DEFAULT_PACKAGES;
+  };
+
+  const [content, setContent] = useState(getInitialPackagesContent);
+  const [isLoaded, setIsLoaded] = useState(() => {
+    return !!localStorage.getItem("landing_packages_content");
+  });
 
   useEffect(() => {
     axiosClient
       .get("/landing/packages")
       .then((res) => {
-        if (res.data?.content)
-          setContent({ ...DEFAULT_PACKAGES, ...res.data.content });
+        if (res.data?.content) {
+          const newContent = { ...DEFAULT_PACKAGES, ...res.data.content };
+          setContent(newContent);
+          localStorage.setItem("landing_packages_content", JSON.stringify(newContent));
+        }
+        setIsLoaded(true);
       })
-      .catch(() => { });
+      .catch(() => {
+        setIsLoaded(true);
+      });
   }, []);
 
   const { scrollYProgress } = useScroll({
@@ -180,7 +199,14 @@ const PackageSection = () => {
         style={{ opacity: contentOpacity }}
         className="max-w-7xl mx-auto relative z-30"
       >
-        {/* 2. HEADER */}
+        {isLoaded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="w-full"
+          >
+            {/* 2. HEADER */}
         <div className="flex flex-col items-center text-center mb-12">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
@@ -354,6 +380,8 @@ const PackageSection = () => {
         </div>
 
         {/* 4. FOOTER SYMBOLS */}
+          </motion.div>
+        )}
       </motion.div>
     </section>
   );

@@ -67,6 +67,7 @@ class PsychicUpdate(BaseModel):
     categories_ids: List[int] | None = None
     availabilities_create: List[PsychicAvailiabilityCreate] | None = None
     availabilities_ids_to_remove: List[int] | None = None
+    replace_availabilities: bool | None = None
     bio: str | None = None
     order: int | None = None  # ✅ Captured field
 

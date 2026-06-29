@@ -18,8 +18,23 @@ class ConnectionManager:
     async def send_to_chat(self, message: dict, chat_id: str):
         """Sends a message to everyone in a specific chat"""
         if chat_id in self.active_chats:
+            disconnected_sockets = []
             for connection in self.active_chats[chat_id]:
-                await connection.send_json(message)
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    from app.logging_config import get_logger
+                    logger = get_logger(__name__)
+                    logger.warning(
+                        "failed_to_send_chat_message",
+                        chat_id=chat_id,
+                        error=str(e),
+                    )
+                    disconnected_sockets.append(connection)
+            
+            # Clean up disconnected sockets
+            for socket in disconnected_sockets:
+                self.disconnect(socket, chat_id)
 
     async def send_to_user(self, message: dict, user_id: str):
         raise NotImplementedError

@@ -103,17 +103,37 @@ const HeroSection = () => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 });
-  const [content, setContent] = useState(DEFAULT_HERO);
+  
+  const getInitialHeroContent = () => {
+    const cached = localStorage.getItem("landing_hero_content");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return DEFAULT_HERO;
+  };
+
+  const [content, setContent] = useState(getInitialHeroContent);
+  const [isLoaded, setIsLoaded] = useState(() => {
+    return !!localStorage.getItem("landing_hero_content");
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
     axiosClient
       .get("/landing/hero")
       .then((res) => {
-        if (res.data?.content)
-          setContent({ ...DEFAULT_HERO, ...res.data.content });
+        if (res.data?.content) {
+          const newContent = { ...DEFAULT_HERO, ...res.data.content };
+          setContent(newContent);
+          localStorage.setItem("landing_hero_content", JSON.stringify(newContent));
+        }
+        setIsLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setIsLoaded(true);
+      });
   }, []);
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -346,97 +366,106 @@ const HeroSection = () => {
           }}
           className="relative z-40 w-full max-w-[900px] flex flex-col items-center text-center"
         >
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-3xl mb-8 bg-white/5"
-          >
-            <span className="uppercase tracking-[0.4em] text-[9px]  text-white/80">
-              {content.badge}
-            </span>
-          </motion.div>
-
-          <div className="mb-2">
-            <motion.span className="block text-xl md:text-3xl mb-2 font-light  text-white/50">
-              {content.name}
-            </motion.span>
-
-            <h1
-              className="leading-[1.0] tracking-tighter"
-              style={{
-                fontSize: "clamp(3rem, 7.5vw, 5.5rem)",
-                fontFamily: TYPOGRAPHY.fontFamily.heading,
-                fontWeight: 900,
-                color: COLORS.neutralWhite,
-              }}
+          {isLoaded && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="flex flex-col items-center w-full"
             >
-              {content.headline} <br />
-              <span
-                className="inline-block"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                {content.headlineHighlighted}
-              </span>
-            </h1>
-          </div>
-
-          <p className="text-base md:text-xl max-w-xl mb-6 leading-relaxed font-light text-white/60">
-            {content.subtitle}
-          </p>
-
-          <div className="flex flex-col sm:flex-row justify-center gap-6">
-            {/* PRIMARY BUTTON: HIRE ME */}
-            {/* <motion.button
-    whileHover={{ 
-      scale: 1.05, 
-      y: -2,
-    }}
-    whileTap={{ scale: 0.95 }}
-    transition={{ type: "spring", stiffness: 400, damping: 17 }}
-    className="px-12 py-5 rounded-full font-bold text-[11px] tracking-[0.2em] uppercase transition-all shadow-xl"
-    style={{ backgroundColor: COLORS.primary, color: COLORS.dark }}
-  >
-    {content.primaryCta}
-  </motion.button> */}
-
-            {/* SECONDARY BUTTON: THE ARCHIVE */}
-            <motion.button
-              onClick={() => navigate("/psychics-browse")}
-              initial="initial"
-              whileHover="hover"
-              whileTap={{ scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 400, damping: 17 }}
-              className="group px-10 py-5 rounded-full border border-white/10 text-[10px] font-bold tracking-[0.3em] text-white backdrop-blur-md transition-all flex items-center justify-center gap-3"
-              style={
-                {
-                  // Inline styles for the hover state logic if not using a CSS file
-                }
-              }
-              variants={{
-                hover: {
-                  scale: 1.05,
-                  y: -2,
-                  backgroundColor: "rgba(255, 255, 255, 0.1)",
-                  borderColor: "rgba(255, 255, 255, 0.4)",
-                },
-              }}
-            >
-              {content.secondaryCta}
               <motion.div
-                variants={{
-                  initial: { x: 0 },
-                  hover: { x: 5 },
-                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-3xl mb-8 bg-white/5"
               >
-                <Icon icon="ph:arrow-right-bold" className="text-xs" />
+                <span className="uppercase tracking-[0.4em] text-[9px]  text-white/80">
+                  {content.badge}
+                </span>
               </motion.div>
-            </motion.button>
-          </div>
+
+              <div className="mb-2">
+                <motion.span className="block text-xl md:text-3xl mb-2 font-light  text-white/50">
+                  {content.name}
+                </motion.span>
+
+                <h1
+                  className="leading-[1.0] tracking-tighter"
+                  style={{
+                    fontSize: "clamp(3rem, 7.5vw, 5.5rem)",
+                    fontFamily: TYPOGRAPHY.fontFamily.heading,
+                    fontWeight: 900,
+                    color: COLORS.neutralWhite,
+                  }}
+                >
+                  {content.headline} <br />
+                  <span
+                    className="inline-block"
+                    style={{
+                      background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    }}
+                  >
+                    {content.headlineHighlighted}
+                  </span>
+                </h1>
+              </div>
+
+              <p className="text-base md:text-xl max-w-xl mb-6 leading-relaxed font-light text-white/60">
+                {content.subtitle}
+              </p>
+
+              <div className="flex flex-col sm:flex-row justify-center gap-6">
+                {/* PRIMARY BUTTON: HIRE ME */}
+                {/* <motion.button
+        whileHover={{ 
+          scale: 1.05, 
+          y: -2,
+        }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        className="px-12 py-5 rounded-full font-bold text-[11px] tracking-[0.2em] uppercase transition-all shadow-xl"
+        style={{ backgroundColor: COLORS.primary, color: COLORS.dark }}
+      >
+        {content.primaryCta}
+      </motion.button> */}
+
+                {/* SECONDARY BUTTON: THE ARCHIVE */}
+                <motion.button
+                  onClick={() => navigate("/psychics-browse")}
+                  initial="initial"
+                  whileHover="hover"
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  className="group px-10 py-5 rounded-full border border-white/10 text-[10px] font-bold tracking-[0.3em] text-white backdrop-blur-md transition-all flex items-center justify-center gap-3"
+                  style={
+                    {
+                      // Inline styles for the hover state logic if not using a CSS file
+                    }
+                  }
+                  variants={{
+                    hover: {
+                      scale: 1.05,
+                      y: -2,
+                      backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      borderColor: "rgba(255, 255, 255, 0.4)",
+                    },
+                  }}
+                >
+                  {content.secondaryCta}
+                  <motion.div
+                    variants={{
+                      initial: { x: 0 },
+                      hover: { x: 5 },
+                    }}
+                  >
+                    <Icon icon="ph:arrow-right-bold" className="text-xs" />
+                  </motion.div>
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
         </motion.div>
       </div>
     </section>

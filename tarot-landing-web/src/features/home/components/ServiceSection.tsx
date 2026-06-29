@@ -24,12 +24,32 @@ const DEFAULT_SERVICES = {
 
 const ServiceSection = () => {
   const containerRef = useRef(null);
-  const [content, setContent] = useState(DEFAULT_SERVICES);
+  const getInitialServicesContent = () => {
+    const cached = localStorage.getItem("landing_services_content");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return DEFAULT_SERVICES;
+  };
+
+  const [content, setContent] = useState(getInitialServicesContent);
+  const [isLoaded, setIsLoaded] = useState(() => {
+    return !!localStorage.getItem("landing_services_content");
+  });
 
   useEffect(() => {
     axiosClient.get("/landing/services").then((res) => {
-      if (res.data?.content) setContent({ ...DEFAULT_SERVICES, ...res.data.content });
-    }).catch(() => {});
+      if (res.data?.content) {
+        const newContent = { ...DEFAULT_SERVICES, ...res.data.content };
+        setContent(newContent);
+        localStorage.setItem("landing_services_content", JSON.stringify(newContent));
+      }
+      setIsLoaded(true);
+    }).catch(() => {
+      setIsLoaded(true);
+    });
   }, []);
   
   // Mouse Tracking for Background Interactivity
@@ -102,7 +122,13 @@ const ServiceSection = () => {
         ))}
       </div>
 
-      <div className="max-w-7xl mx-auto relative z-10">
+      {isLoaded && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-7xl mx-auto relative z-10"
+        >
         
         {/* 2. HEADER */}
         <div className="flex flex-col items-center text-center mb-6">
@@ -233,7 +259,8 @@ const ServiceSection = () => {
             ))}
           </div>
         </motion.div>
-      </div>
+        </motion.div>
+      )}
     </section>
   );
 };
