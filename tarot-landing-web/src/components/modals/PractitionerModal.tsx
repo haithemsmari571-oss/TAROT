@@ -308,12 +308,20 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
               <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.01] space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase text-white tracking-widest">Availability Timeline</span>
-                  <button 
-                    onClick={addAvailability} 
-                    className="text-[9px] text-white border border-white/10 px-2.5 py-1 rounded-lg font-black uppercase flex items-center gap-1 hover:bg-white/5 transition-all"
-                  >
-                    <Icon icon="solar:add-circle-bold" className="text-xs" style={{ color: COLORS.primary }} /> Add Slot
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setAvailability([])} 
+                      className="text-[9px] text-white border border-white/10 px-2.5 py-1 rounded-lg font-black uppercase flex items-center gap-1 hover:bg-white/5 transition-all"
+                    >
+                      <Icon icon="solar:refresh-circle-bold" className="text-xs" style={{ color: COLORS.primary }} /> Reset
+                    </button>
+                    <button 
+                      onClick={addAvailability} 
+                      className="text-[9px] text-white border border-white/10 px-2.5 py-1 rounded-lg font-black uppercase flex items-center gap-1 hover:bg-white/5 transition-all"
+                    >
+                      <Icon icon="solar:add-circle-bold" className="text-xs" style={{ color: COLORS.primary }} /> Add
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
