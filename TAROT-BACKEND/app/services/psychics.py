@@ -203,6 +203,15 @@ def update_psychic(
     return _psychic_to_out(psychic)
 
 
+def delete_psychic(db: Session, psychic_id: int):
+    psychic = get_psychic(db, psychic_id)
+    # Perform a hard delete of the psychic record
+    db.delete(psychic)
+    db.commit()
+    # No content to return after deletion
+    return None
+
+
 def read_psychic(db: Session, psychic_id: int):
     psychic = (
         db.query(User)
@@ -219,12 +228,7 @@ def read_psychic(db: Session, psychic_id: int):
     return _psychic_to_out(psychic)
 
 
-def delete_psychic(db: Session, psychic_id: int):
-    psychic = get_psychic(db, psychic_id)
-    psychic.status = UserStatus.SUSPENDED
-    db.commit()
-    db.refresh(psychic)
-    return _psychic_to_out(psychic)
+
 
 
 def _upload_profile_picture(picture: UploadFile):

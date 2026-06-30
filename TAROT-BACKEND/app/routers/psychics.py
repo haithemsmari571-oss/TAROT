@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, UploadFile, Response
 from sqlalchemy.orm import Session
 
 import app.services.psychics as psychic_service
@@ -58,7 +58,7 @@ def read_psychic_endpoint(psychic_id: int, db: Session = Depends(get_db)):
     return psychic
 
 
-@router.delete("/{psychic_id}")
+@router.delete("/{psychic_id}", status_code=204)
 def delete_psychic_endpoint(psychic_id: int, db: Session = Depends(get_db)):
-    psychic = psychic_service.delete_psychic(db, psychic_id)
-    return psychic
+    psychic_service.delete_psychic(db, psychic_id)
+    return Response(status_code=204)
