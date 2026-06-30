@@ -9,6 +9,7 @@ import type { Psychic, PsychicCategory, PsychicAvailability, PsychicAvailability
 import type { Category } from "../../browse/types/category.types";
 import { useAuth } from "../../auth/hooks";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
+import { paymentApi } from "../../payment/api/paymentApi";
 
 const DAYS_OF_WEEK = [
   "Monday",
@@ -33,6 +34,7 @@ const MyProfile = () => {
   // Form states
   const [bio, setBio] = useState("");
   const [pricePerMinute, setPricePerMinute] = useState(0);
+  const [unitPriceCents, setUnitPriceCents] = useState(100);
   const [isOnline, setIsOnline] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [availabilities, setAvailabilities] = useState<PsychicAvailability[]>([]);
@@ -52,6 +54,9 @@ const MyProfile = () => {
   useEffect(() => {
     fetchProfileData();
     fetchCategories();
+    paymentApi.getUnitPrice()
+      .then((data) => setUnitPriceCents(data.unit_price_cents))
+      .catch(() => {});
   }, []);
 
   const fetchCategories = async () => {
@@ -594,7 +599,7 @@ const MyProfile = () => {
                 className="text-[9px] font-black uppercase tracking-widest mt-3 text-center"
                 style={{ color: COLORS.neutralGray }}
               >
-                Approx. {(pricePerMinute / 100).toFixed(2)} USD per minute
+                Approx. {((pricePerMinute * unitPriceCents) / 100).toFixed(2)} USD per minute
               </p>
             </div>
           </div>

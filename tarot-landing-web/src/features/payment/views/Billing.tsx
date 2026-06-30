@@ -236,10 +236,7 @@ const Billing = () => {
           points: option.points || option.amount || 0,
           amount: option.points || option.amount || 0,
           label: option.label || "Stardust Pack",
-          price:
-            option.price_cents ||
-            option.price ||
-            (option.points ? option.points * 10 : 0),
+          price: option.price_cents || option.price || 0,
         }));
         setApiPackages(mappedOptions);
       } catch (err: any) {
@@ -257,9 +254,12 @@ const Billing = () => {
 
   // ─── Build packages list ────────────────────────────────────────────────────
   const pointsPackages: BillingPackage[] = useMemo(() => {
-    const pricePerPoint = unitPrice?.unit_price_cents || 10;
+    const pricePerPoint = unitPrice?.unit_price_cents || 100;
     if (apiPackages.length > 0) {
-      return apiPackages;
+      return apiPackages.map((pkg) => ({
+        ...pkg,
+        price: pkg.price || pricePerPoint * pkg.points,
+      }));
     }
     return [
       {
@@ -395,7 +395,7 @@ const Billing = () => {
     new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format(amount / 1000);
+    }).format(amount / 100);
 
   const closeSuccessModal = () => {
     setShowSuccessModal(false);

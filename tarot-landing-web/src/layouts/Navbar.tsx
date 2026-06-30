@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Icon } from "@iconify/react";
 import { TYPOGRAPHY, COLORS } from "../theme";
 import { useAuth } from "../features/auth/hooks";
@@ -20,9 +20,10 @@ export default function Navbar() {
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [isCurrencyModalOpen, setIsCurrencyModalOpen] = useState(false);
-  const [buyOptions, setBuyOptions] = useState<PurchasePackage[]>([]);
+  const [rawBuyOptions, setRawBuyOptions] = useState<PurchasePackage[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null);
+  const [unitPriceCents, setUnitPriceCents] = useState(100);
 
   // Sync internal layout balance with background ledger fetches
   useEffect(() => {
@@ -30,7 +31,11 @@ export default function Navbar() {
       paymentApi.getMyBalance()
         .then(data => setBalance(data.balance))
         .catch(() => setBalance(null));
-        
+
+      paymentApi.getUnitPrice()
+        .then(data => setUnitPriceCents(data.unit_price_cents))
+        .catch(() => {});
+
       paymentApi.getBuyOptions()
         .then(data => {
           const mapped = data.map((o: any, idx: number) => ({
@@ -39,13 +44,23 @@ export default function Navbar() {
             points: o.points || o.amount || 0,
             amount: o.points || o.amount || 0,
             label: o.label || "Stardust Pack",
-            price: o.price_cents || o.price || (o.points ? o.points * 10 : 0)
+            price: o.price_cents || o.price || 0,
           }));
-          setBuyOptions(mapped);
+          setRawBuyOptions(mapped);
         })
         .catch(() => {});
     }
   }, [isAuthenticated, location.pathname]);
+
+  // Derive final prices from the live unit price once both have loaded
+  const buyOptions = useMemo(
+    () =>
+      rawBuyOptions.map((pkg) => ({
+        ...pkg,
+        price: pkg.price || unitPriceCents * pkg.points,
+      })),
+    [rawBuyOptions, unitPriceCents],
+  );
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);

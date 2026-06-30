@@ -38,7 +38,7 @@ export function StardustModal({
   const isAnyLoading = loadingTierId !== null || localLoadingId !== null;
 
   const formatCurrency = (amountInCents: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amountInCents / 1000);
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amountInCents / 100);
 
   const handleLocalPurchase = async (pkg: PurchasePackage) => {
     try {

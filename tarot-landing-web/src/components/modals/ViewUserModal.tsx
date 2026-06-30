@@ -8,9 +8,10 @@ interface ViewUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: AdminUserListItem;
+  unitPriceCents?: number;
 }
 
-const ViewUserModal = ({ isOpen, onClose, user }: ViewUserModalProps) => {
+const ViewUserModal = ({ isOpen, onClose, user, unitPriceCents = 100 }: ViewUserModalProps) => {
   if (!isOpen) return null;
 
   const formatDate = (dateString: string) => {
@@ -149,7 +150,7 @@ const ViewUserModal = ({ isOpen, onClose, user }: ViewUserModalProps) => {
                 <div className="flex flex-col gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Balance</span>
                   <span className="text-2xl font-black text-white">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(user.balance / 100)}
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((user.balance * unitPriceCents) / 100)}
                   </span>
                 </div>
               </div>

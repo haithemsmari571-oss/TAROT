@@ -12,6 +12,7 @@ import { useAuth } from "../../auth/hooks/useAuth";
 import { useUsers } from "../hooks/useUsers";
 import { Role, UserStatus } from "../types/user.types";
 import type { AdminUserDetail, AdminUserListItem } from "../types/user.types";
+import { paymentApi } from "../../payment/api/paymentApi";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -61,9 +62,16 @@ const Users = () => {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "All">("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [unitPriceCents, setUnitPriceCents] = useState(100);
 
   // Debounce search to avoid too many API calls
   const debouncedSearch = useDebounce(search, 500);
+
+  useEffect(() => {
+    paymentApi.getUnitPrice()
+      .then((data) => setUnitPriceCents(data.unit_price_cents))
+      .catch(() => {});
+  }, []);
 
   // Fetch users on component mount and when filters change
   useEffect(() => {
@@ -204,7 +212,7 @@ const Users = () => {
       render: (user) => (
         <div className="flex flex-col">
           <span className="text-white font-bold text-xs">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(user.balance / 100)}
+            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((user.balance * unitPriceCents) / 100)}
           </span>
           <span className="text-[9px] text-white/20 uppercase font-black">{user.email}</span>
         </div>
@@ -405,6 +413,7 @@ const Users = () => {
         onClose={() => { setIsGiftModalOpen(false); setUserToGift(null); }}
         onGift={handleGiftBalance}
         user={userToGift}
+        unitPriceCents={unitPriceCents}
       />
 
       {/* View User Modal */}
@@ -413,6 +422,7 @@ const Users = () => {
           isOpen={isViewModalOpen}
           onClose={() => { setIsViewModalOpen(false); setViewUser(null); }}
           user={viewUser}
+          unitPriceCents={unitPriceCents}
         />
       )}
 

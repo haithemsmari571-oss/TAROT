@@ -7,6 +7,7 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useEarnings } from "../hooks/useEarnings";
 import { TransactionStatus } from "../../ledger/types/transaction.types";
 import type { Transaction } from "../../ledger/types/transaction.types";
+import { paymentApi } from "../../payment/api/paymentApi";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -38,6 +39,7 @@ const Earnings = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TransactionStatus | "All">("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [unitPriceCents, setUnitPriceCents] = useState(100);
 
   // Debounce search to avoid too many API calls
   const debouncedSearch = useDebounce(search, 500);
@@ -57,6 +59,9 @@ const Earnings = () => {
   // Fetch summary on mount
   useEffect(() => {
     fetchSummary();
+    paymentApi.getUnitPrice()
+      .then((data) => setUnitPriceCents(data.unit_price_cents))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -91,7 +96,7 @@ const Earnings = () => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format(amount / 100);
+    }).format((amount * unitPriceCents) / 100);
   };
 
   // Format date

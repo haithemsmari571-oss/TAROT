@@ -6,6 +6,7 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { profileApi } from "../api/profileApi";
 import type { UserProfile } from "../types/profile.types";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { paymentApi } from "@/features/payment/api/paymentApi";
 
 // Constellation data for background patterns
 const CONSTELLATION_DATA = [
@@ -32,6 +33,7 @@ const ClientProfile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unitPriceCents, setUnitPriceCents] = useState(100);
   
   // Edit states
   const [isEditingBio, setIsEditingBio] = useState(false);
@@ -137,6 +139,9 @@ const ClientProfile = () => {
 
   useEffect(() => {
     fetchProfile();
+    paymentApi.getUnitPrice()
+      .then((data) => setUnitPriceCents(data.unit_price_cents))
+      .catch(() => {});
   }, []);
 
   const fetchProfile = async () => {
@@ -487,7 +492,7 @@ const ClientProfile = () => {
               <div className="flex items-center gap-2 justify-center md:justify-start mb-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold" style={{ color: COLORS.primary }}>
-                    ${(profile.balance / 100).toFixed(2)}
+                    ${((profile.balance * unitPriceCents) / 100).toFixed(2)}
                   </div>
                   <div className="text-[10px] uppercase tracking-wider opacity-60" style={{ color: COLORS.neutralWhite }}>
                     Account Balance
