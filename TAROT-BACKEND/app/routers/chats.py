@@ -1024,13 +1024,19 @@ async def resume_paused_chat(
         SessionNotFoundError,
     )
 
+    from app.enums.role import Role
+
     chat = db.query(Chat).filter(Chat.id == chat_id).first()
     if not chat:
         return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
 
-    if user.id != chat.user_id:
+    # Client, the assigned psychic, or an admin may resume (the client resumes
+    # after a top-up; the psychic/admin resumes a manually-paused chat).
+    is_admin = user.role in (Role.ADMIN, Role.SUPERADMIN)
+    is_participant = user.id in (chat.user_id, chat.psychic_id)
+    if not is_admin and not is_participant:
         return JSONResponse(
-            content={"detail": "Only the client can resume this chat"},
+            content={"detail": "You don't have permission to resume this chat"},
             status_code=403,
         )
 
@@ -1053,8 +1059,10 @@ async def resume_paused_chat(
 
         chat_obj = db.query(Chat).filter(Chat.id == chat_id).first()
 
+        # Always notify the client (chat.user_id), regardless of who resumed, so
+        # the client's app leaves the "Reading Paused" state.
         client_resume_notification = Notification(
-            user_id=user.id,
+            user_id=chat_obj.user_id if chat_obj else user.id,
             type=NotificationType.CHAT_RESUMED,
             title="Chat Resumed",
             message="Your session has resumed.",
@@ -1090,7 +1098,8 @@ async def resume_paused_chat(
             },
             "timestamp": datetime.now().isoformat(),
         }
-        await notification_manager.send_to_user(resume_ws_data, user.id)
+        client_id = chat_obj.user_id if chat_obj else user.id
+        await notification_manager.send_to_user(resume_ws_data, client_id)
         if chat_obj and chat_obj.psychic_id:
             await notification_manager.send_to_user(resume_ws_data, chat_obj.psychic_id)
 
@@ -1156,6 +1165,153 @@ async def resume_paused_chat(
             content={"detail": "Failed to resume session"},
             status_code=500,
         )
+
+
+@router.post("/{chat_id}/join")
+async def join_chat_endpoint(
+    chat_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Client joins an accepted chat. Anchors the session timer to this moment —
+    the timer does not run between accept and join. Idempotent (safe to call on
+    every mount/reconnect).
+    """
+    from app.services.session_manager import (
+        get_session_manager,
+        SessionNotFoundError,
+    )
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+
+    if user.id != chat.user_id:
+        return JSONResponse(
+            content={"detail": "Only the client can join this chat"},
+            status_code=403,
+        )
+
+    if chat.status != ChatStatus.ACTIVE:
+        return JSONResponse(
+            content={"detail": f"Cannot join chat with status {chat.status.value}"},
+            status_code=400,
+        )
+
+    session_mgr = get_session_manager()
+    try:
+        info = await session_mgr.mark_client_joined(chat_id)
+        return JSONResponse(
+            content={
+                "chat_id": info.chat_id,
+                "elapsed_seconds": info.elapsed_seconds,
+                "remaining_seconds": info.remaining_seconds,
+                "client_balance": info.client_balance,
+                "estimated_cost": info.estimated_cost,
+                "rate_per_second": info.rate_per_second,
+                "started_at": info.started_at,
+                "chat_status": info.chat_status,
+                "session_status": info.session_status,
+            },
+            status_code=200,
+        )
+    except SessionNotFoundError:
+        return JSONResponse(
+            content={"detail": "No active session to join"}, status_code=404
+        )
+    except Exception as e:
+        logger.error(
+            "error_joining_chat", chat_id=chat_id, error=str(e), exc_info=True
+        )
+        return JSONResponse(
+            content={"detail": "Failed to join chat"}, status_code=500
+        )
+
+
+@router.post("/{chat_id}/pause")
+async def pause_chat_manual(
+    chat_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Manually pause an active chat (psychic or admin). Reuses the existing
+    SessionManager.pause_session(); the 30-minute paused-timeout auto-end still
+    applies. Distinct from /topup, which pauses AND opens Stripe checkout.
+    """
+    from app.enums.role import Role
+    from app.notification_manager import notification_manager
+    from app.models.notification import Notification
+    from app.enums.notification_type import NotificationType
+    from app.services.session_manager import (
+        get_session_manager,
+        SessionNotFoundError,
+    )
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+
+    is_admin = user.role in (Role.ADMIN, Role.SUPERADMIN)
+    if not is_admin and user.id != chat.psychic_id:
+        return JSONResponse(
+            content={"detail": "Only the psychic or an admin can pause this chat"},
+            status_code=403,
+        )
+
+    if chat.status != ChatStatus.ACTIVE:
+        return JSONResponse(
+            content={"detail": f"Cannot pause chat with status {chat.status.value}"},
+            status_code=400,
+        )
+
+    session_mgr = get_session_manager()
+    try:
+        result = await session_mgr.pause_session(chat_id)
+    except SessionNotFoundError:
+        return JSONResponse(
+            content={"detail": "Active session not found"}, status_code=404
+        )
+    except Exception as e:
+        logger.error(
+            "error_pausing_chat_manual", chat_id=chat_id, error=str(e), exc_info=True
+        )
+        return JSONResponse(
+            content={"detail": "Failed to pause session"}, status_code=500
+        )
+
+    # pause_session() already broadcast the session_paused event + system message.
+    # Send CHAT_PAUSED notifications to both parties so the app/website react.
+    pause_payload = {
+        "type": "notification",
+        "notification_type": NotificationType.CHAT_PAUSED,
+        "title": "Chat Paused",
+        "message": "The reading has been paused.",
+        "data": {"chat_id": chat_id, "reason": "MANUAL_PAUSE"},
+        "timestamp": datetime.now().isoformat(),
+    }
+    for uid in (chat.user_id, chat.psychic_id):
+        db.add(
+            Notification(
+                user_id=uid,
+                type=NotificationType.CHAT_PAUSED,
+                title="Chat Paused",
+                message="The reading has been paused.",
+                data={"chat_id": chat_id, "reason": "MANUAL_PAUSE"},
+            )
+        )
+    db.commit()
+    await notification_manager.send_to_user(pause_payload, chat.user_id)
+    await notification_manager.send_to_user(pause_payload, chat.psychic_id)
+
+    return JSONResponse(
+        content={
+            "detail": "Chat paused",
+            "elapsed_seconds": result.get("elapsed_seconds", 0),
+        },
+        status_code=200,
+    )
 
 
 def get_termination_message(

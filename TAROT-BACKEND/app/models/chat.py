@@ -14,6 +14,12 @@ class Chat(Base):
     psychic_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[ChatStatus] = mapped_column(Enum(ChatStatus))
     paused_at: Mapped[datetime | None] = mapped_column(default=None, nullable=True)
+    # When the client actually entered the chat screen. The session timer/billing
+    # is anchored to this moment (NOT to when the psychic accepted). NULL until
+    # the client joins, so an accepted-but-never-joined chat never starts the clock.
+    client_joined_at: Mapped[datetime | None] = mapped_column(
+        default=None, nullable=True
+    )
 
     psychic: Mapped["User"] = relationship(
         "User", foreign_keys=[psychic_id], back_populates="psychic_chats"

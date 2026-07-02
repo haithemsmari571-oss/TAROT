@@ -70,6 +70,15 @@ export async function endChat(chatId: number): Promise<void> {
 }
 
 /**
+ * Join an accepted chat. Anchors the session timer to this moment on the
+ * backend (the timer does not run between accept and join). Idempotent, so it's
+ * safe to call every time the chat screen mounts.
+ */
+export async function joinChat(chatId: number): Promise<void> {
+  await api.post(`/api/chat/${chatId}/join`);
+}
+
+/**
  * Fetch messages for a chat. A negative offset returns the last abs(offset)
  * messages (newest window), oldest-first — matches how the web loads history.
  */

@@ -4,7 +4,8 @@ import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useChats } from "../hooks/useChats";
-import { updateChatStatus, getChatMessages, getChatSessionTime, getChatDetails } from "../api/chatApi";
+import { updateChatStatus, getChatMessages, getChatSessionTime, getChatDetails, pauseChatManual, resumeChat } from "../api/chatApi";
+import { stopNotificationSound } from "../../../lib/notificationSound";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { UserRole } from "@/features/auth/types/auth.types";
@@ -601,6 +602,8 @@ const PsychicSessionGlass = () => {
     setProcessingChats((prev) => new Set(prev).add(chatId));
     try {
       await updateChatStatus(chatId, { status: "ACTIVE" });
+      // Stop the reading-request chime immediately on a successful action.
+      stopNotificationSound();
       // Invalidate queries to refresh chat list
       await queryClient.invalidateQueries({ queryKey: ["chats"] });
       toast.success("Chat request accepted successfully!");
@@ -627,6 +630,8 @@ const PsychicSessionGlass = () => {
     setProcessingChats((prev) => new Set(prev).add(chatId));
     try {
       await updateChatStatus(chatId, { status: "ENDED" });
+      // Stop the reading-request chime immediately on a successful action.
+      stopNotificationSound();
       // Invalidate queries to refresh chat list
       await queryClient.invalidateQueries({ queryKey: ["chats"] });
       toast.success("Chat request declined.");
@@ -683,6 +688,38 @@ const PsychicSessionGlass = () => {
       toast.error(err?.response?.data?.detail || "Failed to end chat session");
     } finally {
       setIsTerminating(false);
+    }
+  };
+
+  // Manual pause/resume (psychic/admin). Pause reuses the backend's existing
+  // pause_session via /pause (no top-up flow); resume reuses /resume.
+  const [isPausing, setIsPausing] = useState(false);
+
+  const handlePauseChat = async () => {
+    if (!selectedChat) return;
+    setIsPausing(true);
+    try {
+      await pauseChatManual(selectedChat);
+      toast.success("Reading paused");
+      await queryClient.invalidateQueries({ queryKey: ["chats"] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to pause the reading");
+    } finally {
+      setIsPausing(false);
+    }
+  };
+
+  const handleResumeChat = async () => {
+    if (!selectedChat) return;
+    setIsPausing(true);
+    try {
+      await resumeChat(selectedChat);
+      toast.success("Reading resumed");
+      await queryClient.invalidateQueries({ queryKey: ["chats"] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to resume the reading");
+    } finally {
+      setIsPausing(false);
     }
   };
 
@@ -1177,6 +1214,28 @@ const PsychicSessionGlass = () => {
                 )}
               </motion.div>
 
+              {/* Manual pause control (psychic/admin) */}
+              {canParticipate && currentChat?.status === "ACTIVE" && !isPaused && (
+                <div className="mb-4 flex justify-end">
+                  <button
+                    onClick={handlePauseChat}
+                    disabled={isPausing}
+                    className="px-5 py-2 rounded-xl border font-bold text-xs uppercase tracking-wider transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    style={{
+                      backgroundColor: "rgba(251, 146, 60, 0.12)",
+                      borderColor: "#FB923C",
+                      color: "#FB923C",
+                    }}
+                  >
+                    <Icon
+                      icon={isPausing ? "eos-icons:loading" : "solar:pause-bold"}
+                      className="text-base"
+                    />
+                    {isPausing ? "Pausing..." : "Pause Reading"}
+                  </button>
+                </div>
+              )}
+
               {/* Admin Mode Banner (for chat view) */}
               {isAdmin && currentChat && (
                 <motion.div
@@ -1219,6 +1278,22 @@ const PsychicSessionGlass = () => {
                         <span className="font-semibold">Earnings so far:</span> ${(sessionState.estimatedCost || 0).toFixed(2)}
                       </div>
                       <div className="flex gap-2">
+                        <button
+                          onClick={handleResumeChat}
+                          disabled={isPausing}
+                          className="px-5 py-2 rounded-xl border font-bold text-xs uppercase tracking-wider transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          style={{
+                            backgroundColor: "rgba(74, 222, 128, 0.15)",
+                            borderColor: "#4ADE80",
+                            color: "#4ADE80",
+                          }}
+                        >
+                          <Icon
+                            icon={isPausing ? "eos-icons:loading" : "solar:play-bold"}
+                            className="text-base"
+                          />
+                          {isPausing ? "Resuming..." : "Resume"}
+                        </button>
                         <button
                           onClick={handleEndChat}
                           disabled={isTerminating}

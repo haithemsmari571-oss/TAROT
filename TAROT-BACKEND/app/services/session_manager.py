@@ -89,6 +89,12 @@ class SessionState:
     # Disconnect tracking
     client_disconnected_at: Optional[datetime] = None
 
+    # Join gating: between psychic-accept and client-join the session exists but
+    # the timer is NOT running. `awaiting_join` is True until the client joins;
+    # while True the monitor skips this session so it never elapses or depletes.
+    awaiting_join: bool = False
+    client_joined_at: Optional[datetime] = None
+
 
 class SessionManager:
     """
@@ -204,6 +210,9 @@ class SessionManager:
                     max_session_duration_seconds=estimated_max_duration,
                     initial_balance=float(user.balance),  # Current balance as proxy
                     last_check_at=datetime.now(),
+                    # If the client never joined, keep the timer gated after restart.
+                    awaiting_join=(chat.client_joined_at is None),
+                    client_joined_at=chat.client_joined_at,
                 )
 
                 self.active_sessions[chat.id] = session_state
@@ -329,6 +338,9 @@ class SessionManager:
                 max_session_duration_seconds=max_duration,
                 initial_balance=float(user.balance),
                 last_check_at=datetime.now(),
+                # Timer does not run until the client joins the chat screen.
+                awaiting_join=True,
+                client_joined_at=None,
             )
             self.active_sessions[chat_id] = session_state
 
@@ -351,8 +363,10 @@ class SessionManager:
                 remaining_seconds=info.remaining_seconds,
             )
 
-            # Broadcast session_started event
-            await self._broadcast_session_started(chat_id, info)
+            # NOTE: session_started is intentionally NOT broadcast here. The timer
+            # is anchored to the client joining, so session_started fires from
+            # mark_client_joined() instead. Accepting only opens the chat.
+            logger.info("session_awaiting_client_join", chat_id=chat_id)
 
             # Store and broadcast system message for chat acceptance
             from app.services.chats import broadcast_system_message
@@ -364,6 +378,88 @@ class SessionManager:
 
             return info
 
+        finally:
+            db.close()
+
+    async def mark_client_joined(self, chat_id: int) -> SessionInfo:
+        """
+        Anchor the session timer to the moment the client joins the chat screen.
+
+        Called from the client's join endpoint. Idempotent: if the client has
+        already joined, returns the current info without moving the anchor.
+
+        Args:
+            chat_id: The chat the client is joining
+
+        Returns:
+            SessionInfo with the timer anchored at the join time
+        """
+        from app.database.client import SessionLocal
+
+        session_state = self.active_sessions.get(chat_id)
+        if session_state is None:
+            raise SessionNotFoundError(
+                f"No active session to join for chat {chat_id}"
+            )
+
+        db = SessionLocal()
+        try:
+            chat = db.query(Chat).filter(Chat.id == chat_id).first()
+            if not chat:
+                raise ValueError(f"Chat {chat_id} not found")
+
+            # Idempotent: already joined -> return current info, no re-anchor.
+            if not session_state.awaiting_join and chat.client_joined_at is not None:
+                return self._calculate_session_info(session_state, db)
+
+            joined_at = datetime.now()
+
+            # Recompute the max session duration from the balance available now.
+            user = db.query(User).filter(User.id == chat.user_id).first()
+            current_balance = float(user.balance) if user else 0.0
+            rate = session_state.rate_per_second
+            additional_seconds = int(current_balance / rate) if rate > 0 else 0
+
+            # Anchor the timer at the join moment and (re)arm warnings.
+            session_state.started_at = joined_at
+            session_state.client_joined_at = joined_at
+            session_state.awaiting_join = False
+            session_state.max_session_duration_seconds = additional_seconds
+            session_state.warning_5min_sent = False
+            session_state.warning_60s_sent = False
+            session_state.warning_30s_sent = False
+            session_state.warning_10s_sent = False
+
+            # Move the current interval's start to the join time so billing matches.
+            interval = (
+                db.query(SessionInterval)
+                .filter(SessionInterval.id == session_state.interval_id)
+                .first()
+            )
+            if interval:
+                interval.started_at = joined_at
+
+            chat.client_joined_at = joined_at
+            db.commit()
+
+            info = self._calculate_session_info(session_state, db)
+
+            logger.info(
+                "client_joined_session_timer_anchored",
+                chat_id=chat_id,
+                joined_at=joined_at.isoformat(),
+                max_duration=additional_seconds,
+                remaining_seconds=info.remaining_seconds,
+            )
+
+            # Timer is now running for both client and psychic.
+            await self._broadcast_session_started(chat_id, info)
+
+            return info
+
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -1008,6 +1104,28 @@ class SessionManager:
         IMPORTANT: Remaining time is based on max_session_duration (calculated at start),
         NOT on current user balance. This decouples session monitoring from billing.
         """
+        # Before the client joins, the timer hasn't started: report zero elapsed
+        # and the full duration remaining so nothing counts down or bills.
+        if session_state.awaiting_join:
+            user = (
+                db.query(User).filter(User.id == session_state.client_id).first()
+            )
+            current_balance = float(user.balance) if user else 0.0
+            chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
+            rate = session_state.rate_per_second
+            full_duration = int(current_balance / rate) if rate > 0 else 0
+            return SessionInfo(
+                chat_id=session_state.chat_id,
+                elapsed_seconds=0,
+                estimated_cost=0.0,
+                remaining_seconds=full_duration,
+                client_balance=round(current_balance, 2),
+                chat_status=chat.status.value if chat else "UNKNOWN",
+                session_status="AWAITING_JOIN",
+                started_at=session_state.started_at.isoformat(),
+                rate_per_second=rate,
+            )
+
         # 1. Calculate elapsed time from session start
         elapsed_seconds = int(
             (datetime.now() - session_state.started_at).total_seconds()
@@ -1104,6 +1222,11 @@ class SessionManager:
                     try:
                         session_state = self.active_sessions.get(chat_id)
                         if not session_state:
+                            continue
+
+                        # Skip sessions where the client hasn't joined yet — the
+                        # timer isn't running, so there's nothing to deplete/warn.
+                        if session_state.awaiting_join:
                             continue
 
                         # Calculate current state using fresh DB session

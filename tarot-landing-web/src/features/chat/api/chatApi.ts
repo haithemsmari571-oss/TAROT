@@ -164,10 +164,20 @@ export const updateChatStatus = async (
 };
 
 /**
- * Pause a chat session for top-up (uses the topup endpoint — the only supported pause path)
+ * Pause a chat session for top-up (uses the topup endpoint — client-initiated,
+ * opens Stripe checkout)
  */
 export const pauseChat = async (chatId: number) => {
   const response = await axiosClient.post(`/chat/${chatId}/topup`);
+  return response.data;
+};
+
+/**
+ * Manually pause an active chat (psychic/admin) without the top-up/payment flow.
+ * Pairs with resumeChat().
+ */
+export const pauseChatManual = async (chatId: number) => {
+  const response = await axiosClient.post(`/chat/${chatId}/pause`);
   return response.data;
 };
 

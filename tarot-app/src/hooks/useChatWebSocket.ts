@@ -16,6 +16,7 @@ interface UseChatWebSocket {
   connectionStatus: ConnectionStatus;
   loadingHistory: boolean;
   error: string | null;
+  sessionPaused: boolean; // true after a session_paused event, until resumed
 }
 
 function normalize(m: ChatMessage): ChatMessage {
@@ -36,14 +37,18 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
     useState<ConnectionStatus>("disconnected");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionPaused, setSessionPaused] = useState(false);
   const socketRef = useRef<ChatSocket | null>(null);
 
   useEffect(() => {
     if (!chatId) {
       setConnectionStatus("disconnected");
       setMessages([]);
+      setSessionPaused(false);
       return;
     }
+
+    setSessionPaused(false);
 
     let cancelled = false;
 
@@ -99,6 +104,9 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
         setConnectionStatus((s) => (s === "error" ? s : "disconnected"));
       });
 
+      socket.onSessionPaused(() => setSessionPaused(true));
+      socket.onSessionResumed(() => setSessionPaused(false));
+
       socket.connect();
     })();
 
@@ -130,5 +138,6 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
     connectionStatus,
     loadingHistory,
     error,
+    sessionPaused,
   };
 }

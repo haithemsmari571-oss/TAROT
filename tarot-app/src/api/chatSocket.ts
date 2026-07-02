@@ -25,6 +25,8 @@ export class ChatSocket {
   private onErrorCb?: ErrorCb;
   private onSessionEndingSoonCb?: (secondsRemaining: number) => void;
   private onSessionEndedNoBalanceCb?: VoidCb;
+  private onSessionPausedCb?: VoidCb;
+  private onSessionResumedCb?: VoidCb;
 
   constructor(chatId: number, token: string) {
     this.chatId = chatId;
@@ -61,6 +63,14 @@ export class ChatSocket {
       }
       if (data.event === "session_ended_no_balance") {
         this.onSessionEndedNoBalanceCb?.();
+        return;
+      }
+      if (data.event === "session_paused") {
+        this.onSessionPausedCb?.();
+        return;
+      }
+      if (data.event === "session_resumed" || data.event === "session_started") {
+        this.onSessionResumedCb?.();
         return;
       }
       // Ignore other session lifecycle events for now (session_info, etc.)
@@ -102,6 +112,12 @@ export class ChatSocket {
   }
   onSessionEndedNoBalance(cb: VoidCb) {
     this.onSessionEndedNoBalanceCb = cb;
+  }
+  onSessionPaused(cb: VoidCb) {
+    this.onSessionPausedCb = cb;
+  }
+  onSessionResumed(cb: VoidCb) {
+    this.onSessionResumedCb = cb;
   }
 
   disconnect() {

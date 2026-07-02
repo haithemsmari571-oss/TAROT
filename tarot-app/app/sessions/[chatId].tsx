@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import { COLORS } from "../../src/theme/colors";
 import { useAuth } from "../../src/context/AuthContext";
 import { useChatWebSocket } from "../../src/hooks/useChatWebSocket";
 import { useSessionTimer } from "../../src/hooks/useSessionTimer";
-import { endChat, type ChatMessage } from "../../src/api/chat";
+import { endChat, joinChat, type ChatMessage } from "../../src/api/chat";
 
 const STATUS_LABEL = {
   connecting: "Connecting…",
@@ -69,6 +69,7 @@ export default function ChatScreen() {
     isConnected,
     loadingHistory,
     error,
+    sessionPaused,
   } = useChatWebSocket(Number.isFinite(chatId) ? chatId : null);
 
   const [draft, setDraft] = useState("");
@@ -76,14 +77,25 @@ export default function ChatScreen() {
   const [ending, setEnding] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  // Session timer only runs while the chat is active and not ended.
-  const sessionActive = status === "ACTIVE" && !ended;
+  // Announce that the client has joined so the backend anchors the session
+  // timer to now (it doesn't run between accept and join). Idempotent server-side.
+  useEffect(() => {
+    if (Number.isFinite(chatId) && status === "ACTIVE") {
+      joinChat(chatId).catch(() => {
+        // Non-fatal: the WebSocket/timer still work; a retry happens on remount.
+      });
+    }
+  }, [chatId, status]);
+
+  // Session timer runs only while active, not ended, and not paused.
+  const sessionActive = status === "ACTIVE" && !ended && !sessionPaused;
   const timer = useSessionTimer(
     Number.isFinite(chatId) ? chatId : null,
     sessionActive
   );
   const sessionEnded = ended || timer.depleted;
   const showSession = status === "ACTIVE" && timer.ready && !sessionEnded;
+  const paused = status === "ACTIVE" && sessionPaused && !sessionEnded;
 
   const onSend = () => {
     const text = draft.trim();
@@ -200,6 +212,14 @@ export default function ChatScreen() {
           <Text style={styles.endedText}>Session ended</Text>
         </View>
       )}
+      {paused && (
+        <View style={styles.pausedBanner}>
+          <Ionicons name="pause-circle" size={16} color={COLORS.gold} />
+          <Text style={styles.pausedText}>
+            Reading paused — waiting for your reader to resume.
+          </Text>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -262,22 +282,28 @@ export default function ChatScreen() {
         <View style={styles.composer}>
           <TextInput
             style={styles.input}
-            placeholder={sessionEnded ? "Session ended" : "Type a message…"}
+            placeholder={
+              sessionEnded
+                ? "Session ended"
+                : paused
+                ? "Reading paused"
+                : "Type a message…"
+            }
             placeholderTextColor="rgba(255,255,255,0.3)"
             value={draft}
             onChangeText={setDraft}
             multiline
             onSubmitEditing={onSend}
-            editable={isConnected && !sessionEnded}
+            editable={isConnected && !sessionEnded && !paused}
           />
           <TouchableOpacity
             style={[
               styles.sendBtn,
-              (!isConnected || !draft.trim() || sessionEnded) &&
+              (!isConnected || !draft.trim() || sessionEnded || paused) &&
                 styles.sendBtnDisabled,
             ]}
             onPress={onSend}
-            disabled={!isConnected || !draft.trim() || sessionEnded}
+            disabled={!isConnected || !draft.trim() || sessionEnded || paused}
             activeOpacity={0.85}
           >
             <Ionicons name="arrow-up" size={20} color="#fff" />
@@ -370,6 +396,24 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontFamily: "Poppins_600SemiBold",
   },
+  pausedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(242,174,64,0.1)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(242,174,64,0.25)",
+  },
+  pausedText: {
+    fontSize: 12,
+    color: COLORS.gold,
+    fontFamily: "Poppins_600SemiBold",
+    textAlign: "center",
+  },
+
   messages: { padding: 16, gap: 8, flexGrow: 1 },
   empty: {
     color: COLORS.textMuted,

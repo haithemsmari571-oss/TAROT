@@ -9,6 +9,7 @@ import {
 } from "@expo-google-fonts/poppins";
 import { COLORS } from "../src/theme/colors";
 import { AuthProvider } from "../src/context/AuthContext";
+import { CallProvider } from "../src/context/CallProvider";
 
 // Each tab maps to an Ionicons glyph, swapping to the filled variant when active.
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -44,6 +45,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <CallProvider>
       <Tabs
         screenOptions={{
         tabBarStyle: {
@@ -82,6 +84,7 @@ export default function RootLayout() {
       {/* Reachable via router.push("/signup"); hidden from the tab bar. */}
       <Tabs.Screen name="signup" options={{ href: null }} />
       </Tabs>
+      </CallProvider>
     </AuthProvider>
   );
 }
