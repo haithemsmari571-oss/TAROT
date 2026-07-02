@@ -8,6 +8,7 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 import { COLORS } from "../src/theme/colors";
+import { AuthProvider } from "../src/context/AuthContext";
 
 // Each tab maps to an Ionicons glyph, swapping to the filled variant when active.
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -42,8 +43,9 @@ export default function RootLayout() {
     );
 
   return (
-    <Tabs
-      screenOptions={{
+    <AuthProvider>
+      <Tabs
+        screenOptions={{
         tabBarStyle: {
           backgroundColor: "#0D1117",
           borderTopColor: "rgba(255,255,255,0.06)",
@@ -77,6 +79,7 @@ export default function RootLayout() {
         name="profile"
         options={{ title: "PROFILE", tabBarIcon: icon("profile") }}
       />
-    </Tabs>
+      </Tabs>
+    </AuthProvider>
   );
 }
