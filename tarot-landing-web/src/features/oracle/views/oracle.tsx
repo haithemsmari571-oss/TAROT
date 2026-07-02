@@ -4,6 +4,11 @@ import { SIGNS } from "../data/Signs";
 import { LIFE_PATH_MEANINGS } from "../data/LifePath";
 import { oracleApi } from "../api/oracleApi";
 import type { ZodiacSign as ApiZodiacSign } from "../api/oracleApi";
+import PageBackground from "../../../components/PageBackground";
+import zodiacHall1 from "../../../assets/backgrounds/zodiac-hall-1.webp";
+import zodiacHall2 from "../../../assets/backgrounds/zodiac-hall-2.webp";
+import zodiacHall3 from "../../../assets/backgrounds/zodiac-hall-3.webp";
+import zodiacHall4 from "../../../assets/backgrounds/zodiac-hall-4.webp";
 
 // ─── THEME ───────────────────────────────────────────────────────────────────
 
@@ -330,6 +335,13 @@ export default function oracle() {
   return (
     <>
       <style>{css}</style>
+      {/* Immersive reveal backdrop — slowly crossfades through the zodiac halls */}
+      <PageBackground
+        images={[zodiacHall1, zodiacHall2, zodiacHall3, zodiacHall4]}
+        variant="immersive"
+        rotate
+        intervalMs={11000}
+      />
       <Stars />
 
       <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", maxWidth: 1100, margin: "0 auto", padding: "0 20px 80px" }}>

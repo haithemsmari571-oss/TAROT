@@ -5,7 +5,7 @@ import type {
   TopUpResponse,
   UnitPriceResponse,
   BuyOptionResponse,
-  CreateCheckoutPackageSessionRequest,
+  CreateStardustCheckoutSessionRequest,
 } from "../types/payment.types";
 import type {
   TransactionListResponse,
@@ -36,13 +36,14 @@ export const paymentApi = {
   },
 
   /**
- * Create a Stripe checkout session for purchasing points
- */
-  createCheckoutPackageSession: async (
-    request: CreateCheckoutPackageSessionRequest
+   * Create a Stripe checkout session for a custom Stardust dollar amount.
+   * The backend validates the range and computes the tier/points server-side.
+   */
+  createStardustCheckoutSession: async (
+    request: CreateStardustCheckoutSessionRequest
   ): Promise<CreateCheckoutSessionResponse> => {
     const response = await axiosClient.post(
-      "/payment/create-package-checkout-session",
+      "/payment/create-stardust-checkout-session",
       request
     );
     return response.data;

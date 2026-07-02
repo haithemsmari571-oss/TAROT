@@ -1,3 +1,9 @@
+/* Online-status dot pulse for psychic cards */
+@keyframes psychicPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Starfield Background */
 .starfield {
   position: absolute;

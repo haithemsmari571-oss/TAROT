@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "@/theme";
 import { NotificationType } from "../types/notification.types";
+import PageBackground from "@/components/PageBackground";
+import moonlitBalcony from "@/assets/backgrounds/moonlit-balcony.webp";
 import {
   usePaginatedNotifications,
   type NotificationTab,
@@ -105,7 +107,10 @@ const NotificationsPage = () => {
         backgroundColor: COLORS.dark,
       }}
     >
-      <div className="max-w-4xl mx-auto">
+      {/* Faint dimmed scene — texture only behind the notification list */}
+      <PageBackground images={moonlitBalcony} variant="faint" />
+
+      <div className="relative z-10 max-w-4xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}

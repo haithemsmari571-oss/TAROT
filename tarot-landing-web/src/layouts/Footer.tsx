@@ -1,9 +1,8 @@
-import { motion, useTransform, useSpring, useMotionValue } from "framer-motion";
+import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../theme";
-import CoverImg from "../assets/Cover.png";
 import axiosClient from "../lib/axiosClient";
 
 const DEFAULT_FOOTER = {
@@ -17,7 +16,7 @@ const DEFAULT_FOOTER = {
   copyright: "\u00a9 2026 The Alchemical Exchange",
   navLinks: [
     { name: "Sanctuary", path: "/home" },
-    { name: "Psychics", path: "/psychics" },
+    { name: "Psychics", path: "/psychics-browse" },
     { name: "Life Path & Zodiac", path: "/oracle" },
     { name: "About Us", path: "/about" },
   ],
@@ -27,9 +26,6 @@ const Footer = () => {
   const navigate = useNavigate();
   const footerRef = useRef(null);
   const [content, setContent] = useState(DEFAULT_FOOTER);
-  
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
   const [alchemicalTime, setAlchemicalTime] = useState("");
 
   useEffect(() => {
@@ -39,31 +35,16 @@ const Footer = () => {
   }, []);
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
-      mouseX.set(e.clientX);
-      mouseY.set(e.clientY);
-    };
-    
     const updateTime = () => {
       const hours = new Date().getHours();
       const roman = ["XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"][hours % 12];
       setAlchemicalTime(roman);
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
     updateTime();
     const timer = setInterval(updateTime, 60000);
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      clearInterval(timer);
-    };
-  }, [mouseX, mouseY]);
-
-  const springX = useSpring(mouseX, { stiffness: 40, damping: 20 });
-  const springY = useSpring(mouseY, { stiffness: 40, damping: 20 });
-  const bgX = useTransform(springX, [0, 2000], [20, -20]);
-  const bgY = useTransform(springY, [0, 2000], [20, -20]);
+    return () => clearInterval(timer);
+  }, []);
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -76,17 +57,18 @@ const Footer = () => {
   return (
     <footer 
       ref={footerRef}
-      className="relative pt-32 pb-16 px-6 overflow-hidden border-t border-white/5" 
-      style={{ backgroundColor: COLORS.dark }}
+      className="relative pt-32 pb-16 px-6 overflow-hidden border-t border-white/5"
+      style={{ backgroundColor: "transparent" }}
     >
-      {/* BACKGROUND EFFECTS */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-dark z-10 opacity-60" />
-        <motion.div style={{ x: bgX, y: bgY, scale: 1.1 }} className="absolute inset-0 opacity-20 contrast-[1.4] grayscale-[0.5]">
-          <img src={CoverImg} alt="Soul Nebula" className="w-full h-full object-cover" />
-        </motion.div>
-        <div className="absolute inset-0 z-20" style={{ background: `radial-gradient(circle at center, transparent 0%, ${COLORS.dark} 90%)` }} />
-      </div>
+      {/* Legibility veil — fades in from transparent at the top so the page's
+          fixed backdrop continues seamlessly into the footer (no dark seam),
+          darkening only toward the bottom to keep the fine print readable. */}
+      <div
+        className="absolute inset-0 z-0 pointer-events-none"
+        style={{
+          background: `linear-gradient(180deg, transparent 0%, ${COLORS.dark}59 55%, ${COLORS.dark}8c 100%)`,
+        }}
+      />
 
       <div className="max-w-7xl mx-auto relative z-30">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 mb-24">

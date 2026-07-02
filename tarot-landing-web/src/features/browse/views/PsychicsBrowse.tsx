@@ -6,10 +6,13 @@ import { psychicsApi } from "../api/psychicsApi";
 import { categoriesApi } from "../api/categoriesApi";
 import { Psychic } from "../types/psychic.types";
 import { Category } from "../types/category.types";
+import PageBackground from "../../../components/PageBackground";
+import moonlitBalcony from "../../../assets/backgrounds/moonlit-balcony.webp";
 import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
 import { NumericPagination } from "../components/NumericPagination";
 import { PriceRangeFilter } from "../components/PriceRangeFilter";
 import { ToggleSwitch } from "../components/ToggleSwitch";
+import PsychicCard from "../components/PsychicCard";
 import "../../../styles/starfield.css";
 
 const ITEMS_PER_PAGE = 12;
@@ -115,12 +118,6 @@ const PsychicsBrowse = () => {
     setCurrentPage(1);
   }, []);
 
-  // Convert price per second to price per minute with zero safety guard
-  const getPricePerMinute = (pricePerSecond: number | undefined | null) => {
-    if (!pricePerSecond) return "0.00";
-    return (pricePerSecond * 60).toFixed(2);
-  };
-
   // Check if any filters are active
   const hasActiveFilters = selectedCategories.length > 0 || searchQuery || minPrice !== undefined || maxPrice !== undefined || isOnlineOnly;
 
@@ -142,6 +139,9 @@ const PsychicsBrowse = () => {
       className="relative min-h-screen pt-32 pb-20" 
       style={{ backgroundColor: COLORS.dark }}
     >
+      {/* Dimmed scene — light enough to read clearly, still protects card legibility */}
+      <PageBackground images={moonlitBalcony} variant="soft" />
+
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="starfield"></div>
@@ -303,203 +303,12 @@ const PsychicsBrowse = () => {
         {!loading && !error && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-12">
-              {/* ✅ FIX: Swapped out raw psychics list array mapping block for sortedPsychics */}
               {sortedPsychics.map((psychic) => (
-                <div
+                <PsychicCard
                   key={psychic.id}
+                  psychic={psychic}
                   onClick={() => navigate(`/psychics/${psychic.id}/details`)}
-                  className="relative rounded-3xl overflow-hidden cursor-pointer group flex flex-col backdrop-blur-xl transition-all duration-200 hover:shadow-lg"
-                  style={{
-                    background: `linear-gradient(135deg, ${COLORS.surface}dd 0%, ${COLORS.surfaceAccent}dd 100%)`,
-                    border: `1px solid ${COLORS.neutralWhite}15`,
-                    boxShadow: `0 20px 40px rgba(0,0,0,0.4), 0 0 0 1px ${COLORS.primary}10`,
-                  }}
-                >
-                  {/* IMAGE SECTION */}
-                  <div className="relative h-56 sm:h-72 w-full overflow-hidden">
-                    {psychic.profile_picture_url ? (
-                      <>
-                        <img
-                          src={psychic.profile_picture_url}
-                          alt={psychic.username}
-                          className="w-full h-full object-cover"
-                        />
-                        <div 
-                          className="absolute inset-0"
-                          style={{
-                            background: `linear-gradient(to bottom, transparent 0%, ${COLORS.dark}00 40%, ${COLORS.dark}dd 100%)`,
-                          }}
-                        />
-                      </>
-                    ) : (
-                      <div 
-                        className="w-full h-full flex items-center justify-center relative"
-                        style={{ 
-                          background: `linear-gradient(135deg, ${COLORS.surface} 0%, ${COLORS.surfaceAccent} 100%)` 
-                        }}
-                      >
-                        <svg
-                          width="120"
-                          height="120"
-                          viewBox="0 0 120 120"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="opacity-40"
-                        >
-                          <circle cx="60" cy="60" r="55" stroke={COLORS.primary} strokeWidth="2" strokeOpacity="0.3" fill="none" />
-                          <circle cx="60" cy="60" r="50" stroke={COLORS.primary} strokeWidth="1" strokeOpacity="0.2" fill="none" />
-                          <circle cx="60" cy="45" r="15" fill={COLORS.primary} opacity="0.3" />
-                          <path d="M 30 90 Q 30 65 60 65 Q 90 65 90 90" fill={COLORS.primary} opacity="0.3" />
-                          <path d="M 60 20 L 62 25 L 67 25 L 63 28 L 65 33 L 60 30 L 55 33 L 57 28 L 53 25 L 58 25 Z" fill={COLORS.primary} opacity="0.4" />
-                          <circle cx="25" cy="40" r="2" fill={COLORS.primary} opacity="0.3" />
-                          <circle cx="95" cy="40" r="2" fill={COLORS.primary} opacity="0.3" />
-                        </svg>
-                      </div>
-                    )}
-
-                    {/* ONLINE STATUS BADGE */}
-                    {psychic.is_online && (
-                      <div 
-                        className="absolute top-4 right-4 px-3 py-1.5 rounded-full border flex items-center gap-2 backdrop-blur-xl"
-                        style={{
-                          backgroundColor: `${COLORS.dark}cc`,
-                          borderColor: `${COLORS.primary}40`,
-                          boxShadow: `0 0 20px ${COLORS.primary}30`,
-                        }}
-                      >
-                        <div 
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: COLORS.primary }}
-                        />
-                        <span className="text-[10px] uppercase font-bold tracking-widest" style={{ color: COLORS.primary }}>
-                          Online
-                        </span>
-                      </div>
-                    )}
-
-                    {/* NAME OVERLAY */}
-                    <div className="absolute bottom-0 left-0 right-0 p-5 z-10">
-                      <h3
-                        className="uppercase tracking-tight text-2xl font-black"
-                        style={{ 
-                          color: COLORS.neutralWhite,
-                          textShadow: `0 2px 10px ${COLORS.dark}`,
-                        }}
-                      >
-                        {psychic.username}
-                      </h3>
-                    </div>
-                  </div>
-
-                  {/* INFO SECTION */}
-                  <div className="relative flex flex-col flex-1 p-4 sm:p-6 space-y-3 sm:space-y-4">
-                    {/* SPECIALTIES */}
-                    <div className="flex flex-wrap gap-2">
-                      {(psychic.categories ?? []).slice(0, 3).map((category) => (
-                        <span
-                          key={category.id}
-                          className="px-3 py-1.5 rounded-full text-[10px] uppercase font-bold tracking-wider"
-                          style={{
-                            backgroundColor: `${COLORS.primary}15`,
-                            color: COLORS.primary,
-                            border: `1px solid ${COLORS.primary}30`,
-                          }}
-                        >
-                          {category.title}
-                        </span>
-                      ))}
-                      {(psychic.categories?.length ?? 0) > 3 && (
-                        <span
-                          className="px-3 py-1.5 rounded-full text-[10px] uppercase font-bold tracking-wider"
-                          style={{
-                            backgroundColor: `${COLORS.neutralWhite}10`,
-                            color: COLORS.neutralWhite,
-                            opacity: 0.6,
-                          }}
-                        >
-                          +{(psychic.categories?.length ?? 0) - 3}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* BIO */}
-                    <p 
-                      className="text-sm leading-relaxed opacity-70 line-clamp-3 italic flex-1" 
-                      style={{ color: COLORS.neutralWhite }}
-                    >
-                      "{psychic.bio}"
-                    </p>
-
-                    {/* STATS BAR */}
-                    <div 
-                      className="flex items-center justify-between p-3 rounded-xl"
-                      style={{
-                        backgroundColor: `${COLORS.neutralWhite}05`,
-                        border: `1px solid ${COLORS.neutralWhite}10`,
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Icon 
-                          icon="ph:calendar-dots" 
-                          className="text-base" 
-                          style={{ color: COLORS.primary }} 
-                        />
-                        <span className="text-xs font-medium" style={{ color: COLORS.neutralWhite }}>
-                          {(psychic.availability?.length ?? 0) > 0 ? `${psychic.availability.length} slots` : "No availability"}
-                        </span>
-                      </div>
-                      <div className="h-4 w-px" style={{ backgroundColor: `${COLORS.neutralWhite}20` }} />
-                      <div className="flex items-center gap-1.5">
-                        <Icon 
-                          icon="ph:coins" 
-                          className="text-base" 
-                          style={{ color: COLORS.primary }} 
-                        />
-                        <span className="text-sm font-bold" style={{ color: COLORS.primary }}>
-                          ${getPricePerMinute(psychic.price_per_second)}
-                        </span>
-                        <span className="text-[10px] uppercase font-medium opacity-70" style={{ color: COLORS.neutralWhite }}>
-                          /min
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* CTA BUTTON */}
-                  <button
-  className="w-full py-4 sm:py-5 rounded-2xl flex items-center justify-center gap-3 relative overflow-hidden group transition-all duration-300"
-  style={{
-    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    // Soften the shadow for a more "floating" effect
-    boxShadow: `0 10px 25px -5px ${COLORS.primary}40`,
-    // Add a subtle border to define the shape against dark backgrounds
-    border: `1px solid rgba(255,255,255,0.1)`,
-  }}
->
-  {/* Inner Glow/Glint effect */}
-  <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-  
-  <Icon 
-    icon="ph:chat-circle-dots-fill" 
-    className="text-xl transition-transform duration-300 group-hover:scale-110" 
-    style={{ color: COLORS.dark }} 
-  />
-  
-  <span 
-    className="text-sm font-black uppercase tracking-[0.2em]" 
-    style={{ color: COLORS.dark }}
-  >
-    Start Reading
-  </span>
-  
-  <Icon 
-    icon="ph:arrow-right" 
-    className="text-lg transition-transform duration-300 group-hover:translate-x-1" 
-    style={{ color: COLORS.dark }} 
-  />
-</button>
-                  </div>
-                </div>
+                />
               ))}
             </div>
 

@@ -17,6 +17,25 @@ const axiosClient = axios.create({
   },
 });
 
+// --- Production write-guard ---------------------------------------------------
+// When a LOCAL dev build is pointed at the live production API, block mutating
+// requests so local experiments can't alter real data. Auth endpoints stay
+// allowed so you can still log in to browse authenticated views. To run fully
+// local (writes enabled), set VITE_API_URL back to http://localhost:8000.
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
+const PROD_WRITE_GUARD =
+  import.meta.env.DEV && /askvalentina\.co\.uk/i.test(API_BASE);
+const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
+const GUARD_ALLOWLIST = ["/auth/sign-in", "/auth/refresh-token"];
+
+if (PROD_WRITE_GUARD) {
+  console.warn(
+    `[axiosClient] Local dev is connected to the PRODUCTION API (${API_BASE}). ` +
+      "Write requests (POST/PUT/PATCH/DELETE) are BLOCKED to protect live data. " +
+      "Set VITE_API_URL to http://localhost:8000 to enable them."
+  );
+}
+
 // Flag to prevent multiple refresh attempts
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -38,6 +57,22 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 
 axiosClient.interceptors.request.use(
   (config) => {
+    // Block mutating calls when local dev is aimed at the production API.
+    if (PROD_WRITE_GUARD) {
+      const method = (config.method ?? "get").toLowerCase();
+      const url = config.url ?? "";
+      const isAllowed = GUARD_ALLOWLIST.some((path) => url.includes(path));
+      if (WRITE_METHODS.has(method) && !isAllowed) {
+        return Promise.reject(
+          new Error(
+            `[prod-write-guard] Blocked ${method.toUpperCase()} ${url} — local dev ` +
+              "is connected to the production API. This write was prevented to avoid " +
+              "modifying live data. Point VITE_API_URL at a local backend to allow it."
+          )
+        );
+      }
+    }
+
     const token = getToken();
     if (token) {
       // Check if token is expired before making request

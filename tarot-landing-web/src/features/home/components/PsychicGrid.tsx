@@ -4,6 +4,12 @@ import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import axiosClient from "../../../lib/axiosClient";
+import {
+  DISPLAY_RATINGS,
+  getHaloColor,
+  getTier,
+  hexToRgb,
+} from "../../../lib/psychicDisplay";
 
 const DEFAULT_PSYCHICS_SECTION = {
   heading: "Find the psychic reader who",
@@ -49,7 +55,6 @@ const TarotCouncil = () => {
   const [isLoaded, setIsLoaded] = useState(() => {
     return !!localStorage.getItem("landing_psychics_section_content") && !!localStorage.getItem("landing_psychics_list");
   });
-  const navigate = useNavigate();
 
   useEffect(() => {
     Promise.all([
@@ -121,7 +126,7 @@ const TarotCouncil = () => {
   return (
     <section
       className="relative py-12 overflow-hidden"
-      style={{ backgroundColor: COLORS.dark }}
+      style={{ backgroundColor: "transparent" }}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
@@ -208,11 +213,17 @@ const TarotCouncil = () => {
 
 const TarotCard = ({ psychic }: { psychic: any }) => {
   const [isBtnHovered, setIsBtnHovered] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
   const specialties = psychic.categories?.map((c: any) => c.title) || [];
-  const pricePerMinute = psychic.price_per_second
-    ? (psychic.price_per_second * 60).toFixed(2)
-    : "0.00";
+  const perMinute = psychic.price_per_second ? psychic.price_per_second * 60 : 0;
+  const pricePerMinute = perMinute.toFixed(2);
+
+  const halo = getHaloColor(psychic.categories);
+  const haloRgb = hexToRgb(halo);
+  const tier = getTier(perMinute);
+  const rating = DISPLAY_RATINGS[psychic.id];
+  const filledStars = rating != null ? Math.round(rating) : 0;
 
   return (
     <motion.div
@@ -220,10 +231,15 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="relative min-w-[320px] md:min-w-[340px] h-[600px] snap-center rounded-[2.2rem] p-4 flex flex-col group cursor-pointer"
       onClick={() => navigate(`/psychics/${psychic.id}/details`)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         backgroundColor: COLORS.surface,
-        border: `1px solid ${COLORS.neutralDarkGray}40`,
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+        border: `1px solid rgba(${haloRgb}, ${isHovered ? 0.6 : 0.35})`,
+        boxShadow: isHovered
+          ? `0 0 40px 6px rgba(${haloRgb}, 0.3), 0 25px 50px -12px rgba(0, 0, 0, 0.5)`
+          : `0 0 20px 2px rgba(${haloRgb}, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.5)`,
+        transition: "border-color 0.35s ease, box-shadow 0.35s ease",
       }}
     >
       <div className="absolute inset-3 border border-white/5 rounded-[1.8rem] pointer-events-none" />
@@ -239,16 +255,32 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-surface/80 via-transparent to-transparent" />
 
-        <div className="absolute top-3 right-3 px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 flex items-center gap-1.5">
-          <Icon
-            icon="ph:star-fill"
-            style={{ color: COLORS.starGold }}
-            className="text-[10px]"
-          />
-          <span className="text-[11px] font-bold text-white">
-            {psychic.is_verified ? "4.8" : "4.5"}
-          </span>
+        {/* Tier badge (top-left) */}
+        <div
+          className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-[0.08em]"
+          style={{ background: tier.gradient, color: COLORS.dark }}
+        >
+          {tier.label}
         </div>
+
+        {/* Rating badge (top-right) — real, varied display rating */}
+        {rating != null && (
+          <div className="absolute top-3 right-3 px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 flex items-center gap-1.5">
+            <span className="text-[10px] tracking-tight" style={{ letterSpacing: "0.5px" }}>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span
+                  key={i}
+                  style={{ color: i < filledStars ? COLORS.starGold : "rgba(255,255,255,0.25)" }}
+                >
+                  {i < filledStars ? "★" : "☆"}
+                </span>
+              ))}
+            </span>
+            <span className="text-[11px] font-bold text-white">
+              {rating.toFixed(1)}
+            </span>
+          </div>
+        )}
 
         <div className="absolute bottom-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
           <div
@@ -278,10 +310,23 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
             {psychic.username}
           </h3>
           <div className="flex flex-wrap justify-center gap-1.5">
-            {specialties.map((s: string) => (
+            {specialties.map((s: string, i: number) => (
               <span
                 key={s}
-                className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] uppercase font-bold text-white/70"
+                className="px-2.5 py-0.5 rounded-full text-[9px] uppercase font-bold"
+                style={
+                  i === 0
+                    ? {
+                        color: halo,
+                        border: `1px solid ${halo}`,
+                        background: `rgba(${haloRgb}, 0.08)`,
+                      }
+                    : {
+                        color: "rgba(255,255,255,0.7)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        background: "rgba(255,255,255,0.05)",
+                      }
+                }
               >
                 {s}
               </span>
@@ -294,8 +339,8 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
             <span className="block text-[8px] uppercase tracking-widest opacity-40 text-white mb-0.5">
               Exp.
             </span>
-            <span className="text-xs text-white font-bold">
-              {psychic.is_verified ? "Elite" : "Rising"}
+            <span className="text-xs font-bold" style={{ color: halo }}>
+              {tier.label}
             </span>
           </div>
           <div className="text-center border-l border-white/5">
@@ -360,13 +405,13 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
               <div className="flex flex-col items-end">
                 <span
                   className="text-xs font-black"
-                  style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}
+                  style={{ color: isBtnHovered ? COLORS.dark : tier.color }}
                 >
                   ${pricePerMinute}
                 </span>
                 <span
                   className="text-[7px] uppercase font-bold"
-                  style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}
+                  style={{ color: isBtnHovered ? COLORS.dark : tier.color }}
                 >
                   / Min
                 </span>

@@ -18,6 +18,8 @@ import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
 import "../../../styles/starfield.css";
+import PageBackground from "../../../components/PageBackground";
+import moonlitBalcony from "../../../assets/backgrounds/moonlit-balcony.webp";
 
 const ClientChat = () => {
   const queryClient = useQueryClient();
@@ -858,6 +860,9 @@ const ClientChat = () => {
       className="h-[calc(100dvh-80px)] flex gap-2 md:gap-4 p-2 sm:p-3 md:p-4 relative overflow-hidden"
       style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}
     >
+      {/* Faint dimmed scene — texture only; kept well below message legibility */}
+      <PageBackground images={moonlitBalcony} variant="faint" />
+
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="starfield"></div>

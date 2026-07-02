@@ -236,7 +236,7 @@ const HeroSection = () => {
       ref={containerRef}
       onMouseMove={handleMouseMove}
       className="relative w-full"
-      style={{ backgroundColor: COLORS.dark, height: "300vh" }}
+      style={{ backgroundColor: "transparent", height: "300vh" }}
     >
       <canvas
         ref={canvasRef}

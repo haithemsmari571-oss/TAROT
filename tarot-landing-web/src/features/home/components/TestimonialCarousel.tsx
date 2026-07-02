@@ -5,9 +5,9 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import axiosClient from "../../../lib/axiosClient";
 
 const DEFAULT_TESTIMONIALS = [
-  { name: "Aria Vance", role: "Soul Seeker", content: "The Two-Fold Truth reading felt like she was reading the very blueprint of my heart." },
-  { name: "Julian Thorne", role: "Returning Client", content: "Deep Soul Access is an understatement. The 10 questions covered every corner of my life." },
-  { name: "Elena Rossi", role: "Artist", content: "A Whisper Message was all I needed. Short, piercingly accurate, and delivered with grace." },
+  { name: "Aria Vance", role: "Soul Seeker", content: "It felt like she was reading the very blueprint of my heart. Every word landed exactly where I needed it." },
+  { name: "Julian Thorne", role: "Returning Client", content: "The depth here is unreal. My reading covered every corner of my life and left nothing unspoken." },
+  { name: "Elena Rossi", role: "Artist", content: "A single message was all I needed. Short, piercingly accurate, and delivered with grace." },
   { name: "Marcus K.", role: "Mentor", content: "Rarely do I find an intuitive with this level of raw, unfiltered accuracy. No fluff." },
   { name: "Sasha L.", role: "Seeker", content: "The channeled card spread is now my daily meditation. It speaks to me daily." },
 ];
@@ -60,8 +60,8 @@ const TestimonialCarousel = () => {
   return (
     <section 
       ref={containerRef}
-      className="relative min-h-[120vh] py-32 overflow-hidden flex flex-col items-center justify-start" 
-      style={{ backgroundColor: COLORS.dark }}
+      className="relative min-h-[120vh] py-32 overflow-hidden flex flex-col items-center justify-start"
+      style={{ backgroundColor: "transparent" }}
     >
       {/* 1. SECTION HEADER */}
  

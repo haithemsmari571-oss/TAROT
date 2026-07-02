@@ -10,6 +10,8 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { usePsychicDetails, usePsychicReviewSummary, usePsychicReviews, useMyReviews, useChats } from "../hooks/usePsychicDetails";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import "../../../styles/starfield.css";
+import PageBackground from "../../../components/PageBackground";
+import zodiacHall2 from "../../../assets/backgrounds/zodiac-hall-2.webp";
 
 
 
@@ -288,6 +290,9 @@ const PsychicDetails = () => {
       className="relative min-h-screen pt-32 pb-20" 
       style={{ backgroundColor: COLORS.dark }}
     >
+      {/* Subtle dimmed scene — atmospheric but recessed behind the profile */}
+      <PageBackground images={zodiacHall2} variant="subtle" />
+
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="starfield"></div>

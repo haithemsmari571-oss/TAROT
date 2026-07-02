@@ -5,8 +5,8 @@ export interface CreateCheckoutSessionRequest {
   return_url?: string;
 }
 
-export interface CreateCheckoutPackageSessionRequest {
-  title: string;
+export interface CreateStardustCheckoutSessionRequest {
+  amount_usd: number;
   return_url?: string;
 }
 

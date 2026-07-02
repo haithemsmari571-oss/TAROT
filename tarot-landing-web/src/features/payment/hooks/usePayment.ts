@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { paymentApi } from "../api/paymentApi";
-import type { CreateCheckoutSessionRequest, UnitPriceResponse, BuyOptionResponse, CreateCheckoutPackageSessionRequest } from "../types/payment.types";
+import type { CreateCheckoutSessionRequest, UnitPriceResponse, BuyOptionResponse, CreateStardustCheckoutSessionRequest } from "../types/payment.types";
 import type {
   TransactionListResponse,
   TransactionFilters,
@@ -31,11 +31,11 @@ export const usePayment = () => {
     }
   };
 
-  const createCheckoutPackageSession = async (request: CreateCheckoutPackageSessionRequest) => {
+  const createStardustCheckoutSession = async (request: CreateStardustCheckoutSessionRequest) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await paymentApi.createCheckoutPackageSession(request);
+      const response = await paymentApi.createStardustCheckoutSession(request);
       // Redirect to Stripe checkout
       window.location.href = response.url;
     } catch (err: unknown) {
@@ -135,7 +135,7 @@ export const usePayment = () => {
     unitPrice,
     buyOptions,
     createCheckoutSession,
-    createCheckoutPackageSession,
+    createStardustCheckoutSession,
     fetchMyTransactions,
     fetchMyBalance,
     fetchUnitPrice,
