@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import type { ColorValue } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import {
   useFonts,
   Poppins_400Regular,
@@ -7,6 +8,15 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 import { COLORS } from "../src/theme/colors";
+
+// Each tab maps to an Ionicons glyph, swapping to the filled variant when active.
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+const TAB_ICON: Record<string, { active: IoniconName; inactive: IoniconName }> = {
+  index: { active: "sparkles", inactive: "sparkles-outline" },
+  psychics: { active: "moon", inactive: "moon-outline" },
+  sessions: { active: "chatbubbles", inactive: "chatbubbles-outline" },
+  profile: { active: "person", inactive: "person-outline" },
+};
 
 export default function RootLayout() {
   // Load Poppins before rendering so fontFamily references resolve. If loading
@@ -20,6 +30,16 @@ export default function RootLayout() {
   if (!loaded && !error) {
     return null;
   }
+
+  const icon =
+    (name: keyof typeof TAB_ICON) =>
+    ({ color, focused }: { color: ColorValue; focused: boolean }) => (
+      <Ionicons
+        name={focused ? TAB_ICON[name].active : TAB_ICON[name].inactive}
+        size={22}
+        color={color}
+      />
+    );
 
   return (
     <Tabs
@@ -43,36 +63,20 @@ export default function RootLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: "SANCTUARY",
-          tabBarIcon: ({ color }) => <TabIcon symbol="✦" color={color} />,
-        }}
+        options={{ title: "SANCTUARY", tabBarIcon: icon("index") }}
       />
       <Tabs.Screen
         name="psychics"
-        options={{
-          title: "PSYCHICS",
-          tabBarIcon: ({ color }) => <TabIcon symbol="◎" color={color} />,
-        }}
+        options={{ title: "PSYCHICS", tabBarIcon: icon("psychics") }}
       />
       <Tabs.Screen
         name="sessions"
-        options={{
-          title: "SESSIONS",
-          tabBarIcon: ({ color }) => <TabIcon symbol="◈" color={color} />,
-        }}
+        options={{ title: "SESSIONS", tabBarIcon: icon("sessions") }}
       />
       <Tabs.Screen
         name="profile"
-        options={{
-          title: "PROFILE",
-          tabBarIcon: ({ color }) => <TabIcon symbol="○" color={color} />,
-        }}
+        options={{ title: "PROFILE", tabBarIcon: icon("profile") }}
       />
     </Tabs>
   );
-}
-
-function TabIcon({ symbol, color }: { symbol: string; color: string }) {
-  return <Text style={{ fontSize: 18, color, lineHeight: 22 }}>{symbol}</Text>;
 }
