@@ -50,6 +50,25 @@ export async function requestChat(
   await api.post("/api/chat/request", { psychic_id: psychicId, message });
 }
 
+export interface SessionTime {
+  elapsed_seconds: number;
+  estimated_cost: number; // cents
+  price_per_second: number; // cents per second
+  client_balance: number; // cents
+  remaining_seconds: number;
+}
+
+/** Current session duration, cost, rate and client balance for an active chat. */
+export async function getSessionTime(chatId: number): Promise<SessionTime> {
+  const res = await api.get(`/api/chat/${chatId}/session-time`);
+  return res.data;
+}
+
+/** End the chat session (client-initiated). Same endpoint the website uses. */
+export async function endChat(chatId: number): Promise<void> {
+  await api.post(`/api/chat/${chatId}/status`, { status: "ENDED" });
+}
+
 /**
  * Fetch messages for a chat. A negative offset returns the last abs(offset)
  * messages (newest window), oldest-first — matches how the web loads history.

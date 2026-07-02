@@ -157,7 +157,11 @@ export default function SessionsScreen() {
               onPress={() =>
                 router.push({
                   pathname: "/sessions/[chatId]",
-                  params: { chatId: String(item.id), title: other },
+                  params: {
+                    chatId: String(item.id),
+                    title: other,
+                    status: item.status,
+                  },
                 })
               }
             >
