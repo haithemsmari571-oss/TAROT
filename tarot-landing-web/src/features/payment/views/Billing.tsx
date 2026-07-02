@@ -1,83 +1,16 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { motion, useScroll, useSpring, useTransform } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { usePayment } from "../hooks/usePayment";
-import { paymentApi } from "../api/paymentApi";
+import StardustGlider from "../components/StardustGlider";
+import PageBackground from "../../../components/PageBackground";
+import celestialPortal from "../../../assets/backgrounds/celestial-portal.webp";
 import {
   TransactionStatus,
   TransactionType,
   type Transaction,
 } from "../../ledger/types/transaction.types";
-import axiosClient from "../../../lib/axiosClient";
-
-const SYMBOLS_LIST = ["\uD83D\uDD02", "\uD83D\uDD01", "\uD83D\uDD03"];
-
-const DEFAULT_PACKAGES = {
-  badge: "The Sacred Offerings",
-  heading: "Choose the",
-  headingHighlighted: "Depth",
-  subheading: "of Your Insight",
-  packages: [
-    {
-      title: "Whisper Message",
-      price: "15",
-      tagline: "A quiet message from spirit, just for you.",
-      features: [
-        "1 Psychic Question Answered",
-        "Clear and honest intuitive insight",
-        "Energy-focused response",
-      ],
-      footer: "Perfect for when you need one clear answer.",
-      cta: "Receive My Whisper Message",
-      popular: false,
-      label: "",
-      points: 0,
-    },
-    {
-      title: "Two-Fold Truth",
-      price: "20",
-      tagline: "Double the clarity. Double the alignment.",
-      features: [
-        "2 Psychic Questions Answered",
-        "Additional energy message",
-        "Expanded soul-connected detail",
-      ],
-      footer: "For those pulled between two options or paths.",
-      cta: "Reveal My Two-Fold Truth",
-      popular: true,
-      label: "Most Chosen by Returning Clients",
-      points: 0,
-    },
-    {
-      title: "Deep Soul Access",
-      price: "70",
-      tagline: "Your full energetic reading \u2014 raw and real.",
-      features: [
-        "Ask up to 10 questions",
-        "Full spiritual overview (Audio/Written)",
-        "Channeled card spread image",
-        "1 Follow-up question (48h)",
-      ],
-      footer: "Unlock deep guidance and the full picture.",
-      cta: "Access Deep Soul Reading",
-      popular: false,
-      label: "",
-      points: 0,
-    },
-  ],
-};
-interface BillingPackage {
-  id: string;
-  _id?: string;
-  points: number;
-  amount: number;
-  price: number;
-  label: string;
-  is_active?: boolean;
-  sort_order?: number;
-}
 
 // ─── Constellation data for background patterns ──────────────────────────────
 const CONSTELLATION_DATA = [
@@ -173,161 +106,43 @@ const formatDate = (dateStr: string) => {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const Billing = () => {
-  const [content, setContent] = useState(DEFAULT_PACKAGES);
-
-  useEffect(() => {
-    axiosClient
-      .get("/landing/packages")
-      .then((res) => {
-        if (res.data?.content)
-          setContent({ ...DEFAULT_PACKAGES, ...res.data.content });
-      })
-      .catch(() => { });
-  }, []);
-
   const {
     loading: paymentLoading,
     error: paymentError,
     transactions: transactionsData,
     balance,
-    unitPrice,
-    createCheckoutSession,
-    createCheckoutPackageSession,
+    createStardustCheckoutSession,
     fetchMyTransactions,
     fetchMyBalance,
-    fetchUnitPrice,
   } = usePayment();
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(
-    null,
-  );
-  const [selectedBigPackageId, setSelectedBigPackageId] = useState<
-    string | null
-  >(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
-  const [carouselIndex, setCarouselIndex] = useState(0);
-  const [cardsPerView, setCardsPerView] = useState(3);
-
-  // Buy options API state
-  const [apiPackages, setApiPackages] = useState<BillingPackage[]>([]);
-  const [apiLoading, setApiLoading] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
 
   // Canvas & refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const carouselContainerRef = useRef<HTMLDivElement>(null);
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 });
-  const containerRef = useRef(null);
-
-  // ─── Fetch buy options from API ─────────────────────────────────────────────
-  useEffect(() => {
-    const fetchApiOptions = async () => {
-      try {
-        setApiLoading(true);
-        setApiError(null);
-        const data = await paymentApi.getBuyOptions();
-        const mappedOptions = data.map((option: any, idx: number) => ({
-          ...option,
-          id: option.id || option._id || `tier-${idx}`,
-          points: option.points || option.amount || 0,
-          amount: option.points || option.amount || 0,
-          label: option.label || "Stardust Pack",
-          price: option.price_cents || option.price || 0,
-        }));
-        setApiPackages(mappedOptions);
-      } catch (err: any) {
-        const msg =
-          err.response?.data?.message ||
-          err.message ||
-          "Failed to load point offers.";
-        setApiError(msg);
-      } finally {
-        setApiLoading(false);
-      }
-    };
-    fetchApiOptions();
-  }, []);
-
-  // ─── Build packages list ────────────────────────────────────────────────────
-  const pointsPackages: BillingPackage[] = useMemo(() => {
-    const pricePerPoint = unitPrice?.unit_price_cents || 100;
-    if (apiPackages.length > 0) {
-      return apiPackages.map((pkg) => ({
-        ...pkg,
-        price: pkg.price || pricePerPoint * pkg.points,
-      }));
-    }
-    return [
-      {
-        id: "starter",
-        points: 5,
-        amount: 5,
-        price: pricePerPoint * 5,
-        label: "Starter",
-      },
-      {
-        id: "basic",
-        points: 20,
-        amount: 20,
-        price: pricePerPoint * 20,
-        label: "Basic",
-      },
-      {
-        id: "popular",
-        points: 50,
-        amount: 50,
-        price: pricePerPoint * 50,
-        label: "Popular",
-      },
-      {
-        id: "pro",
-        points: 100,
-        amount: 100,
-        price: pricePerPoint * 100,
-        label: "Pro",
-      },
-      {
-        id: "premium",
-        points: 250,
-        amount: 250,
-        price: pricePerPoint * 250,
-        label: "Premium",
-      },
-      {
-        id: "elite",
-        points: 500,
-        amount: 500,
-        price: pricePerPoint * 500,
-        label: "Elite",
-      },
-    ];
-  }, [unitPrice, apiPackages]);
 
   // ─── Stable constellation data (no random on re-render) ────────────────────
-  const constellations = useMemo(() => {
-    // Seeded-ish positions using index math so they're stable
-    return Array.from({ length: 6 }).map((_, i) => {
-      const data = CONSTELLATION_DATA[i % CONSTELLATION_DATA.length];
-      return {
-        ...data,
-        x: (i * 17 + 5) % 90,
-        y: (i * 23 + 10) % 90,
-        scale: 0.6 + ((i * 0.15) % 0.8),
-        rotate: (i * 60) % 360,
-        opacity: 0.05 + ((i * 0.025) % 0.15),
-      };
-    });
-  }, []);
+  const constellations = Array.from({ length: 6 }).map((_, i) => {
+    const data = CONSTELLATION_DATA[i % CONSTELLATION_DATA.length];
+    return {
+      ...data,
+      x: (i * 17 + 5) % 90,
+      y: (i * 23 + 10) % 90,
+      scale: 0.6 + ((i * 0.15) % 0.8),
+      rotate: (i * 60) % 360,
+      opacity: 0.05 + ((i * 0.025) % 0.15),
+    };
+  });
 
-  // ─── Responsive cards per view ──────────────────────────────────────────────
+  // ─── Responsive canvas sizing ───────────────────────────────────────────────
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
-      setCardsPerView(w < 768 ? 1 : w < 1024 ? 2 : 3);
       setWindowSize({ width: w, height: window.innerHeight });
       if (canvasRef.current) {
         canvasRef.current.width = w;
@@ -385,17 +200,9 @@ const Billing = () => {
 
   // ─── Initial data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
-    fetchUnitPrice();
     fetchMyBalance();
     fetchMyTransactions({ page: currentPage, limit: 10 });
   }, [currentPage]);
-
-  // ─── Helpers ────────────────────────────────────────────────────────────────
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount / 100);
 
   const closeSuccessModal = () => {
     setShowSuccessModal(false);
@@ -407,78 +214,22 @@ const Billing = () => {
     navigate(window.location.pathname, { replace: true });
   };
 
-  const handlePurchase = async (pkg: BillingPackage) => {
-    setSelectedPackageId(pkg.id);
+  // ─── Custom-amount ("glider") purchase ─────────────────────────────────────
+  const handleStardustPurchase = async (amountUsd: number) => {
     try {
       const returnUrl = searchParams.get("return_url");
-      await createCheckoutSession({
-        points_amount: pkg.points,
-        return_url:
-          returnUrl || `${window.location.origin}/billing?status=success`,
+      await createStardustCheckoutSession({
+        amount_usd: amountUsd,
+        return_url: returnUrl || undefined,
       });
     } catch (err) {
       console.error("Failed to create checkout session:", err);
       setShowErrorModal(true);
-    } finally {
-      setSelectedPackageId(null);
-    }
-  };
-
-  const handlePurchasePackage = async (pkg: BillingPackage) => {
-    setSelectedBigPackageId(pkg.id);
-
-    try {
-      const returnUrl = searchParams.get("return_url");
-
-      await createCheckoutPackageSession({
-        title: pkg.label,
-        return_url:
-          returnUrl || `${window.location.origin}/billing?status=success`,
-      });
-
-    } catch (err) {
-      console.error("Failed to create checkout session:", err);
-      setShowErrorModal(true);
-    } finally {
-      setSelectedBigPackageId(null);
     }
   };
 
   // ─── Derived state ───────────────────────────────────────────────────────────
   const transactions = transactionsData?.transactions || [];
-  const combinedLoading = paymentLoading || apiLoading;
-  const combinedError = paymentError || apiError;
-  const maxCarouselIndex = Math.max(
-    0,
-    Math.ceil(pointsPackages.length / cardsPerView) - 1,
-  );
-  const selectedPackage = pointsPackages.find(
-    (pkg) => pkg.id === selectedPackageId,
-  );
-  const bestValuePackage = pointsPackages.reduce<BillingPackage | null>(
-    (best, pkg) => {
-      if (pkg.points <= 0 || pkg.price <= 0) return best;
-      if (!best || pkg.price / pkg.points < best.price / best.points)
-        return pkg;
-      return best;
-    },
-    null,
-  );
-
-  useEffect(() => {
-    setCarouselIndex((index) => Math.min(index, maxCarouselIndex));
-  }, [maxCarouselIndex]);
-
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start end", "end start"],
-  });
-
-  const smoothScroll = useSpring(scrollYProgress, {
-    stiffness: 100,
-    damping: 30,
-  });
-  const floatY = useTransform(smoothScroll, [0, 1], [0, -60]);
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -489,6 +240,9 @@ const Billing = () => {
         fontFamily: TYPOGRAPHY.fontFamily.body,
       }}
     >
+      {/* Immersive celestial backdrop — identical to the home/Sanctuary page. */}
+      <PageBackground images={celestialPortal} variant="immersive" />
+
       {/* ── Animated star canvas ── */}
       <canvas
         ref={canvasRef}
@@ -533,14 +287,15 @@ const Billing = () => {
         ))}
       </div>
 
-      {/* ── Radial vignette ── */}
+      {/* ── Radial vignette ── (softened so the Glider's full-bleed per-tier
+             scene stays visible instead of fading to solid dark) */}
       <div
         className="fixed inset-0 z-[2] pointer-events-none"
         style={{
           background: `
             radial-gradient(circle at 15% 10%, ${COLORS.primary}24 0%, transparent 34%),
             radial-gradient(circle at 85% 20%, ${COLORS.secondary}18 0%, transparent 30%),
-            linear-gradient(180deg, ${COLORS.dark}55 0%, ${COLORS.dark} 68%)
+            linear-gradient(180deg, ${COLORS.dark}33 0%, transparent 45%, ${COLORS.dark}b3 100%)
           `,
         }}
       />
@@ -593,7 +348,7 @@ const Billing = () => {
                 </span>
               </h1>
               <p className="mt-5 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">
-                Choose a tier, complete secure Stripe checkout, and keep your
+                Choose any amount, complete secure Stripe checkout, and keep your
                 reading credits ready when the moment calls.
               </p>
 
@@ -703,18 +458,21 @@ const Billing = () => {
               <div className="mt-8 space-y-3">
                 <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
                   <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">
-                    Best Value
+                    Rate
                   </span>
                   <span className="text-sm font-black text-white">
-                    {bestValuePackage?.label ?? "Loading"}
+                    $1 = 1 Stardust
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
                   <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">
-                    Selected
+                    Top Bonus
                   </span>
-                  <span className="text-sm font-black text-white">
-                    {selectedPackage?.label ?? "Choose Tier"}
+                  <span
+                    className="text-sm font-black"
+                    style={{ color: COLORS.starGold }}
+                  >
+                    +60% Devotion
                   </span>
                 </div>
               </div>
@@ -722,286 +480,17 @@ const Billing = () => {
           </aside>
         </div>
 
-        {/* ── Buy Points carousel ── */}
-        <div
-          className="relative mb-8 overflow-hidden rounded-[28px] border border-white/10 p-5 backdrop-blur-xl sm:mb-10 sm:p-8 md:p-10"
-          style={{
-            background: `linear-gradient(180deg, ${COLORS.surface}e8 0%, ${COLORS.dark}d8 100%)`,
-            boxShadow: "0 22px 70px rgba(0,0,0,0.34)",
-          }}
-        >
-          <div className="absolute inset-0 overflow-hidden opacity-40 pointer-events-none">
-            <div
-              className="absolute -right-32 -top-32 h-96 w-96 rounded-full blur-3xl"
-              style={{ backgroundColor: `${COLORS.primary}18` }}
-            />
-            <div
-              className="absolute -bottom-44 left-1/4 h-80 w-80 rounded-full blur-3xl"
-              style={{ backgroundColor: `${COLORS.secondary}12` }}
-            />
-          </div>
-
-          <div className="relative z-10">
-            <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
-              <div>
-                <div className="mb-3 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
-                  <Icon
-                    icon="solar:bag-smile-bold-duotone"
-                    style={{ color: COLORS.primary }}
-                    className="text-base"
-                  />
-                  <span className="text-[9px] font-black uppercase tracking-[0.24em] text-white/45">
-                    Stardust Tiers
-                  </span>
-                </div>
-                <h2
-                  className="text-3xl font-black uppercase tracking-normal sm:text-4xl"
-                  style={{ color: COLORS.neutralWhite }}
-                >
-                  Choose your pack
-                </h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-                  The same live tiers from the Stardust modal, tuned for faster
-                  comparison.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-2">
-                <button
-                  onClick={() => setCarouselIndex((i) => Math.max(0, i - 1))}
-                  disabled={carouselIndex === 0}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"
-                >
-                  <Icon
-                    icon="ph:caret-left-bold"
-                    className="text-xl"
-                    style={{ color: COLORS.primary }}
-                  />
-                </button>
-                <div className="min-w-[86px] text-center text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
-                  {carouselIndex + 1} / {maxCarouselIndex + 1}
-                </div>
-                <button
-                  onClick={() =>
-                    setCarouselIndex((i) => Math.min(maxCarouselIndex, i + 1))
-                  }
-                  disabled={carouselIndex >= maxCarouselIndex}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"
-                >
-                  <Icon
-                    icon="ph:caret-right-bold"
-                    className="text-xl"
-                    style={{ color: COLORS.primary }}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {/* Cards */}
-            <div className="overflow-hidden" ref={carouselContainerRef}>
-              <div
-                className="flex transition-transform duration-500 ease-out"
-                style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
-              >
-                {pointsPackages.map((pkg, idx) => {
-                  const isSelected = selectedPackageId === pkg.id;
-                  const isProcessing = paymentLoading && isSelected;
-                  const isPopular = idx === 2 || pkg.points === 50;
-                  const paddingStyle =
-                    idx === 0
-                      ? "0 0.75rem 0 0"
-                      : idx === pointsPackages.length - 1
-                        ? "0 0 0 0.75rem"
-                        : "0 0.75rem";
-
-                  return (
-                    <div
-                      key={pkg.id || `${pkg.label}-${idx}`}
-                      className="flex-shrink-0"
-                      style={{
-                        width: `${100 / cardsPerView}%`,
-                        padding: paddingStyle,
-                      }}
-                    >
-                      <div
-                        className={`relative flex h-full cursor-pointer flex-col overflow-hidden rounded-[24px] p-5 transition-all duration-300 group sm:p-6 ${isSelected ? "border-2" : "border border-white/10"
-                          }`}
-                        style={{
-                          background: isPopular
-                            ? `linear-gradient(180deg, ${COLORS.primary}14 0%, ${COLORS.dark}f2 55%)`
-                            : `linear-gradient(180deg, rgba(255,255,255,0.035) 0%, ${COLORS.dark}e8 100%)`,
-                          backdropFilter: "blur(20px)",
-                          borderColor:
-                            isSelected || isPopular
-                              ? `${COLORS.primary}66`
-                              : undefined,
-                          boxShadow: isSelected
-                            ? `0 0 42px ${COLORS.primary}24, 0 18px 44px rgba(0,0,0,0.44)`
-                            : "0 14px 36px rgba(0,0,0,0.28)",
-                          minHeight: "340px",
-                        }}
-                        onClick={() => setSelectedPackageId(pkg.id)}
-                      >
-                        {/* Hover gradient */}
-                        <div
-                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                          style={{
-                            background: `radial-gradient(circle at 50% 0%, ${COLORS.primary}15 0%, transparent 70%)`,
-                          }}
-                        />
-
-                        <div className="relative z-10 flex h-full flex-col">
-                          {/* Label badge */}
-                          <div className="mb-6 flex items-start gap-3">
-                            <div
-                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border text-xs font-black"
-                              style={{
-                                backgroundColor: `${COLORS.primary}15`,
-                                borderColor: `${COLORS.primary}30`,
-                                color: COLORS.primary,
-                              }}
-                            >
-                              {pkg.label.substring(0, 2).toUpperCase()}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div
-                                className="truncate text-[10px] font-black uppercase tracking-[0.2em]"
-                                style={{ color: COLORS.neutralWhite }}
-                              >
-                                {pkg.label}
-                              </div>
-                              <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">
-                                {formatCurrency(
-                                  pkg.price / Math.max(pkg.points, 1),
-                                )}{" "}
-                                / point
-                              </div>
-                            </div>
-                            {isPopular && (
-                              <div
-                                className="shrink-0 rounded-full px-3 py-1 text-[8px] font-black uppercase tracking-[0.15em]"
-                                style={{
-                                  backgroundColor: COLORS.primary,
-                                  color: COLORS.dark,
-                                }}
-                              >
-                                Choice
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Points amount */}
-                          <div className="mb-7">
-                            <div
-                              className="mb-2 text-5xl font-black tracking-normal sm:text-6xl"
-                              style={{
-                                background: `linear-gradient(135deg, ${COLORS.neutralWhite} 0%, ${COLORS.primary} 100%)`,
-                                WebkitBackgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                                backgroundClip: "text",
-                              }}
-                            >
-                              {pkg.points.toLocaleString()}
-                            </div>
-                            <div
-                              className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider"
-                              style={{ color: COLORS.neutralGray }}
-                            >
-                              <Icon
-                                icon="ph:sparkle-fill"
-                                style={{ color: COLORS.primary }}
-                              />
-                              Points Included
-                            </div>
-                          </div>
-
-                          {/* Price */}
-                          <div className="mb-auto rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/35">
-                              Total
-                            </div>
-                            <div
-                              className="mt-1 text-3xl font-black sm:text-4xl"
-                              style={{ color: COLORS.primary }}
-                            >
-                              {formatCurrency(pkg.price)}
-                            </div>
-                          </div>
-
-                          {/* Buy button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePurchase(pkg);
-                            }}
-                            disabled={combinedLoading}
-                            className="group/btn relative mt-5 w-full overflow-hidden rounded-2xl px-4 py-4 text-[10px] font-black uppercase tracking-widest transition-all hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 sm:px-6"
-                            style={{
-                              backgroundColor: COLORS.primary,
-                              color: COLORS.dark,
-                              boxShadow: `0 10px 30px ${COLORS.primary}30`,
-                            }}
-                          >
-                            <span className="relative z-10 flex items-center justify-center gap-2">
-                              {isProcessing ? (
-                                <>
-                                  <Icon
-                                    icon="svg-spinners:3-dots-fade"
-                                    className="text-base"
-                                  />
-                                  Processing…
-                                </>
-                              ) : (
-                                "Buy Now"
-                              )}
-                            </span>
-                            <div
-                              className="absolute inset-0 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"
-                              style={{
-                                background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-                              }}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Carousel navigation */}
-            <div className="mt-7 flex items-center justify-center">
-              <div className="flex gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-2">
-                {Array.from({ length: maxCarouselIndex + 1 }).map(
-                  (_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCarouselIndex(index)}
-                      style={{
-                        width: carouselIndex === index ? "40px" : "10px",
-                        height: "10px",
-                        borderRadius: "5px",
-                        backgroundColor:
-                          carouselIndex === index
-                            ? COLORS.primary
-                            : `${COLORS.neutralGray}30`,
-                        boxShadow:
-                          carouselIndex === index
-                            ? `0 0 15px ${COLORS.primary}50`
-                            : "none",
-                        transition: "all 0.3s ease",
-                      }}
-                    />
-                  ),
-                )}
-              </div>
-            </div>
-          </div>
+        {/* ── Stardust glider (custom amount) ── */}
+        <div className="mb-8 sm:mb-10">
+          <StardustGlider
+            fullBleed
+            loading={paymentLoading}
+            onPurchase={handleStardustPurchase}
+          />
         </div>
 
         {/* ── Global error banner ── */}
-        {combinedError && (
+        {paymentError && (
           <div
             className="mb-8 rounded-2xl border border-red-500/20 p-5 backdrop-blur-xl"
             style={{
@@ -1014,173 +503,10 @@ const Billing = () => {
                 icon="solar:danger-circle-bold-duotone"
                 className="text-3xl text-red-400 flex-shrink-0"
               />
-              <p className="text-red-400 text-sm font-medium">
-                {combinedError}
-              </p>
+              <p className="text-red-400 text-sm font-medium">{paymentError}</p>
             </div>
           </div>
         )}
-
-        <motion.div className="mb-10">
-          {/* 2. HEADER */}
-          <div className="flex flex-col items-center text-center mb-12">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-3 px-6 py-2 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-xl mb-6 shadow-2xl"
-            >
-              <span className="text-[10px] font-black tracking-[0.5em] uppercase text-white/50">
-                {content.badge}
-              </span>
-            </motion.div>
-          </div>
-
-          {/* 3. THE 3D CARD SPREAD */}
-          <div className="flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-6 perspective-2000">
-            {content.packages.map((pkg, i) => (
-              <motion.div
-                key={pkg.id}
-                initial={{ opacity: 0, y: 50 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.8, delay: i * 0.2 }}
-                style={{ y: pkg.popular ? 0 : floatY }}
-                className={`relative w-full max-w-[380px] group ${pkg.popular ? "z-40 scale-105 lg:scale-110" : "z-10"}`}
-              >
-                {/* Popular Badge */}
-                {pkg.popular && pkg.label && (
-                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap">
-                    <motion.div
-                      initial={{ y: 10, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      className="px-5 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-[0.2em]  border border-white/10"
-                      style={{
-                        backgroundColor: COLORS.secondary,
-                        color: COLORS.dark,
-                      }}
-                    >
-                      {pkg.label}
-                    </motion.div>
-                  </div>
-                )}
-
-                {/* Card Container */}
-                <div
-                  className={`relative p-10 rounded-[3rem] border transition-all duration-700 h-full backdrop-blur-3xl overflow-hidden shadow-2xl ${pkg.popular
-                    ? "border-primary/40 bg-white/[0.06]"
-                    : "border-white/5 bg-white/[0.02] group-hover:bg-white/[0.04]"
-                    } group-hover:border-primary/60`}
-                >
-                  {/* Background Alchemy Watermark */}
-                  <span className="absolute -top-6 -right-6 text-[12rem] opacity-[0.03] text-white pointer-events-none italic group-hover:opacity-[0.06] transition-opacity duration-1000">
-                    {SYMBOLS_LIST[i % SYMBOLS_LIST.length]}
-                  </span>
-
-                  {/* Header Content */}
-                  <div className="relative z-10 mb-8">
-                    <span
-                      className="text-4xl mb-6"
-                      style={{
-                        color: pkg.popular ? COLORS.secondary : COLORS.primary,
-                      }}
-                    >
-                      {SYMBOLS_LIST[i % SYMBOLS_LIST.length]}
-                    </span>
-                    <h3
-                      style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
-                      className="text-2xl font-black text-white uppercase tracking-tighter mb-2"
-                    >
-                      {pkg.title}
-                    </h3>
-                    <div className="flex items-baseline gap-1 mb-4">
-                      <span className="text-5xl font-black text-white">
-                        ${pkg.price}
-                      </span>
-                      <span className="text-white/20 text-xs uppercase tracking-widest font-light">
-                        USD
-                      </span>
-                    </div>
-                    <p className="text-white/50 text-xs leading-relaxed italic font-light h-8">
-                      {pkg.tagline}
-                    </p>
-                  </div>
-
-                  {/* Feature List */}
-                  <div className="relative z-10 space-y-4 mb-10 border-t border-white/10 pt-8">
-                    {pkg.features.map((feature, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-3 group/feat"
-                      >
-                        <Icon
-                          icon="ph:sparkle-fill"
-                          className="text-[10px] mt-1 transition-transform group-hover/feat:rotate-90"
-                          style={{ color: COLORS.secondary }}
-                        />
-                        <span className="text-[11px] text-white/70 font-light tracking-wide group-hover/feat:text-white transition-colors">
-                          {feature}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Footer Quote */}
-                  <p className="relative z-10 text-[10px] text-white/30 uppercase tracking-[0.2em] mb-10 leading-loose min-h-[40px]">
-                    “{pkg.footer}”
-                  </p>
-
-                  {/* CTA Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() =>
-                      handlePurchasePackage({
-                        id: pkg.title,
-                        points: pkg.points,
-                        amount: 0,
-                        price: parseFloat(pkg.price.replace("$", "")),
-                        label: pkg.title,
-                      })
-                    }
-                    className={`relative z-10 w-full py-3 rounded-2xl overflow-hidden uppercase transition-all duration-500 border
-                                 ${pkg.popular
-                        ? "bg-primary text-dark border-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]"
-                        : "bg-transparent text-primary border-primary/50 hover:border-primary"
-                      }
-                               `}
-                    style={{
-                      // Using inline style only for the custom color variable if not in Tailwind config
-                      backgroundColor: pkg.popular ? COLORS.primary : undefined,
-                      color: pkg.popular ? COLORS.dark : COLORS.primary,
-                      borderColor: COLORS.primary,
-                    }}
-                  >
-                    {/* The "Liquid" fill effect for non-popular buttons */}
-                    {!pkg.popular && (
-                      <div className="absolute inset-0 bg-primary translate-y-[102%] group-hover/btn:translate-y-0 transition-transform duration-500 ease-out" />
-                    )}
-
-                    <span
-                      className={`relative z-10 transition-colors duration-500 ${!pkg.popular && "group-hover/btn:text-dark"}`}
-                    >
-                      {pkg.cta}
-                    </span>
-
-                    {/* Subtle Glow Streak */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
-                  </motion.button>
-                </div>
-
-                {/* Floor Aura for Deep Soul Access */}
-                {pkg.id === 3 && (
-                  <div className="absolute inset-0 -z-10 bg-primary/5 blur-[100px] rounded-full scale-75 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                )}
-              </motion.div>
-            ))}
-          </div>
-
-          {/* 4. FOOTER SYMBOLS */}
-        </motion.div>
 
         {/* ── Transaction history ── */}
         <div
@@ -1227,7 +553,7 @@ const Billing = () => {
           </div>
 
           {/* Loading state */}
-          {combinedLoading && transactions.length === 0 ? (
+          {paymentLoading && transactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Icon
                 icon="svg-spinners:3-dots-fade"
@@ -1576,7 +902,7 @@ const Billing = () => {
                 className="text-sm sm:text-base mb-6 sm:mb-8 font-light px-2"
                 style={{ color: COLORS.neutralGray }}
               >
-                Your top-up was successful! Your points have been added to your
+                Your top-up was successful! Your Stardust has been added to your
                 account.
               </p>
 
