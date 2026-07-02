@@ -234,7 +234,7 @@ const Billing = () => {
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div
-      className="relative min-h-screen overflow-hidden px-4 pb-10 pt-28 sm:px-6 md:px-10 md:pt-32"
+      className="relative min-h-screen overflow-hidden px-4 pb-10 pt-8 sm:px-6 md:px-10 md:pt-10"
       style={{
         // Transparent so the fixed PageBackground below shows through (the dark
         // base is painted by PublicLayout). An opaque color here occludes it.
@@ -304,6 +304,14 @@ const Billing = () => {
 
       {/* ── Page content ── */}
       <div className="relative z-10 mx-auto max-w-[1280px]">
+        {/* ── Stardust glider (custom amount) — primary, centered like home ── */}
+        <div className="mx-auto mb-8 max-w-5xl sm:mb-10">
+          <StardustGlider
+            loading={paymentLoading}
+            onPurchase={handleStardustPurchase}
+          />
+        </div>
+
         {/* ── Header ── */}
         <div className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
           <section
@@ -480,15 +488,6 @@ const Billing = () => {
               </div>
             </div>
           </aside>
-        </div>
-
-        {/* ── Stardust glider (custom amount) ── */}
-        <div className="mb-8 sm:mb-10">
-          <StardustGlider
-            fullBleed
-            loading={paymentLoading}
-            onPurchase={handleStardustPurchase}
-          />
         </div>
 
         {/* ── Global error banner ── */}
