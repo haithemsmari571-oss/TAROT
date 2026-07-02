@@ -26,6 +26,19 @@ export async function signIn(email: string, password: string): Promise<string> {
   return access;
 }
 
+/**
+ * Register a new account. The backend returns a confirmation message (and sends
+ * a verification email) but NOT tokens, so callers must sign in separately to
+ * capture the access + refresh tokens.
+ */
+export async function signUp(
+  username: string,
+  email: string,
+  password: string
+): Promise<void> {
+  await api.post("/api/auth/sign-up", { username, email, password });
+}
+
 /** Fetch the currently authenticated user (used to tell "my" messages apart). */
 export async function fetchCurrentUser(): Promise<CurrentUser> {
   const res = await api.get("/api/profile/me");

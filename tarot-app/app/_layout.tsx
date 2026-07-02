@@ -79,6 +79,8 @@ export default function RootLayout() {
         name="profile"
         options={{ title: "PROFILE", tabBarIcon: icon("profile") }}
       />
+      {/* Reachable via router.push("/signup"); hidden from the tab bar. */}
+      <Tabs.Screen name="signup" options={{ href: null }} />
       </Tabs>
     </AuthProvider>
   );

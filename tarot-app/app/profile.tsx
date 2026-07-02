@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { COLORS } from "../src/theme/colors";
 import { useAuth } from "../src/context/AuthContext";
 
@@ -55,6 +56,7 @@ function Account() {
 
 function SignInForm() {
   const { signIn } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -132,6 +134,18 @@ function SignInForm() {
               <Text style={styles.submitText}>SIGN IN</Text>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.createLink}
+            activeOpacity={0.7}
+            onPress={() => router.push("/signup")}
+            disabled={submitting}
+          >
+            <Text style={styles.createText}>
+              New here?{" "}
+              <Text style={styles.createTextAccent}>Create account</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -193,6 +207,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 1.2,
     fontFamily: "Poppins_700Bold",
+  },
+  createLink: { alignItems: "center", marginTop: 22 },
+  createText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    fontFamily: "Poppins_400Regular",
+  },
+  createTextAccent: {
+    color: COLORS.lavender,
+    fontFamily: "Poppins_600SemiBold",
   },
   // Account view
   accountContent: {
