@@ -245,6 +245,17 @@ export default function ChatScreen() {
               </Text>
             }
             renderItem={({ item }) => {
+              // System/event messages (accepted, paused, resumed, ended) render
+              // as a centered muted pill, not a chat bubble — matching the website.
+              if (item.type === "system" || item.is_system) {
+                return (
+                  <View style={styles.systemRow}>
+                    <View style={styles.systemPill}>
+                      <Text style={styles.systemText}>{item.content}</Text>
+                    </View>
+                  </View>
+                );
+              }
               const mine = user != null && item.sender_id === user.id;
               return (
                 <View
@@ -425,6 +436,22 @@ const styles = StyleSheet.create({
   bubbleRow: { flexDirection: "row" },
   bubbleRowMine: { justifyContent: "flex-end" },
   bubbleRowTheirs: { justifyContent: "flex-start" },
+  systemRow: { alignItems: "center", marginVertical: 6 },
+  systemPill: {
+    maxWidth: "85%",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  systemText: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.5)",
+    fontFamily: "Poppins_400Regular",
+    textAlign: "center",
+  },
   bubble: {
     maxWidth: "78%",
     paddingHorizontal: 14,

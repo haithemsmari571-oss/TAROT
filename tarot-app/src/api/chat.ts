@@ -16,13 +16,14 @@ export interface MyChat {
 
 export interface ChatMessage {
   id?: number;
-  type?: string;
+  type?: string; // "system" for server/system messages
   content: string;
   sender_id?: number;
   user_id?: number;
   chat_id?: number;
   created_at?: string;
   timestamp?: string;
+  is_system?: boolean; // true for system/event messages (accepted, paused, …)
 }
 
 interface ChatMessagesResponse {
