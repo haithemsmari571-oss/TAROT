@@ -236,7 +236,9 @@ const Billing = () => {
     <div
       className="relative min-h-screen overflow-hidden px-4 pb-10 pt-28 sm:px-6 md:px-10 md:pt-32"
       style={{
-        backgroundColor: COLORS.dark,
+        // Transparent so the fixed PageBackground below shows through (the dark
+        // base is painted by PublicLayout). An opaque color here occludes it.
+        backgroundColor: "transparent",
         fontFamily: TYPOGRAPHY.fontFamily.body,
       }}
     >
