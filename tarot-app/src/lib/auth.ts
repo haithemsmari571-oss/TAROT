@@ -1,8 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../api/client";
-
-// Must match the key the axios client reads in src/api/client.ts
-export const TOKEN_KEY = "auth_token";
+import { clearTokens, getAccessToken, saveTokens } from "./tokens";
 
 export interface CurrentUser {
   id: number;
@@ -10,30 +7,23 @@ export interface CurrentUser {
   email: string;
 }
 
-export async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
-}
-
-export async function setToken(token: string): Promise<void> {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
-}
-
-export async function clearToken(): Promise<void> {
-  await AsyncStorage.removeItem(TOKEN_KEY);
-}
+// Re-exported for existing callers (AuthContext, chat hook).
+export const getToken = getAccessToken;
+export const clearToken = clearTokens;
 
 /**
- * Sign in with email + password. Stores the access token so the axios client
- * and the chat WebSocket can both use it. Returns the raw access token.
+ * Sign in with email + password. Stores BOTH the access token and the refresh
+ * token so the axios client and the WebSocket can auth, and so expired access
+ * tokens can be refreshed transparently.
  */
 export async function signIn(email: string, password: string): Promise<string> {
   const res = await api.post("/api/auth/sign-in", { email, password });
-  const token: string | undefined = res.data?.access_token;
-  if (!token) {
+  const access: string | undefined = res.data?.access_token;
+  if (!access) {
     throw new Error("No access token returned from sign-in.");
   }
-  await setToken(token);
-  return token;
+  await saveTokens(access, res.data?.refresh_token);
+  return access;
 }
 
 /** Fetch the currently authenticated user (used to tell "my" messages apart). */

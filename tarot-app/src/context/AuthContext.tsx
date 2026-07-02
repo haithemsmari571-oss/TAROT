@@ -13,6 +13,7 @@ import {
   signIn as apiSignIn,
   type CurrentUser,
 } from "../lib/auth";
+import { setOnAuthFailure } from "../lib/refresh";
 
 interface AuthState {
   user: CurrentUser | null;
@@ -42,6 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     })();
+  }, []);
+
+  // When a token refresh definitively fails (refresh token expired), drop to a
+  // signed-out state so the UI reflects it.
+  useEffect(() => {
+    setOnAuthFailure(() => setUser(null));
+    return () => setOnAuthFailure(null);
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {

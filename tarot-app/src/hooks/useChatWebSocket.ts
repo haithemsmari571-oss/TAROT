@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChatMessages, type ChatMessage } from "../api/chat";
 import { ChatSocket } from "../api/chatSocket";
-import { getToken } from "../lib/auth";
+import { getValidAccessToken } from "../lib/refresh";
 
 export type ConnectionStatus =
   | "connecting"
@@ -48,7 +48,7 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
     let cancelled = false;
 
     (async () => {
-      const token = await getToken();
+      const token = await getValidAccessToken();
       if (!token) {
         setError("You need to sign in to open this chat.");
         setConnectionStatus("error");
