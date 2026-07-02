@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../src/theme/colors";
 import { useAuth } from "../../src/context/AuthContext";
@@ -23,6 +23,23 @@ const STATUS_COLOR: Record<string, string> = {
   ENDED: "rgba(255,255,255,0.35)",
   ARCHIVED: "rgba(255,255,255,0.35)",
 };
+
+function statusLabel(status: string, otherName: string): string {
+  switch (status) {
+    case "REQUESTED":
+      return `Requested — waiting for ${otherName}`;
+    case "ACTIVE":
+      return "Active now";
+    case "PAUSED":
+      return "Paused";
+    case "ENDED":
+      return "Ended";
+    case "ARCHIVED":
+      return "Archived";
+    default:
+      return status;
+  }
+}
 
 export default function SessionsScreen() {
   const { user, loading: authLoading } = useAuth();
@@ -41,14 +58,24 @@ export default function SessionsScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [user, load]);
+  // Refetch whenever the tab regains focus, so a request accepted on the web
+  // flips to ACTIVE without a manual pull. The first load shows the spinner;
+  // later focus refetches happen quietly in the background.
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      let active = true;
+      load().finally(() => {
+        if (active) setLoading(false);
+      });
+      return () => {
+        active = false;
+      };
+    }, [user, load])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -143,8 +170,11 @@ export default function SessionsScreen() {
                   <View
                     style={[styles.statusDot, { backgroundColor: statusColor }]}
                   />
-                  <Text style={[styles.statusText, { color: statusColor }]}>
-                    {item.status}
+                  <Text
+                    style={[styles.statusText, { color: statusColor }]}
+                    numberOfLines={1}
+                  >
+                    {statusLabel(item.status, other)}
                   </Text>
                 </View>
               </View>
@@ -222,6 +252,7 @@ const styles = StyleSheet.create({
   statusWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: {
+    flexShrink: 1,
     fontSize: 10,
     letterSpacing: 0.8,
     fontFamily: "Poppins_600SemiBold",

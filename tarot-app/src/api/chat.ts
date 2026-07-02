@@ -39,6 +39,18 @@ export async function getMyChats(): Promise<MyChat[]> {
 }
 
 /**
+ * Request a chat with a psychic. Creates (or re-opens) a chat in REQUESTED
+ * status with an initial message. Reuses the existing backend endpoint the
+ * website uses; the psychic/admin accepts it elsewhere to make it ACTIVE.
+ */
+export async function requestChat(
+  psychicId: number,
+  message: string
+): Promise<void> {
+  await api.post("/api/chat/request", { psychic_id: psychicId, message });
+}
+
+/**
  * Fetch messages for a chat. A negative offset returns the last abs(offset)
  * messages (newest window), oldest-first — matches how the web loads history.
  */

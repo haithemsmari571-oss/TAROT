@@ -18,13 +18,17 @@ import { api } from "../../src/api/client";
 import { COLORS } from "../../src/theme/colors";
 import type { Psychic } from "../../src/types";
 import { getHalo, getTier, hexToRgba, perMinute } from "../../src/utils/psychic";
+import { useAuth } from "../../src/context/AuthContext";
+import { requestChat } from "../../src/api/chat";
 
 export default function PsychicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const [psychic, setPsychic] = useState<Psychic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -42,6 +46,64 @@ export default function PsychicDetailScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleStartReading = useCallback(async () => {
+    if (!psychic) return;
+
+    // Requesting a chat needs a signed-in client.
+    if (!user) {
+      Alert.alert(
+        "Sign in to start a reading",
+        "Sign in from the Profile tab, then tap Start Reading again.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Go to Profile", onPress: () => router.push("/profile") },
+        ]
+      );
+      return;
+    }
+
+    setRequesting(true);
+    try {
+      await requestChat(psychic.id, "Hello, I'd like to start a reading.");
+      // Land on the Sessions tab so the new pending request is visible.
+      router.push("/sessions");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      const existingChatId = err?.response?.data?.existing_chat_id;
+
+      // Backend blocks a new request while another chat is active/paused.
+      if (status === 400 && existingChatId) {
+        Alert.alert(
+          "You already have a chat",
+          typeof detail === "string"
+            ? detail
+            : "Finish your current chat before starting a new one.",
+          [
+            { text: "Dismiss", style: "cancel" },
+            {
+              text: "Open it",
+              onPress: () =>
+                router.push({
+                  pathname: "/sessions/[chatId]",
+                  params: { chatId: String(existingChatId) },
+                }),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Couldn't start reading",
+          typeof detail === "string" && detail
+            ? detail
+            : "Please check your connection and try again."
+        );
+      }
+    } finally {
+      setRequesting(false);
+    }
+  }, [psychic, user, router]);
 
   const BackButton = (
     <TouchableOpacity
@@ -224,19 +286,16 @@ export default function PsychicDetailScreen() {
       {/* STICKY CTA */}
       <SafeAreaView edges={["bottom"]} style={styles.ctaBar}>
         <TouchableOpacity
-          style={styles.cta}
+          style={[styles.cta, requesting && styles.ctaDisabled]}
           activeOpacity={0.85}
-          onPress={() =>
-            Alert.alert(
-              "Reading sessions",
-              "Live readings arrive in the next update. You'll be able to start a session with " +
-                psychic.username +
-                " right here.",
-              [{ text: "Got it" }]
-            )
-          }
+          onPress={handleStartReading}
+          disabled={requesting}
         >
-          <Text style={styles.ctaText}>START READING →</Text>
+          {requesting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.ctaText}>START READING →</Text>
+          )}
         </TouchableOpacity>
       </SafeAreaView>
     </View>
@@ -416,6 +475,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
+  ctaDisabled: { opacity: 0.6 },
   ctaText: {
     color: "#fff",
     fontSize: 13,
