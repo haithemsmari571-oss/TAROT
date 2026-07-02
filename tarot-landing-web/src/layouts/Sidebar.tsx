@@ -7,11 +7,16 @@ import { useAuth } from '../features/auth/hooks';
 import { UserRole } from '../features/auth/types/auth.types';
 import axiosClient from '../lib/axiosClient';
 import { NotificationBell } from '../features/notifications/components/NotificationBell';
+import { startNotificationSound, stopNotificationSound } from '../lib/notificationSound';
+import { SoundToggle } from '../components/SoundToggle';
+import { useNotifications } from '../features/notifications/hooks/useNotifications';
+import { NotificationType } from '../features/notifications/types/notification.types';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { onNotification } = useNotifications();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pendingChatsCount, setPendingChatsCount] = useState(0);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
@@ -30,6 +35,14 @@ const Sidebar = () => {
           const chats = response.data || [];
           // Count chats with status REQUESTED (pending)
           const pendingCount = chats.filter((chat: any) => chat.status === 'REQUESTED').length;
+
+          // Safety net: if nothing is pending (all handled/cancelled, possibly in
+          // another tab), silence any lingering chime. The chime is STARTED in
+          // real time by the CHAT_REQUESTED WebSocket subscription below.
+          if (pendingCount === 0) {
+            stopNotificationSound();
+          }
+
           setPendingChatsCount(pendingCount);
         } catch (error) {
           console.error('Failed to fetch chats:', error);
@@ -40,8 +53,32 @@ const Sidebar = () => {
     fetchPendingChats();
     // Refresh every 30 seconds
     const interval = setInterval(fetchPendingChats, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Never let the chime outlive the admin panel.
+      stopNotificationSound();
+    };
   }, [user]);
+
+  // Instant reading-request alert: fire the chime the moment a CHAT_REQUESTED
+  // notification arrives over the WebSocket, if the admin has opted in via the
+  // "Enable sounds" toggle. Never autoplays — only on a real incoming request.
+  useEffect(() => {
+    const unsubscribe = onNotification(NotificationType.CHAT_REQUESTED, () => {
+      if (localStorage.getItem('adminSoundsEnabled') === 'true') {
+        startNotificationSound();
+      }
+    });
+    return unsubscribe;
+  }, [onNotification]);
+
+  // Acknowledge requests: stop the chime as soon as the admin opens the Chats
+  // page to view/handle them.
+  useEffect(() => {
+    if (location.pathname === '/admin/chats') {
+      stopNotificationSound();
+    }
+  }, [location.pathname]);
 
   // Fetch profile picture
   useEffect(() => {
@@ -192,17 +229,22 @@ const Sidebar = () => {
            <Icon icon="ph:eye-duotone" className="text-3xl relative z-10" style={{ color: COLORS.primary }} />
            <motion.div animate={{ opacity: [0.2, 0.5, 0.2] }} transition={{ repeat: Infinity, duration: 3 }} className="absolute inset-0 blur-lg rounded-full" style={{ backgroundColor: COLORS.primary }} />
         </div>
-        <h1 
-          style={{ 
+        <h1
+          style={{
             fontFamily: TYPOGRAPHY.headings.h1.fontFamily,
             color: COLORS.neutralWhite,
             fontWeight: 800,
             letterSpacing: "-0.02em"
-          }} 
+          }}
           className="text-lg uppercase leading-none"
         >
           Tarot <span style={{ color: COLORS.primary }}>Admin</span>
         </h1>
+      </div>
+
+      {/* Sound opt-in — unlocks audio so new reading-request chimes can play */}
+      <div className="px-3 -mt-8 mb-8 relative z-10">
+        <SoundToggle />
       </div>
 
       {/* 2. NAVIGATION */}

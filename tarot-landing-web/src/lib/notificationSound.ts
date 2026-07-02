@@ -18,6 +18,26 @@ function getAudio(): HTMLAudioElement {
   return audio;
 }
 
+// Unlock the <audio> element for later autoplay. Browsers block audio.play()
+// unless it first happens inside a user gesture, so call this from a click (the
+// "Enable sounds" toggle). Plays muted for an instant, then pauses/rewinds —
+// after which start/stopNotificationSound() can play without a user gesture.
+export function primeNotificationSound(): void {
+  const el = getAudio();
+  const prevVolume = el.volume;
+  el.volume = 0;
+  const restore = () => {
+    el.pause();
+    try {
+      el.currentTime = 0;
+    } catch {
+      // ignore
+    }
+    el.volume = prevVolume;
+  };
+  el.play().then(restore).catch(restore);
+}
+
 // Start the looping request alert. Safe to call repeatedly — restarts from 0.
 export function startNotificationSound(): void {
   const el = getAudio();
