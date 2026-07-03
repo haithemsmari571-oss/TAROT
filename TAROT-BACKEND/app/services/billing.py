@@ -82,6 +82,56 @@ def bill_session_interval(
     user_id = chat.user_id
     psychic_username = chat.psychic.username
 
+    # ── Never-joined guard ───────────────────────────────────────────────────
+    # If the client never joined (viewed) the reading, the session sat in the
+    # non-billing AWAITING_JOIN state and no reading time was consumed — do not
+    # charge for a reading the client never opened. `mark_client_joined` stamps
+    # `client_joined_at` for every real reading (web via /join since Phase 1, and
+    # the mobile app), so a null value means the client never viewed it.
+    #
+    # Legacy-data sanity check: only skip when there was genuinely no reading —
+    # i.e. the client authored no (non-system) messages. This prevents forgiving
+    # a real conversation on any historical row that happens to lack
+    # client_joined_at (e.g. a pre-join-mechanism session where a reading did
+    # occur); such rows still bill normally.
+    if chat.client_joined_at is None:
+        from app.models.message import Message
+
+        client_message_count = (
+            db.query(Message)
+            .filter(
+                Message.chat_id == chat.id,
+                Message.sender_id == chat.user_id,
+                Message.is_system == False,  # noqa: E712
+            )
+            .count()
+        )
+        if client_message_count == 0:
+            logger.warning(
+                "billing_skipped_client_never_joined",
+                interval_id=interval.id,
+                chat_id=chat.id,
+                session_id=session.id,
+                started_at=(
+                    interval.started_at.isoformat() if interval.started_at else None
+                ),
+                ended_at=(
+                    interval.ended_at.isoformat() if interval.ended_at else None
+                ),
+                note="client_joined_at is None and no client messages -> never viewed; not billing",
+            )
+            interval.is_billed = True
+            db.commit()
+            return None
+        else:
+            logger.warning(
+                "billing_client_joined_at_null_but_reading_occurred",
+                interval_id=interval.id,
+                chat_id=chat.id,
+                client_message_count=client_message_count,
+                note="client_joined_at is None but client messages exist -> real reading; billing normally",
+            )
+
     # Calculate cost
     cost = calculate_interval_cost(interval, psychic_price_per_second)
 
