@@ -409,6 +409,9 @@ def get_chat_session_time_endpoint(
             "client_balance": session_info.client_balance,
             "remaining_seconds": session_info.remaining_seconds,
             "total_seconds": session_info.elapsed_seconds,  # For backwards compatibility
+            # AWAITING_JOIN until the client actually joins/views — lets the admin
+            # panel show a frozen "waiting" state instead of a climbing counter.
+            "session_status": session_info.session_status,
         },
         status_code=200,
     )

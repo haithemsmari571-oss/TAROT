@@ -19,6 +19,10 @@ const AdminChatDetail = () => {
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
   const [seconds, setSeconds] = useState(0);
   const [estimatedCost, setEstimatedCost] = useState(0);
+  // True while the session is accepted but the client hasn't joined/viewed yet.
+  // The backend freezes billing in this AWAITING_JOIN window, so the panel must
+  // NOT tick a climbing time/earnings counter for a reading no one has opened.
+  const [awaitingJoin, setAwaitingJoin] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [pauseReason, setPauseReason] = useState<string | null>(null);
@@ -83,6 +87,7 @@ const AdminChatDetail = () => {
       console.log("Initial session data:", sessionTimeData);
       setSeconds(sessionTimeData.total_seconds || sessionTimeData.elapsed_seconds || 0);
       setEstimatedCost(sessionTimeData.estimated_cost || 0);
+      setAwaitingJoin((sessionTimeData as any).session_status === "AWAITING_JOIN");
     }
   }, [sessionTimeData, isChatActive]);
 
@@ -100,8 +105,9 @@ const AdminChatDetail = () => {
 
   // Frontend timer - increments every second for ACTIVE chats
   useEffect(() => {
-    // Stop timer if session ended, chat is not active, OR if paused
-    if (!isChatActive || !sessionTimeData || sessionEnded || timerPaused) return;
+    // Stop timer if session ended, not active, paused, OR the client hasn't
+    // joined yet (session frozen in AWAITING_JOIN — nothing to count).
+    if (!isChatActive || !sessionTimeData || sessionEnded || timerPaused || awaitingJoin) return;
 
     const timer = setInterval(() => {
       setSeconds((s) => s + 1);
@@ -109,7 +115,7 @@ const AdminChatDetail = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isChatActive, sessionTimeData, pricePerSecond, sessionEnded, timerPaused]);
+  }, [isChatActive, sessionTimeData, pricePerSecond, sessionEnded, timerPaused, awaitingJoin]);
 
   // Connect to WebSocket using psychic token
   useEffect(() => {
@@ -153,6 +159,16 @@ const AdminChatDetail = () => {
           toastRef.current.info("Chat session has ended");
           setSessionEnded(true);
           queryClient.invalidateQueries({ queryKey: ["chatDetails", chatId] });
+        } else if (data.event === "session_info") {
+          // Live session snapshot — reflect whether the client has joined yet.
+          const s = data.data || {};
+          setAwaitingJoin(s.session_status === "AWAITING_JOIN");
+          if (typeof s.elapsed_seconds === "number") setSeconds(s.elapsed_seconds);
+          if (typeof s.estimated_cost === "number") setEstimatedCost(s.estimated_cost);
+        } else if (data.event === "session_started") {
+          // Client just joined — the clock is now genuinely running.
+          setAwaitingJoin(false);
+          if (typeof data.data?.elapsed_seconds === "number") setSeconds(data.data.elapsed_seconds);
         } else if (data.type === "balance_warning") {
           toastRef.current.warning(`Low balance: ${data.remaining_seconds}s remaining`);
         } else if (data.event === "session_paused") {
@@ -383,7 +399,7 @@ const AdminChatDetail = () => {
                     Session Time
                   </div>
                   <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.primary }}>
-                    {formatTime(seconds)}
+                    {awaitingJoin ? "Waiting for client…" : formatTime(seconds)}
                   </div>
                 </div>
               </div>
