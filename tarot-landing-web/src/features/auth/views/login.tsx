@@ -44,9 +44,9 @@ const LoginPage = () => {
     await login({ email, password });
   };
 
-  const inputClasses = 
-    `w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/10 
-     uppercase text-[10px] font-black tracking-[0.2em] focus:outline-none focus:border-primary 
+  const inputClasses =
+    `w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/40
+     text-base font-medium focus:outline-none focus:border-primary
      focus:bg-white/[0.07] focus:ring-1 focus:ring-primary/20 transition-all duration-300`;
 
   return (
@@ -80,8 +80,8 @@ const LoginPage = () => {
             >
               Welcome <br /> <span style={{ color: COLORS.primary }}>Back</span>
             </h1>
-            <p className="text-[9px] uppercase tracking-[0.3em] font-bold text-white/30 leading-relaxed">
-              Login to access your personalized cosmic dashboard.
+            <p className="text-sm font-medium text-white/50 leading-relaxed">
+              Sign in to continue your readings.
             </p>
           </header>
 
@@ -94,8 +94,8 @@ const LoginPage = () => {
             >
               <div className="flex items-center justify-center gap-2">
                 <Icon icon="ph:check-circle-bold" className="text-green-400 text-lg" />
-                <p className="text-[10px] font-bold uppercase tracking-wider text-green-400">
-                  Account Verified Successfully!
+                <p className="text-sm font-semibold text-green-400">
+                  Account verified — welcome!
                 </p>
               </div>
             </motion.div>
@@ -103,13 +103,13 @@ const LoginPage = () => {
 
           <form className="space-y-6" onSubmit={handleLogin}>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/50 ml-1">Email</label>
+              <label className="text-sm font-semibold text-white/70 ml-1">Email</label>
               <div className="relative">
                 <Icon icon="ph:user-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
                 <input 
                   required 
                   type="email" 
-                  placeholder="agent@cosmic.net" 
+                  placeholder="you@email.com"
                   className={`${inputClasses} pl-12`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -119,9 +119,9 @@ const LoginPage = () => {
             
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/50">Password</label>
-                <Link to="/forgot-password" style={{ color: COLORS.primary }} className="text-[9px] font-black uppercase tracking-widest hover:underline opacity-80">
-                  Forgot?
+                <label className="text-sm font-semibold text-white/70">Password</label>
+                <Link to="/forgot-password" style={{ color: COLORS.primary }} className="text-sm font-semibold tracking-wide hover:underline opacity-80">
+                  Forgot password?
                 </Link>
               </div>
               <div className="relative">
@@ -139,8 +139,8 @@ const LoginPage = () => {
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-red-400">
-                  {error?.response?.data?.detail || "Invalid credentials"}
+                <p className="text-sm font-medium text-red-400">
+                  {error?.response?.data?.detail || "Incorrect email or password."}
                 </p>
               </div>
             )}
@@ -151,25 +151,25 @@ const LoginPage = () => {
               whileHover={{ scale: 1.02, backgroundColor: COLORS.primaryLight }}
               whileTap={{ scale: 0.98 }}
               style={{ backgroundColor: COLORS.primary }}
-              className="w-full py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] text-black shadow-lg transition-all mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
+              className="w-full py-5 rounded-2xl font-black uppercase text-sm tracking-[0.2em] text-black shadow-lg transition-all mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
             >
               {isPending ? (
-                <>Verifying... <Icon icon="ph:spinner-gap-bold" className="animate-spin text-lg" /></>
+                <>Signing in… <Icon icon="ph:spinner-gap-bold" className="animate-spin text-lg" /></>
               ) : (
-                <>Login <Icon icon="ph:arrow-right-bold" /></>
+                <>Sign in <Icon icon="ph:arrow-right-bold" /></>
               )}
             </motion.button>
           </form>
           
           <div className="mt-12 pt-8 border-t border-white/5 text-center">
-            <p className="text-[9px] uppercase tracking-[0.2em] text-white/20 font-bold mb-4">
-              Not registered in the archives?
+            <p className="text-xs tracking-wide text-white/40 font-medium mb-4">
+              New to Ask Valentina?
             </p>
-            <Link 
-              to="/register" 
-              className="inline-block text-[10px] font-black uppercase tracking-[0.4em] py-3 px-8 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-all"
+            <Link
+              to="/register"
+              className="inline-block text-sm font-bold tracking-wide py-3 px-8 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-all"
             >
-              Join The Council
+              Create account
             </Link>
           </div>
         </div>

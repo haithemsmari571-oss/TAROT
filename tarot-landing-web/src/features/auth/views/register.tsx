@@ -48,9 +48,9 @@ const RegisterPage = () => {
     register({ username, email, password });
   };
 
-  const inputClasses = 
-    `w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/10 
-     uppercase text-[10px] font-black tracking-[0.2em] focus:outline-none focus:border-primary 
+  const inputClasses =
+    `w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/40
+     text-base font-medium focus:outline-none focus:border-primary
      focus:bg-white/[0.07] focus:ring-1 focus:ring-primary/20 transition-all duration-300`;
 
   const containerVariants = {
@@ -82,10 +82,10 @@ const RegisterPage = () => {
               style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
               className="text-5xl font-black uppercase leading-none tracking-tighter italic"
             >
-              Join the <br /> <span style={{ color: COLORS.primary }}>Council</span>
+              Create your <br /> <span style={{ color: COLORS.primary }}>account</span>
             </h1>
-            <p className="text-[9px] uppercase tracking-[0.3em] font-bold text-white/30 leading-relaxed">
-              Create your neural profile to unlock cosmic insights.
+            <p className="text-sm font-medium text-white/50 leading-relaxed">
+              Join Ask Valentina to connect with a gifted reader.
             </p>
           </header>
 
@@ -97,18 +97,18 @@ const RegisterPage = () => {
             >
               <Icon icon="ph:check-circle-bold" className="text-green-400 text-5xl mx-auto" />
               <div>
-                <h3 className="text-[12px] font-black uppercase tracking-wider text-green-400 mb-2">
-                  Profile Created Successfully
+                <h3 className="text-sm font-bold text-green-400 mb-2">
+                  Account created
                 </h3>
-                <p className="text-[9px] uppercase tracking-widest text-white/40 leading-relaxed">
-                  Check your email to verify your account before logging in.
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Check your email to verify your account, then sign in.
                 </p>
               </div>
-              <Link 
+              <Link
                 to="/login"
-                className="inline-block text-[10px] font-black uppercase tracking-[0.4em] py-3 px-8 rounded-xl border border-green-500/20 text-green-400 hover:bg-green-500/5 transition-all"
+                className="inline-block text-sm font-bold tracking-wide py-3 px-8 rounded-xl border border-green-500/20 text-green-400 hover:bg-green-500/5 transition-all"
               >
-                Go to Login
+                Go to sign in
               </Link>
             </motion.div>
           ) : (
@@ -120,13 +120,13 @@ const RegisterPage = () => {
               onSubmit={handleRegister}
             >
               <motion.div variants={itemVariants} className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/50 ml-1">Username</label>
+                <label className="text-sm font-semibold text-white/70 ml-1">Username</label>
                 <div className="relative">
                   <Icon icon="ph:identification-card-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
                   <input 
                     required
                     type="text" 
-                    placeholder="AGENT_NAME_00" 
+                    placeholder="Your name"
                     className={`${inputClasses} pl-12`}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -135,13 +135,13 @@ const RegisterPage = () => {
               </motion.div>
 
               <motion.div variants={itemVariants} className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/50 ml-1">Email</label>
+                <label className="text-sm font-semibold text-white/70 ml-1">Email</label>
                 <div className="relative">
                   <Icon icon="ph:envelope-simple-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
                   <input 
                     required
                     type="email" 
-                    placeholder="IDENTITY@COUNCIL.IO" 
+                    placeholder="you@email.com"
                     className={`${inputClasses} pl-12`}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -151,7 +151,7 @@ const RegisterPage = () => {
               
               <div className="grid grid-cols-2 gap-4">
                   <motion.div variants={itemVariants} className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/50 ml-1">Password</label>
+                      <label className="text-sm font-semibold text-white/70 ml-1">Password</label>
                       <input 
                         required
                         type="password" 
@@ -162,7 +162,7 @@ const RegisterPage = () => {
                       />
                   </motion.div>
                   <motion.div variants={itemVariants} className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/50 ml-1">Confirm</label>
+                      <label className="text-sm font-semibold text-white/70 ml-1">Confirm password</label>
                       <input 
                         required
                         type="password" 
@@ -176,7 +176,7 @@ const RegisterPage = () => {
 
               {(passwordError || error) && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-red-400">
+                  <p className="text-sm font-medium text-red-400">
                     {passwordError || error?.response?.data?.message}
                   </p>
                 </div>
@@ -189,12 +189,12 @@ const RegisterPage = () => {
                 whileHover={{ scale: 1.02, backgroundColor: COLORS.primaryLight }}
                 whileTap={{ scale: 0.98 }}
                 style={{ backgroundColor: COLORS.primary }}
-                className="w-full py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] text-black shadow-lg transition-colors mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
+                className="w-full py-5 rounded-2xl font-black uppercase text-sm tracking-[0.2em] text-black shadow-lg transition-colors mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
               >
                 {isPending ? (
                   <>Processing... <Icon icon="ph:spinner-gap-bold" className="animate-spin text-lg" /></>
                 ) : (
-                  <>Initialize Profile <Icon icon="ph:user-plus-bold" /></>
+                  <>Create account <Icon icon="ph:user-plus-bold" /></>
                 )}
               </motion.button>
             </motion.form>
@@ -206,14 +206,14 @@ const RegisterPage = () => {
             transition={{ delay: 0.8 }}
             className="mt-10 pt-6 border-t border-white/5 text-center"
           >
-            <p className="text-[9px] uppercase tracking-[0.2em] text-white/20 font-bold mb-4">
-              Already verified in the archives?
+            <p className="text-xs tracking-wide text-white/40 font-medium mb-4">
+              Already have an account?
             </p>
-            <Link 
-              to="/login" 
-              className="inline-block text-[10px] font-black uppercase tracking-[0.4em] py-3 px-8 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-all"
+            <Link
+              to="/login"
+              className="inline-block text-sm font-bold tracking-wide py-3 px-8 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-all"
             >
-              Authorized Login
+              Sign in
             </Link>
           </motion.div>
         </div>
