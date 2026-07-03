@@ -7,7 +7,7 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useChats } from "../hooks/useChats";
 import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
-import { getChatMessages, getChatSessionTime, resumeChat, joinChat, Chat } from "../api/chatApi";
+import { getChatMessages, getChatSessionTime, resumeChat, Chat } from "../api/chatApi";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -474,25 +474,10 @@ const ClientChat = () => {
     setMessages([]);
   }, [selectedChat]);
 
-  // ── Anchor billing to when the client actually VIEWS the accepted reading ──
-  // The website's equivalent of the mobile app's /join. Fires when the client is
-  // genuinely rendering an ACTIVE conversation — NOT on WebSocket connect and NOT
-  // on notification click. The backend re-anchors the session clock to this
-  // moment, so the accept→viewed gap is never billed. Idempotent server-side, and
-  // ref-guarded so it fires once per activation.
-  const joinedChatRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (
-      selectedChat &&
-      currentChatStatus === 'ACTIVE' &&
-      joinedChatRef.current !== selectedChat
-    ) {
-      joinedChatRef.current = selectedChat;
-      joinChat(selectedChat).catch((err) => {
-        console.error('[ClientChat] Failed to anchor session on view (join):', err);
-      });
-    }
-  }, [selectedChat, currentChatStatus]);
+  // NOTE: billing is anchored ONLY by an explicit click on the global
+  // "Incoming Reading" Join button (IncomingReadingModal → joinChat). It must
+  // NOT be triggered by viewing/rendering this conversation, so there is no
+  // join-on-view effect here by design.
 
   // Track when sidebar should show
   useEffect(() => {

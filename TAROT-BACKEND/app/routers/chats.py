@@ -205,6 +205,10 @@ def get_my_chats_endpoint(
             "status": chat.status.value,
             "created_at": chat.created_at.isoformat() if chat.created_at else None,
             "updated_at": chat.updated_at.isoformat() if chat.updated_at else None,
+            # When the client explicitly joined (billing anchor); null until then.
+            "client_joined_at": (
+                chat.client_joined_at.isoformat() if chat.client_joined_at else None
+            ),
             # Client details
             "client_id": client.id if client else None,
             "client_username": client.username if client else None,

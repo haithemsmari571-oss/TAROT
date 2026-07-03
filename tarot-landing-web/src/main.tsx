@@ -8,6 +8,7 @@ import { AuthProvider } from './features/auth/context'
 import { AuthInitializer } from './features/auth/components'
 import { ToastProvider } from './components/Toast'
 import { NotificationProvider } from './features/notifications/context/NotificationContext'
+import IncomingReadingModal from './features/chat/components/IncomingReadingModal'
 
 const queryClient = new QueryClient(
   {defaultOptions: {
@@ -28,6 +29,8 @@ createRoot(document.getElementById('root')!).render(
             <AuthInitializer>
               <ToastProvider>
                 <App />
+                {/* Global "Incoming Reading" gate — the ONLY way to join/start billing */}
+                <IncomingReadingModal />
               </ToastProvider>
             </AuthInitializer>
           </NotificationProvider>
