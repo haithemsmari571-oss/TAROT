@@ -188,12 +188,18 @@ export class ChatFacade {
       
       case 'session_ended':
       case 'session_ended_no_balance':
-      case 'session_ended_confirmed':
-        console.log('[ChatFacade] Emitting SESSION_ENDED:', data.reason, 'DB Status:', data.chat_status);
+      case 'session_ended_confirmed': {
+        // `session_ended_confirmed` nests its fields under `data.data`
+        // (e.g. reason: "MANUAL_EXIT"), while the plainer events carry them at
+        // the top level — read both so the real reason isn't lost.
+        const endReason = data.reason ?? data.data?.reason ?? 'session_ended';
+        const dbStatus = data.chat_status ?? data.data?.chat_status;
+        console.log('[ChatFacade] Emitting SESSION_ENDED:', endReason, 'DB Status:', dbStatus);
         this.eventBus.emit(ChatEventType.SESSION_ENDED, {
-          reason: data.reason || 'session_ended'
+          reason: endReason
         });
         break;
+      }
       
       // Let adapter handle role-specific events
       default:

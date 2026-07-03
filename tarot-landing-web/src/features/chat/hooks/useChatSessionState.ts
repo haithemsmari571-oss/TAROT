@@ -473,11 +473,11 @@ export function useChatSessionState({
   // Handle auto-end when timer reaches 0
   useEffect(() => {
     if (state.status === 'ENDED' && state.remainingSeconds === 0 && !hasCalledOnSessionEnded.current) {
-      console.log('[useChatSessionState] Session auto-ended due to insufficient balance');
+      console.log('[useChatSessionState] Session ended, reason:', state.endReason ?? 'unknown');
       hasCalledOnSessionEnded.current = true;
       onSessionEndedRef.current?.();
     }
-  }, [state.status, state.remainingSeconds, chatId]);
+  }, [state.status, state.remainingSeconds, state.endReason, chatId]);
   
   const updateBalance = useCallback((balance: number) => {
     dispatch({ type: 'UPDATE_BALANCE', payload: { balance } });
