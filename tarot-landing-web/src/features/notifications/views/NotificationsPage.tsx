@@ -1,6 +1,7 @@
 import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { COLORS, TYPOGRAPHY } from "@/theme";
 import { NotificationType } from "../types/notification.types";
 import PageBackground from "@/components/PageBackground";
@@ -79,6 +80,7 @@ function formatTime(timestamp: string) {
 
 const NotificationsPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const {
     notifications,
     total,
@@ -96,7 +98,16 @@ const NotificationsPage = () => {
 
   const handleClick = (notification: (typeof notifications)[0]) => {
     if (!notification.is_read) markAsRead(notification.id);
-    if (notification.data?.chat_id) navigate("/chats");
+    // Deep-link straight into the specific conversation (not just the list), so a
+    // client tapping "chat accepted" lands in the live reading instead of hunting
+    // for it. Route by side: clients → /chats, psychics/admins → /admin/chats.
+    const chatId = notification.data?.chat_id;
+    if (chatId) {
+      const isPsychicSide = ["PSYCHIC", "ADMIN", "SUPERADMIN"].includes(
+        String(user?.role)
+      );
+      navigate(`${isPsychicSide ? "/admin/chats" : "/chats"}?chat_id=${chatId}`);
+    }
   };
 
   return (

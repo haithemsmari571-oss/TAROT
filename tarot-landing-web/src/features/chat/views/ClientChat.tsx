@@ -7,7 +7,7 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useChats } from "../hooks/useChats";
 import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
-import { getChatMessages, getChatSessionTime, resumeChat, Chat } from "../api/chatApi";
+import { getChatMessages, getChatSessionTime, resumeChat, joinChat, Chat } from "../api/chatApi";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -474,6 +474,26 @@ const ClientChat = () => {
     setMessages([]);
   }, [selectedChat]);
 
+  // ── Anchor billing to when the client actually VIEWS the accepted reading ──
+  // The website's equivalent of the mobile app's /join. Fires when the client is
+  // genuinely rendering an ACTIVE conversation — NOT on WebSocket connect and NOT
+  // on notification click. The backend re-anchors the session clock to this
+  // moment, so the accept→viewed gap is never billed. Idempotent server-side, and
+  // ref-guarded so it fires once per activation.
+  const joinedChatRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      selectedChat &&
+      currentChatStatus === 'ACTIVE' &&
+      joinedChatRef.current !== selectedChat
+    ) {
+      joinedChatRef.current = selectedChat;
+      joinChat(selectedChat).catch((err) => {
+        console.error('[ClientChat] Failed to anchor session on view (join):', err);
+      });
+    }
+  }, [selectedChat, currentChatStatus]);
+
   // Track when sidebar should show
   useEffect(() => {
     const shouldShow = isChatActive || currentChatStatus === 'ACTIVE';
@@ -797,6 +817,22 @@ const ClientChat = () => {
       }, 1000);
 
       return () => clearTimeout(timer);
+    }
+  }, [searchParams, navigate]);
+
+  // ── Deep-link: open a specific conversation straight from a notification ──
+  // /chats?chat_id=123 (no payment `status`) selects that chat directly, instead
+  // of dropping the client on the list to hunt for it while billing runs.
+  useEffect(() => {
+    const chatIdParam = searchParams.get('chat_id');
+    const status = searchParams.get('status');
+    if (chatIdParam && !status) {
+      const id = parseInt(chatIdParam);
+      if (Number.isFinite(id)) {
+        setSelectedChat(id);
+        // Clean the query so refresh/back doesn't re-trigger selection.
+        navigate('/chats', { replace: true });
+      }
     }
   }, [searchParams, navigate]);
 

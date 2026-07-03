@@ -164,6 +164,17 @@ export const updateChatStatus = async (
 };
 
 /**
+ * Client "joins" an accepted chat — anchors the billing timer to the moment the
+ * client actually views the conversation (backend `mark_client_joined`). The
+ * backend does NOT bill the gap between the psychic accepting and this call; it
+ * re-anchors the session clock here. Idempotent server-side (safe to re-call).
+ */
+export const joinChat = async (chatId: number) => {
+  const response = await axiosClient.post(`/chat/${chatId}/join`);
+  return response.data;
+};
+
+/**
  * Pause a chat session for top-up (uses the topup endpoint — client-initiated,
  * opens Stripe checkout)
  */
