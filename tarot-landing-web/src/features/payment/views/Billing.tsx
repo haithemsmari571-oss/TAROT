@@ -994,8 +994,15 @@ const Billing = () => {
                 className="text-sm sm:text-base mb-6 sm:mb-8 font-light px-2"
                 style={{ color: COLORS.neutralGray }}
               >
-                Your payment could not be processed. Please try again or contact
-                support if the issue persists.
+                Your payment could not be processed. Please try again or{" "}
+                <a
+                  href="mailto:support@askvalentina.co.uk"
+                  className="underline hover:opacity-80 transition-opacity"
+                  style={{ color: COLORS.primary }}
+                >
+                  contact support
+                </a>{" "}
+                if the issue persists.
               </p>
 
               <button

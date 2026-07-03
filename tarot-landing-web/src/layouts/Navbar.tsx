@@ -121,11 +121,11 @@ export default function Navbar() {
           <div className="starfield-dense"></div>
         </div>
 
-         <div className="max-w-[1440px] mx-auto px-4 md:px-6 flex items-center justify-between relative z-10">
-           
-           <div onClick={() => navigate("/home")} className="cursor-pointer group relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12">
-             <img src="/logo short normal.svg" alt="Tarot Logo" className="w-full h-full object-contain transition-all duration-500 group-hover:brightness-125" />
-             <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full -z-10 opacity-50 group-hover:opacity-100 transition-opacity" />
+         <div className="max-w-[1440px] mx-auto px-6 md:px-10 flex items-center justify-between relative z-10">
+
+           <div onClick={() => navigate("/home")} className="cursor-pointer group relative flex items-center h-16 lg:h-24 shrink-0" title="Ask Valentina — home">
+             <img src="/logo short normal.svg" alt="Ask Valentina home" className="h-full w-auto object-contain transition-all duration-500 group-hover:brightness-125" />
+             <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full -z-10 opacity-50 group-hover:opacity-100 transition-opacity" />
            </div>
 
            <nav className="hidden lg:flex items-center bg-white/[0.03] backdrop-blur-md rounded-full px-1.5 py-1 border border-white/5">
@@ -150,6 +150,16 @@ export default function Navbar() {
            </nav>
 
            <div className="hidden lg:flex items-center gap-4">
+             {/* Help — always reachable, opens the support email */}
+             <a
+               href="mailto:support@askvalentina.co.uk"
+               title="Email our support team"
+               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white/50 hover:text-primary transition-colors"
+             >
+               <Icon icon="ph:lifebuoy-bold" className="text-base" />
+               Help
+             </a>
+
              {isAuthenticated ? (
                <>
                  <div 
@@ -247,7 +257,7 @@ export default function Navbar() {
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-white/5">
             <div onClick={() => { navigate("/home"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-3">
-              <img src="/logo short normal.svg" alt="Tarot Logo" className="w-6 h-6 object-contain" />
+              <img src="/logo short normal.svg" alt="Ask Valentina home" className="h-14 w-auto object-contain" />
               <span 
                 className="font-black text-sm uppercase tracking-wider"
                 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
@@ -313,7 +323,16 @@ export default function Navbar() {
                 <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
               </div>
 
-              <button 
+              <a
+                href="mailto:support@askvalentina.co.uk"
+                onClick={() => setMobileNavOpen(false)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all"
+              >
+                <Icon icon="ph:lifebuoy-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                <span className="text-sm font-bold uppercase tracking-wider text-white/70">Help &amp; Support</span>
+              </a>
+
+              <button
                 onClick={() => { logout(); setMobileNavOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
               >
