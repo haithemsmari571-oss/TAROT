@@ -45,7 +45,12 @@ export interface ChatSessionState {
   showCriticalEndingWarning: boolean;
   isPaused: boolean;
   pauseReason: string | null;
-  
+
+  // Why the session ended (backend reason string, e.g. "user_initiated" vs
+  // "insufficient_balance"). Single source of truth for the end-of-session
+  // modal variant. Null while the session is still live.
+  endReason: string | null;
+
   // Role context
   userRole: 'CLIENT' | 'PSYCHIC' | 'ADMIN';
 }

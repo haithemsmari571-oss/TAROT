@@ -32,6 +32,11 @@ const ClientChat = () => {
   // Refs for stable access in callbacks
   const toastRef = useRef(toast);
   const queryClientRef = useRef(queryClient);
+  // Guards the end-of-session modal so it is shown once, by the handler that
+  // knows the REAL end reason. Prevents the client-side "timer hit 0" fallback
+  // effect from overriding a graceful/manual end with the "ran out of balance"
+  // variant (CHAT_ENDED forces remainingSeconds to 0 for every end).
+  const hasHandledSessionEnd = useRef(false);
 
   useEffect(() => {
     toastRef.current = toast;
@@ -264,6 +269,7 @@ const ClientChat = () => {
 
     // Show summary modal
     setShowSessionSummaryModal(true);
+    hasHandledSessionEnd.current = true;
 
     // Optimistically update the chat status in cache
     if (selectedChat) {
@@ -294,6 +300,11 @@ const ClientChat = () => {
         reason: reason || 'Session ended',
       }
     });
+
+    // This handler knows the real end reason (MANUAL_EXIT vs INSUFFICIENT_FUNDS,
+    // etc.), so claim the session-end here — the client-side timer-0 fallback
+    // effect must not override the modal variant it just chose.
+    hasHandledSessionEnd.current = true;
 
     // If session was never active (declined request), skip the modal
     const wasDeclined = sessionState.elapsedSeconds === 0 && sessionState.estimatedCost === 0;
@@ -492,10 +503,7 @@ const ClientChat = () => {
     });
   }, [isChatActive, currentChatStatus, sessionState.status, sessionState.chatId, selectedChat]);
 
-  // Track if we've already handled the session end to prevent infinite loop
-  const hasHandledSessionEnd = useRef(false);
-
-  // Reset the flag when chat changes
+  // Reset the session-end guard when the chat changes.
   useEffect(() => {
     hasHandledSessionEnd.current = false;
   }, [selectedChat]);
@@ -514,15 +522,18 @@ const ClientChat = () => {
 
       // Disconnect WebSocket
       if (facade && isConnected) {
-        console.log('[ClientChat] Disconnecting WebSocket due to insufficient balance');
+        console.log('[ClientChat] Disconnecting WebSocket, end reason:', sessionState.endReason);
         facade.disconnect();
       }
 
-      // Show session summary modal
+      // Show session summary modal. CHAT_ENDED forces remainingSeconds to 0 for
+      // EVERY end (manual or balance), so this fallback must key off the real
+      // end reason — not assume "insufficient balance". A voluntary End Chat
+      // carries "user_initiated" and gets the graceful (purple) variant.
       setSessionSummaryData({
         duration: sessionState.elapsedSeconds,
         cost: sessionState.estimatedCost,
-        endReason: "Session ended - insufficient balance",
+        endReason: sessionState.endReason || "Session ended",
       });
       setShowSessionSummaryModal(true);
 
@@ -541,7 +552,7 @@ const ClientChat = () => {
       // Refetch to sync with backend
       refetch();
     }
-  }, [sessionState.status, sessionState.remainingSeconds, sessionState.elapsedSeconds, sessionState.estimatedCost, facade, isConnected, selectedChat, refetch]);
+  }, [sessionState.status, sessionState.remainingSeconds, sessionState.elapsedSeconds, sessionState.estimatedCost, sessionState.endReason, facade, isConnected, selectedChat, refetch]);
 
   const handleEnterChat = (chatId: number) => {
     setSelectedChat(chatId);

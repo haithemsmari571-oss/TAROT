@@ -25,11 +25,12 @@ const initialState: ChatSessionState = {
   showCriticalEndingWarning: false,
   isPaused: false,
   pauseReason: null,
+  endReason: null,
   userRole: 'CLIENT', // Default, can be passed as param
 };
 
-function chatSessionReducer(
-  state: ChatSessionState, 
+export function chatSessionReducer(
+  state: ChatSessionState,
   action: ChatSessionAction
 ): ChatSessionState {
   switch (action.type) {
@@ -72,10 +73,13 @@ function chatSessionReducer(
         isPaused: false,
         remainingBalance: effectiveBalance,
         remainingSeconds,
+        // Fresh session: no end reason yet. If it initializes already-depleted,
+        // that IS a balance end.
+        endReason: actualStatus === 'ENDED' ? 'insufficient_balance' : null,
         showLowBalanceWarning: remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
         showCriticalWarning: remainingSeconds !== null && remainingSeconds <= 60,
       };
-      
+
       console.log('[useChatSessionState] New state after INITIALIZE:', newState);
       console.log('[useChatSessionState] Balance check - effectiveBalance:', effectiveBalance, 'remainingSeconds:', remainingSeconds, 'actualStatus:', actualStatus);
       return newState;
@@ -106,6 +110,7 @@ function chatSessionReducer(
           remainingBalance: 0,
           remainingSeconds: 0,
           status: 'ENDED',
+          endReason: 'insufficient_balance',
           isInputEnabled: false,
           showLowBalanceWarning: false,
           showCriticalWarning: false,
@@ -192,6 +197,9 @@ function chatSessionReducer(
       return {
         ...state,
         status: 'ENDED',
+        // Preserve the REAL reason (e.g. "user_initiated" for a voluntary End
+        // Chat) so the summary modal doesn't default to the balance variant.
+        endReason: action.payload?.reason ?? state.endReason ?? 'user_initiated',
         isInputEnabled: false,
         isPaused: false,
         elapsedSeconds: finalElapsedSeconds,
@@ -201,7 +209,7 @@ function chatSessionReducer(
         showCriticalEndingWarning: false,
       };
     }
-    
+
     case 'SESSION_ENDED_NO_BALANCE': {
       console.log('[useChatSessionState] SESSION_ENDED_NO_BALANCE reducer:', {
         chatId: state.chatId,
@@ -212,6 +220,7 @@ function chatSessionReducer(
       return {
         ...state,
         status: 'ENDED',
+        endReason: 'insufficient_balance',
         isInputEnabled: false,
         isPaused: false,
         remainingSeconds: 0, // Force to 0 when ended
@@ -219,7 +228,7 @@ function chatSessionReducer(
         showCriticalEndingWarning: false,
       };
     }
-    
+
     case 'UPDATE_BALANCE': {
       const newBalance = action.payload.balance;
       const remainingSeconds = state.psychicRatePerSecond > 0
