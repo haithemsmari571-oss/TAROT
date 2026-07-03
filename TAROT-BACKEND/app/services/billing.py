@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import List, Tuple
 
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.enums.chat_session_status import ChatSessionStatus
@@ -97,12 +97,27 @@ def bill_session_interval(
     if chat.client_joined_at is None:
         from app.models.message import Message
 
+        # Boundary = when THIS session started (its earliest interval). Only
+        # messages sent during the session count as evidence a reading occurred.
+        # Crucially this excludes the client's initial chat *request* message —
+        # which every reading creates before the session starts — as well as any
+        # messages from prior sessions on this (reused) chat row. Without this
+        # window the request message alone made the count non-zero for every
+        # reading, so the skip branch below was unreachable and never-joined
+        # sessions were billed anyway.
+        session_start = (
+            db.query(func.min(SessionInterval.started_at))
+            .filter(SessionInterval.session_id == session.id)
+            .scalar()
+        )
+
         client_message_count = (
             db.query(Message)
             .filter(
                 Message.chat_id == chat.id,
                 Message.sender_id == chat.user_id,
                 Message.is_system == False,  # noqa: E712
+                Message.created_at >= session_start,
             )
             .count()
         )

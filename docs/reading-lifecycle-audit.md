@@ -139,3 +139,41 @@ works but a reasonable user would be lost or surprised · `cosmetic` = polish.
 - **broken:** web never `/join`s → billing runs from accept (stage 5); no deep-link to the live chat on accept (stage 4); insufficient-balance ends the reading during the top-up race (stage 6); orphaned/mock psychic code (stage 3).
 - **confusing:** "Start Reading" really means "request" with no cost preview (stage 1); empty `201` on request (stage 2); admins can't accept from chat-detail (stage 3); no client-present signal to psychic (stage 4/5); three different purchase flows + threshold mismatch (stage 6); no end summary when client is away, no review prompt (stage 7).
 - **cosmetic:** accept copy drift; duplicate decline paths; generic end-reason fallback.
+
+---
+
+## Regression log
+
+### 2026-07-03 — Never-joined billing guard was inert (fixed)
+**Symptom:** a client who requests a reading, the psychic accepts, and the
+client **never joins/opens it** was still **billed from accept** when the
+session ended. The Phase-1b "never-joined guard" (`billing.py`
+`bill_session_interval`) never actually fired.
+
+**Two independent defects (both required to be wrong for it to bill):**
+1. **Dead sanity check.** The guard skipped only when the client had zero
+   non-system messages, but it counted the client's initial **request
+   message** — `req_start_chat` (`services/chats.py`) creates one for every
+   reading, `is_system=False`, *before* the session starts. So the count was
+   always ≥ 1 and the `== 0` skip branch was unreachable, even for a fresh
+   session with `chat.client_joined_at IS NULL`.
+2. **Stale join stamp.** Chats are **reused per client-psychic pair**
+   (`req_start_chat` flips an existing row back to `REQUESTED`), and
+   `chat.client_joined_at` was never reset. Once a client joined a psychic
+   once, every later session saw a non-null stamp, so the guard billed from
+   accept without even reaching the message check.
+
+**Verified live on production (via API, client = Rania):**
+- chat 16 (fresh psychic YUSUF, `client_joined_at=None`, never joined) → `DEBIT 1 / 21s`.
+- chat 11 (repeat psychic Valentina, stale `client_joined_at`, never joined) → `DEBIT 3 / 27s`.
+
+**Fix:** `billing.py` now counts only client messages sent at/after the
+session start (`min(SessionInterval.started_at)`), excluding the request
+message and prior-session messages; `session_manager.start_session` now
+resets `chat.client_joined_at = None` on each new session (`INITIAL_START`
+only, not resume).
+
+**Regression checks to keep:** (a) never-joined fresh **and** repeat sessions
+must **skip** billing (log `billing_skipped_client_never_joined`, balance
+unchanged, no transaction row); (b) a **real** reading where the client
+joins and chats must **still bill** normally.

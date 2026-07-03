@@ -311,6 +311,13 @@ class SessionManager:
             # Update chat status
             chat.status = ChatStatus.ACTIVE
 
+            # A new session must be joined afresh. Chats are reused per
+            # client-psychic pair, so clear any join stamp left on this row by a
+            # previous session — otherwise the never-joined billing guard and the
+            # awaiting-join gate would treat every repeat session as already
+            # joined and bill it from accept even if the client never opens it.
+            chat.client_joined_at = None
+
             db.commit()
             db.refresh(chat_session)
             db.refresh(interval)
