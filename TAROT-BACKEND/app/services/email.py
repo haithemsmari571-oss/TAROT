@@ -171,6 +171,65 @@ templates = {
 </body>
 </html>
 """,
+    MailTemplateKey.LIFETIME_ACCESS.value: """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lifetime Access — Manual Fulfilment Needed</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333333;
+      background-color: #f9f9f9;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 { color: #8A5A00; }
+    .flag {
+      display: inline-block;
+      padding: 6px 12px;
+      margin-bottom: 10px;
+      font-weight: bold;
+      color: #ffffff;
+      background-color: #F2AE40;
+      border-radius: 5px;
+    }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    td { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+    td.k { color: #888; width: 40%; }
+    .footer { font-size: 12px; color: #888888; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="flag">⚡ MANUAL FULFILMENT NEEDED</div>
+    <h2>Lifetime Access purchased</h2>
+    <p>A client just paid for <strong>Lifetime Access</strong>. This is not
+    tracked automatically — please grant their access manually.</p>
+    <table>
+      <tr><td class="k">User</td><td>{{username}} (ID {{user_id}})</td></tr>
+      <tr><td class="k">Email</td><td>{{user_email}}</td></tr>
+      <tr><td class="k">Amount paid</td><td>${{amount_usd}} USD</td></tr>
+      <tr><td class="k">Stripe session</td><td>{{stripe_session_id}}</td></tr>
+      <tr><td class="k">Entitlement</td><td>{{entitlement}}</td></tr>
+    </table>
+    <p>Transaction record: #{{transaction_id}} (also flagged in the admin order list).</p>
+    <div class="footer">
+      &copy; 2026 AskValentina. Automated notification.
+    </div>
+  </div>
+</body>
+</html>
+""",
 }
 
 
@@ -192,6 +251,9 @@ async def send_email(
         email_subjects = {
             MailTemplateKey.FORGOT_PASSWORD.value: "Reset your password",
             MailTemplateKey.VERIFY_ACCOUNT.value: "Verify your AskValentina account",
+            MailTemplateKey.LIFETIME_ACCESS.value: (
+                "⚡ Lifetime Access purchased — manual fulfilment needed"
+            ),
         }
         subject = email_subjects.get(template_key, "AskValentina Notification")
 

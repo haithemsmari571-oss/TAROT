@@ -12,10 +12,10 @@ from app.models.settings import Settings
 from app.models.user import User
 from app.schemas.payment import (
     CreateCheckoutSessionRequest,
+    CreateStardustCheckoutSessionRequest,
     UnitPriceResponse,
-    CreateCheckoutPackageSessionRequest,
 )
-from app.services.landing import get_section
+from app.services.stardust import LIFETIME_COPY, calculate_stardust_quote
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -163,47 +163,57 @@ async def create_checkout_session(
         )
 
 
-@router.post("/create-package-checkout-session")
-async def create_checkout_session(
-    request: CreateCheckoutPackageSessionRequest,
+@router.post("/create-stardust-checkout-session")
+async def create_stardust_checkout_session(
+    request: CreateStardustCheckoutSessionRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Custom-amount ("glider") checkout.
+
+    The client sends only a whole-dollar amount ($15–$1000). The tier, bonus
+    percentage and awarded points are always computed here on the server via
+    ``calculate_stardust_quote`` — the client-side numbers are display only.
+    An arbitrary amount is charged using Stripe dynamic ``price_data`` (no
+    pre-set Price ID).
+    """
     bind_user_to_context(user.id)
 
+    # Server-side tier calculation — never trust a client-sent point total.
+    quote = calculate_stardust_quote(request.amount_usd)
+
     logger.info(
-        "checkout_session_requested",
+        "stardust_checkout_session_requested",
         user_id=user.id,
-        title=request.title,
+        amount_usd=quote.amount_usd,
+        tier=quote.tier,
+        total_points=quote.total_points,
+        is_lifetime=quote.is_lifetime,
     )
 
     try:
         stripe_api_key_setting = (
             db.query(Settings).filter(Settings.key == "stripe_api_key").first()
         )
-
         if not stripe_api_key_setting or not stripe_api_key_setting.value:
-            raise HTTPException(500, "Stripe API key not configured")
+            logger.error("stripe_api_key_not_configured", user_id=user.id)
+            raise HTTPException(
+                status_code=500, detail="Stripe API key not configured in settings"
+            )
 
         stripe.api_key = stripe_api_key_setting.value
 
-        entry = get_section(db, "packages")
-        packages = entry.content["packages"]
+        amount_cents = quote.amount_usd * 100
 
-        package = next(
-            (
-                p
-                for p in packages
-                if p["title"].strip().lower() == request.title.strip().lower()
-            ),
-            None,
-        )
-
-        if not package:
-            raise HTTPException(status_code=404, detail="Package not found")
-
-        price_cents = int(float(package["price"]) * 100)
-        points = package["points"]
+        if quote.is_lifetime:
+            product_name = "Stardust — Lifetime Access"
+        elif quote.bonus_pct > 0:
+            product_name = (
+                f"{quote.total_points} Stardust "
+                f"({quote.tier_name} tier · +{int(quote.bonus_pct * 100)}% bonus)"
+            )
+        else:
+            product_name = f"{quote.total_points} Stardust"
 
         success_url = (
             f"{settings.FRONT_BASE_URL}{request.return_url}&status=success"
@@ -217,10 +227,8 @@ async def create_checkout_session(
                 {
                     "price_data": {
                         "currency": "usd",
-                        "product_data": {
-                            "name": package["title"],
-                        },
-                        "unit_amount": price_cents,
+                        "product_data": {"name": product_name},
+                        "unit_amount": amount_cents,
                     },
                     "quantity": 1,
                 }
@@ -228,19 +236,29 @@ async def create_checkout_session(
             mode="payment",
             metadata={
                 "user_id": str(user.id),
-                "title": package["title"],
-                "points": str(points),
+                "flow": "stardust",
+                "amount_usd": str(quote.amount_usd),
+                "tier": quote.tier,
+                "base_points": str(quote.base_points),
+                "bonus_points": str(quote.bonus_points),
+                # Total (base + bonus) credited by the webhook for non-lifetime.
+                "points": str(quote.total_points),
+                "lifetime": "true" if quote.is_lifetime else "false",
             },
             success_url=success_url,
             cancel_url=f"{settings.FRONT_BASE_URL}/billing?status=cancelled",
         )
 
         logger.info(
-            "checkout_session_created",
+            "stardust_checkout_session_created",
             user_id=user.id,
-            points_amount=points,
-            total_amount_cents=price_cents,
-            total_amount_usd=price_cents / 100,
+            amount_usd=quote.amount_usd,
+            tier=quote.tier,
+            base_points=quote.base_points,
+            bonus_points=quote.bonus_points,
+            total_points=quote.total_points,
+            is_lifetime=quote.is_lifetime,
+            total_amount_cents=amount_cents,
             session_id=session.id,
             currency="usd",
         )
@@ -251,15 +269,214 @@ async def create_checkout_session(
         raise
     except Exception as e:
         logger.error(
-            "checkout_session_creation_failed",
+            "stardust_checkout_session_creation_failed",
             user_id=user.id,
-            title=request.title,
+            amount_usd=request.amount_usd,
             error=str(e),
+            error_type=e.__class__.__name__,
             exc_info=True,
         )
         raise HTTPException(
             status_code=400,
             detail=f"Error creating checkout session: {str(e)}",
+        )
+
+
+async def _handle_lifetime_purchase(
+    *,
+    event: dict,
+    session: dict,
+    metadata: dict,
+    user_id: int,
+    payment_intent_id,
+    amount_total: int,
+    idempotency_key: str,
+):
+    """Record and surface a $1000 Lifetime Access purchase.
+
+    No points are awarded. Instead the order is flagged for the site owner in
+    three places: a clearly-labelled transaction in the admin order list, an
+    email to support, and an in-app notification to every admin/superadmin.
+    Fulfilment is manual — there is no automatic daily-usage tracking.
+    """
+    import json
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.database.client import SessionLocal
+    from app.enums.notification_type import NotificationType
+    from app.enums.role import Role
+    from app.enums.transaction_status import TransactionStatus
+    from app.enums.transaction_type import TransactionType
+    from app.models import Transaction, User
+    from app.models.notification import Notification
+    from app.notification_manager import notification_manager
+
+    amount_usd = int(metadata.get("amount_usd", (amount_total or 0) // 100))
+
+    logger.info(
+        "stripe_lifetime_purchase_received",
+        event_id=event["id"],
+        user_id=user_id,
+        amount_usd=amount_usd,
+        session_id=session["id"],
+    )
+
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(
+                "lifetime_purchase_user_not_found",
+                event_id=event["id"],
+                user_id=user_id,
+            )
+            return
+
+        description = (
+            f"⚡ LIFETIME ACCESS — manual fulfilment needed (${amount_usd})"
+        )
+        txn_metadata = {
+            "flow": "stardust",
+            "lifetime_access": True,
+            "fulfillment_status": "manual_needed",
+            "entitlement": LIFETIME_COPY,
+            "amount_paid_cents": amount_total,
+            "amount_usd": amount_usd,
+            "stripe_session_id": session["id"],
+        }
+
+        # Lifetime awards no points, so the balance is unchanged. We still write
+        # a transaction row (amount 0) purely so the order surfaces in the admin
+        # ledger. The unique idempotency_key guards against duplicate webhooks.
+        transaction = Transaction(
+            user_id=user_id,
+            transaction_type=TransactionType.CREDIT,
+            amount=0,
+            balance_before=user.balance,
+            balance_after=user.balance,
+            status=TransactionStatus.COMPLETED,
+            description=description,
+            stripe_payment_intent_id=payment_intent_id,
+            idempotency_key=idempotency_key,
+            transaction_metadata=json.dumps(txn_metadata),
+        )
+        db.add(transaction)
+        try:
+            db.commit()
+            db.refresh(transaction)
+        except IntegrityError:
+            db.rollback()
+            logger.warning(
+                "stripe_lifetime_duplicate_ignored",
+                event_id=event["id"],
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+                message="Idempotency working as expected",
+            )
+            return
+
+        logger.info(
+            "stripe_lifetime_purchase_flagged",
+            transaction_id=transaction.id,
+            user_id=user_id,
+            amount_usd=amount_usd,
+            stripe_event_id=event["id"],
+        )
+
+        # ── Email to support (owner-visible, manual fulfilment queue) ──
+        try:
+            from fastapi_mail import NameEmail
+
+            from app.enums.email_template_key import MailTemplateKey
+            from app.services.email import conf, send_email
+
+            await send_email(
+                recepientEmail=[NameEmail(email=conf.MAIL_FROM, name="Site Owner")],
+                template_key=MailTemplateKey.LIFETIME_ACCESS.value,
+                vars={
+                    "username": user.username,
+                    "user_id": user.id,
+                    "user_email": user.email,
+                    "amount_usd": amount_usd,
+                    "stripe_session_id": session["id"],
+                    "entitlement": LIFETIME_COPY,
+                    "transaction_id": transaction.id,
+                },
+            )
+        except Exception as e:
+            # Never fail the webhook because of email trouble — the flagged
+            # transaction and admin notifications still surface the order.
+            logger.error(
+                "lifetime_purchase_email_failed",
+                transaction_id=transaction.id,
+                error=str(e),
+                error_type=e.__class__.__name__,
+                exc_info=True,
+            )
+
+        # ── In-app notification to every admin / superadmin ──
+        admins = (
+            db.query(User)
+            .filter(User.role.in_([Role.ADMIN, Role.SUPERADMIN]))
+            .all()
+        )
+        admin_message = (
+            f"{user.username} purchased Lifetime Access (${amount_usd}). "
+            "Grant access manually — no automatic tracking."
+        )
+        admin_payload_data = {
+            "transaction_id": transaction.id,
+            "buyer_user_id": user_id,
+            "buyer_username": user.username,
+            "buyer_email": user.email,
+            "amount_usd": amount_usd,
+            "fulfillment_status": "manual_needed",
+        }
+        for admin in admins:
+            db.add(
+                Notification(
+                    user_id=admin.id,
+                    type=NotificationType.LIFETIME_ACCESS_PURCHASED,
+                    title="Lifetime Access — action needed",
+                    message=admin_message,
+                    data=admin_payload_data,
+                )
+            )
+
+        # ── Confirmation notification to the buyer ──
+        db.add(
+            Notification(
+                user_id=user_id,
+                type=NotificationType.LIFETIME_ACCESS_PURCHASED,
+                title="Lifetime Access confirmed",
+                message=LIFETIME_COPY,
+                data={"amount_usd": amount_usd},
+            )
+        )
+        db.commit()
+
+        # Real-time push (best-effort) to admins and the buyer.
+        ws_data = {
+            "type": "notification",
+            "notification_type": NotificationType.LIFETIME_ACCESS_PURCHASED,
+            "title": "Lifetime Access — action needed",
+            "message": admin_message,
+            "data": admin_payload_data,
+            "timestamp": datetime.now().isoformat(),
+        }
+        for admin in admins:
+            await notification_manager.send_to_user(ws_data, admin.id)
+
+        await notification_manager.send_to_user(
+            {
+                "type": "notification",
+                "notification_type": NotificationType.LIFETIME_ACCESS_PURCHASED,
+                "title": "Lifetime Access confirmed",
+                "message": LIFETIME_COPY,
+                "data": {"amount_usd": amount_usd},
+                "timestamp": datetime.now().isoformat(),
+            },
+            user_id,
         )
 
 
@@ -304,8 +521,8 @@ async def stripe_webhook(
     if event["type"] == "checkout.session.completed":
         try:
             session = event["data"]["object"]
-            user_id = int(session["metadata"]["user_id"])
-            points_to_add = int(session["metadata"]["points"])
+            metadata = session["metadata"] or {}
+            user_id = int(metadata["user_id"])
 
             # Stripe event ID as idempotency key to prevent duplicate credits
             idempotency_key = event["id"]
@@ -314,6 +531,22 @@ async def stripe_webhook(
 
             # Get amount paid from session (use getattr for Stripe objects)
             amount_total = getattr(session, "amount_total", 0)  # in cents
+
+            # Lifetime Access ($1000): no points awarded — flag for manual
+            # fulfilment and surface the order to the site owner instead.
+            if metadata.get("lifetime") == "true":
+                await _handle_lifetime_purchase(
+                    event=event,
+                    session=session,
+                    metadata=metadata,
+                    user_id=user_id,
+                    payment_intent_id=payment_intent_id,
+                    amount_total=amount_total,
+                    idempotency_key=idempotency_key,
+                )
+                return {"status": "success"}
+
+            points_to_add = int(metadata["points"])
 
             logger.info(
                 "stripe_checkout_completed",
