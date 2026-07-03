@@ -16,14 +16,43 @@ jobs:
     name: Pull latest + rebuild containers over SSH
     runs-on: ubuntu-latest
     steps:
+      # Attempt 1. `continue-on-error` lets a transient failure (e.g. a brief
+      # "dial tcp :22 i/o timeout") fall through to the retry below instead of
+      # failing the whole deploy. `timeout` is the SSH connect timeout (60s).
       - name: Deploy to the VPS
+        id: deploy
+        continue-on-error: true
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 22
+          timeout: 60s
           # Abort the deploy if any command in the script fails.
+          script_stop: true
+          script: |
+            cd /root/TAROT
+            git pull origin main
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend frontend
+
+      # Short pause before retrying, to let a transient network/SSH blip clear.
+      - name: Pause before retry
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 10
+
+      # Attempt 2 (retry) — runs only if the first attempt failed. No
+      # continue-on-error here, so if this also fails the deploy is marked failed
+      # (a genuine outage, not a blip).
+      - name: Deploy to the VPS (retry)
+        if: steps.deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          timeout: 60s
           script_stop: true
           script: |
             cd /root/TAROT
