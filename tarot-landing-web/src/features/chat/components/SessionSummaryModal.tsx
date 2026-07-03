@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useNavigate } from "react-router-dom";
+import { COLORS, TYPOGRAPHY } from "../../../theme";
 
 interface SessionSummaryModalProps {
   isOpen: boolean;
@@ -38,6 +39,11 @@ export const SessionSummaryModal = ({
 }: SessionSummaryModalProps) => {
   const navigate = useNavigate();
 
+  // Distinguish "ran out of Stardust" from a normal end so the copy stays warm.
+  const ranOutOfBalance = /balance|insufficient|run out|ran out/i.test(
+    sessionData.endReason || ""
+  );
+
   const handleTopUp = () => {
     onClose();
     if (onTopUp) {
@@ -66,7 +72,8 @@ export const SessionSummaryModal = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            className="relative w-full max-w-md rounded-3xl bg-gradient-to-br from-purple-900/40 to-pink-900/40 p-8 shadow-2xl backdrop-blur-xl border border-white/10"
+            className="relative w-full max-w-md rounded-3xl p-8 shadow-2xl backdrop-blur-xl border border-white/10"
+            style={{ backgroundColor: COLORS.surface }}
           >
             {/* Close button */}
             <button
@@ -78,19 +85,33 @@ export const SessionSummaryModal = ({
 
             {/* Icon */}
             <div className="flex justify-center mb-6">
-              <div className="p-4 rounded-full bg-purple-500/20">
+              <div
+                className="w-20 h-20 rounded-3xl flex items-center justify-center"
+                style={{
+                  backgroundColor: ranOutOfBalance ? `${COLORS.starGold}1f` : `${COLORS.primary}1f`,
+                  border: `1px solid ${ranOutOfBalance ? COLORS.starGold : COLORS.primary}44`,
+                }}
+              >
                 <Icon
-                  icon="solar:clock-circle-bold"
-                  className="text-purple-400 text-5xl"
+                  icon={ranOutOfBalance ? "solar:hourglass-line-duotone" : "solar:moon-stars-bold-duotone"}
+                  className="text-4xl"
+                  style={{ color: ranOutOfBalance ? COLORS.starGold : COLORS.primary }}
                 />
               </div>
             </div>
 
             {/* Title */}
-            <h2 className="text-2xl font-bold text-center text-white mb-2">
-              Session Ended
+            <h2
+              className="text-2xl font-bold text-center text-white mb-2"
+              style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
+            >
+              {ranOutOfBalance ? "Your reading time has run out" : "Your reading has ended"}
             </h2>
-            <p className="text-center text-white/60 mb-6">{sessionData.endReason}</p>
+            <p className="text-center text-white/60 mb-6 leading-relaxed">
+              {ranOutOfBalance
+                ? "Add Stardust to keep going — your reader is just a tap away."
+                : "We hope it brought you clarity. You're welcome back any time."}
+            </p>
 
             {/* Stats */}
             <div className="space-y-4 mb-8">
@@ -113,27 +134,38 @@ export const SessionSummaryModal = ({
                     icon="solar:wallet-money-bold-duotone"
                     className="text-green-400 text-2xl"
                   />
-                  <span className="text-white/80">Total Cost</span>
+                  <span className="text-white/80">Stardust spent</span>
                 </div>
-                <span className="text-xl font-bold text-white">
-                  {formatCost(sessionData.cost)} pts
+                <span className="text-xl font-bold text-white tabular-nums">
+                  {formatCost(sessionData.cost)}
                 </span>
               </div>
             </div>
 
             {/* Actions */}
             <div className="space-y-3">
-              {sessionData.endReason.toLowerCase().includes("balance") && (
+              {ranOutOfBalance ? (
                 <button
                   onClick={handleTopUp}
-                  className="w-full py-3 px-6 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl"
+                  className="w-full py-3.5 px-6 rounded-2xl font-bold transition-transform hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2"
+                  style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
                 >
-                  Top Up Balance
+                  <Icon icon="ph:sparkle-fill" className="text-lg" />
+                  Add Stardust
+                </button>
+              ) : (
+                <button
+                  onClick={() => { onClose(); navigate("/psychics-browse"); }}
+                  className="w-full py-3.5 px-6 rounded-2xl font-bold text-white transition-opacity hover:opacity-90 shadow-lg flex items-center justify-center gap-2"
+                  style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}
+                >
+                  <Icon icon="solar:users-group-rounded-bold-duotone" className="text-lg" />
+                  Book another reading
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="w-full py-3 px-6 rounded-full bg-white/10 text-white font-semibold hover:bg-white/20 transition-all duration-300 border border-white/20"
+                className="w-full py-3.5 px-6 rounded-2xl bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors border border-white/15"
               >
                 Close
               </button>

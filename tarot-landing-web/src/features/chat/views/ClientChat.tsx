@@ -816,6 +816,14 @@ const ClientChat = () => {
     return [...olderMessages, ...messages];
   }, [olderMessages, messages]);
 
+  // ── LOCAL-ONLY PREVIEW (dev only): /chats?preview=active|lowbalance|paused|ended|ranout
+  //    Renders the redesigned session states with mock data so they can be eyeballed
+  //    without a live reading. Remove this block (and ChatStatePreview below) before shipping.
+  const previewMode = import.meta.env.DEV ? searchParams.get("preview") : null;
+  if (previewMode) {
+    return <ChatStatePreview mode={previewMode} />;
+  }
+
   // --- LOADING STATE ---
   if (loading) {
     return (
@@ -853,6 +861,23 @@ const ClientChat = () => {
       </div>
     );
   }
+
+  // --- Live session metrics for the status bar (colour shifts as time runs low) ---
+  const remaining = sessionState.remainingSeconds;
+  const timeLeftColor =
+    remaining == null
+      ? COLORS.neutralWhite
+      : remaining <= 60
+        ? "#FF6B6B"
+        : remaining <= 300
+          ? COLORS.starGold
+          : COLORS.neutralWhite;
+  const stardustLeft =
+    sessionState.clientBalance == null
+      ? null
+      : Math.max(0, Math.floor(sessionState.clientBalance - (sessionState.estimatedCost || 0)));
+  const psychicName =
+    psychicDetails?.username || selectedChatData?.user_name || "Your reader";
 
   // --- MESSENGER-STYLE 2-COLUMN LAYOUT ---
   return (
@@ -1103,8 +1128,8 @@ const ClientChat = () => {
                         </>
                       ) : isPaused ? (
                         <>
-                          <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-                          <span className="text-sm text-orange-400 font-medium">Paused - Top up to continue • Will end in 30 min</span>
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.starGold }} />
+                          <span className="text-sm font-medium" style={{ color: COLORS.starGold }}>Reading paused — add Stardust to resume</span>
                         </>
                       ) : currentChatStatus === 'ENDED' ? (
                         <>
@@ -1184,25 +1209,83 @@ const ClientChat = () => {
                 )}
               </div>
 
-              {/* Mobile Timer + Top Up Bar */}
+              {/* ── Session status bar — persistent, calm, readable at a glance ── */}
               {(isChatActive || isPaused) && (
-                <div className="md:hidden flex items-center justify-between px-5 py-3 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}33` }}>
-                  <div className="flex items-center gap-2">
-                    <Icon icon="ph:clock-fill" className="text-lg" style={{ color: sessionState.remainingSeconds && sessionState.remainingSeconds <= 120 ? '#f87171' : COLORS.primary }} />
-                    <span className={`text-sm font-bold ${sessionState.remainingSeconds && sessionState.remainingSeconds <= 120 ? 'text-red-400' : 'text-white'}`}>
-                      {isPaused ? 'Paused' : formatTime(sessionState.remainingSeconds)}
-                    </span>
-                    {!isPaused && sessionState.estimatedCost != null && (
-                      <span className="text-xs text-white/40 ml-1">· ${(sessionState.estimatedCost || 0).toFixed(2)}</span>
-                    )}
+                <div
+                  className="px-3 sm:px-5 py-3 border-b border-white/5"
+                  style={{ backgroundColor: `${COLORS.surface}55` }}
+                >
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    {/* Session (elapsed) */}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
+                      <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+                        Session
+                      </div>
+                      <div
+                        className="mt-1 text-lg sm:text-2xl font-bold text-white tabular-nums leading-none"
+                        style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
+                      >
+                        {formatTime(sessionState.elapsedSeconds)}
+                      </div>
+                    </div>
+
+                    {/* Time remaining — colour shifts gold under 5 min, red under 1 min */}
+                    <div
+                      className="rounded-2xl border px-2 py-2.5 text-center transition-colors duration-300"
+                      style={{
+                        borderColor: isPaused ? "rgba(255,255,255,0.1)" : `${timeLeftColor}55`,
+                        backgroundColor: isPaused ? "rgba(255,255,255,0.04)" : `${timeLeftColor}14`,
+                      }}
+                    >
+                      <div
+                        className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em]"
+                        style={{ color: isPaused ? "rgba(255,255,255,0.4)" : timeLeftColor }}
+                      >
+                        Time Left
+                      </div>
+                      <div
+                        className="mt-1 text-lg sm:text-2xl font-bold tabular-nums leading-none"
+                        style={{
+                          fontFamily: TYPOGRAPHY.fontFamily.heading,
+                          color: isPaused ? "#ffffff" : timeLeftColor,
+                        }}
+                      >
+                        {isPaused
+                          ? "Paused"
+                          : remaining == null
+                            ? "—"
+                            : formatTime(Math.max(0, Math.floor(remaining)))}
+                      </div>
+                    </div>
+
+                    {/* Stardust balance remaining */}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
+                      <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+                        Stardust
+                      </div>
+                      <div
+                        className="mt-1 flex items-center justify-center gap-1 text-lg sm:text-2xl font-bold tabular-nums leading-none"
+                        style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.starGold }}
+                      >
+                        <Icon icon="ph:sparkle-fill" className="text-xs sm:text-sm" />
+                        {stardustLeft == null ? "—" : stardustLeft.toLocaleString()}
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleTopUpClick}
-                    className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-bold transition-colors flex items-center gap-1.5"
-                  >
-                    <Icon icon="ph:wallet-fill" className="text-sm" />
-                    Top Up
-                  </button>
+
+                  {/* Connection status — dot always paired with a text label, never colour alone */}
+                  <div className="mt-2.5 flex items-center justify-center gap-1.5">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: isConnected ? "#22c55e" : COLORS.starGold }}
+                    />
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wider"
+                      style={{ color: isConnected ? "#4ade80" : COLORS.starGold }}
+                    >
+                      {isConnected ? "Connected" : "Reconnecting…"}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -1277,15 +1360,12 @@ const ClientChat = () => {
                 )}
 
                 {allMessages.map((msg, i) => {
-                  // Check if this is a system message
+                  // System / event messages render as a centred, muted pill.
                   if (msg.type === 'system' || msg.is_system) {
                     return (
-                      <div
-                        key={msg.id || i}
-                        className="flex justify-center my-6"
-                      >
-                        <div className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-xl">
-                          <p className="text-xs text-white/50 font-medium">
+                      <div key={msg.id || i} className="flex justify-center my-5">
+                        <div className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-xl max-w-[85%]">
+                          <p className="text-[13px] text-white/55 font-medium text-center">
                             {msg.content}
                           </p>
                         </div>
@@ -1297,48 +1377,69 @@ const ClientChat = () => {
                   const isMyMessage = senderId === user?.id;
                   const messageTime = msg.timestamp || msg.created_at;
 
+                  // Group consecutive messages from the same sender: only the first
+                  // in a run shows the avatar + name; the rest tuck in beneath it.
+                  const prev = allMessages[i - 1];
+                  const prevSameSender =
+                    prev &&
+                    !(prev.type === 'system' || prev.is_system) &&
+                    ((prev.sender_id || prev.user_id) === senderId);
+                  const startOfGroup = !prevSameSender;
+
                   return (
                     <div
                       key={msg.id || i}
-                      className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'} ${startOfGroup ? 'mt-4' : 'mt-1'}`}
                     >
-                      <div className={`max-w-[75%] ${isMyMessage ? '' : 'flex gap-3'}`}>
-                        {/* Avatar for received messages */}
+                      <div className={`max-w-[80%] sm:max-w-[75%] ${isMyMessage ? '' : 'flex gap-2.5'}`}>
+                        {/* Psychic avatar — shown once per group, kept (hidden) for alignment otherwise */}
                         {!isMyMessage && (
-                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden flex-shrink-0 mt-auto border border-white/10">
-                            {selectedChatData?.user_profile_pic_url ? (
+                          <div
+                            className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/25 to-secondary/25 flex items-center justify-center overflow-hidden flex-shrink-0 self-end border border-white/10"
+                            style={{ visibility: startOfGroup ? 'visible' : 'hidden' }}
+                          >
+                            {(psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url) ? (
                               <img
-                                src={selectedChatData.user_profile_pic_url}
-                                alt={selectedChatData.user_name}
+                                src={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
+                                alt={psychicName}
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <Icon icon="ph:user-fill" className="text-white/80 text-lg" />
+                              <Icon icon="ph:user-fill" className="text-white/80 text-base" />
                             )}
                           </div>
                         )}
 
-                        <div>
+                        <div className="min-w-0">
+                          {/* Psychic name above the first bubble of a group */}
+                          {!isMyMessage && startOfGroup && (
+                            <span
+                              className="block mb-1 ml-1 text-[12px] font-semibold"
+                              style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.heading }}
+                            >
+                              {psychicName}
+                            </span>
+                          )}
                           <div
-                            className={`rounded-3xl px-5 py-3.5 shadow-lg ${isMyMessage
-                              ? 'rounded-br-lg text-white'
-                              : 'rounded-bl-lg'
+                            className={`px-4 py-3 sm:px-[18px] sm:py-3.5 shadow-lg ${isMyMessage
+                              ? 'rounded-[22px] rounded-br-md text-white'
+                              : 'rounded-[22px] rounded-bl-md'
                               }`}
                             style={isMyMessage ? {
                               background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
                             } : {
-                              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                              backgroundColor: 'rgba(255, 255, 255, 0.06)',
                               backdropFilter: 'blur(10px)',
                               color: 'white',
-                              border: '1px solid rgba(255, 255, 255, 0.15)'
+                              border: '1px solid rgba(255, 255, 255, 0.14)'
                             }}
                           >
-                            <p className="text-sm leading-relaxed break-words font-medium">
+                            <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">
                               {msg.content}
                             </p>
                           </div>
                           {messageTime && (
-                            <p className={`text-xs text-white/30 mt-1.5 px-2 ${isMyMessage ? 'text-right' : 'text-left'}`}>
+                            <p className={`text-[11px] text-white/35 mt-1 px-1.5 ${isMyMessage ? 'text-right' : 'text-left'}`}>
                               {new Date(messageTime).toLocaleTimeString([], {
                                 hour: '2-digit',
                                 minute: '2-digit'
@@ -1405,6 +1506,34 @@ const ClientChat = () => {
                 <div ref={scrollRef} />
               </div>
 
+              {/* ── Calm low-balance banner (~1 minute of reading time left) ── */}
+              {isChatActive && sessionState.showCriticalWarning && (
+                <div className="px-3 sm:px-6 pt-3">
+                  <div
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-4 py-3.5"
+                    style={{ borderColor: `${COLORS.starGold}44`, backgroundColor: `${COLORS.starGold}14` }}
+                  >
+                    <div
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: `${COLORS.starGold}22`, border: `1px solid ${COLORS.starGold}44` }}
+                    >
+                      <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
+                    </div>
+                    <p className="flex-1 text-sm leading-snug text-white/80">
+                      You have about <span className="font-bold text-white">1 minute</span> of reading time left. Add Stardust to keep your reading going.
+                    </p>
+                    <button
+                      onClick={handlePauseForTopUp}
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                      style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
+                    >
+                      <Icon icon="ph:sparkle-fill" className="text-base" />
+                      Add Stardust
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Message Input - Only show for ACTIVE chats */}
               {isChatActive ? (
                 <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
@@ -1446,22 +1575,22 @@ const ClientChat = () => {
                 </div>
               ) : isPaused ? (
                 <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
-                  <div className="p-5 rounded-2xl bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 mb-4">
+                  <div className="p-5 rounded-2xl border mb-4" style={{ backgroundColor: `${COLORS.starGold}12`, borderColor: `${COLORS.starGold}33` }}>
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 animate-pulse">
-                        <Icon icon="solar:pause-circle-bold-duotone" className="text-red-400 text-2xl" />
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${COLORS.starGold}22`, border: `1px solid ${COLORS.starGold}44` }}>
+                        <Icon icon="solar:pause-circle-bold-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-bold text-white">Chat Paused</p>
+                        <p className="text-sm font-bold text-white">Reading paused</p>
                         <p className="text-xs text-white/60">
                           {sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
-                            ? 'Insufficient balance to continue'
-                            : 'Session paused'}
+                            ? 'Your Stardust ran low — add more to keep going.'
+                            : 'Waiting for your reader to resume.'}
                         </p>
                       </div>
                     </div>
                     <p className="text-xs text-white/50 mb-4">
-                      Top up to continue, or resume if you have enough balance. This chat will automatically end in 30 minutes if not resumed.
+                      Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn't resumed.
                     </p>
                     <div className="flex gap-2 text-xs text-white/40">
                       <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
@@ -1486,8 +1615,8 @@ const ClientChat = () => {
                         background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
                       }}
                     >
-                      <Icon icon="solar:wallet-bold-duotone" className="text-xl" />
-                      Top Up
+                      <Icon icon="ph:sparkle-fill" className="text-lg" />
+                      Add Stardust
                     </button>
                     <button
                       onClick={() => setShowEndConfirm(true)}
@@ -1541,29 +1670,41 @@ const ClientChat = () => {
                   </button>
                 </div>
               ) : currentChatStatus === 'ENDED' ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
-                  <div className="mb-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center flex-shrink-0">
-                        <Icon icon="solar:close-circle-bold-duotone" className="text-red-400 text-2xl" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white">Chat Ended</p>
-                        <p className="text-xs text-white/50">This session has been concluded</p>
-                      </div>
+                <div className="p-5 sm:p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+                  <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/10">
+                    <div
+                      className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: `${COLORS.primary}1f`, border: `1px solid ${COLORS.primary}44` }}
+                    >
+                      <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                        Your reading has ended
+                      </p>
+                      <p className="text-sm text-white/55 mt-0.5">
+                        We hope it brought you clarity. You're welcome back any time.
+                      </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setRequestError(null); setShowRequestModal(true); }}
-                    disabled={requestChatMutation.isPending}
-                    className="w-full px-8 py-4 rounded-2xl font-bold text-base transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg text-white"
-                    style={{
-                      background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
-                    }}
-                  >
-                    <Icon icon="solar:chat-round-line-bold-duotone" className="text-2xl" />
-                    Request Again
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      onClick={() => { setRequestError(null); setShowRequestModal(true); }}
+                      disabled={requestChatMutation.isPending}
+                      className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg text-white"
+                      style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}
+                    >
+                      <Icon icon="solar:chat-round-line-bold-duotone" className="text-xl" />
+                      Book another reading
+                    </button>
+                    <button
+                      onClick={() => navigate('/psychics-browse')}
+                      className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm transition-colors hover:bg-white/10 flex items-center justify-center gap-2 text-white border border-white/15 bg-white/[0.04]"
+                    >
+                      <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                      Browse psychics
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -1748,51 +1889,7 @@ const ClientChat = () => {
                             )}
                           </div>
 
-                          {/* Low Balance Warning */}
-                          {(sessionState.showLowBalanceWarning || sessionState.showCriticalWarning) && (
-                            <motion.div
-                              initial={{ opacity: 0, y: -10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className={`p-4 rounded-2xl border ${sessionState.showCriticalWarning
-                                ? 'bg-gradient-to-r from-red-500/20 to-orange-500/20 border-red-500/50'
-                                : 'bg-gradient-to-r from-yellow-500/10 to-red-500/10 border-yellow-500/30'
-                                }`}
-                            >
-                              <div className="flex items-center gap-2 mb-2">
-                                <Icon
-                                  icon="solar:danger-bold-duotone"
-                                  className={`text-xl ${sessionState.showCriticalWarning ? 'text-red-400' : 'text-yellow-400'}`}
-                                />
-                                <span className={`font-bold text-sm ${sessionState.showCriticalWarning ? 'text-red-400' : 'text-yellow-400'}`}>
-                                  {sessionState.showCriticalWarning ? 'Critical: Balance Almost Depleted!' : 'Low Balance Warning'}
-                                </span>
-                              </div>
-                              <p className="text-xs text-white/60 mb-3">
-                                {sessionState.showCriticalWarning
-                                  ? 'Less than 1 minute remaining! Your session will pause automatically when balance reaches $0. Top up immediately to continue.'
-                                  : `You have approximately ${Math.floor((sessionState.remainingSeconds || 0) / 60)} minutes remaining. Top up now to avoid interruption.`
-                                }
-                              </p>
-
-                              {/* Pause & Top Up Button */}
-                              <button
-                                onClick={handlePauseForTopUp}
-                                disabled={!selectedChat}
-                                className="w-full px-4 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{
-                                  background: sessionState.showCriticalWarning
-                                    ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
-                                    : `linear-gradient(135deg, ${COLORS.starGold} 0%, #F59E0B 100%)`,
-                                  color: sessionState.showCriticalWarning ? 'white' : COLORS.dark
-                                }}
-                              >
-                                <div className="flex items-center justify-center gap-2">
-                                  <Icon icon="solar:pause-circle-bold-duotone" className="text-lg" />
-                                  <span>{sessionState.showCriticalWarning ? 'Pause & Top Up Now!' : 'Pause & Top Up Balance'}</span>
-                                </div>
-                              </button>
-                            </motion.div>
-                          )}
+                          {/* Low-balance warning now lives as a calm banner above the message input (all widths). */}
                         </div>
                       )}
                     </>
@@ -1861,7 +1958,7 @@ const ClientChat = () => {
         isOpen={showSessionSummaryModal}
         onClose={() => setShowSessionSummaryModal(false)}
         sessionData={sessionSummaryData}
-        onTopUp={() => navigate("/client/wallet")}
+        onTopUp={() => navigate("/billing")}
       />
 
       {/* End Chat Confirmation Modal */}
@@ -1912,6 +2009,208 @@ const ClientChat = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOCAL-ONLY PREVIEW HARNESS (dev only) — REMOVE BEFORE SHIPPING.
+// Eyeball the redesigned session states without a live reading:
+//   /chats?preview=active | lowbalance | paused | ended | ranout
+// ─────────────────────────────────────────────────────────────────────────────
+const PREVIEW_CFG: Record<
+  string,
+  { elapsed: number; remaining: number; balance: number; cost: number; status: string; paused: boolean }
+> = {
+  active: { elapsed: 372, remaining: 840, balance: 25, cost: 2.4, status: "ACTIVE", paused: false },
+  warning: { elapsed: 660, remaining: 180, balance: 12, cost: 9.1, status: "ACTIVE", paused: false },
+  lowbalance: { elapsed: 900, remaining: 48, balance: 6, cost: 5.2, status: "ACTIVE", paused: false },
+  paused: { elapsed: 540, remaining: 300, balance: 10, cost: 4.0, status: "PAUSED", paused: true },
+  ended: { elapsed: 612, remaining: 0, balance: 8, cost: 6.0, status: "ENDED", paused: false },
+  ranout: { elapsed: 780, remaining: 0, balance: 0, cost: 12.0, status: "ENDED", paused: false },
+};
+
+const ChatStatePreview = ({ mode }: { mode: string }) => {
+  const navigate = useNavigate();
+  const cfg = PREVIEW_CFG[mode] || PREVIEW_CFG.active;
+  const [summary, setSummary] = useState<null | "normal" | "ranout">(
+    mode === "ended" ? "normal" : mode === "ranout" ? "ranout" : null
+  );
+
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  };
+  const remaining = cfg.remaining;
+  const timeLeftColor = cfg.paused
+    ? COLORS.neutralWhite
+    : remaining <= 60
+      ? "#FF6B6B"
+      : remaining <= 300
+        ? COLORS.starGold
+        : COLORS.neutralWhite;
+  const stardust = Math.max(0, Math.floor(cfg.balance - cfg.cost));
+  const isActive = cfg.status === "ACTIVE";
+  const isPaused = cfg.paused;
+  const isEnded = cfg.status === "ENDED";
+  const critical = isActive && remaining <= 60;
+  const psychicName = "Selene Mare";
+
+  const bubbles = [
+    { mine: false, text: "Hello, love. I can feel there's something weighing on your heart today. Take a breath — we'll look at it together.", t: "7:41 PM" },
+    { mine: true, text: "Hi Selene. Yes… it's about a decision I've been putting off.", t: "7:42 PM" },
+    { mine: false, text: "The cards are showing me a path opening. You already know the answer — let's give you the clarity to trust it.", t: "7:42 PM" },
+  ];
+  const modes = ["active", "warning", "lowbalance", "paused", "ended", "ranout"];
+
+  return (
+    <div className="h-[calc(100dvh-80px)] p-2 sm:p-4 relative overflow-hidden" style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}>
+      <PageBackground images={moonlitBalcony} variant="faint" />
+      <div className="relative z-10 mx-auto max-w-2xl h-full flex flex-col rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl" style={{ backgroundColor: `${COLORS.dark}22` }}>
+        {/* Preview switcher (dev-only chrome) */}
+        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}66` }}>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 mr-1">Preview</span>
+          {modes.map((m) => (
+            <button
+              key={m}
+              onClick={() => navigate(`/chats?preview=${m}`)}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors"
+              style={{
+                borderColor: m === mode ? COLORS.primary : "rgba(255,255,255,0.12)",
+                color: m === mode ? COLORS.primary : "rgba(255,255,255,0.6)",
+                backgroundColor: m === mode ? `${COLORS.primary}18` : "transparent",
+              }}
+            >
+              {m}
+            </button>
+          ))}
+          <button onClick={() => navigate("/chats")} className="ml-auto text-[11px] font-semibold px-2.5 py-1 rounded-full border border-white/20 text-white/60">
+            exit
+          </button>
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 p-4 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}22` }}>
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary/25 to-secondary/25 flex items-center justify-center border border-white/10">
+            <Icon icon="ph:user-fill" className="text-white/80 text-xl" />
+          </div>
+          <div>
+            <h2 className="font-bold text-white text-lg" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>{psychicName}</h2>
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isEnded ? "#FF6B6B" : isPaused ? COLORS.starGold : "#22c55e" }} />
+              <span className="text-sm font-medium" style={{ color: isEnded ? "#FF6B6B" : isPaused ? COLORS.starGold : "#4ade80" }}>
+                {isEnded ? "Session ended" : isPaused ? "Reading paused — add Stardust to resume" : "Active now"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Session status bar */}
+        {(isActive || isPaused) && (
+          <div className="px-3 sm:px-5 py-3 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}55` }}>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
+                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Session</div>
+                <div className="mt-1 text-lg sm:text-2xl font-bold text-white tabular-nums leading-none" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>{fmt(cfg.elapsed)}</div>
+              </div>
+              <div className="rounded-2xl border px-2 py-2.5 text-center transition-colors duration-300" style={{ borderColor: isPaused ? "rgba(255,255,255,0.1)" : `${timeLeftColor}55`, backgroundColor: isPaused ? "rgba(255,255,255,0.04)" : `${timeLeftColor}14` }}>
+                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: isPaused ? "rgba(255,255,255,0.4)" : timeLeftColor }}>Time Left</div>
+                <div className="mt-1 text-lg sm:text-2xl font-bold tabular-nums leading-none" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: isPaused ? "#ffffff" : timeLeftColor }}>{isPaused ? "Paused" : fmt(remaining)}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
+                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Stardust</div>
+                <div className="mt-1 flex items-center justify-center gap-1 text-lg sm:text-2xl font-bold tabular-nums leading-none" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.starGold }}>
+                  <Icon icon="ph:sparkle-fill" className="text-xs sm:text-sm" />{stardust.toLocaleString()}
+                </div>
+              </div>
+            </div>
+            <div className="mt-2.5 flex items-center justify-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#4ade80" }}>Connected</span>
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {bubbles.map((b, i) => {
+            const startGroup = i === 0 || bubbles[i - 1].mine !== b.mine;
+            return (
+              <div key={i} className={`flex ${b.mine ? "justify-end" : "justify-start"} ${startGroup ? "mt-4" : "mt-1"}`}>
+                <div className={`max-w-[80%] ${b.mine ? "" : "flex gap-2.5"}`}>
+                  {!b.mine && (
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/25 to-secondary/25 flex items-center justify-center flex-shrink-0 self-end border border-white/10" style={{ visibility: startGroup ? "visible" : "hidden" }}>
+                      <Icon icon="ph:user-fill" className="text-white/80 text-base" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    {!b.mine && startGroup && <span className="block mb-1 ml-1 text-[12px] font-semibold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.heading }}>{psychicName}</span>}
+                    <div className={`px-4 py-3 sm:px-[18px] sm:py-3.5 shadow-lg ${b.mine ? "rounded-[22px] rounded-br-md text-white" : "rounded-[22px] rounded-bl-md"}`} style={b.mine ? { background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` } : { backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "white" }}>
+                      <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">{b.text}</p>
+                    </div>
+                    <p className={`text-[11px] text-white/35 mt-1 px-1.5 ${b.mine ? "text-right" : "text-left"}`}>{b.t}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Low-balance banner */}
+        {critical && (
+          <div className="px-3 sm:px-6 pt-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-4 py-3.5" style={{ borderColor: `${COLORS.starGold}44`, backgroundColor: `${COLORS.starGold}14` }}>
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${COLORS.starGold}22`, border: `1px solid ${COLORS.starGold}44` }}>
+                <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
+              </div>
+              <p className="flex-1 text-sm leading-snug text-white/80">You have about <span className="font-bold text-white">1 minute</span> of reading time left. Add Stardust to keep your reading going.</p>
+              <button onClick={() => navigate("/billing")} className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:scale-[1.02]" style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}>
+                <Icon icon="ph:sparkle-fill" className="text-base" />Add Stardust
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        {isEnded ? (
+          <div className="p-5 sm:p-6 border-t border-white/5" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+            <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/10">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${COLORS.primary}1f`, border: `1px solid ${COLORS.primary}44` }}>
+                <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
+              </div>
+              <div>
+                <p className="text-base font-bold text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>Your reading has ended</p>
+                <p className="text-sm text-white/55 mt-0.5">We hope it brought you clarity. You're welcome back any time.</p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button onClick={() => setSummary(mode === "ranout" ? "ranout" : "normal")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2" style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}>
+                <Icon icon="solar:refresh-bold-duotone" className="text-xl" />Show summary modal
+              </button>
+              <button onClick={() => navigate("/psychics-browse")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white border border-white/15 bg-white/[0.04] flex items-center justify-center gap-2">
+                <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: COLORS.primary }} />Browse psychics
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-6 border-t border-white/5" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl px-6 py-4 text-white/30 text-sm">{isPaused ? "Reading paused" : "Type your message…"}</div>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}>
+                <Icon icon="solar:plain-2-bold" className="text-xl" />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <SessionSummaryModal
+        isOpen={summary !== null}
+        onClose={() => setSummary(null)}
+        sessionData={{ duration: cfg.elapsed, cost: cfg.cost, endReason: summary === "ranout" ? "Session ended - insufficient balance" : "Session ended" }}
+        onTopUp={() => navigate("/billing")}
+      />
     </div>
   );
 };
