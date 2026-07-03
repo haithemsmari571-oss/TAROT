@@ -1,0 +1,31 @@
+name: Deploy to production
+
+# Manual trigger ONLY. Nothing deploys automatically on push — someone has to
+# click "Run workflow" in the Actions tab, giving a review moment before it goes
+# live. To auto-deploy on push later, you'd add a `push:` trigger here (not now).
+on:
+  workflow_dispatch:
+
+# Prevent two deploys from running at once (a second click waits/cancels).
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Pull latest + rebuild containers over SSH
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to the VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          # Abort the deploy if any command in the script fails.
+          script_stop: true
+          script: |
+            cd /root/TAROT
+            git pull origin main
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend frontend
