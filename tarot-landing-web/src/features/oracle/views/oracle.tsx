@@ -4,6 +4,7 @@ import { SIGNS } from "../data/Signs";
 import { LIFE_PATH_MEANINGS } from "../data/LifePath";
 import { oracleApi } from "../api/oracleApi";
 import type { ZodiacSign as ApiZodiacSign } from "../api/oracleApi";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import PageBackground from "../../../components/PageBackground";
 import zodiacHall1 from "../../../assets/backgrounds/zodiac-hall-1.webp";
 import zodiacHall2 from "../../../assets/backgrounds/zodiac-hall-2.webp";
@@ -235,6 +236,16 @@ export default function oracle() {
   // lifepath
   const [lpDob, setLpDob] = useState("");
   const [lpResult, setLpResult] = useState(null);
+
+  // Prefill the Life Path date from the signed-in user's saved DOB (captured at
+  // signup) so we don't ask for their own birthday again. Stays editable — only
+  // seeds while the field is still empty.
+  const { user } = useAuth();
+  useEffect(() => {
+    if (user?.date_of_birth) {
+      setLpDob((prev) => prev || (user.date_of_birth as string));
+    }
+  }, [user?.date_of_birth]);
 
   // Fetch zodiac signs on mount
   useEffect(() => {

@@ -1,6 +1,7 @@
-from typing import List
+from datetime import date
+from typing import List, Optional
 
-from sqlalchemy import Enum, Integer
+from sqlalchemy import Date, Enum, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.role import Role
@@ -22,6 +23,9 @@ class User(Base):
     price_per_second: Mapped[float] = mapped_column(nullable=True)
     profile_picture_path: Mapped[str] = mapped_column(nullable=True)
     bio: Mapped[str] = mapped_column(nullable=True)
+    # Captured (required) at signup for astrology features; nullable so the
+    # pre-existing accounts that predate this field are unaffected.
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     
     # 💡 Added: Dynamic display order field
     # Default is 9999 so un-ordered psychics go to the end

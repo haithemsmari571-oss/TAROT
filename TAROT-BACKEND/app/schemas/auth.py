@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from datetime import date
+
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class AuthBase(BaseModel):
@@ -21,6 +23,18 @@ class ResetPasswordReq(BaseModel):
 
 class UserSignup(AuthBase):
     password: str
+    date_of_birth: date
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, v: date) -> date:
+        today = date.today()
+        if v > today:
+            raise ValueError("Date of birth cannot be in the future")
+        # Sane upper bound on age (no hard minimum-age gate).
+        if v.year < today.year - 120:
+            raise ValueError("Please enter a valid date of birth")
+        return v
 
 
 class UserLogin(BaseModel):

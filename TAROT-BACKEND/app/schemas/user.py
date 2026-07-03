@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -32,12 +32,20 @@ class UserProfileUpdate(BaseModel):
     """Schema for users updating their own profile"""
 
     bio: Optional[str] = None
+    date_of_birth: Optional[date] = None
 
     @field_validator("bio")
     @classmethod
     def validate_bio(cls, v):
         if v is not None and len(v) > 500:
             raise ValueError("Bio must not exceed 500 characters")
+        return v
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, v):
+        if v is not None and v > date.today():
+            raise ValueError("Date of birth cannot be in the future")
         return v
 
 
@@ -53,6 +61,7 @@ class UserProfileRead(BaseModel):
     is_online: bool
     profile_picture_path: Optional[str] = None
     bio: Optional[str] = None
+    date_of_birth: Optional[date] = None
     price_per_second: Optional[float] = None
     created_at: datetime
 

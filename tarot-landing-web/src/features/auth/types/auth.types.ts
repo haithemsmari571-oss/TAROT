@@ -23,6 +23,7 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  date_of_birth: string; // ISO date, "YYYY-MM-DD"
 }
 
 export interface RegisterResponse {
@@ -36,6 +37,7 @@ export interface User {
   is_verified: boolean;
   role: UserRole;
   bio?: string;
+  date_of_birth?: string | null; // ISO date, "YYYY-MM-DD"
   profile_picture?: string;
   balance: number;
   created_at: string;

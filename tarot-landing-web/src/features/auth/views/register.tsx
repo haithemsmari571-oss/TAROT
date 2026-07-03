@@ -10,9 +10,12 @@ const RegisterPage = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  // Today, "YYYY-MM-DD" — caps the date picker so a future DOB can't be picked.
+  const today = new Date().toISOString().split("T")[0];
   const { mutate: register, isPending, error, isSuccess } = useRegister();
   
   const mouseX = useSpring(0, { stiffness: 40, damping: 20 });
@@ -45,7 +48,12 @@ const RegisterPage = () => {
       return;
     }
 
-    register({ username, email, password });
+    if (dateOfBirth && dateOfBirth > today) {
+      setPasswordError("Date of birth cannot be in the future");
+      return;
+    }
+
+    register({ username, email, password, date_of_birth: dateOfBirth });
   };
 
   const inputClasses =
@@ -149,6 +157,24 @@ const RegisterPage = () => {
                 </div>
               </motion.div>
               
+              <motion.div variants={itemVariants} className="space-y-1.5">
+                <label className="text-sm font-semibold text-white/70 ml-1 flex items-center gap-2">
+                  Date of birth
+                  <span className="text-xs font-medium text-primary/70 normal-case">For astrology</span>
+                </label>
+                <div className="relative">
+                  <Icon icon="ph:cake-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg pointer-events-none" />
+                  <input
+                    required
+                    type="date"
+                    max={today}
+                    className={`${inputClasses} pl-12 [color-scheme:dark]`}
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                  />
+                </div>
+              </motion.div>
+
               <div className="grid grid-cols-2 gap-4">
                   <motion.div variants={itemVariants} className="space-y-1.5">
                       <label className="text-sm font-semibold text-white/70 ml-1">Password</label>
