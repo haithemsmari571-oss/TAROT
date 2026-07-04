@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
-import { requestChat } from "@/features/chat/api/chatApi";
+import RequestReadingModal from "@/features/chat/components/RequestReadingModal";
 import { useToast } from "@/components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { usePsychicDetails, usePsychicReviewSummary, usePsychicReviews, useMyReviews, useChats } from "../hooks/usePsychicDetails";
@@ -50,7 +50,7 @@ const PsychicDetails = () => {
   const totalReviews = reviewSummary?.total_reviews || 0;
   
   // Local state
-  const [requestingChat, setRequestingChat] = useState(false);
+  const [showRequestPanel, setShowRequestPanel] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(myReview?.rating || 5);
   const [reviewComment, setReviewComment] = useState(myReview?.comment || "");
@@ -73,34 +73,15 @@ const PsychicDetails = () => {
 
 
 
-  // Handle start reading (request chat)
-  const handleStartReading = useCallback(async () => {
+  // Handle start reading — open the request panel (it collects her opening
+  // question and sends the request; the reassurance/waiting state lives there).
+  const handleStartReading = useCallback(() => {
     if (!psychic || !user) {
       toast.error("Please log in to start a reading");
       navigate("/login");
       return;
     }
-
-    try {
-      setRequestingChat(true);
-      
-      await requestChat({
-        psychic_id: psychic.id,
-        message: "Hello, I'd like to start a reading.",
-      });
-
-      toast.success("Chat request sent! Redirecting...");
-      
-      // Navigate to the chat page
-      setTimeout(() => {
-        navigate("/chats");
-      }, 1000);
-    } catch (err: any) {
-      console.error("Error requesting chat:", err);
-      toast.error(err.response?.data?.detail ?? err.response?.data?.message ?? "Failed to request chat. Please try again.");
-    } finally {
-      setRequestingChat(false);
-    }
+    setShowRequestPanel(true);
   }, [psychic, user, toast, navigate]);
 
   // Render star rating
@@ -475,25 +456,16 @@ const PsychicDetails = () => {
               {/* START READING BUTTON */}
               <button
                 onClick={handleStartReading}
-                disabled={requestingChat || !psychic.is_online}
+                disabled={!psychic.is_online}
                 className="w-full py-4 rounded-xl flex items-center justify-center gap-3 mb-3 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
                 style={{
                   backgroundColor: psychic.is_online ? COLORS.primary : `${COLORS.neutralWhite}20`,
                   fontFamily: TYPOGRAPHY.fontFamily.heading,
                 }}
               >
-                {requestingChat ? (
-                  <>
-                    <Icon icon="ph:spinner" className="text-xl animate-spin" style={{ color: COLORS.dark }} />
-                    <span className="text-sm font-black uppercase tracking-wider" style={{ color: COLORS.dark }}>
-                      Requesting...
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-sm font-black uppercase tracking-wider" style={{ color: COLORS.dark }}>
-                    Start Reading
-                  </span>
-                )}
+                <span className="text-sm font-black uppercase tracking-wider" style={{ color: COLORS.dark }}>
+                  Start Reading
+                </span>
               </button>
               
               {!psychic.is_online && (
@@ -888,6 +860,14 @@ const PsychicDetails = () => {
           </div>
         </div>
       </div>
+      {showRequestPanel && psychic && (
+        <RequestReadingModal
+          psychicId={psychic.id}
+          psychicName={psychic.username}
+          psychicPhoto={psychic.profile_picture_url}
+          onClose={() => setShowRequestPanel(false)}
+        />
+      )}
     </div>
   );
 };
