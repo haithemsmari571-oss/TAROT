@@ -285,8 +285,14 @@ def check_user_can_start_session(db: Session, user_id: int, psychic_id: int) -> 
     if not user or not psychic or not psychic.price_per_second:
         return False
 
-    # Check if user has at least 2 minutes worth of balance (120 seconds)
-    required_balance = int(psychic.price_per_second * 120)
+    # Reserve the same minimum the session itself requires to start, so the
+    # request gate can't be stricter than the door it opens. (Was hardcoded to
+    # 120s, which blocked clients who had enough to actually begin — e.g. ~90s
+    # of balance passed start but failed request.)
+    from app.config import get_app_settings
+
+    min_seconds = get_app_settings().SESSION_MINIMUM_BALANCE_SECONDS
+    required_balance = int(psychic.price_per_second * min_seconds)
 
     return user.balance >= required_balance
 

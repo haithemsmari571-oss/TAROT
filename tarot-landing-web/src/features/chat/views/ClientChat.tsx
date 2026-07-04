@@ -7,12 +7,12 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useChats } from "../hooks/useChats";
 import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
-import { getChatMessages, getChatSessionTime, resumeChat, Chat } from "../api/chatApi";
+import { getChatMessages, getChatSessionTime, resumeChat, pauseChatManual, Chat } from "../api/chatApi";
+import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
-import { usePayment } from "@/features/payment/hooks/usePayment";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
@@ -85,7 +85,7 @@ const ClientChat = () => {
     updateChatStatusMutationRef.current = updateChatStatusMutation;
   }, [updateChatStatusMutation]);
 
-  const { topupChat } = usePayment();
+  const { open: openTopUp } = useTopUp();
 
   // Fetch psychic details for selected chat
   const {
@@ -730,30 +730,26 @@ const ClientChat = () => {
     }
   };
 
-  const handlePauseForTopUp = async () => {
+  // In-session "Add Stardust": open the real Stardust Glider (any amount + bonus
+  // tiers). We pause the reading only once she commits (onBeforeCheckout), so the
+  // clock isn't running during the Stripe round-trip; on return we resume (see the
+  // payment-return effect — the glider's webhook credits Stardust but, unlike
+  // /topup, does not itself resume the paused chat).
+  const handleAddStardust = useCallback(() => {
     if (!selectedChat) return;
+    const chatId = selectedChat;
+    openTopUp({
+      reason:
+        "Add Stardust to keep your reading going — we'll pause the clock while you top up.",
+      returnUrl: `/chats?chat_id=${chatId}&resume=1`,
+      onBeforeCheckout: async () => {
+        await pauseChatManual(chatId);
+      },
+    });
+  }, [selectedChat, openTopUp]);
 
-    try {
-      // Call topup endpoint which will pause via SessionManager and return Stripe URL
-      toast.info('Pausing session and preparing payment...');
-      await topupChat(selectedChat);
-      // topupChat will redirect to Stripe automatically
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to initiate top-up');
-    }
-  };
-
-  const handleTopUpClick = async () => {
-    if (!selectedChat) return;
-
-    try {
-      toast.info('Preparing payment...');
-
-      await topupChat(selectedChat);
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to initiate top-up');
-    }
-  };
+  const handlePauseForTopUp = handleAddStardust;
+  const handleTopUpClick = handleAddStardust;
 
   const handleResumeChat = async () => {
     if (!selectedChat) return;
@@ -788,9 +784,52 @@ const ClientChat = () => {
 
     const chatIdNum = parseInt(chatIdParam);
 
-    // Payment successful - webhook will handle resume via SessionManager
     if (status === 'success') {
       setSelectedChat(chatIdNum);
+
+      // Glider top-up (resume=1): the Stardust webhook only credits balance — it
+      // does NOT resume the chat — so we resume ourselves, retrying to let the
+      // async credit land before /resume's own balance check runs.
+      if (searchParams.get('resume') === '1') {
+        toastRef.current.success('Payment received — resuming your reading…');
+        let cancelled = false;
+        (async () => {
+          for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+            try {
+              const data = await resumeChat(chatIdNum);
+              dispatch({
+                type: 'CHAT_RESUMED',
+                payload: {
+                  client_balance: data.client_balance,
+                  elapsed_seconds: data.elapsed_seconds,
+                  remaining_seconds: data.remaining_seconds,
+                  rate_per_second: data.rate_per_second,
+                },
+              });
+              refetch();
+              break;
+            } catch (e: any) {
+              const detail = e?.response?.data?.detail || '';
+              if (/insufficient/i.test(detail) && attempt < 3) {
+                await new Promise((r) => setTimeout(r, 1500));
+                continue;
+              }
+              if (attempt >= 3) {
+                toastRef.current.info(
+                  'Payment received. Tap Resume to continue your reading.'
+                );
+              }
+              break;
+            }
+          }
+          if (!cancelled) navigate(`/chats?chat_id=${chatIdNum}`, { replace: true });
+        })();
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      // Legacy /topup flow: the backend webhook resumes automatically.
       toastRef.current.success('Payment successful! Session will resume automatically.')
 
       // Clean up URL after short delay
@@ -1990,7 +2029,7 @@ const ClientChat = () => {
         isOpen={showSessionSummaryModal}
         onClose={() => setShowSessionSummaryModal(false)}
         sessionData={sessionSummaryData}
-        onTopUp={() => navigate("/billing")}
+        onTopUp={() => openTopUp({ returnUrl: "/chats?topup=1" })}
       />
 
       {/* End Chat Confirmation Modal */}
@@ -2064,6 +2103,7 @@ const PREVIEW_CFG: Record<
 
 const ChatStatePreview = ({ mode }: { mode: string }) => {
   const navigate = useNavigate();
+  const { open: openTopUp } = useTopUp();
   const cfg = PREVIEW_CFG[mode] || PREVIEW_CFG.active;
   const [summary, setSummary] = useState<null | "normal" | "ranout">(
     mode === "ended" ? "normal" : mode === "ranout" ? "ranout" : null
@@ -2241,7 +2281,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
         isOpen={summary !== null}
         onClose={() => setSummary(null)}
         sessionData={{ duration: cfg.elapsed, cost: cfg.cost, endReason: summary === "ranout" ? "Session ended - insufficient balance" : "Session ended" }}
-        onTopUp={() => navigate("/billing")}
+        onTopUp={() => openTopUp({ returnUrl: "/chats?topup=1" })}
       />
     </div>
   );

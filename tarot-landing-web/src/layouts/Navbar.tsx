@@ -6,7 +6,8 @@ import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
 import { usePayment } from "../features/payment/hooks/usePayment"; // Imported hook from payment features
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
-import { StardustModal, type PurchasePackage } from "./StardustModal"; 
+import { StardustModal, type PurchasePackage } from "./StardustModal";
+import { useTopUp } from "../features/payment/context/TopUpContext";
 import "../styles/starfield.css";
 
 export default function Navbar() {
@@ -16,6 +17,7 @@ export default function Navbar() {
   
   // Connect explicitly to the shared payment hook engine
   const { createCheckoutSession, loading: paymentLoading, fetchMyBalance } = usePayment();
+  const { open: openTopUp } = useTopUp();
 
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -162,8 +164,8 @@ export default function Navbar() {
 
              {isAuthenticated ? (
                <>
-                 <div 
-                   onClick={() => setIsCurrencyModalOpen(true)}
+                 <div
+                   onClick={() => openTopUp()}
                    style={{ backgroundColor: COLORS.primary }}
                    className="flex items-center gap-2 px-4 py-2 rounded-full cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.3)] transition-all hover:shadow-[0_0_30px_rgba(0,0,0,0.4)] hover:scale-105 group"
                  >
@@ -189,10 +191,10 @@ export default function Navbar() {
                      <div className="absolute inset-0 bg-primary/10 group-hover:opacity-0 transition-opacity" />
                    </div>
                    <div className="flex flex-col items-start leading-none">
-                     <span className="text-[9px] font-black text-white/80 uppercase tracking-widest group-hover:text-primary transition-colors">
+                     <span className="text-sm font-black text-white/90 uppercase tracking-wide group-hover:text-primary transition-colors">
                        {user?.username || 'User'}
                      </span>
-                     <span className="text-[7px] font-bold text-white/20 uppercase tracking-tighter">View Identity</span>
+                     <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wide">View profile</span>
                    </div>
                  </button>
 
@@ -312,7 +314,7 @@ export default function Navbar() {
           <div className="p-4 border-t border-white/5">
             <div className="space-y-3">
               <div 
-                onClick={() => { setIsCurrencyModalOpen(true); setMobileNavOpen(false); }}
+                onClick={() => { openTopUp(); setMobileNavOpen(false); }}
                 style={{ backgroundColor: COLORS.primary }}
                 className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
               >

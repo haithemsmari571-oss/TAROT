@@ -1261,9 +1261,12 @@ async def pause_chat_manual(
         return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
 
     is_admin = user.role in (Role.ADMIN, Role.SUPERADMIN)
-    if not is_admin and user.id != chat.psychic_id:
+    # Participants (client or psychic) may pause; the client needs this to pause
+    # her own reading before topping up (mirrors /resume's authorization).
+    is_participant = user.id in (chat.user_id, chat.psychic_id)
+    if not is_admin and not is_participant:
         return JSONResponse(
-            content={"detail": "Only the psychic or an admin can pause this chat"},
+            content={"detail": "Only a participant or an admin can pause this chat"},
             status_code=403,
         )
 

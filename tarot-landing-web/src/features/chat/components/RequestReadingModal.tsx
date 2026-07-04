@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
+import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { requestChat } from "../api/chatApi";
 import { COLORS, TYPOGRAPHY } from "@/theme";
 
@@ -30,10 +31,12 @@ export default function RequestReadingModal({
   onClose,
 }: RequestReadingModalProps) {
   const { onNotification } = useNotifications();
+  const { open: openTopUp } = useTopUp();
   const [step, setStep] = useState<"form" | "waiting">("form");
   const [question, setQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsTopUp, setNeedsTopUp] = useState(false);
 
   // Hand off to the global IncomingReadingModal the moment she's accepted (or if
   // the request is cancelled/declined). pid may be absent on some payloads — in
@@ -62,6 +65,7 @@ export default function RequestReadingModal({
     if (submitting) return;
     setSubmitting(true);
     setError(null);
+    setNeedsTopUp(false);
     try {
       await requestChat({
         psychic_id: psychicId,
@@ -71,11 +75,15 @@ export default function RequestReadingModal({
       });
       setStep("waiting");
     } catch (err: any) {
-      setError(
-        err?.response?.data?.detail ??
-          err?.response?.data?.message ??
-          "We couldn't send your request. Please try again."
-      );
+      const detail =
+        err?.response?.data?.detail ?? err?.response?.data?.message ?? "";
+      if (/insufficient/i.test(detail)) {
+        // Genuinely not enough balance — offer a top-up path instead of a dead end.
+        setNeedsTopUp(true);
+        setError("You need a little more Stardust to begin this reading.");
+      } else {
+        setError(detail || "We couldn't send your request. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -149,9 +157,30 @@ export default function RequestReadingModal({
             />
 
             {error && (
-              <div className="mt-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+              <div
+                className={`mt-3 text-sm rounded-xl p-3 ${
+                  needsTopUp
+                    ? "text-white/70 bg-white/[0.04] border border-white/10"
+                    : "text-red-400 bg-red-500/10 border border-red-500/20"
+                }`}
+              >
                 {error}
               </div>
+            )}
+
+            {needsTopUp && (
+              <button
+                onClick={() =>
+                  openTopUp({
+                    returnUrl: `/psychics/${psychicId}/details?topup=1`,
+                    reason: `Add Stardust to begin your reading with ${psychicName}.`,
+                  })
+                }
+                className="mt-3 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black uppercase text-sm tracking-widest transition-transform hover:scale-[1.02]"
+                style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
+              >
+                <Icon icon="ph:sparkle-fill" className="text-lg" /> Add Stardust
+              </button>
             )}
 
             <button
