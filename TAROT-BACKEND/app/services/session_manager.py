@@ -52,11 +52,14 @@ class SessionInfo:
     elapsed_seconds: int
     estimated_cost: float
     remaining_seconds: int
-    client_balance: float
+    client_balance: float  # total spendable = credit + paid
     chat_status: str
     session_status: str
     started_at: str
     rate_per_second: float
+    # Split of client_balance so the operator sees free credit vs paid.
+    credit_balance: float = 0.0
+    paid_balance: float = 0.0
 
 
 @dataclass
@@ -279,11 +282,11 @@ class SessionManager:
             min_required = (
                 psychic.price_per_second * settings.SESSION_MINIMUM_BALANCE_SECONDS
             )
-            if user.balance < min_required:
+            if user.total_balance < min_required:
                 logger.warning(
                     "insufficient_balance_for_session_start",
                     chat_id=chat_id,
-                    user_balance=user.balance,
+                    user_balance=user.total_balance,
                     min_required=min_required,
                 )
                 raise InsufficientBalanceError(
@@ -325,7 +328,7 @@ class SessionManager:
             # Calculate max session duration based on initial balance
             # This is independent of billing - session ends when elapsed time reaches this
             max_duration = (
-                int(user.balance / psychic.price_per_second)
+                int(user.total_balance / psychic.price_per_second)
                 if psychic.price_per_second > 0
                 else 0
             )
@@ -343,7 +346,7 @@ class SessionManager:
                 psychic_id=chat.psychic_id,
                 rate_per_second=psychic.price_per_second,
                 max_session_duration_seconds=max_duration,
-                initial_balance=float(user.balance),
+                initial_balance=float(user.total_balance),
                 last_check_at=datetime.now(),
                 # Timer does not run until the client joins the chat screen.
                 awaiting_join=True,
@@ -1117,7 +1120,9 @@ class SessionManager:
             user = (
                 db.query(User).filter(User.id == session_state.client_id).first()
             )
-            current_balance = float(user.balance) if user else 0.0
+            credit_balance = float(user.credit_balance) if user else 0.0
+            paid_balance = float(user.balance) if user else 0.0
+            current_balance = credit_balance + paid_balance
             chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
             rate = session_state.rate_per_second
             full_duration = int(current_balance / rate) if rate > 0 else 0
@@ -1127,6 +1132,8 @@ class SessionManager:
                 estimated_cost=0.0,
                 remaining_seconds=full_duration,
                 client_balance=round(current_balance, 2),
+                credit_balance=round(credit_balance, 2),
+                paid_balance=round(paid_balance, 2),
                 chat_status=chat.status.value if chat else "UNKNOWN",
                 session_status="AWAITING_JOIN",
                 started_at=session_state.started_at.isoformat(),
@@ -1141,15 +1148,23 @@ class SessionManager:
         # 2. Calculate estimated cost so far
         estimated_cost = elapsed_seconds * session_state.rate_per_second
 
-        # 3. Calculate remaining time based on max duration (NOT current balance)
-        # This is independent of billing - session ends when time runs out
-        remaining_seconds = max(
+        # 3. Get current LIVE balances from DB (free credit + paid).
+        user = db.query(User).filter(User.id == session_state.client_id).first()
+        credit_balance = float(user.credit_balance) if user else 0.0
+        paid_balance = float(user.balance) if user else 0.0
+        current_balance = credit_balance + paid_balance  # total spendable
+
+        # 4. Remaining time = the SMALLER of the start-time duration cap and what
+        # the client can still afford RIGHT NOW. This is the zero-balance fix:
+        # ending is driven by the LIVE balance, so when it depletes remaining
+        # hits 0 and the monitor stops the session — it no longer coasts on a
+        # stale start-time estimate.
+        rate = session_state.rate_per_second
+        balance_remaining = int(current_balance / rate) if rate > 0 else 0
+        duration_remaining = max(
             0, session_state.max_session_duration_seconds - elapsed_seconds
         )
-
-        # 4. Get current balance from DB (for display purposes only, not used for session ending)
-        user = db.query(User).filter(User.id == session_state.client_id).first()
-        current_balance = float(user.balance) if user else 0.0
+        remaining_seconds = max(0, min(duration_remaining, balance_remaining))
 
         # 5. Get chat status from DB
         chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
@@ -1161,6 +1176,8 @@ class SessionManager:
             estimated_cost=round(estimated_cost, 2),
             remaining_seconds=remaining_seconds,
             client_balance=round(current_balance, 2),
+            credit_balance=round(credit_balance, 2),
+            paid_balance=round(paid_balance, 2),
             chat_status=chat_status,
             session_status="ACTIVE",
             started_at=session_state.started_at.isoformat(),

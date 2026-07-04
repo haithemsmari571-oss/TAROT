@@ -452,6 +452,7 @@ async def gift_user_balance(
         amount=gift_data.amount,
         description=f"Admin gift: {gift_data.message}" if gift_data.message else "Admin gift",
         transaction_type=TransactionType.GIFT,
+        to_credit=True,  # gifts are free credit, spent before paid balance
         metadata={
             "admin_id": admin.id,
             "admin_username": admin.username,

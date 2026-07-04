@@ -94,14 +94,16 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
         if signup_bonus_str is not None:
             bonus_amount = int(signup_bonus_str)
             if bonus_amount > 0:
-                user.balance = bonus_amount
+                # Welcome credit goes to the FREE credit_balance (spent before
+                # paid balance), not the paid balance.
+                user.credit_balance = bonus_amount
                 transaction = Transaction(
                     user_id=user.id,
                     transaction_type=TransactionType.BONUS,
                     amount=bonus_amount,
                     balance_before=0,
                     balance_after=bonus_amount,
-                    description="Signup bonus",
+                    description="Signup bonus (welcome credit)",
                 )
                 db.add(transaction)
                 db.commit()

@@ -45,10 +45,15 @@ def create_credit_transaction(
     idempotency_key: Optional[str] = None,
     metadata: Optional[dict] = None,
     transaction_type: TransactionType = TransactionType.CREDIT,
+    to_credit: bool = False,
 ) -> Transaction:
     """
     Create a CREDIT transaction (add points to user balance).
     Used for: Stripe purchases, refunds, admin credits.
+
+    When `to_credit` is True the points are added to the FREE credit_balance
+    (signup bonus, admin gifts) rather than the paid balance. Free credit is
+    spent before paid balance when the user is billed.
 
     Args:
         db: Database session
@@ -77,8 +82,12 @@ def create_credit_transaction(
         raise InvalidTransactionAmountError("Credit amount must be positive")
 
     try:
-        # Lock user row and get current balance
-        user, balance_before = get_user_balance_with_lock(db, user_id)
+        # Lock user row and get current balances
+        user, _ = get_user_balance_with_lock(db, user_id)
+        credit_before = user.credit_balance or 0
+        paid_before = user.balance or 0
+        # balance_before/after track TOTAL spendable (credit + paid).
+        balance_before = credit_before + paid_before
 
         # Calculate new balance
         balance_after = balance_before + amount
@@ -110,8 +119,11 @@ def create_credit_transaction(
 
         db.add(transaction)
 
-        # Update user balance
-        user.balance = balance_after
+        # Route to free credit (bonus/gift) or paid balance.
+        if to_credit:
+            user.credit_balance = credit_before + amount
+        else:
+            user.balance = paid_before + amount
 
         db.commit()
         db.refresh(transaction)
@@ -193,16 +205,23 @@ def create_debit_transaction(
         raise InvalidTransactionAmountError("Debit amount must be positive")
 
     try:
-        # Lock user row and get current balance
-        user, balance_before = get_user_balance_with_lock(db, user_id)
+        # Lock user row and get current balances
+        user, _ = get_user_balance_with_lock(db, user_id)
+        credit_before = user.credit_balance or 0
+        paid_before = user.balance or 0
+        # balance_before/after track TOTAL spendable (credit + paid) so the
+        # ledger reads as one running balance.
+        balance_before = credit_before + paid_before
 
-        # Check sufficient balance
+        # Check sufficient TOTAL balance (free credit + paid)
         if balance_before < amount:
             logger.warning(
                 "debit_transaction_insufficient_balance",
                 user_id=user_id,
                 amount_required=amount,
                 balance_available=balance_before,
+                credit_available=credit_before,
+                paid_available=paid_before,
                 deficit=amount - balance_before,
                 related_chat_id=related_chat_id,
                 related_session_interval_id=related_session_interval_id,
@@ -210,7 +229,9 @@ def create_debit_transaction(
             )
             raise InsufficientBalanceError(required=amount, available=balance_before)
 
-        # Calculate new balance
+        # Spend free credit first, then paid balance.
+        from_credit = min(credit_before, amount)
+        from_paid = amount - from_credit
         balance_after = balance_before - amount
 
         logger.debug(
@@ -235,13 +256,16 @@ def create_debit_transaction(
             description=description,
             related_chat_id=related_chat_id,
             related_session_interval_id=related_session_interval_id,
-            transaction_metadata=json.dumps(metadata) if metadata else None,
+            transaction_metadata=json.dumps(
+                {**(metadata or {}), "credit_spent": from_credit, "paid_spent": from_paid}
+            ),
         )
 
         db.add(transaction)
 
-        # Update user balance
-        user.balance = balance_after
+        # Apply the split: free credit first, then paid balance.
+        user.credit_balance = credit_before - from_credit
+        user.balance = paid_before - from_paid
 
         db.commit()
         db.refresh(transaction)

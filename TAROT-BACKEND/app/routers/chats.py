@@ -392,13 +392,16 @@ def get_chat_session_time_endpoint(
 
     if not session_info:
         # No active session
-        client_balance = float(chat.user.balance) if chat.user else 0.0
+        credit_balance = float(chat.user.credit_balance) if chat.user else 0.0
+        paid_balance = float(chat.user.balance) if chat.user else 0.0
         return JSONResponse(
             content={
                 "elapsed_seconds": 0,
                 "estimated_cost": 0.0,
                 "price_per_second": chat.psychic.price_per_second or 0.0,
-                "client_balance": client_balance,
+                "client_balance": credit_balance + paid_balance,
+                "credit_balance": credit_balance,
+                "paid_balance": paid_balance,
                 "remaining_seconds": 0,
             },
             status_code=200,
@@ -411,6 +414,8 @@ def get_chat_session_time_endpoint(
             "estimated_cost": session_info.estimated_cost,
             "price_per_second": session_info.rate_per_second,
             "client_balance": session_info.client_balance,
+            "credit_balance": session_info.credit_balance,
+            "paid_balance": session_info.paid_balance,
             "remaining_seconds": session_info.remaining_seconds,
             "total_seconds": session_info.elapsed_seconds,  # For backwards compatibility
             # AWAITING_JOIN until the client actually joins/views — lets the admin

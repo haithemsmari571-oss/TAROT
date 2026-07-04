@@ -17,7 +17,12 @@ class User(Base):
     email: Mapped[str] = mapped_column(unique=True)
     username: Mapped[str] = mapped_column(unique=True)
     password_hash: Mapped[str]
+    # Paid balance — points bought via Stripe (1 point = £1).
     balance: Mapped[int] = mapped_column(default=0)
+    # Free welcome/gift credit (signup bonus, admin gifts). Spent BEFORE paid
+    # balance so promotional credit is used up first. Kept separate so the
+    # operator can see credit vs paid at a glance.
+    credit_balance: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     is_verified: Mapped[bool] = mapped_column(default=False)
     is_online: Mapped[bool] = mapped_column(default=True)
     price_per_second: Mapped[float] = mapped_column(nullable=True)
@@ -34,6 +39,13 @@ class User(Base):
     status: Mapped[UserStatus] = mapped_column(
         Enum(UserStatus), default=UserStatus.ACTIVE
     )
+
+    @property
+    def total_balance(self) -> int:
+        """Total spendable points = free credit + paid balance. Use this for
+        every 'can they afford it' / remaining-time check; use the two fields
+        separately only for display."""
+        return (self.credit_balance or 0) + (self.balance or 0)
 
     # Relationships
     categories: Mapped[List["PsychicCategory"]] = relationship(

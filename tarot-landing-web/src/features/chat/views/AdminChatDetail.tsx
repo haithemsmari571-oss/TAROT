@@ -421,6 +421,23 @@ const AdminChatDetail = () => {
                 </div>
               </div>
 
+              {/* Client balance — free welcome credit is spent before paid balance */}
+              <div
+                className="px-6 py-3 rounded-2xl backdrop-blur-xl border"
+                style={{ background: `${COLORS.primary}12`, borderColor: `${COLORS.primary}30` }}
+              >
+                <div className="text-center">
+                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
+                    Client Balance
+                  </div>
+                  <div className="text-sm font-black tabular-nums mt-1 flex items-center gap-2 justify-center">
+                    <span style={{ color: COLORS.starGold }}>£{(sessionTimeData?.credit_balance ?? 0).toFixed(2)} credit</span>
+                    <span style={{ color: COLORS.neutralGray }}>·</span>
+                    <span style={{ color: COLORS.neutralWhite }}>£{(sessionTimeData?.paid_balance ?? 0).toFixed(2)} paid</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="text-right">
                 <div className="text-xs" style={{ color: COLORS.neutralGray }}>
                   Rate

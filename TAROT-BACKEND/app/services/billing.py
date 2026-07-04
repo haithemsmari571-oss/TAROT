@@ -294,7 +294,7 @@ def check_user_can_start_session(db: Session, user_id: int, psychic_id: int) -> 
     min_seconds = get_app_settings().SESSION_MINIMUM_BALANCE_SECONDS
     required_balance = int(psychic.price_per_second * min_seconds)
 
-    return user.balance >= required_balance
+    return user.total_balance >= required_balance
 
 
 def get_unbilled_active_sessions(
@@ -348,6 +348,6 @@ def get_remaining_session_time(
         return 0
 
     # Calculate seconds remaining
-    remaining_seconds = int(user.balance / psychic_price_per_second)
+    remaining_seconds = int(user.total_balance / psychic_price_per_second)
 
     return max(remaining_seconds, 0)

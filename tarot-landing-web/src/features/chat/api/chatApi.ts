@@ -139,7 +139,10 @@ export interface ChatSessionTime {
   elapsed_seconds: number;
   estimated_cost: number;
   price_per_second: number;
-  client_balance: number;
+  client_balance: number; // total spendable = credit + paid
+  credit_balance?: number; // free welcome/gift credit remaining
+  paid_balance?: number; // purchased balance remaining
+  session_status?: string; // e.g. "ACTIVE" | "AWAITING_JOIN"
 }
 
 /**
