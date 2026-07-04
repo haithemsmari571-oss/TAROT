@@ -15,6 +15,7 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
 import { MessageBubble } from "../components/MessageBubble";
+import { SessionBar } from "../components/SessionBar";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
@@ -934,16 +935,8 @@ const ClientChat = () => {
     );
   }
 
-  // --- Live session metrics for the status bar (colour shifts as time runs low) ---
+  // --- Live session metrics for the status bar (SessionBar handles its own colour ramp) ---
   const remaining = sessionState.remainingSeconds;
-  const timeLeftColor =
-    remaining == null
-      ? COLORS.neutralWhite
-      : remaining <= 60
-        ? "#FF6B6B"
-        : remaining <= 300
-          ? COLORS.starGold
-          : COLORS.neutralWhite;
   const stardustLeft =
     sessionState.clientBalance == null
       ? null
@@ -1281,84 +1274,16 @@ const ClientChat = () => {
                 )}
               </div>
 
-              {/* ── Session status bar — persistent, calm, readable at a glance ── */}
+              {/* ── Session status bar — Time Left + Stardust lead; tap Stardust to top up ── */}
               {(isChatActive || isPaused) && (
-                <div
-                  className="px-3 sm:px-5 py-3 border-b border-white/5"
-                  style={{ backgroundColor: `${COLORS.surface}55` }}
-                >
-                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                    {/* Session (elapsed) */}
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
-                      <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
-                        Session
-                      </div>
-                      <div
-                        className="mt-1 text-lg sm:text-2xl font-bold text-white tabular-nums leading-none"
-                        style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
-                      >
-                        {formatTime(sessionState.elapsedSeconds)}
-                      </div>
-                    </div>
-
-                    {/* Time remaining — colour shifts gold under 5 min, red under 1 min */}
-                    <div
-                      className="rounded-2xl border px-2 py-2.5 text-center transition-colors duration-300"
-                      style={{
-                        borderColor: isPaused ? "rgba(255,255,255,0.1)" : `${timeLeftColor}55`,
-                        backgroundColor: isPaused ? "rgba(255,255,255,0.04)" : `${timeLeftColor}14`,
-                      }}
-                    >
-                      <div
-                        className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em]"
-                        style={{ color: isPaused ? "rgba(255,255,255,0.4)" : timeLeftColor }}
-                      >
-                        Time Left
-                      </div>
-                      <div
-                        className="mt-1 text-lg sm:text-2xl font-bold tabular-nums leading-none"
-                        style={{
-                          fontFamily: TYPOGRAPHY.fontFamily.heading,
-                          color: isPaused ? "#ffffff" : timeLeftColor,
-                        }}
-                      >
-                        {isPaused
-                          ? "Paused"
-                          : remaining == null
-                            ? "—"
-                            : formatTime(Math.max(0, Math.floor(remaining)))}
-                      </div>
-                    </div>
-
-                    {/* Stardust balance remaining */}
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
-                      <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
-                        Stardust
-                      </div>
-                      <div
-                        className="mt-1 flex items-center justify-center gap-1 text-lg sm:text-2xl font-bold tabular-nums leading-none"
-                        style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.starGold }}
-                      >
-                        <Icon icon="ph:sparkle-fill" className="text-xs sm:text-sm" />
-                        {stardustLeft == null ? "—" : stardustLeft.toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Connection status — dot always paired with a text label, never colour alone */}
-                  <div className="mt-2.5 flex items-center justify-center gap-1.5">
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: isConnected ? "#22c55e" : COLORS.starGold }}
-                    />
-                    <span
-                      className="text-[10px] font-semibold uppercase tracking-wider"
-                      style={{ color: isConnected ? "#4ade80" : COLORS.starGold }}
-                    >
-                      {isConnected ? "Connected" : "Reconnecting…"}
-                    </span>
-                  </div>
-                </div>
+                <SessionBar
+                  elapsedSeconds={sessionState.elapsedSeconds}
+                  remainingSeconds={remaining}
+                  stardust={stardustLeft}
+                  isPaused={isPaused}
+                  isConnected={isConnected}
+                  onTopUp={handleAddStardust}
+                />
               )}
 
               {/* Messages Area */}
@@ -2063,13 +1988,6 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
     return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   };
   const remaining = cfg.remaining;
-  const timeLeftColor = cfg.paused
-    ? COLORS.neutralWhite
-    : remaining <= 60
-      ? "#FF6B6B"
-      : remaining <= 300
-        ? COLORS.starGold
-        : COLORS.neutralWhite;
   const stardust = Math.max(0, Math.floor(cfg.balance - cfg.cost));
   const isActive = cfg.status === "ACTIVE";
   const isPaused = cfg.paused;
@@ -2128,28 +2046,14 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
 
         {/* Session status bar */}
         {(isActive || isPaused) && (
-          <div className="px-3 sm:px-5 py-3 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}55` }}>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
-                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Session</div>
-                <div className="mt-1 text-lg sm:text-2xl font-bold text-white tabular-nums leading-none" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>{fmt(cfg.elapsed)}</div>
-              </div>
-              <div className="rounded-2xl border px-2 py-2.5 text-center transition-colors duration-300" style={{ borderColor: isPaused ? "rgba(255,255,255,0.1)" : `${timeLeftColor}55`, backgroundColor: isPaused ? "rgba(255,255,255,0.04)" : `${timeLeftColor}14` }}>
-                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: isPaused ? "rgba(255,255,255,0.4)" : timeLeftColor }}>Time Left</div>
-                <div className="mt-1 text-lg sm:text-2xl font-bold tabular-nums leading-none" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: isPaused ? "#ffffff" : timeLeftColor }}>{isPaused ? "Paused" : fmt(remaining)}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center">
-                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Stardust</div>
-                <div className="mt-1 flex items-center justify-center gap-1 text-lg sm:text-2xl font-bold tabular-nums leading-none" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.starGold }}>
-                  <Icon icon="ph:sparkle-fill" className="text-xs sm:text-sm" />{stardust.toLocaleString()}
-                </div>
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-center justify-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#22c55e" }} />
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#4ade80" }}>Connected</span>
-            </div>
-          </div>
+          <SessionBar
+            elapsedSeconds={cfg.elapsed}
+            remainingSeconds={remaining}
+            stardust={stardust}
+            isPaused={isPaused}
+            isConnected={true}
+            onTopUp={() => openTopUp({ returnUrl: "/chats?topup=1" })}
+          />
         )}
 
         {/* Messages */}
