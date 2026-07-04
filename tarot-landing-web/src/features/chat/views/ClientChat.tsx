@@ -957,7 +957,7 @@ const ClientChat = () => {
       style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}
     >
       {/* Faint dimmed scene — texture only; kept well below message legibility */}
-      <PageBackground images={chatBackground} variant="faint" />
+      <PageBackground images={chatBackground} variant="soft" />
 
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none">
@@ -966,7 +966,7 @@ const ClientChat = () => {
       </div>
 
       {/* LEFT SIDEBAR - CHAT LIST */}
-      <div className={`${selectedChat ? 'hidden' : 'flex'} md:flex w-full md:w-80 lg:w-96 flex-col relative z-10 backdrop-blur-xl rounded-3xl border border-white/10`} style={{ backgroundColor: `${COLORS.surface}22` }}>
+      <div className={`${selectedChat ? 'hidden' : 'flex'} md:flex w-full md:w-80 lg:w-96 flex-col relative z-10 backdrop-blur-xl rounded-3xl border border-white/10`} style={{ backgroundColor: `${COLORS.dark}22` }}>
         {/* Header */}
         <div className="p-6 border-b border-white/5">
           <div className="flex items-center justify-between">
@@ -2138,7 +2138,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
 
   return (
     <div className="h-[calc(100dvh-80px)] p-2 sm:p-4 relative overflow-hidden" style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}>
-      <PageBackground images={chatBackground} variant="faint" />
+      <PageBackground images={chatBackground} variant="soft" />
       <div className="relative z-10 mx-auto max-w-2xl h-full flex flex-col rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl" style={{ backgroundColor: `${COLORS.dark}22` }}>
         {/* Preview switcher (dev-only chrome) */}
         <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}66` }}>
