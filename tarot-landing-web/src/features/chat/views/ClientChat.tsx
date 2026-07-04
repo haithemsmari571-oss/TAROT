@@ -19,7 +19,7 @@ import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
 import "../../../styles/starfield.css";
 import PageBackground from "../../../components/PageBackground";
-import moonlitBalcony from "../../../assets/backgrounds/moonlit-balcony.webp";
+import chatBackground from "../../../assets/backgrounds/chat-background.webp";
 
 const ClientChat = () => {
   const queryClient = useQueryClient();
@@ -957,7 +957,7 @@ const ClientChat = () => {
       style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}
     >
       {/* Faint dimmed scene — texture only; kept well below message legibility */}
-      <PageBackground images={moonlitBalcony} variant="faint" />
+      <PageBackground images={chatBackground} variant="faint" />
 
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none">
@@ -2138,7 +2138,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
 
   return (
     <div className="h-[calc(100dvh-80px)] p-2 sm:p-4 relative overflow-hidden" style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}>
-      <PageBackground images={moonlitBalcony} variant="faint" />
+      <PageBackground images={chatBackground} variant="faint" />
       <div className="relative z-10 mx-auto max-w-2xl h-full flex flex-col rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl" style={{ backgroundColor: `${COLORS.dark}22` }}>
         {/* Preview switcher (dev-only chrome) */}
         <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}66` }}>
