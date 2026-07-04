@@ -1,7 +1,10 @@
 from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel
 
 from app.enums.chat_status import ChatStatus
+from app.enums.message_status import MessageStatus
 
 
 class ChatBase(BaseModel):
@@ -47,6 +50,7 @@ class MessageOut(BaseModel):
     sender_id: int | None = None
     content: str
     is_system: bool = False
+    status: Optional[MessageStatus] = None
     created_at: datetime
 
     class Config:

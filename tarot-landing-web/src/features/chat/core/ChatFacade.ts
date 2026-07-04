@@ -186,6 +186,14 @@ export class ChatFacade {
         });
         break;
       
+      case 'messages_read':
+        // Recipient opened the conversation — flip our sent messages to "seen".
+        this.eventBus.emit(ChatEventType.MESSAGES_READ, {
+          chatId: Number(data.chat_id),
+          readerId: Number(data.reader_id),
+        });
+        break;
+
       case 'session_ended':
       case 'session_ended_no_balance':
       case 'session_ended_confirmed': {

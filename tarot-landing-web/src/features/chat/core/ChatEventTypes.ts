@@ -14,6 +14,7 @@ export enum ChatEventType {
   MESSAGE_RECEIVED = 'message:received',
   MESSAGE_SENT = 'message:sent',
   MESSAGE_ERROR = 'message:error',
+  MESSAGES_READ = 'message:read', // recipient opened the conversation → flip receipts
   
   // Session Events  
   SESSION_STARTED = 'session:started',
@@ -50,6 +51,7 @@ export interface ChatMessage {
   created_at?: string;
   chat_id?: number;
   is_system?: boolean;
+  status?: string; // SENT | DELIVERED | READ (read-receipts)
 }
 
 /**
@@ -64,6 +66,7 @@ export type ChatEventPayload = {
   [ChatEventType.MESSAGE_RECEIVED]: { message: ChatMessage };
   [ChatEventType.MESSAGE_SENT]: { content: string };
   [ChatEventType.MESSAGE_ERROR]: { error: string };
+  [ChatEventType.MESSAGES_READ]: { chatId: number; readerId: number };
   
   [ChatEventType.SESSION_STARTED]: { 
     chatId: number;

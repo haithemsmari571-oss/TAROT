@@ -227,6 +227,7 @@ const ClientChat = () => {
         created_at: msg.created_at,
         chat_id: msg.chat_id,
         is_system: msg.is_system,
+        status: msg.status,
       }));
 
       setMessages(normalizedMessages);
@@ -250,6 +251,18 @@ const ClientChat = () => {
       return [...prev, message];
     });
   }, []);
+
+  // The other party opened the conversation → flip our sent messages to "seen".
+  const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
+    if (!user || readerId === user.id) return;
+    setMessages(prev =>
+      prev.map(m =>
+        !m.is_system && (m.sender_id === user.id || m.user_id === user.id)
+          ? { ...m, status: 'READ' }
+          : m
+      )
+    );
+  }, [user]);
 
   const handleSessionEndingSoon = useCallback(({ remainingSeconds }: { remainingSeconds: number }) => {
     console.log(`[ClientChat] Session ending in ${remainingSeconds} seconds`);
@@ -468,6 +481,7 @@ const ClientChat = () => {
     enabled: !!selectedChat,
     events: {
       [ChatEventType.MESSAGE_RECEIVED]: handleMessageReceived,
+      [ChatEventType.MESSAGES_READ]: handleMessagesRead,
       [ChatEventType.SESSION_INFO]: handleSessionInfo,
       [ChatEventType.SESSION_STARTED]: handleSessionStarted,
       [ChatEventType.SESSION_ENDING_SOON]: handleSessionEndingSoon,
@@ -666,6 +680,7 @@ const ClientChat = () => {
         timestamp: msg.created_at || msg.timestamp,
         created_at: msg.created_at,
         chat_id: msg.chat_id,
+        status: msg.status,
       }));
 
       // Filter out messages that are already loaded (use ID as unique identifier)
@@ -1392,6 +1407,7 @@ const ClientChat = () => {
                       isGroupStart={startOfGroup}
                       senderName={psychicName}
                       senderAvatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
+                      status={msg.status}
                     />
                   );
                 })}
@@ -1999,6 +2015,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
     { mine: false, text: "Hello, love. I can feel there's something weighing on your heart today. Take a breath — we'll look at it together.", t: "7:41 PM" },
     { mine: true, text: "Hi Selene. Yes… it's about a decision I've been putting off.", t: "7:42 PM" },
     { mine: false, text: "The cards are showing me a path opening. You already know the answer — let's give you the clarity to trust it.", t: "7:42 PM" },
+    { mine: true, text: "That feels right. Thank you 💜", t: "7:43 PM" },
   ];
   const modes = ["active", "warning", "lowbalance", "paused", "ended", "ranout"];
 
@@ -2068,6 +2085,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
                 isOwn={b.mine}
                 isGroupStart={startGroup}
                 senderName={psychicName}
+                status={b.mine ? (i === bubbles.length - 1 ? "READ" : "DELIVERED") : undefined}
               />
             );
           })}

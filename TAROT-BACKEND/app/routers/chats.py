@@ -1404,8 +1404,42 @@ async def websocket_endpoint(
         # 3. Send auth success
         await websocket.send_json({"type": "auth_success"})
 
-        # 4. Connect to chat room
-        await manager.connect(websocket, chat_id)
+        # 4. Connect to chat room (track user_id so we know who's viewing)
+        await manager.connect(websocket, chat_id, user.id)
+
+        # 4.5. Opening the conversation counts as "seen": mark the other party's
+        # messages READ and tell the room, so the sender's receipts flip to the
+        # double-check. Best-effort — never let it break the connection.
+        try:
+            from app.enums.message_status import MessageStatus
+            from app.models.message import Message as _Message
+
+            unread = (
+                db.query(_Message)
+                .filter(
+                    _Message.chat_id == int(chat_id),
+                    _Message.sender_id != user.id,
+                    _Message.is_system == False,  # noqa: E712
+                    _Message.status != MessageStatus.READ,
+                )
+                .all()
+            )
+            if unread:
+                for _m in unread:
+                    _m.status = MessageStatus.READ
+                db.commit()
+                await manager.send_to_chat(
+                    {
+                        "type": "messages_read",
+                        "chat_id": int(chat_id),
+                        "reader_id": user.id,
+                    },
+                    str(chat_id),
+                )
+        except Exception as _e:
+            logger.warning(
+                "mark_read_on_open_failed", chat_id=chat_id, error=str(_e)
+            )
 
         # 5. Initialize event dispatcher
         from app.services.chat.event_dispatcher import EventDispatcher

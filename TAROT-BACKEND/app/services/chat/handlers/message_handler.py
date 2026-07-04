@@ -72,6 +72,24 @@ class MessageHandler(BaseEventHandler):
             else message_data["timestamp"]
         )
 
+        # ── Read-receipt status from live presence ──
+        # READ if the recipient currently has this conversation open, DELIVERED
+        # if they're online (app open) but elsewhere, else SENT. Two-tier UI:
+        # DELIVERED = single check, READ = double check.
+        from app.notification_manager import notification_manager
+        from app.enums.message_status import MessageStatus
+
+        recipient_id = chat.psychic_id if user.id == chat.user_id else chat.user_id
+        if recipient_id in manager.users_in_chat(str(self.chat_id)):
+            status = MessageStatus.READ
+        elif notification_manager.is_user_connected(recipient_id):
+            status = MessageStatus.DELIVERED
+        else:
+            status = MessageStatus.SENT
+        db_message.status = status
+        self.db.commit()
+        message_data["status"] = status.value
+
         logger.info(
             "message_broadcasting",
             chat_id=self.chat_id,

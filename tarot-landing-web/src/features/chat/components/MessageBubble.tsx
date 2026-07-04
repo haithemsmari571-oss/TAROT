@@ -15,6 +15,8 @@ interface MessageBubbleProps {
   senderName?: string;
   /** The OTHER party's avatar (shown once per run). */
   senderAvatarUrl?: string | null;
+  /** Read-receipt status of an own message: DELIVERED | READ (else none). */
+  status?: string;
 }
 
 const formatTime = (ts?: string | null) => {
@@ -22,6 +24,16 @@ const formatTime = (ts?: string | null) => {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
+// Two-tier receipt: single check = delivered, double check (accent) = seen.
+const READ_ACCENT = "#B79CFF"; // soft lavender accent, on-brand and unobtrusive
+const receiptFor = (status?: string) => {
+  const s = (status || "").toUpperCase();
+  if (s === "READ") return { icon: "ph:checks-bold", color: READ_ACCENT }; // seen
+  if (s === "DELIVERED")
+    return { icon: "ph:check-bold", color: "rgba(255,255,255,0.4)" }; // delivered
+  return null; // SENT / sending / unknown → no check (2-tier)
 };
 
 /**
@@ -38,9 +50,11 @@ export const MessageBubble = ({
   isGroupStart,
   senderName,
   senderAvatarUrl,
+  status,
 }: MessageBubbleProps) => {
   const [showTime, setShowTime] = useState(false);
   const time = formatTime(timestamp);
+  const receipt = isOwn ? receiptFor(status) : null;
 
   return (
     <motion.div
@@ -110,21 +124,39 @@ export const MessageBubble = ({
             </p>
           </button>
 
-          <AnimatePresence initial={false}>
-            {showTime && time && (
-              <motion.p
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.15 }}
-                className={`overflow-hidden px-1.5 text-[11px] text-white/40 ${
-                  isOwn ? "self-end text-right" : "self-start text-left"
-                }`}
-              >
-                <span className="mt-1 inline-block">{time}</span>
-              </motion.p>
-            )}
-          </AnimatePresence>
+          {/* Timestamp reveals on tap; the receipt check (own messages) stays
+              visible so "seen" is legible at a glance without tapping. */}
+          {(showTime || receipt) && (
+            <div
+              className={`mt-1 flex items-center gap-1 px-1.5 text-[11px] leading-none ${
+                isOwn ? "self-end justify-end" : "self-start"
+              }`}
+            >
+              <AnimatePresence initial={false}>
+                {showTime && time && (
+                  <motion.span
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: "auto" }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden whitespace-nowrap text-white/40"
+                  >
+                    {time}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+              {receipt && (
+                <Icon
+                  icon={receipt.icon}
+                  className="text-[13px]"
+                  style={{ color: receipt.color }}
+                  aria-label={
+                    (status || "").toUpperCase() === "READ" ? "Seen" : "Delivered"
+                  }
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

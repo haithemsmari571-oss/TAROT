@@ -261,6 +261,7 @@ const PsychicSessionGlass = () => {
         created_at: msg.created_at,
         chat_id: msg.chat_id,
         is_system: msg.is_system,
+        status: msg.status,
       }));
 
       setWsMessages(normalizedMessages);
@@ -287,6 +288,15 @@ const PsychicSessionGlass = () => {
       return [...prev, message];
     });
   }, []);
+
+  // The client opened the conversation → flip our sent messages to "seen".
+  const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
+    const myId = isAdmin ? currentChat?.psychic_id : user?.id;
+    if (myId == null || readerId === myId) return;
+    setWsMessages(prev =>
+      prev.map(m => (!m.is_system && m.sender_id === myId ? { ...m, status: 'READ' } : m))
+    );
+  }, [isAdmin, currentChat?.psychic_id, user?.id]);
 
   const handleSessionPaused = useCallback(({ reason, elapsed_seconds }: { reason?: string; elapsed_seconds?: number }) => {
     console.log('[PsychicSessionGlass] SESSION_PAUSED event received:', { reason, elapsed_seconds });
@@ -475,6 +485,7 @@ const PsychicSessionGlass = () => {
     enabled: activeView === "chat" && !!selectedChat,
     events: {
       [ChatEventType.MESSAGE_RECEIVED]: handleMessageReceived,
+      [ChatEventType.MESSAGES_READ]: handleMessagesRead,
       [ChatEventType.SESSION_STARTED]: handleSessionStarted,
       [ChatEventType.SESSION_PAUSED]: handleSessionPaused,
       [ChatEventType.SESSION_RESUMED]: handleSessionResumed,
@@ -562,6 +573,7 @@ const PsychicSessionGlass = () => {
           created_at: msg.created_at,
           chat_id: msg.chat_id,
           is_system: msg.is_system,
+          status: msg.status,
         }));
 
         // Add to loaded older messages (this will trigger the merge in useEffect)
@@ -1478,6 +1490,7 @@ const PsychicSessionGlass = () => {
                             isGroupStart={startOfGroup}
                             senderName={currentChat?.user_name || "Client"}
                             senderAvatarUrl={currentChat?.user_profile_pic_url}
+                            status={msg.status}
                           />
                         );
                       })}
