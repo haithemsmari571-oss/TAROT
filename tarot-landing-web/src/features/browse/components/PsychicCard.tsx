@@ -8,7 +8,7 @@ import {
   getTier,
   hexToRgb,
 } from "../../../lib/psychicDisplay";
-import { formatPerMinuteGbp } from "../../../lib/currency";
+import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
 
 const BG = "#0D1117";
 
@@ -24,6 +24,7 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
   const halo = getHaloColor(psychic.categories);
   const haloRgb = hexToRgb(halo);
   const perMinute = (psychic.price_per_second || 0) * 60;
+  const freeMinutes = welcomeCreditMinutes(psychic.price_per_second);
   const tier = getTier(perMinute);
   const rating = DISPLAY_RATINGS[psychic.id];
 
@@ -102,40 +103,65 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
           }}
         />
 
-        {/* ONLINE indicator (top-left) */}
-        {psychic.is_online && (
-          <div
-            style={{
-              position: "absolute",
-              top: 10,
-              left: 10,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span
+        {/* Top-left overlay: online status + welcome-credit badge (opposite the tier tag) */}
+        <div
+          style={{
+            position: "absolute",
+            top: 10,
+            left: 10,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: 6,
+          }}
+        >
+          {psychic.is_online && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#22c55e",
+                  animation: "psychicPulse 2s ease-in-out infinite",
+                  display: "inline-block",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.1em",
+                  color: "#22c55e",
+                  fontWeight: 700,
+                }}
+              >
+                ONLINE
+              </span>
+            </div>
+          )}
+
+          {freeMinutes > 0 && (
+            <div
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "#22c55e",
-                animation: "psychicPulse 2s ease-in-out infinite",
-                display: "inline-block",
-              }}
-            />
-            <span
-              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "rgba(13,17,23,0.72)",
+                border: "1px solid rgba(242,174,64,0.5)",
+                padding: "3px 8px",
+                borderRadius: 20,
                 fontSize: 10,
-                letterSpacing: "0.1em",
-                color: "#22c55e",
                 fontWeight: 700,
+                letterSpacing: "0.03em",
+                color: "#F2AE40",
+                backdropFilter: "blur(4px)",
+                whiteSpace: "nowrap",
               }}
             >
-              ONLINE
-            </span>
-          </div>
-        )}
+              🎁 £15 FREE = {freeMinutes} min
+            </div>
+          )}
+        </div>
 
         {/* TIER badge (top-right) */}
         <div

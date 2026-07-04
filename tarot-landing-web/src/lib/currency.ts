@@ -1,42 +1,33 @@
-// Currency display helpers. The site trades in GBP (£) — the wallet/checkout is
+// Currency display helpers. The site trades in GBP (£). Reader rates are stored
+// in the DB as GBP (price_per_second is £/second), and the wallet/checkout is
 // charged in GBP by the backend (Stripe currency "gbp"), so 1 credit = £1.
-//
-// Per-minute reader rates use a fixed USD->GBP conversion table supplied by the
-// business (not a live FX rate). Anything not in the table falls back to a clean
-// rounded-to-10p figure so we never show odd fractions.
+// Per-minute rates are formatted, never converted — the displayed price equals
+// the billed price.
 
 export const GBP = "£";
 
-// Exact per-minute conversions (USD -> GBP), keyed by USD pennies to dodge float
-// comparison issues.
-const PER_MINUTE_TABLE: Record<number, number> = {
-  180: 1.4,
-  240: 1.9,
-  270: 2.1,
-  294: 2.3,
-  300: 2.4,
-  360: 2.8,
-  396: 3.1,
-  462: 3.6,
-  540: 4.2,
-  594: 4.7,
-  660: 5.2,
-};
-
-/** Round a number to the nearest clean 10p (e.g. 2.844 -> 2.80). */
-export function roundToTenPence(value: number): number {
-  return Math.round(value * 10) / 10;
+/** Numeric per-minute reader rate in GBP (price_per_second * 60, already GBP). */
+export function perMinuteGbp(gbpPerMinute: number): number {
+  return gbpPerMinute;
 }
 
+/** Format a per-minute reader rate (price_per_second * 60, in GBP) as "£5.20". */
+export function formatPerMinuteGbp(gbpPerMinute: number): string {
+  return `${GBP}${gbpPerMinute.toFixed(2)}`;
+}
+
+/** Free credit granted to a new member on their first reading (in GBP). */
+export const WELCOME_CREDIT_GBP = 15;
+
 /**
- * Format a per-minute reader rate (given as a USD/min figure, e.g. price_per_second*60)
- * as a GBP string like "£5.20".
+ * Whole minutes of reading time the £15 welcome credit buys with a given reader,
+ * rounded DOWN so the offer never over-promises. Uses the same GBP per-minute
+ * rate the card shows, so "£X/min" and "£15 = Y min" always agree.
  */
-export function formatPerMinuteGbp(usdPerMinute: number): string {
-  const cents = Math.round(usdPerMinute * 100);
-  const gbp =
-    PER_MINUTE_TABLE[cents] ?? roundToTenPence(usdPerMinute * 0.79);
-  return `${GBP}${gbp.toFixed(2)}`;
+export function welcomeCreditMinutes(pricePerSecond: number): number {
+  const perMin = (pricePerSecond || 0) * 60;
+  if (perMin <= 0) return 0;
+  return Math.floor(WELCOME_CREDIT_GBP / perMin);
 }
 
 /**

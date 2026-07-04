@@ -360,6 +360,18 @@ const PsychicPanels = () => {
         >
           Five truths. One reading.
         </p>
+        <p
+          style={{
+            fontFamily: BODY_FONT,
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: "#F2AE40",
+            marginTop: 12,
+            letterSpacing: "0.02em",
+          }}
+        >
+          🎁 Your first reading is on us — £15 free credit for new members.
+        </p>
       </div>
 
       {/* Panels */}

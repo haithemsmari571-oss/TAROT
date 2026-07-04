@@ -109,6 +109,14 @@ const Footer = () => {
           {/* SPACER - newsletter removed */}
         </div>
 
+        {/* WELCOME-CREDIT TERMS — site-wide fine print */}
+        <div className="flex items-center justify-center gap-1.5 mb-10" style={{ color: COLORS.starGold, opacity: 0.7 }}>
+          <Icon icon="ph:gift-fill" className="text-[11px]" />
+          <span className="text-[10px] uppercase tracking-[0.2em] font-bold">
+            £15 welcome credit — new members only, one per person.
+          </span>
+        </div>
+
         {/* BOTTOM BAR */}
         <div className="flex flex-col md:flex-row justify-between items-center pt-12 border-t border-white/5 gap-8">
           <div className="flex gap-6 items-center">

@@ -10,7 +10,7 @@ import { StardustModal, type PurchasePackage } from "./StardustModal";
 import { useTopUp } from "../features/payment/context/TopUpContext";
 import "../styles/starfield.css";
 
-export default function Navbar() {
+export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
@@ -109,10 +109,11 @@ export default function Navbar() {
   return (
     <>
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 overflow-hidden ${
+        className={`fixed inset-x-0 z-50 transition-all duration-500 overflow-hidden ${
           scrolled ? "py-3" : "py-5"
         }`}
-        style={{ 
+        style={{
+          top: topOffset,
           borderBottom: `1px solid ${scrolled ? "rgba(255,255,255,0.05)" : "transparent"}`,
           backgroundColor: scrolled ? `${COLORS.dark}F2` : "transparent",
           backdropFilter: scrolled ? "blur(20px)" : "none"
@@ -125,7 +126,7 @@ export default function Navbar() {
 
          <div className="max-w-[1440px] mx-auto px-6 md:px-10 flex items-center justify-between relative z-10">
 
-           <div onClick={() => navigate("/home")} className="cursor-pointer group relative flex items-center h-16 lg:h-24 shrink-0" title="Ask Valentina — home">
+           <div onClick={() => navigate("/psychics-browse")} className="cursor-pointer group relative flex items-center h-16 lg:h-24 shrink-0" title="Ask Valentina — home">
              <img src="/logo short normal.svg" alt="Ask Valentina home" className="h-full w-auto object-contain transition-all duration-500 group-hover:brightness-125" />
              <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full -z-10 opacity-50 group-hover:opacity-100 transition-opacity" />
            </div>
@@ -223,7 +224,7 @@ export default function Navbar() {
                      boxShadow: `0 10px 30px ${COLORS.primary}40`,
                    }}
                  >
-                   Get Started
+                   Get £15 Free
                  </button>
                </>
              )}
@@ -258,7 +259,7 @@ export default function Navbar() {
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-white/5">
-            <div onClick={() => { navigate("/home"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-3">
+            <div onClick={() => { navigate("/psychics-browse"); setMobileNavOpen(false); }} className="cursor-pointer group flex items-center gap-3">
               <img src="/logo short normal.svg" alt="Ask Valentina home" className="h-14 w-auto object-contain" />
               <span 
                 className="font-black text-sm uppercase tracking-wider"

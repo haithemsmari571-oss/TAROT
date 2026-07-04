@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import axiosClient from "../../../lib/axiosClient";
-import { formatPerMinuteGbp } from "../../../lib/currency";
+import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
 import {
   DISPLAY_RATINGS,
   getHaloColor,
@@ -160,10 +160,12 @@ const TarotCouncil = () => {
           </span>
         </motion.h2>
         <p
-          className="text-sm md:text-base opacity-50 leading-relaxed mx-auto max-w-xl font-medium"
+          className="text-sm md:text-base leading-relaxed mx-auto max-w-xl font-medium"
           style={{ color: COLORS.neutralWhite }}
         >
-          {sectionContent.subtitle} <br />
+          Your first reading is on us —{" "}
+          <span style={{ color: COLORS.starGold, fontWeight: 700 }}>£15 free credit</span>{" "}
+          with any reader below. <br />
           {sectionContent.subtitleLine2}
         </p>
       </div>
@@ -296,6 +298,22 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
             {psychic.is_online ? "Online" : "Away"}
           </span>
         </div>
+
+        {/* Welcome-credit badge (bottom-right) — £15 free = X min with this reader */}
+        {welcomeCreditMinutes(psychic.price_per_second) > 0 && (
+          <div
+            className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full flex items-center"
+            style={{
+              background: "rgba(13,17,23,0.72)",
+              border: `1px solid ${COLORS.starGold}80`,
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <span className="text-[9px] font-black tracking-wide" style={{ color: COLORS.starGold }}>
+              🎁 £15 FREE = {welcomeCreditMinutes(psychic.price_per_second)} min
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col items-center text-center space-y-4 px-1">

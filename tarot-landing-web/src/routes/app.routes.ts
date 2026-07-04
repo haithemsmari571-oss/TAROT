@@ -1,6 +1,7 @@
 import React from "react";
 import authRoutes from "./auth.routes";
-import { homePage } from "../features/home/views";
+import HomeRedirect from "../features/home/views/HomeRedirect";
+import home from "../features/home/views/home";
 import userRoutes from "./user.routes";
 import psychicsRoutes from "./psychics.routes";
 import chatRoutes from "./chat.routes";
@@ -38,14 +39,14 @@ export interface RouteConfig {
 const routes: RouteConfig[] = [
   {
     path: "/",
-    name: "home Page",
-    component: homePage,
+    name: "home Redirect",
+    component: HomeRedirect,
     layout: "public",
   },
   {
     path: "/home",
     name: "home Page",
-    component: homePage,
+    component: home,
     layout: "public",
   },
   ...authRoutes,

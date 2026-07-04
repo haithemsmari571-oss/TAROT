@@ -2,7 +2,7 @@ import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
-import { formatPerMinuteGbp } from "../../../lib/currency";
+import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
 import RequestReadingModal from "@/features/chat/components/RequestReadingModal";
@@ -453,6 +453,21 @@ const PsychicDetails = () => {
                   </span>
                 </div>
               </div>
+
+              {/* WELCOME-CREDIT BADGE — first reading free, in minutes with this reader */}
+              {welcomeCreditMinutes(psychic.price_per_second) > 0 && (
+                <div
+                  className="mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
+                  style={{
+                    backgroundColor: `${COLORS.starGold}14`,
+                    border: `1px solid ${COLORS.starGold}44`,
+                    color: COLORS.starGold,
+                  }}
+                >
+                  <Icon icon="ph:gift-fill" className="text-sm" />
+                  First £15 free = {welcomeCreditMinutes(psychic.price_per_second)} min with {psychic.username}
+                </div>
+              )}
 
               {/* START READING BUTTON */}
               <button

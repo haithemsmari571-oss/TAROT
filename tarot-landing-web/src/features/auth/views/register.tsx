@@ -104,6 +104,10 @@ const RegisterPage = () => {
             <p className="text-sm font-medium text-white/50 leading-relaxed">
               Join Ask Valentina to connect with a gifted reader.
             </p>
+            <p className="text-sm font-bold leading-relaxed flex items-center gap-1.5" style={{ color: COLORS.primary }}>
+              <Icon icon="ph:sparkle-fill" style={{ color: COLORS.starGold }} />
+              Your first reading is on us — £15 free credit.
+            </p>
           </header>
 
           {(

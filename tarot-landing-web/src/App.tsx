@@ -53,8 +53,8 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   //     return <Navigate to="/admin/chats" replace />;
   //   }
   // }
-  // Logged-in USER role — the homepage at "/" is a real page for everyone now,
-  // so no longer redirect "/" or "/home" to /psychics-browse.
+  // Logged-in USER role. "/" and "/home" have no standalone homepage — the
+  // HomeRedirect route component sends them to /psychics-browse.
   if (isAuthenticated && user?.role === UserRole.USER) {
     return <>{children}</>;
   }
@@ -74,7 +74,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
       location.pathname.startsWith("/psychics/");
 
     if (!isGuestAllowed) {
-      return <Navigate to="/home" replace />;
+      return <Navigate to="/psychics-browse" replace />;
     }
     return <>{children}</>;
   }

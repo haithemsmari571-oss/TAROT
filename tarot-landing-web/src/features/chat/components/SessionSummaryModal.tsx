@@ -49,7 +49,7 @@ export const SessionSummaryModal = ({
     if (onTopUp) {
       onTopUp();
     } else {
-      navigate("/client/wallet");
+      navigate("/billing");
     }
   };
 

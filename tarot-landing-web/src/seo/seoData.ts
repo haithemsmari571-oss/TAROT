@@ -39,14 +39,21 @@ export const SEO: Record<string, SeoMeta> = {
     path: "/",
     title: "Private Love Readings & Tarot Clarity | Ask Valentina",
     description:
-      "Private love and tarot readings for the connection you cannot stop thinking about. Talk to an intuitive reader and get clarity on him, your relationship and what comes next.",
+      "Private love and tarot readings for the connection you cannot stop thinking about. £15 free credit for your first reading. Talk to an intuitive reader and get clarity on him, your relationship and what comes next.",
+    ogType: "website",
+  },
+  "/home": {
+    path: "/home",
+    title: "Ask Valentina — Live Love & Tarot Readings Online",
+    description:
+      "Ask Valentina connects you with gifted readers for private, one-to-one love and tarot readings. Your first reading is on us — £15 free credit for new members.",
     ogType: "website",
   },
   "/psychics-browse": {
     path: "/psychics-browse",
     title: "Browse Our Psychic & Tarot Readers | Ask Valentina",
     description:
-      "Meet our intuitive love and tarot readers. Choose the reader who feels right and start a private one-to-one reading whenever you're ready.",
+      "Meet our intuitive love and tarot readers — £15 free credit for your first reading. Choose the reader who feels right and start a private one-to-one reading whenever you're ready.",
     ogType: "website",
   },
   "/about": {

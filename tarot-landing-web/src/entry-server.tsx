@@ -7,7 +7,6 @@ import { StaticRouter } from "react-router";
 import type { ComponentType } from "react";
 
 import MarketingShell from "./prerender/MarketingShell";
-import HomePage from "./features/home/views/home";
 import DoesHeMissMe from "./features/seo/views/DoesHeMissMe";
 import WillMyExComeBack from "./features/seo/views/WillMyExComeBack";
 import NotFound from "./features/misc/views/NotFound";
@@ -17,7 +16,6 @@ import { renderHeadTags } from "./seo/renderHead";
 // Routes we prerender. Add a page here (and to scripts/prerender.mjs ROUTES) to
 // ship another static SEO page.
 const PAGES: Record<string, ComponentType> = {
-  "/": HomePage,
   "/does-he-miss-me": DoesHeMissMe,
   "/will-my-ex-come-back": WillMyExComeBack,
 };

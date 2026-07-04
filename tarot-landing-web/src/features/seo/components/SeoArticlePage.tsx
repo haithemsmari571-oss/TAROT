@@ -149,8 +149,15 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
         <h2 className="text-2xl md:text-3xl font-bold mb-3" style={{ color: COLORS.neutralWhite }}>
           {content.ctaHeading}
         </h2>
-        <p className="mb-6 text-base md:text-lg" style={{ color: COLORS.neutralGray }}>
+        <p className="mb-3 text-base md:text-lg" style={{ color: COLORS.neutralGray }}>
           {content.ctaBody}
+        </p>
+        <p
+          className="mb-6 flex items-center justify-center gap-1.5 text-sm font-bold"
+          style={{ color: COLORS.starGold }}
+        >
+          <Icon icon="ph:gift-fill" width={16} height={16} />
+          New here? Your first £15 is free.
         </p>
         {/* TODO: point ctaHref at /love-compatibility-calculator once that page
             ships (Phase 2). For now it routes to the readers page. */}

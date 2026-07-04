@@ -159,7 +159,7 @@ const PsychicsBrowse = () => {
             Explore Our <span style={{ color: COLORS.primary }}>Psychic Readers</span>
           </h1>
           <p className="text-base opacity-60 max-w-2xl mx-auto" style={{ color: COLORS.neutralWhite }}>
-            Connect with experienced spiritual advisors ready to guide you on your journey
+            Connect with experienced spiritual advisors — your first reading is on us with £15 free credit
           </p>
         </div>
 
