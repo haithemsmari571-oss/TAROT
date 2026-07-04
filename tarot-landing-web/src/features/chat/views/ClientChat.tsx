@@ -14,6 +14,7 @@ import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
+import { MessageBubble } from "../components/MessageBubble";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
@@ -1458,68 +1459,15 @@ const ClientChat = () => {
                   const startOfGroup = !prevSameSender;
 
                   return (
-                    <div
+                    <MessageBubble
                       key={msg.id || i}
-                      className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'} ${startOfGroup ? 'mt-4' : 'mt-1'}`}
-                    >
-                      <div className={`max-w-[80%] sm:max-w-[75%] ${isMyMessage ? '' : 'flex gap-2.5'}`}>
-                        {/* Psychic avatar — shown once per group, kept (hidden) for alignment otherwise */}
-                        {!isMyMessage && (
-                          <div
-                            className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/25 to-secondary/25 flex items-center justify-center overflow-hidden flex-shrink-0 self-end border border-white/10"
-                            style={{ visibility: startOfGroup ? 'visible' : 'hidden' }}
-                          >
-                            {(psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url) ? (
-                              <img
-                                src={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
-                                alt={psychicName}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <Icon icon="ph:user-fill" className="text-white/80 text-base" />
-                            )}
-                          </div>
-                        )}
-
-                        <div className="min-w-0">
-                          {/* Psychic name above the first bubble of a group */}
-                          {!isMyMessage && startOfGroup && (
-                            <span
-                              className="block mb-1 ml-1 text-[12px] font-semibold"
-                              style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.heading }}
-                            >
-                              {psychicName}
-                            </span>
-                          )}
-                          <div
-                            className={`px-4 py-3 sm:px-[18px] sm:py-3.5 shadow-lg ${isMyMessage
-                              ? 'rounded-[22px] rounded-br-md text-white'
-                              : 'rounded-[22px] rounded-bl-md'
-                              }`}
-                            style={isMyMessage ? {
-                              background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
-                            } : {
-                              backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                              backdropFilter: 'blur(10px)',
-                              color: 'white',
-                              border: '1px solid rgba(255, 255, 255, 0.14)'
-                            }}
-                          >
-                            <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">
-                              {msg.content}
-                            </p>
-                          </div>
-                          {messageTime && (
-                            <p className={`text-[11px] text-white/35 mt-1 px-1.5 ${isMyMessage ? 'text-right' : 'text-left'}`}>
-                              {new Date(messageTime).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                      content={msg.content}
+                      timestamp={messageTime}
+                      isOwn={isMyMessage}
+                      isGroupStart={startOfGroup}
+                      senderName={psychicName}
+                      senderAvatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
+                    />
                   );
                 })}
 
@@ -2209,22 +2157,14 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
           {bubbles.map((b, i) => {
             const startGroup = i === 0 || bubbles[i - 1].mine !== b.mine;
             return (
-              <div key={i} className={`flex ${b.mine ? "justify-end" : "justify-start"} ${startGroup ? "mt-4" : "mt-1"}`}>
-                <div className={`max-w-[80%] ${b.mine ? "" : "flex gap-2.5"}`}>
-                  {!b.mine && (
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/25 to-secondary/25 flex items-center justify-center flex-shrink-0 self-end border border-white/10" style={{ visibility: startGroup ? "visible" : "hidden" }}>
-                      <Icon icon="ph:user-fill" className="text-white/80 text-base" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    {!b.mine && startGroup && <span className="block mb-1 ml-1 text-[12px] font-semibold" style={{ color: COLORS.primary, fontFamily: TYPOGRAPHY.fontFamily.heading }}>{psychicName}</span>}
-                    <div className={`px-4 py-3 sm:px-[18px] sm:py-3.5 shadow-lg ${b.mine ? "rounded-[22px] rounded-br-md text-white" : "rounded-[22px] rounded-bl-md"}`} style={b.mine ? { background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` } : { backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", color: "white" }}>
-                      <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap">{b.text}</p>
-                    </div>
-                    <p className={`text-[11px] text-white/35 mt-1 px-1.5 ${b.mine ? "text-right" : "text-left"}`}>{b.t}</p>
-                  </div>
-                </div>
-              </div>
+              <MessageBubble
+                key={i}
+                content={b.text}
+                timestamp={new Date(Date.now() - (bubbles.length - i) * 60000).toISOString()}
+                isOwn={b.mine}
+                isGroupStart={startGroup}
+                senderName={psychicName}
+              />
             );
           })}
         </div>
@@ -2257,8 +2197,8 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2.5">
-              <button onClick={() => setSummary(mode === "ranout" ? "ranout" : "normal")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2" style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}>
-                <Icon icon="solar:refresh-bold-duotone" className="text-xl" />Show summary modal
+              <button onClick={() => navigate("/psychics-browse")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2" style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}>
+                <Icon icon="solar:chat-round-line-bold-duotone" className="text-xl" />Book another reading
               </button>
               <button onClick={() => navigate("/psychics-browse")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white border border-white/15 bg-white/[0.04] flex items-center justify-center gap-2">
                 <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: COLORS.primary }} />Browse psychics

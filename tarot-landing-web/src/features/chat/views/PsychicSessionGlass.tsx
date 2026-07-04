@@ -15,7 +15,7 @@ import { useChatSessionState } from "../hooks/useChatSessionState";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { GlassChatCard } from "../components/GlassChatCard";
 import { GlassChatListItem } from "../components/GlassChatListItem";
-import { GlassMessageBubble } from "../components/GlassMessageBubble";
+import { MessageBubble } from "../components/MessageBubble";
 import { GlassChatInput } from "../components/GlassChatInput";
 import { GlassChatSidebar } from "../components/GlassChatSidebar";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
@@ -1421,13 +1421,21 @@ const PsychicSessionGlass = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-1">
+                    <div>
                       {allMessages.map((msg, index) => {
                         // For admins acting as psychic, messages from the psychic are "own"
                         // For regular psychics, messages matching their user_id are "own"
                         const isOwn = isAdmin
                           ? msg.sender_id === currentChat?.psychic_id
                           : msg.sender_id === user?.id;
+
+                        // First of a same-sender run gets the avatar + name.
+                        const prev = allMessages[index - 1];
+                        const startOfGroup = !(
+                          prev &&
+                          !(prev.type === 'system' || prev.is_system) &&
+                          prev.sender_id === msg.sender_id
+                        );
 
                         // Create a truly unique key using multiple properties
                         const uniqueKey = msg.id
@@ -1462,17 +1470,15 @@ const PsychicSessionGlass = () => {
                         }
 
                         return (
-                          <motion.div
+                          <MessageBubble
                             key={uniqueKey}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: Math.min(index * 0.03, 0.5) }}
-                          >
-                            <GlassMessageBubble
-                              message={msg}
-                              isOwn={isOwn}
-                            />
-                          </motion.div>
+                            content={msg.content}
+                            timestamp={msg.created_at || msg.timestamp}
+                            isOwn={isOwn}
+                            isGroupStart={startOfGroup}
+                            senderName={currentChat?.user_name || "Client"}
+                            senderAvatarUrl={currentChat?.user_profile_pic_url}
+                          />
                         );
                       })}
                     </div>
