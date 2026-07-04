@@ -95,13 +95,13 @@ const Ledger = () => {
     };
   }, [transactions]);
 
-  // Format currency (amount is in points, convert to dollars using unit_price_cents)
+  // Format currency (amount is in points; 1 point = £1)
   const formatCurrency = (amount: number) => {
-    const dollars = (amount * unitPriceCents) / 100;
-    return new Intl.NumberFormat("en-US", {
+    const pounds = (amount * unitPriceCents) / 100;
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency: "USD",
-    }).format(dollars);
+      currency: "GBP",
+    }).format(pounds);
   };
 
   // Format date

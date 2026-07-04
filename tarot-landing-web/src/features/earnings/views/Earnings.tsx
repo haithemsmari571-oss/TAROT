@@ -91,11 +91,11 @@ const Earnings = () => {
     };
   }, [earnings]);
 
-  // Format currency (points to USD for display)
+  // Format currency (points to GBP for display; 1 point = £1)
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency: "USD",
+      currency: "GBP",
     }).format((amount * unitPriceCents) / 100);
   };
 
@@ -270,7 +270,7 @@ const Earnings = () => {
             </span>
           </div>
           <div className="text-3xl font-black" style={{ color: "#4ADE80" }}>
-            {summary ? formatCurrency(summary.totalEarnings) : "$0.00"}
+            {summary ? formatCurrency(summary.totalEarnings) : "£0.00"}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
@@ -357,7 +357,7 @@ const Earnings = () => {
             </span>
           </div>
           <div className="text-3xl font-black" style={{ color: "#F59E0B" }}>
-            {summary ? formatCurrency(summary.pendingEarnings) : "$0.00"}
+            {summary ? formatCurrency(summary.pendingEarnings) : "£0.00"}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
