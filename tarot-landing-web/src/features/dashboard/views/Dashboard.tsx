@@ -32,8 +32,8 @@ function getVisiblePages(current: number, total: number, siblings: number = 1): 
 
 const formatAmount = (points: number, unitPriceCents: number) => {
   const dollars = (points * unitPriceCents) / 100;
-  if (dollars >= 1000) return `$${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  return `$${dollars.toFixed(2)}`;
+  if (dollars >= 1000) return `£${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return `£${dollars.toFixed(2)}`;
 };
 
 const formatNumber = (n: number) => n.toLocaleString();

@@ -762,9 +762,9 @@ const PsychicSessionGlass = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency: "USD",
+      currency: "GBP",
     }).format(amount / 100);
   };
 
@@ -1287,7 +1287,7 @@ const PsychicSessionGlass = () => {
                         The client needs to top up their balance to continue. This session will automatically end in 30 minutes if not resumed.
                       </p>
                       <div className="text-xs text-white/50 mb-3">
-                        <span className="font-semibold">Earnings so far:</span> ${(sessionState.estimatedCost || 0).toFixed(2)}
+                        <span className="font-semibold">Earnings so far:</span> £{(sessionState.estimatedCost || 0).toFixed(2)}
                       </div>
                       <div className="flex gap-2">
                         <button

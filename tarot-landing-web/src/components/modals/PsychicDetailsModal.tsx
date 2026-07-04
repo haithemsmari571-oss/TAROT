@@ -2,6 +2,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../theme";
+import { formatPerMinuteGbp, GBP } from "../../lib/currency";
 import type { Psychic } from "../../features/psychics/data/PractitionersUsers";
 
 interface PsychicDetailsModalProps {
@@ -196,14 +197,14 @@ const PsychicDetailsModal = ({ isOpen, onClose, psychic }: PsychicDetailsModalPr
                       <div>
                         <div className="text-[9px] font-black text-white/40 uppercase tracking-wider">Per Minute Rate</div>
                         <div className="text-base font-black text-white mt-0.5">
-                          ${(psychic.price_per_second * 60).toFixed(2)}
+                          {formatPerMinuteGbp(psychic.price_per_second * 60)}
                         </div>
                       </div>
                     </div>
                     
                     <div className="px-4 py-2 border-l border-white/10">
                       <div className="text-[9px] text-white/30 font-black uppercase tracking-wider">Exact Per Second Base</div>
-                      <div className="text-xs text-white/60 font-semibold mt-0.5">${psychic.price_per_second.toFixed(4)}</div>
+                      <div className="text-xs text-white/60 font-semibold mt-0.5">{GBP}{psychic.price_per_second.toFixed(4)}</div>
                     </div>
                   </div>
                 </div>

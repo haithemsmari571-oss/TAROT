@@ -599,7 +599,7 @@ const MyProfile = () => {
                 className="text-[9px] font-black uppercase tracking-widest mt-3 text-center"
                 style={{ color: COLORS.neutralGray }}
               >
-                Approx. {((pricePerMinute * unitPriceCents) / 100).toFixed(2)} USD per minute
+                Approx. £{((pricePerMinute * unitPriceCents) / 100).toFixed(2)} per minute
               </p>
             </div>
           </div>

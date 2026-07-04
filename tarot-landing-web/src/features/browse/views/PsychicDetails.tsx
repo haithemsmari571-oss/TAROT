@@ -2,6 +2,7 @@ import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatPerMinuteGbp } from "../../../lib/currency";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
 import RequestReadingModal from "@/features/chat/components/RequestReadingModal";
@@ -58,9 +59,9 @@ const PsychicDetails = () => {
   const loading = psychicLoading || summaryLoading || reviewsLoading;
   const error = psychicError ? "Failed to load psychic details. Please try again later." : null;
 
-  // Convert price per second to price per minute
+  // Convert price per second to a GBP price-per-minute string (e.g. "£5.20").
   const getPricePerMinute = (pricePerSecond: number) => {
-    return (pricePerSecond * 60).toFixed(2);
+    return formatPerMinuteGbp(pricePerSecond * 60);
   };
 
   // Update review form when myReview changes
@@ -445,7 +446,7 @@ const PsychicDetails = () => {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-black" style={{ color: COLORS.primary }}>
-                    ${getPricePerMinute(psychic.price_per_second)}
+                    {getPricePerMinute(psychic.price_per_second)}
                   </span>
                   <span className="text-sm uppercase font-bold opacity-60" style={{ color: COLORS.neutralWhite }}>
                     per minute

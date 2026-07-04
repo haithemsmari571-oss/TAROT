@@ -315,7 +315,7 @@ const StardustGlider = ({
           </span>
         </h2>
         <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-          Slide to choose any amount from ${STARDUST_MIN_USD} to ${STARDUST_MAX_USD}. Larger
+          Slide to choose any amount from £{STARDUST_MIN_USD} to £{STARDUST_MAX_USD}. Larger
           offerings unlock bigger bonus Stardust.
         </p>
 
@@ -336,10 +336,10 @@ const StardustGlider = ({
                   backgroundClip: "text",
                 }}
               >
-                ${amount}
+                £{amount}
               </span>
               <span className="pb-2 text-xs font-black uppercase tracking-[0.22em] text-white/40">
-                USD
+                GBP
               </span>
             </div>
 
@@ -465,7 +465,7 @@ const StardustGlider = ({
               }}
             >
               <Icon icon={TIER_ICONS.lifetime} className="text-sm" />
-              Lifetime ${STARDUST_MAX_USD}
+              Lifetime £{STARDUST_MAX_USD}
             </div>
           </div>
         </div>
@@ -490,16 +490,16 @@ const StardustGlider = ({
             ) : isLifetime ? (
               <>
                 <Icon icon="solar:crown-star-bold" className="text-base" />
-                Unlock Lifetime Access · ${amount}
+                Unlock Lifetime Access · £{amount}
               </>
             ) : (
-              <>Buy {quote.totalPoints.toLocaleString()} Stardust · ${amount}</>
+              <>Buy {quote.totalPoints.toLocaleString()} Stardust · £{amount}</>
             )}
           </span>
         </button>
 
         <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-wider text-white/30">
-          Secure Stripe checkout · USD
+          Secure Stripe checkout · GBP
         </p>
         </div>
       </div>

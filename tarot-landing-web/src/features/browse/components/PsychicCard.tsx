@@ -8,6 +8,7 @@ import {
   getTier,
   hexToRgb,
 } from "../../../lib/psychicDisplay";
+import { formatPerMinuteGbp } from "../../../lib/currency";
 
 const BG = "#0D1117";
 
@@ -279,7 +280,7 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
             <span style={{ fontSize: 18, fontWeight: 700, color: tier.color }}>
-              ${perMinute.toFixed(2)}
+              {formatPerMinuteGbp(perMinute)}
             </span>
             <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
               /min

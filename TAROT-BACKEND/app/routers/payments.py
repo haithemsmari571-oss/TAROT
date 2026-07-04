@@ -123,7 +123,7 @@ async def create_checkout_session(
             line_items=[
                 {
                     "price_data": {
-                        "currency": "usd",
+                        "currency": "gbp",
                         "product_data": {"name": f"{points_amount} Tarot Points"},
                         "unit_amount": unit_price_cents,
                     },
@@ -143,7 +143,7 @@ async def create_checkout_session(
             total_amount_cents=total_amount_cents,
             total_amount_usd=total_amount_cents / 100,
             session_id=session.id,
-            currency="usd",
+            currency="gbp",
         )
 
         return {"url": session.url}
@@ -226,7 +226,7 @@ async def create_stardust_checkout_session(
             line_items=[
                 {
                     "price_data": {
-                        "currency": "usd",
+                        "currency": "gbp",
                         "product_data": {"name": product_name},
                         "unit_amount": amount_cents,
                     },
@@ -260,7 +260,7 @@ async def create_stardust_checkout_session(
             is_lifetime=quote.is_lifetime,
             total_amount_cents=amount_cents,
             session_id=session.id,
-            currency="usd",
+            currency="gbp",
         )
 
         return {"url": session.url}
@@ -557,7 +557,7 @@ async def stripe_webhook(
                 amount_total_usd=amount_total / 100 if amount_total else 0,
                 payment_intent_id=payment_intent_id,
                 session_id=session["id"],
-                currency="usd",
+                currency="gbp",
             )
 
             from app.database.client import SessionLocal

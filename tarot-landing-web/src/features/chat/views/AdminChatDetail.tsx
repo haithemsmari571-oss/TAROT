@@ -416,7 +416,7 @@ const AdminChatDetail = () => {
                     Est. Earnings
                   </div>
                   <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.starGold }}>
-                    ${estimatedCost.toFixed(2)}
+                    £{estimatedCost.toFixed(2)}
                   </div>
                 </div>
               </div>
@@ -485,7 +485,7 @@ const AdminChatDetail = () => {
                     Est. Earnings (Paused)
                   </div>
                   <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.starGold }}>
-                    ${estimatedCost.toFixed(2)}
+                    £{estimatedCost.toFixed(2)}
                   </div>
                 </div>
               </div>

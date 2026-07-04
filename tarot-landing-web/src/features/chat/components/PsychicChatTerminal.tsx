@@ -50,7 +50,7 @@ const PsychicChatTerminal = ({ onExit }: { onExit: () => void }) => {
             <div className="w-px h-8 bg-white/10" />
             <div className="text-center">
               <span className="block text-[8px] font-black text-white/30 uppercase tracking-widest">Session Credit</span>
-              <span className="text-xl font-black text-primary tabular-nums">$42.50</span>
+              <span className="text-xl font-black text-primary tabular-nums">£42.50</span>
             </div>
           </div>
         </div>

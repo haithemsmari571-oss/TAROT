@@ -1575,7 +1575,7 @@ const ClientChat = () => {
                     </p>
                     <div className="flex gap-2 text-xs text-white/40">
                       <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
-                      <span>Session cost so far: ${(sessionState.estimatedCost || 0).toFixed(2)}</span>
+                      <span>Session cost so far: £{(sessionState.estimatedCost || 0).toFixed(2)}</span>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">

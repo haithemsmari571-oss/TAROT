@@ -76,7 +76,7 @@ export const calculateStardustQuote = (amountUsd: number): StardustQuote => {
     tierName = "Whisper";
   }
 
-  const basePoints = amount; // $1 = 1 point
+  const basePoints = amount; // £1 = 1 point
   const bonusPoints = Math.floor(basePoints * bonusPct); // matches Python int()
 
   return {

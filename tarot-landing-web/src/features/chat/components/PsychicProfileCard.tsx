@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatPerMinuteGbp } from "../../../lib/currency";
 
 interface Category {
   id: number;
@@ -138,7 +139,7 @@ export const PsychicProfileCard = ({
             Your rate
           </span>
           <span className="text-base font-bold tabular-nums text-white">
-            ${(pricePerSecond * 60).toFixed(2)}
+            {formatPerMinuteGbp(pricePerSecond * 60)}
             <span className="text-xs font-normal text-white/45">/min</span>
           </span>
         </div>

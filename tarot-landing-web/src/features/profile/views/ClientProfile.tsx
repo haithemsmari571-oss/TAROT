@@ -492,7 +492,7 @@ const ClientProfile = () => {
               <div className="flex items-center gap-2 justify-center md:justify-start mb-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold" style={{ color: COLORS.primary }}>
-                    ${((profile.balance * unitPriceCents) / 100).toFixed(2)}
+                    £{((profile.balance * unitPriceCents) / 100).toFixed(2)}
                   </div>
                   <div className="text-[10px] uppercase tracking-wider opacity-60" style={{ color: COLORS.neutralWhite }}>
                     Account Balance

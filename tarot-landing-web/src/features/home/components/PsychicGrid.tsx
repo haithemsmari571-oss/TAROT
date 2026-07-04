@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import axiosClient from "../../../lib/axiosClient";
+import { formatPerMinuteGbp } from "../../../lib/currency";
 import {
   DISPLAY_RATINGS,
   getHaloColor,
@@ -217,7 +218,7 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
   const navigate = useNavigate();
   const specialties = psychic.categories?.map((c: any) => c.title) || [];
   const perMinute = psychic.price_per_second ? psychic.price_per_second * 60 : 0;
-  const pricePerMinute = perMinute.toFixed(2);
+  const pricePerMinute = formatPerMinuteGbp(perMinute);
 
   const halo = getHaloColor(psychic.categories);
   const haloRgb = hexToRgb(halo);
@@ -407,7 +408,7 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
                   className="text-xs font-black"
                   style={{ color: isBtnHovered ? COLORS.dark : tier.color }}
                 >
-                  ${pricePerMinute}
+                  {pricePerMinute}
                 </span>
                 <span
                   className="text-[7px] uppercase font-bold"
