@@ -22,6 +22,7 @@ import landingEditorRoutes from "./landing-editor.routes";
 import aboutRoutes from "./about.routes";
 import privacyRoutes from "./privacy.routes";
 import termsRoutes from "./terms.routes";
+import seoRoutes from "./seo.routes";
 import { UserRole } from "../features/auth/types/auth.types";
 
 
@@ -69,6 +70,7 @@ const routes: RouteConfig[] = [
 ...aboutRoutes,
 ...privacyRoutes,
 ...termsRoutes,
+...seoRoutes,
 
 ];
 

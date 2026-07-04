@@ -6,17 +6,16 @@ import { COLORS, TYPOGRAPHY } from "../theme";
 import axiosClient from "../lib/axiosClient";
 
 const DEFAULT_FOOTER = {
-  brandName: "The Alchemical Exchange",
-  description: "A sanctuary for those ready to transcend. Bridging the gap between mundane reality and celestial clarity through raw, unfiltered, intuitive revelation.",
+  brandName: "Ask Valentina",
+  description: "A sanctuary for private, honest love and tarot readings. Talk to an intuitive reader and find clarity on the connection you can't stop thinking about.",
   socialLinks: [
-    { platform: "instagram", url: "#", icon: "ph:instagram-logo-fill" },
-    { platform: "youtube", url: "#", icon: "ph:youtube-logo-fill" },
-    { platform: "tiktok", url: "#", icon: "ph:tiktok-logo-fill" },
+    { platform: "instagram", url: "https://www.instagram.com/askvalentina.co.uk/", icon: "ph:instagram-logo-fill" },
+    { platform: "tiktok", url: "https://www.tiktok.com/@valentina_clarity", icon: "ph:tiktok-logo-fill" },
   ],
-  copyright: "\u00a9 2026 The Alchemical Exchange",
+  copyright: "\u00a9 2026 Ask Valentina",
   navLinks: [
-    { name: "Sanctuary", path: "/home" },
-    { name: "Psychics", path: "/psychics-browse" },
+    { name: "Home", path: "/" },
+    { name: "Readers", path: "/psychics-browse" },
     { name: "Life Path & Zodiac", path: "/oracle" },
     { name: "About Us", path: "/about" },
   ],
@@ -131,7 +130,7 @@ const Footer = () => {
           </motion.button>
 
           <div className="flex gap-6">
-            {content.socialLinks.map((social, i) => (
+            {content.socialLinks.filter((social) => social.url && social.url !== "#").map((social, i) => (
               <motion.a key={i} href={social.url} target="_blank" rel="noopener noreferrer" whileHover={{ scale: 1.2, color: COLORS.primary }} className="text-lg text-white/20 cursor-pointer hover:text-primary transition-colors">
                 <Icon icon={social.icon || `ph:${social.platform}-logo-fill`} />
               </motion.a>

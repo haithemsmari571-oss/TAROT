@@ -5,7 +5,7 @@ import "./App.css";
 import type { RouteConfig } from "./routes/app.routes";
 import routes from "./routes/app.routes";
 import { useEffect } from "react";
-import { COLORS } from "./theme";
+import NotFound from "./features/misc/views/NotFound";
 import { ProtectedRoute, RoleProtectedRoute } from "./features/auth/components";
 import { useAuth } from "./features/auth/hooks";
 import { UserRole } from "./features/auth/types/auth.types";
@@ -53,12 +53,9 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   //     return <Navigate to="/admin/chats" replace />;
   //   }
   // }
-  // Logged-in USER role
+  // Logged-in USER role — the homepage at "/" is a real page for everyone now,
+  // so no longer redirect "/" or "/home" to /psychics-browse.
   if (isAuthenticated && user?.role === UserRole.USER) {
-    // / and /home redirect to /psychics-browse as their home page
-    if (location.pathname === "/" || location.pathname === "/home") {
-      return <Navigate to="/psychics-browse" replace />;
-    }
     return <>{children}</>;
   }
 
@@ -72,6 +69,8 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
       location.pathname === "/about" ||
       location.pathname === "/privacy" ||
       location.pathname === "/terms" ||
+      location.pathname === "/does-he-miss-me" ||
+      location.pathname === "/will-my-ex-come-back" ||
       location.pathname.startsWith("/psychics/");
 
     if (!isGuestAllowed) {
@@ -154,39 +153,8 @@ export default function App() {
           <Route key={r.path} path={r.path} element={<r.component />} />
         ))}
 
-      {/* 404 fallback - Styled to match your Dark theme */}
-      <Route
-        path="*"
-        element={
-          <div
-            className="flex flex-col items-center justify-center w-full h-screen text-center"
-            style={{ backgroundColor: COLORS.Dark }}
-          >
-            <h1
-              className="text-8xl font-black mb-2"
-              style={{ color: COLORS.primary, fontFamily: "Oswald" }}
-            >
-              404
-            </h1>
-            <p
-              className="text-xl uppercase tracking-widest mb-8"
-              style={{ color: COLORS.neutralGray, fontFamily: "Montserrat" }}
-            >
-              Node Not Found
-            </p>
-            <a
-              href="/home"
-              className="px-8 py-3 text-white rounded-xl transition-all hover:scale-105 font-bold uppercase tracking-widest"
-              style={{
-                backgroundColor: COLORS.primary,
-                boxShadow: `0 10px 20px ${COLORS.primary}40`,
-              }}
-            >
-              Return to System
-            </a>
-          </div>
-        }
-      />
+      {/* 404 fallback - branded, on-voice page */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
