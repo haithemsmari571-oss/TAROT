@@ -16,6 +16,7 @@ import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
 import { MessageBubble } from "../components/MessageBubble";
 import { SessionBar } from "../components/SessionBar";
+import { PsychicProfileCard } from "../components/PsychicProfileCard";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
@@ -52,6 +53,7 @@ const ClientChat = () => {
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [olderMessages, setOlderMessages] = useState<any[]>([]);
@@ -1197,9 +1199,20 @@ const ClientChat = () => {
                   </div>
 
                   <div className="flex-1">
-                    <h2 className="font-bold text-white text-lg" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
-                      {selectedChatData?.user_name || "Psychic"}
-                    </h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-bold text-white text-lg" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                        {selectedChatData?.user_name || "Psychic"}
+                      </h2>
+                      {/* Tablet (<lg): open the reader profile sheet; on lg the sidebar shows it. */}
+                      <button
+                        type="button"
+                        onClick={() => setShowProfileSheet(true)}
+                        aria-label="View your reader's profile"
+                        className="lg:hidden w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center flex-shrink-0"
+                      >
+                        <Icon icon="solar:alt-arrow-down-linear" className="text-white/50 text-xs" />
+                      </button>
+                    </div>
                     <div className="flex items-center gap-2">
                       {isChatActive ? (
                         <>
@@ -1257,25 +1270,33 @@ const ClientChat = () => {
                     <Icon icon="solar:alt-arrow-left-linear" className="text-white text-base" />
                   </button>
 
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border border-white/10 flex-shrink-0">
-                    {selectedChatData?.user_profile_pic_url ? (
-                      <img src={selectedChatData.user_profile_pic_url} alt={selectedChatData.user_name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Icon icon="ph:user-fill" className="text-white/80 text-sm" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-white text-sm truncate" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
-                        {selectedChatData?.user_name || "Psychic"}
-                      </span>
-                      {isChatActive && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />}
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileSheet(true)}
+                    className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                    aria-label="View your reader's profile"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border border-white/10 flex-shrink-0">
+                      {selectedChatData?.user_profile_pic_url ? (
+                        <img src={selectedChatData.user_profile_pic_url} alt={selectedChatData.user_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Icon icon="ph:user-fill" className="text-white/80 text-sm" />
+                      )}
                     </div>
-                    <span className="text-xs text-white/40">
-                      {isChatActive ? 'Active' : isPaused ? 'Paused' : currentChatStatus === 'ENDED' ? 'Ended' : currentChatStatus === 'REQUESTED' ? 'Pending' : currentChatStatus === 'ARCHIVED' ? 'Cancelled' : ''}
-                    </span>
-                  </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white text-sm truncate" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                          {selectedChatData?.user_name || "Psychic"}
+                        </span>
+                        {isChatActive && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />}
+                        <Icon icon="solar:alt-arrow-down-linear" className="text-white/40 text-xs flex-shrink-0" />
+                      </div>
+                      <span className="text-xs text-white/40">
+                        {isChatActive ? 'Active' : isPaused ? 'Paused' : currentChatStatus === 'ENDED' ? 'Ended' : currentChatStatus === 'REQUESTED' ? 'Pending' : currentChatStatus === 'ARCHIVED' ? 'Cancelled' : ''}
+                      </span>
+                    </div>
+                  </button>
                 </div>
 
                 {(isChatActive || isPaused) && (
@@ -1669,12 +1690,12 @@ const ClientChat = () => {
               ) : null}
             </div>
 
-            {/* RIGHT SIDEBAR - PSYCHIC DETAILS */}
+            {/* RIGHT SIDEBAR — desktop only; mobile/tablet use the profile sheet */}
             {selectedChatData && (
               <div className="hidden lg:flex w-80 border-l border-white/5 flex-col backdrop-blur-xl overflow-y-auto" style={{ backgroundColor: `${COLORS.surface}dd` }}>
                 <div className="p-6">
                   <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-6" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
-                    Psychic Details
+                    Your Reader
                   </h3>
 
                   {loadingPsychic ? (
@@ -1682,177 +1703,15 @@ const ClientChat = () => {
                       <Icon icon="solar:spinner-bold-duotone" className="text-3xl text-primary/60 animate-spin" />
                     </div>
                   ) : (
-                    <>
-                      {/* Psychic Avatar & Name */}
-                      <div className="flex flex-col items-center text-center mb-8">
-                        <div className="relative mb-4">
-                          <div className="w-28 h-28 rounded-3xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border-2 border-primary/30">
-                            {(psychicDetails?.profile_picture_url || selectedChatData.user_profile_pic_url) ? (
-                              <img
-                                src={psychicDetails?.profile_picture_url || selectedChatData.user_profile_pic_url}
-                                alt={psychicDetails?.username || selectedChatData.user_name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <Icon icon="ph:user-fill" className="text-white/80 text-5xl" />
-                            )}
-                          </div>
-                          {psychicDetails?.is_verified && (
-                            <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl bg-primary flex items-center justify-center shadow-lg text-white">
-                              <Icon icon="solar:verified-check-bold" className="text-2xl" />
-                            </div>
-                          )}
-                        </div>
-                        <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
-                          {psychicDetails?.username || selectedChatData.user_name}
-                        </h2>
-                        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10">
-                          <div
-                            className={`w-2.5 h-2.5 rounded-full ${psychicDetails?.is_online ? 'bg-green-500 animate-pulse' : 'bg-white/30'
-                              }`}
-                          />
-                          <span className="text-sm font-medium" style={{ color: psychicDetails?.is_online ? '#4ade80' : 'rgba(255,255,255,0.6)' }}>
-                            {psychicDetails?.is_online ? 'Online' : 'Offline'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Bio */}
-                      {psychicDetails?.bio && (
-                        <div className="mb-6 p-5 rounded-2xl bg-white/5 border border-white/10">
-                          <h4 className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-3 flex items-center gap-2">
-                            <Icon icon="solar:document-text-bold-duotone" className="text-primary text-lg" />
-                            About
-                          </h4>
-                          <p className="text-sm text-white/70 leading-relaxed">
-                            {psychicDetails.bio}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Categories */}
-                      {psychicDetails?.categories && psychicDetails.categories.length > 0 && (
-                        <div className="mb-6">
-                          <h4 className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-3 flex items-center gap-2">
-                            <Icon icon="solar:star-bold-duotone" className="text-primary text-lg" />
-                            Specialties
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {psychicDetails.categories.map((category, idx) => (
-                              <span
-                                key={category.id}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 text-xs font-bold text-white"
-                              >
-                                {category.title}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Rate */}
-                      {psychicDetails?.price_per_second && (
-                        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-white/5 to-white/10 border border-white/20">
-                          <div className="flex items-center gap-3 mb-3">
-                            <Icon icon="solar:dollar-minimalistic-bold-duotone" className="text-white text-2xl" />
-                            <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">Rate</span>
-                          </div>
-                          <p className="text-2xl font-bold text-white">
-                            ${(psychicDetails.price_per_second * 60).toFixed(2)}
-                            <span className="text-sm text-white/50 font-normal">/min</span>
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Session Info */}
-                      {(isChatActive || currentChatStatus === 'ACTIVE') && (
-                        <div className="space-y-3 mb-6">
-                          <div className="p-5 rounded-2xl bg-white/5 border border-white/20">
-                            <div className="flex items-center gap-3 mb-3">
-                              <Icon icon="solar:clock-circle-bold-duotone" className="text-white text-2xl" />
-                              <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">Duration</span>
-                            </div>
-                            <p className="text-3xl font-bold text-white tabular-nums">{formatTime(sessionState.elapsedSeconds)}</p>
-                          </div>
-
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.1 }}
-                            className="p-5 rounded-2xl bg-gradient-to-br from-white/5 to-white/10 border border-white/20"
-                          >
-                            <div className="flex items-center gap-3 mb-3">
-                              <Icon icon="solar:dollar-minimalistic-bold-duotone" className="text-white text-2xl" />
-                              <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">Session Cost</span>
-                            </div>
-                            <p className="text-3xl font-bold text-white tabular-nums">
-                              ${(sessionState.estimatedCost || 0).toFixed(2)}
-                            </p>
-                          </motion.div>
-
-                          {/* Remaining Time Display - Always show during active chat */}
-                          <div
-                            className={`p-5 rounded-2xl bg-gradient-to-br from-white/5 to-white/10 border transition-all duration-300 ${sessionState.showCriticalWarning
-                              ? 'border-red-500 shadow-lg shadow-red-500/30'
-                              : sessionState.showLowBalanceWarning
-                                ? 'border-yellow-500 shadow-lg shadow-yellow-500/20'
-                                : 'border-white/20'
-                              }`}
-                          >
-                            <div className="flex items-center gap-3 mb-3">
-                              <Icon
-                                icon="solar:hourglass-bold-duotone"
-                                className={`text-2xl ${sessionState.showCriticalWarning
-                                  ? 'text-red-400'
-                                  : sessionState.showLowBalanceWarning
-                                    ? 'text-yellow-400'
-                                    : 'text-white'
-                                  }`}
-                              />
-                              <span className={`text-xs font-bold uppercase tracking-[0.15em] ${sessionState.showCriticalWarning
-                                ? 'text-red-400'
-                                : sessionState.showLowBalanceWarning
-                                  ? 'text-yellow-400'
-                                  : 'text-white/40'
-                                }`}>
-                                Time Remaining {sessionState.showCriticalWarning ? '🚨' : sessionState.showLowBalanceWarning ? '⚠️' : ''}
-                              </span>
-                            </div>
-
-                            {/* Show skeleton if data not loaded yet */}
-                            {sessionState.remainingSeconds === null ? (
-                              <div className="animate-pulse">
-                                <div className="h-9 bg-white/10 rounded w-24 mb-2"></div>
-                              </div>
-                            ) : (
-                              <p className={`text-3xl font-bold tabular-nums ${sessionState.showCriticalWarning
-                                ? 'text-red-400'
-                                : sessionState.showLowBalanceWarning
-                                  ? 'text-yellow-400'
-                                  : 'text-white'
-                                }`}>
-                                {formatTime(Math.max(0, Math.floor(sessionState.remainingSeconds)))}
-                              </p>
-                            )}
-
-                            {/* Countdown indicator */}
-                            {(sessionState.showLowBalanceWarning || sessionState.showCriticalWarning) && sessionState.remainingSeconds !== null && (
-                              <div className="mt-3 h-1 bg-white/10 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full ${sessionState.showCriticalWarning ? 'bg-red-500' : 'bg-yellow-500'}`}
-                                  style={{
-                                    width: `${Math.max(0, Math.min(100, (sessionState.remainingSeconds / 300) * 100))}%`,
-                                    transition: 'width 1s linear'
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Low-balance warning now lives as a calm banner above the message input (all widths). */}
-                        </div>
-                      )}
-                    </>
+                    <PsychicProfileCard
+                      name={psychicName}
+                      avatarUrl={psychicDetails?.profile_picture_url || selectedChatData.user_profile_pic_url}
+                      isVerified={psychicDetails?.is_verified}
+                      isOnline={psychicDetails?.is_online}
+                      bio={psychicDetails?.bio}
+                      categories={psychicDetails?.categories}
+                      pricePerSecond={psychicDetails?.price_per_second}
+                    />
                   )}
                 </div>
               </div>
@@ -1860,6 +1719,53 @@ const ClientChat = () => {
           </div>
         )}
       </div>
+
+      {/* Reader profile — mobile/tablet bottom sheet (lg shows the sidebar instead) */}
+      {showProfileSheet && selectedChatData && (
+        <div
+          className="fixed inset-0 z-[120] lg:hidden"
+          onClick={() => setShowProfileSheet(false)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 32 }}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-3xl border-t border-white/10 p-5 pb-8"
+            style={{ backgroundColor: COLORS.surface }}
+          >
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-white/40" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                Your Reader
+              </h3>
+              <button
+                onClick={() => setShowProfileSheet(false)}
+                aria-label="Close"
+                className="p-1 text-white/50 hover:text-white/90 transition-colors"
+              >
+                <Icon icon="solar:close-circle-bold" className="text-2xl" />
+              </button>
+            </div>
+            {loadingPsychic ? (
+              <div className="flex justify-center py-10">
+                <Icon icon="solar:spinner-bold-duotone" className="text-3xl text-primary/60 animate-spin" />
+              </div>
+            ) : (
+              <PsychicProfileCard
+                name={psychicName}
+                avatarUrl={psychicDetails?.profile_picture_url || selectedChatData.user_profile_pic_url}
+                isVerified={psychicDetails?.is_verified}
+                isOnline={psychicDetails?.is_online}
+                bio={psychicDetails?.bio}
+                categories={psychicDetails?.categories}
+                pricePerSecond={psychicDetails?.price_per_second}
+              />
+            )}
+          </motion.div>
+        </div>
+      )}
 
       {/* Request New Chat Modal */}
       {showRequestModal && selectedChatData && (
