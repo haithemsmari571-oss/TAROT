@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import backgroundImage from "../../../assets/Cover.png";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useRegister } from "../hooks";
@@ -16,8 +16,9 @@ const RegisterPage = () => {
   const [passwordError, setPasswordError] = useState("");
   // Today, "YYYY-MM-DD" — caps the date picker so a future DOB can't be picked.
   const today = new Date().toISOString().split("T")[0];
-  const { mutate: register, isPending, error, isSuccess } = useRegister();
-  
+  const { mutate: register, isPending, error } = useRegister();
+  const navigate = useNavigate();
+
   const mouseX = useSpring(0, { stiffness: 40, damping: 20 });
   const mouseY = useSpring(0, { stiffness: 40, damping: 20 });
 
@@ -53,7 +54,15 @@ const RegisterPage = () => {
       return;
     }
 
-    register({ username, email, password, date_of_birth: dateOfBirth });
+    register(
+      { username, email, password, date_of_birth: dateOfBirth },
+      {
+        // Send new signups to the redesigned "Check your email" page instead of
+        // an inline panel; pass the email so it can be shown there.
+        onSuccess: () =>
+          navigate(`/verify-account?email=${encodeURIComponent(email)}`),
+      }
+    );
   };
 
   const inputClasses =
@@ -97,30 +106,8 @@ const RegisterPage = () => {
             </p>
           </header>
 
-          {isSuccess ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 text-center space-y-4"
-            >
-              <Icon icon="ph:check-circle-bold" className="text-green-400 text-5xl mx-auto" />
-              <div>
-                <h3 className="text-sm font-bold text-green-400 mb-2">
-                  Account created
-                </h3>
-                <p className="text-xs text-white/50 leading-relaxed">
-                  Check your email to verify your account, then sign in.
-                </p>
-              </div>
-              <Link
-                to="/login"
-                className="inline-block text-sm font-bold tracking-wide py-3 px-8 rounded-xl border border-green-500/20 text-green-400 hover:bg-green-500/5 transition-all"
-              >
-                Go to sign in
-              </Link>
-            </motion.div>
-          ) : (
-            <motion.form 
+          {(
+            <motion.form
               variants={containerVariants}
               initial="hidden"
               animate="visible"
