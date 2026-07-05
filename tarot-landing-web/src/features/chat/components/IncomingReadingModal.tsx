@@ -35,6 +35,11 @@ export default function IncomingReadingModal() {
   const [incoming, setIncoming] = useState<Incoming | null>(null);
   const [joining, setJoining] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Chats already joined/dismissed THIS mount — stops the reload-proof fallback
+  // from re-surfacing the prompt with stale data the instant after a join (the
+  // flicker). A fresh CHAT_ACCEPTED clears the entry so a reused chat row (repeat
+  // reading with the same psychic) still prompts next time.
+  const handledRef = useRef<Set<number>>(new Set());
 
   const stopRing = useCallback(() => {
     if (audioRef.current) {
@@ -46,7 +51,11 @@ export default function IncomingReadingModal() {
 
   const clear = useCallback(() => {
     stopRing();
-    setIncoming(null);
+    setIncoming((cur) => {
+      // Remember it so the fallback query can't immediately pop it back up.
+      if (cur) handledRef.current.add(cur.chatId);
+      return null;
+    });
   }, [stopRing]);
 
   const playRing = useCallback(() => {
@@ -65,6 +74,8 @@ export default function IncomingReadingModal() {
 
   const showFor = useCallback(
     (base: Incoming, ring: boolean) => {
+      // Don't re-surface a chat already joined/dismissed this session.
+      if (handledRef.current.has(base.chatId)) return;
       setIncoming((cur) => cur ?? base);
       if (ring) playRing();
       // Enrich with the psychic's real photo/name.
@@ -96,6 +107,9 @@ export default function IncomingReadingModal() {
     const offAccepted = onNotification(NotificationType.CHAT_ACCEPTED, (n) => {
       const chatId = Number(n.data?.chat_id);
       if (!Number.isFinite(chatId)) return;
+      // A fresh accept always (re)prompts — even for a reused chat row from an
+      // earlier reading with the same psychic.
+      handledRef.current.delete(chatId);
       showFor(
         {
           chatId,
@@ -176,19 +190,31 @@ export default function IncomingReadingModal() {
 
   const onJoin = useCallback(async () => {
     if (!incoming || joining) return;
-    setJoining(true);
     const id = incoming.chatId;
-    try {
-      // ── THE ONLY billing trigger ── explicit, conscious acknowledgement.
-      await joinChat(id);
-    } catch (e) {
-      console.error("[IncomingReading] join failed:", e);
-    } finally {
-      clear();
-      setJoining(false);
-      // Now take her into the live chat (billing already anchored above).
-      navigate(`/chats?chat_id=${id}`);
+    setJoining(true);
+
+    // ── THE ONLY billing trigger ── this explicit click. But don't hang the UI
+    // on the network round-trip (which now also charges minute 1): dismiss the
+    // prompt and enter the chat immediately, then anchor billing in the
+    // background. joinChat stays click-driven (never navigation-driven) and is
+    // idempotent server-side, so we retry to survive a transient failure.
+    handledRef.current.add(id);
+    clear();
+    navigate(`/chats?chat_id=${id}`);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await joinChat(id);
+        break;
+      } catch (e) {
+        if (attempt === 2) {
+          console.error("[IncomingReading] join failed after retries:", e);
+        } else {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
     }
+    setJoining(false);
   }, [incoming, joining, clear, navigate]);
 
   if (!incoming) return null;
