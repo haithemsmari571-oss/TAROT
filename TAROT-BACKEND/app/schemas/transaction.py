@@ -13,9 +13,11 @@ class TransactionOut(BaseModel):
     id: int
     user_id: int
     transaction_type: TransactionType
-    amount: int
-    balance_before: int
-    balance_after: int
+    # Money is stored to 2 dp (pennies) — per-minute debits can be fractional
+    # (e.g. £5.20), so these must be float, not int (int_from_float 500s).
+    amount: float
+    balance_before: float
+    balance_after: float
     status: TransactionStatus
     description: Optional[str] = None
     related_chat_id: Optional[int] = None
@@ -57,17 +59,17 @@ class BalanceResponse(BaseModel):
     """Response schema for user balance."""
 
     user_id: int
-    balance: int  # total spendable = credit + paid
-    credit_balance: int = 0  # free welcome/gift credit remaining
-    paid_balance: int = 0  # purchased balance remaining
-    last_updated: datetime
+    balance: float  # total spendable = credit + paid (pennies)
+    credit_balance: float = 0  # free welcome/gift credit remaining
+    paid_balance: float = 0  # purchased balance remaining
+    last_updated: Optional[datetime] = None
 
 
 class RefundRequest(BaseModel):
     """Request schema for issuing a refund."""
 
     transaction_id: int
-    amount: int
+    amount: float
     reason: str
 
 
@@ -76,5 +78,5 @@ class RefundResponse(BaseModel):
 
     success: bool
     transaction_id: int
-    refunded_amount: int
+    refunded_amount: float
     message: str

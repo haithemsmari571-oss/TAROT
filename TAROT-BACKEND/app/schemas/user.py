@@ -80,7 +80,7 @@ class AdminUserListItem(BaseModel):
     email: str
     role: Role
     status: UserStatus
-    balance: int
+    balance: float  # money stored to 2 dp (pennies)
     is_verified: bool
     is_online: bool
     created_at: datetime
@@ -98,7 +98,7 @@ class AdminUserDetail(BaseModel):
     email: str
     role: Role
     status: UserStatus
-    balance: int
+    balance: float  # money stored to 2 dp (pennies)
     is_verified: bool
     is_online: bool
     price_per_second: Optional[float] = None
@@ -120,7 +120,7 @@ class AdminUserCreate(BaseModel):
     role: Role = Role.USER
     status: UserStatus = UserStatus.ACTIVE
     is_verified: bool = False
-    balance: int = 0
+    balance: float = 0
     price_per_second: Optional[float] = None
     bio: Optional[str] = None
 
@@ -144,7 +144,7 @@ class AdminUserUpdate(BaseModel):
     price_per_second: Optional[float] = None
     bio: Optional[str] = None
     password: Optional[str] = None
-    balance: Optional[int] = None
+    balance: Optional[float] = None
 
     @field_validator("password")
     @classmethod
@@ -168,13 +168,13 @@ class UserRoleUpdate(BaseModel):
 
 class AdminGiftBalance(BaseModel):
     """Schema for admin gift balance"""
-    amount: int = Field(gt=0, description="Amount of points to gift")
+    amount: float = Field(gt=0, description="Amount of points to gift")
     message: str = Field(default="", max_length=500, description="Optional gift message")
 
 
 class AdminBalanceAdjustment(BaseModel):
     """Schema for admin balance adjustment"""
-    amount: int
+    amount: float
     reason: str
 
     @field_validator("amount")
