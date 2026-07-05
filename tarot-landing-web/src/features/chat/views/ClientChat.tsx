@@ -384,8 +384,6 @@ const ClientChat = () => {
   }, [dispatch, selectedChatData]);
 
   const handleSessionStarted = useCallback((p: any) => {
-    console.log('[meter-init] SESSION_STARTED (WS) received:', p);
-
     const payload = {
       chat_id: p.chatId,
       chat_status: 'ACTIVE' as const,
@@ -588,18 +586,7 @@ const ClientChat = () => {
 
   // Auto-disconnect WebSocket and show modal when timer reaches 0
   useEffect(() => {
-    console.log('[meter-end] end-effect check', {
-      status: sessionState.status,
-      sessionStatus: sessionState.sessionStatus,
-      remainingSeconds: sessionState.remainingSeconds,
-      elapsedSeconds: sessionState.elapsedSeconds,
-      clientBalance: sessionState.clientBalance,
-      estimatedCost: sessionState.estimatedCost,
-      endReason: sessionState.endReason,
-      handled: hasHandledSessionEnd.current,
-    });
     if (sessionState.status === 'ENDED' && sessionState.remainingSeconds === 0 && !hasHandledSessionEnd.current) {
-      console.log('[meter-end] SHOWING END MODAL — status ENDED & remaining 0. endReason:', sessionState.endReason);
       // Skip if session was never active (e.g., declined request)
       if (sessionState.elapsedSeconds === 0 && sessionState.estimatedCost === 0) {
         hasHandledSessionEnd.current = true;

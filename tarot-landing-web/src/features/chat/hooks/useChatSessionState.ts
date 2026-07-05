@@ -115,12 +115,6 @@ export function chatSessionReducer(
         showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
       };
 
-      console.log('[meter-init] INITIALIZE', {
-        chat_id, chat_status, session_status: resolvedSessionStatus,
-        client_balance, estimated_cost, elapsed_seconds,
-        minutes_charged, perMinute, prepaidRemaining, affordableFuture,
-        remainingSeconds, remainingMinutes: newState.remainingMinutes, status: actualStatus,
-      });
       return newState;
     }
     

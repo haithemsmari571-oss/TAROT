@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useAuth } from "../../../features/auth/hooks";
-import { UserRole } from "../../../features/auth/types/auth.types";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -9,7 +7,7 @@ import { Icon } from "@iconify/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { dashboardApi } from "../api/dashboardApi";
-import type { AdminDashboardStats, TopPsychic, EarningsSummary, MyChat } from "../api/dashboardApi";
+import type { AdminDashboardStats, TopPsychic } from "../api/dashboardApi";
 
 function getVisiblePages(current: number, total: number, siblings: number = 1): (number | "...")[] {
   if (total <= siblings * 2 + 4) return Array.from({ length: total }, (_, i) => i + 1);
@@ -473,183 +471,9 @@ const AdminView = () => {
   );
 };
 
-const PsychicView = () => {
-  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
-  const [chats, setChats] = useState<MyChat[]>([]);
-  const [unitPriceCents, setUnitPriceCents] = useState(100);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [earningsData, chatsData, unitPrice] = await Promise.all([
-        dashboardApi.getEarningsSummary(),
-        dashboardApi.getMyChats(),
-        dashboardApi.getUnitPrice(),
-      ]);
-      setEarnings(earningsData);
-      setChats(chatsData);
-      setUnitPriceCents(unitPrice.unit_price_cents);
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data?.detail || err.message || "Failed to load data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const chatStatusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    chats.forEach((c) => {
-      counts[c.status] = (counts[c.status] || 0) + 1;
-    });
-    return counts;
-  }, [chats]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.dark }}>
-        <div className="flex flex-col items-center gap-4">
-          <Icon icon="svg-spinners:3-dots-fade" className="text-5xl" style={{ color: COLORS.primary }} />
-          <span className="font-bold uppercase tracking-widest text-sm" style={{ color: COLORS.neutralGray }}>Loading Dashboard...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.dark }}>
-        <div className="flex flex-col items-center gap-4 max-w-md">
-          <Icon icon="solar:danger-circle-bold-duotone" className="text-5xl" style={{ color: COLORS.starGold }} />
-          <span className="font-bold text-lg" style={{ color: COLORS.neutralWhite }}>{error}</span>
-          <button
-            onClick={fetchData}
-            className="px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-wider hover:scale-105 transition-transform"
-            style={{ backgroundColor: COLORS.primary, color: COLORS.neutralWhite }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen p-6 lg:p-12 space-y-10" style={{ backgroundColor: COLORS.dark, fontFamily: TYPOGRAPHY.fontFamily.body }}>
-      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-        <div>
-          <h1 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.primary }} className="text-5xl font-extrabold italic uppercase tracking-tighter leading-none">
-            My <span style={{ color: COLORS.neutralGray }}>Dashboard</span>
-          </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.6em] mt-3" style={{ color: COLORS.neutralGray }}>Performance Overview</p>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: "Client Spend", val: formatAmount(earnings?.totalClientSpend || 0, unitPriceCents), icon: "solar:wallet-money-bold-duotone", color: COLORS.starGold },
-          { label: "Minutes Read", val: formatNumber(earnings?.minutesRead || 0), icon: "solar:clock-circle-bold-duotone", color: COLORS.primary },
-          { label: "Sessions", val: formatNumber(earnings?.sessions || 0), icon: "solar:chat-round-line-bold-duotone", color: COLORS.secondary },
-          { label: "Unique Clients", val: formatNumber(earnings?.uniqueClients || 0), icon: "solar:users-group-rounded-bold-duotone", color: COLORS.primaryLight },
-        ].map((stat) => (
-          <motion.div
-            key={stat.label}
-            whileHover={{ y: -5 }}
-            className="p-8 rounded-[40px] transition-all duration-500"
-            style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.neutralDarkGray}` }}
-          >
-            <div className="flex justify-between items-start mb-6">
-              <div className="w-14 h-14 rounded-3xl flex items-center justify-center" style={{ backgroundColor: COLORS.surfaceAccent, border: `1px solid ${COLORS.neutralDarkGray}` }}>
-                <Icon icon={stat.icon} style={{ color: stat.color }} className="text-2xl" />
-              </div>
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: COLORS.neutralGray }}>{stat.label}</span>
-            <h3 className="text-4xl font-black italic tracking-tighter mt-1" style={{ color: COLORS.neutralWhite, fontFamily: TYPOGRAPHY.fontFamily.heading }}>{stat.val}</h3>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="p-10 rounded-[56px]" style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.neutralDarkGray}` }}>
-          <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }} className="text-3xl font-black italic uppercase tracking-tighter mb-10">
-            Chat <span style={{ color: COLORS.neutralGray }}>Overview</span>
-          </h2>
-          <div className="space-y-4">
-            {[
-              { status: "REQUESTED", label: "Pending Requests", color: COLORS.starGold },
-              { status: "ACTIVE", label: "Active Chats", color: COLORS.success },
-              { status: "ENDED", label: "Completed", color: COLORS.primary },
-              { status: "ARCHIVED", label: "Archived", color: COLORS.neutralGray },
-            ].map((item) => (
-              <div
-                key={item.status}
-                className="p-6 rounded-[32px] flex items-center justify-between"
-                style={{ backgroundColor: COLORS.surfaceAccent, border: `1px solid ${COLORS.neutralDarkGray}` }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color, boxShadow: `0 0 8px ${item.color}60` }} />
-                  <span className="text-sm font-black uppercase tracking-tight" style={{ color: COLORS.neutralWhite }}>{item.label}</span>
-                </div>
-                <span className="text-2xl font-black tabular-nums" style={{ color: COLORS.neutralWhite }}>
-                  {chatStatusCounts[item.status] || 0}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-10 rounded-[56px] flex flex-col" style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.neutralDarkGray}` }}>
-          <h2 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }} className="text-3xl font-black italic uppercase tracking-tighter mb-10 leading-none">
-            Recent <span style={{ color: COLORS.neutralGray }}>Activity</span>
-          </h2>
-          <div className="flex-1 space-y-6">
-            {chats.slice(0, 10).map((chat) => (
-              <div key={chat.id} className="flex items-start gap-5 p-5 rounded-3xl" style={{ border: `1px solid ${COLORS.neutralDarkGray}30`, backgroundColor: `${COLORS.surfaceAccent}60` }}>
-                <div
-                  className="w-1.5 h-10 rounded-full shrink-0"
-                  style={{
-                    backgroundColor:
-                      chat.status === "ACTIVE" ? COLORS.success :
-                      chat.status === "REQUESTED" ? COLORS.starGold :
-                      chat.status === "ENDED" ? COLORS.primary :
-                      COLORS.neutralGray,
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black uppercase tracking-tight italic truncate" style={{ color: COLORS.neutralWhite }}>
-                    Chat with {chat.user?.username || `User #${chat.user_id}`}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[9px] font-black uppercase" style={{ color: COLORS.neutralGray }}>{chat.status}</span>
-                    <div className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: COLORS.neutralDarkGray }} />
-                    <span className="text-[9px] font-bold uppercase tabular-nums shrink-0" style={{ color: COLORS.neutralGray }}>
-                      {new Date(chat.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {chats.length === 0 && (
-              <p className="text-[10px] font-black uppercase tracking-widest text-center py-12" style={{ color: COLORS.neutralGray }}>No chat activity yet</p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AnalyticsDashboard = () => {
-  const { user } = useAuth();
-  const isPsychic = user?.role === UserRole.PSYCHIC;
-  if (isPsychic) return <PsychicView />;
-  return <AdminView />;
-};
+// Only admins/superadmins reach this panel (psychics use a separate app), so the
+// dashboard is always the admin view.
+const AnalyticsDashboard = () => <AdminView />;
 
 export default AnalyticsDashboard;

@@ -48,26 +48,6 @@ export interface AdminDashboardStats {
   unitPriceCents: number;
 }
 
-// Client-spend / activity summary (GBP). Client spend only — psychics are
-// salaried, so there is no "earnings" or reader cut here.
-export interface EarningsSummary {
-  totalClientSpend: number;
-  pendingClientSpend: number;
-  minutesRead: number;
-  sessions: number;
-  uniqueClients: number;
-}
-
-export interface MyChat {
-  id: number;
-  status: string;
-  user_id?: number;
-  psychic_id?: number;
-  user?: { id: number; username: string; profile_picture_path?: string };
-  psychic?: { id: number; username: string; profile_picture_path?: string };
-  created_at: string;
-}
-
 export interface UnitPriceResponse {
   unit_price_cents: number;
 }
@@ -84,16 +64,6 @@ export const dashboardApi = {
     transactions_per_page?: number;
   }): Promise<AdminDashboardStats> => {
     const response = await axiosClient.get("/admin/dashboard/stats", { params });
-    return response.data;
-  },
-
-  getEarningsSummary: async (): Promise<EarningsSummary> => {
-    const response = await axiosClient.get("/admin/psychics/earnings/summary");
-    return response.data;
-  },
-
-  getMyChats: async (): Promise<MyChat[]> => {
-    const response = await axiosClient.get("/chat/my-chats");
     return response.data;
   },
 };
