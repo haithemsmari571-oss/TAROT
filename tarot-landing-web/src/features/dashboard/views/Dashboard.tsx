@@ -153,7 +153,7 @@ const AdminView = () => {
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         <div>
           <h1 style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.primary }} className="text-5xl font-extrabold italic uppercase tracking-tighter leading-none">
-            Intelligence <span style={{ color: COLORS.neutralGray }}>Matrix</span>
+            Command <span style={{ color: COLORS.neutralGray }}>Center</span>
           </h1>
           <p className="text-[10px] font-black uppercase tracking-[0.6em] mt-3" style={{ color: COLORS.neutralGray }}>System Overview</p>
         </div>
@@ -333,6 +333,7 @@ const AdminView = () => {
                   </div>
                   <div className="text-right">
                     <div className="text-xl font-black tabular-nums" style={{ color: COLORS.starGold }}>{formatAmount(p.totalEarnings, stats!.unitPriceCents)}</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: COLORS.neutralGray }}>Client Spend</div>
                     <div className="flex items-center justify-end gap-1" style={{ color: COLORS.neutralGray }}>
                       <Icon icon="solar:star-bold" className="text-xs" />
                       <span className="text-[9px] font-black uppercase">{p.averageRating.toFixed(1)} Avg</span>

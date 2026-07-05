@@ -9,7 +9,7 @@ import { useToast } from "../../../components/Toast";
 
 const getSettingLabel = (key: string): string => {
   const labels: Record<string, string> = {
-    unit_price_cents: "Price of Points (in cents)",
+    unit_price_cents: "Price of Points (in pence)",
     stripe_api_key: "Stripe API Key",
     signup_bonus: "Signup Bonus (points)",
     privacy_policy: "Privacy Policy",
@@ -20,7 +20,7 @@ const getSettingLabel = (key: string): string => {
 
 const getSettingDescription = (key: string): string => {
   const descriptions: Record<string, string> = {
-    unit_price_cents: "The price of one point in cents (e.g., 100 = $1.00)",
+    unit_price_cents: "The price of one point in pence (e.g., 100 = £1.00)",
     stripe_api_key: "Your Stripe secret API key for payment processing",
     signup_bonus: "Free points awarded to new users on registration",
     privacy_policy: "Privacy policy content in Markdown format",

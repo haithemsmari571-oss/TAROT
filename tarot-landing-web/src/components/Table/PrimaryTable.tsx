@@ -110,7 +110,7 @@ export const PrimaryTable = <T extends Record<string, any>>({
           <div className="flex items-center gap-2 mt-1">
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS.primary, boxShadow: `0 0 8px ${COLORS.primary}` }} />
             <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: COLORS.neutralGray }}>
-              {data.length} Detected Identities
+              {data.length} Records
             </span>
           </div>
         </div>
