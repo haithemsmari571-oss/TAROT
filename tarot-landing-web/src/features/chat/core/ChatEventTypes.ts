@@ -16,10 +16,12 @@ export enum ChatEventType {
   MESSAGE_ERROR = 'message:error',
   MESSAGES_READ = 'message:read', // recipient opened the conversation → flip receipts
   
-  // Session Events  
+  // Session Events
   SESSION_STARTED = 'session:started',
   SESSION_INFO = 'session:info',
   SESSION_TIMER_TICK = 'session:timer_tick',
+  SESSION_MINUTE_CHARGED = 'session:minute_charged', // per-minute prepaid debit
+  SESSION_GRACE = 'session:grace', // out-of-balance top-up hold
   SESSION_ENDING_SOON = 'session:ending_soon',
   SESSION_ENDED = 'session:ended',
   SESSION_PAUSED = 'session:paused',

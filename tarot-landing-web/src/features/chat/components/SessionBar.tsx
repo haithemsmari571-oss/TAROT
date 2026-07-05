@@ -4,9 +4,11 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 interface SessionBarProps {
   /** Elapsed reading time (seconds) — shown as a small caption, not a headline. */
   elapsedSeconds: number;
-  /** Remaining time (seconds); null while loading. */
+  /** Remaining time (seconds); null while loading. Drives the calm colour ramp. */
   remainingSeconds: number | null;
-  /** Stardust remaining (balance − cost); null while loading. */
+  /** Whole minutes of reading remaining (per-minute prepaid model) — the headline. */
+  minutesLeft: number | null;
+  /** Stardust remaining (live balance); null while loading. */
   stardust: number | null;
   isPaused: boolean;
   isConnected: boolean;
@@ -34,6 +36,7 @@ const AMBER = "#EE8A5E";
 export const SessionBar = ({
   elapsedSeconds,
   remainingSeconds,
+  minutesLeft,
   stardust,
   isPaused,
   isConnected,
@@ -48,11 +51,12 @@ export const SessionBar = ({
       : low
         ? GOLD
         : COLORS.neutralWhite;
+  // Per-minute prepaid model: show whole minutes remaining ("2 min").
   const timeValue = isPaused
     ? "Paused"
-    : remainingSeconds == null
+    : minutesLeft == null
       ? "—"
-      : fmt(remainingSeconds);
+      : `${Math.max(0, minutesLeft)} min`;
 
   return (
     <div

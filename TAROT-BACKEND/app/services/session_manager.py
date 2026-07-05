@@ -26,10 +26,27 @@ from app.enums.chat_status import ChatStatus
 from app.enums.chat_session_status import ChatSessionStatus
 from app.enums.chat_session_triggers import ChatSessionTrigger
 from app.enums.chat_termination_reason import ChatTerminationReason
+from app.exceptions.transactions import (
+    InsufficientBalanceError as TxnInsufficientBalanceError,
+)
 from app.manager import manager  # WebSocket connection manager
 
 logger = get_logger(__name__)
 settings = get_app_settings()
+
+# ── Per-minute prepaid billing ───────────────────────────────────────────────
+# Billing model: the client is charged one full minute UPFRONT the moment the
+# session becomes ACTIVE (both joined), then one more full minute at each minute
+# boundary. Every debit is exactly the reader's per-minute rate — no partial
+# seconds, no rounding to whole points. When the balance can't cover the next
+# minute the session enters a GRACE pause (below) instead of ending instantly.
+GRACE_SECONDS = 60  # client has 60s to top up before the session ends
+TOPUP_HOLD_CAP_SECONDS = 300  # …extended to 5 min total once they start a top-up
+
+
+def _per_minute_rate(rate_per_second: float) -> float:
+    """Exact per-minute charge in points (£), to 2 dp (pennies)."""
+    return round((rate_per_second or 0) * 60, 2)
 
 
 class InsufficientBalanceError(Exception):
@@ -60,6 +77,13 @@ class SessionInfo:
     # Split of client_balance so the operator sees free credit vs paid.
     credit_balance: float = 0.0
     paid_balance: float = 0.0
+    # Per-minute prepaid model.
+    rate_per_minute: float = 0.0
+    minutes_charged: int = 0
+    remaining_minutes: int = 0  # whole minutes still affordable (incl. current)
+    # Grace/top-up state (only meaningful while session_status == "GRACE").
+    grace_seconds_left: int = 0  # countdown before the session auto-ends
+    is_topping_up: bool = False
 
 
 @dataclass
@@ -97,6 +121,27 @@ class SessionState:
     # while True the monitor skips this session so it never elapses or depletes.
     awaiting_join: bool = False
     client_joined_at: Optional[datetime] = None
+
+    # ── Per-minute prepaid billing state ────────────────────────────────────
+    # How many whole minutes have been charged upfront so far.
+    minutes_charged: int = 0
+    # Elapsed seconds frozen at the moment the meter stopped (pause/grace). On
+    # resume, started_at is set to (now - paused_elapsed_seconds) so the counter
+    # continues from exactly where it stopped.
+    paused_elapsed_seconds: int = 0
+
+    # ── Grace / top-up state ────────────────────────────────────────────────
+    # True while the session is in the out-of-balance grace pause (meter stopped,
+    # billing stopped, input locked, client offered a top-up).
+    is_grace: bool = False
+    grace_started_at: Optional[datetime] = None
+    # Set once the client actually starts a top-up, which extends the hold from
+    # GRACE_SECONDS to TOPUP_HOLD_CAP_SECONDS so an in-flight checkout isn't cut off.
+    topping_up: bool = False
+    # Total balance at the moment grace began — lets resume report "+£X topped up".
+    grace_entry_balance: float = 0.0
+    # Amount added between grace entry and resume (for the transcript line).
+    last_topup_amount: float = 0.0
 
 
 class SessionManager:
@@ -201,6 +246,11 @@ class SessionManager:
                     else 0
                 )
 
+                # Estimate minutes already charged so a restart doesn't re-bill
+                # minutes that already elapsed: every due minute up to now is
+                # assumed charged (it was, while the session was live).
+                already_charged = 0 if chat.client_joined_at is None else int(elapsed // 60) + 1
+
                 # Create session state
                 session_state = SessionState(
                     chat_id=chat.id,
@@ -216,6 +266,7 @@ class SessionManager:
                     # If the client never joined, keep the timer gated after restart.
                     awaiting_join=(chat.client_joined_at is None),
                     client_joined_at=chat.client_joined_at,
+                    minutes_charged=already_charged,
                 )
 
                 self.active_sessions[chat.id] = session_state
@@ -302,12 +353,15 @@ class SessionManager:
             db.add(chat_session)
             db.flush()
 
-            # Create SessionInterval
+            # Create SessionInterval. is_billed=True: the per-minute prepaid
+            # engine debits money directly (one DEBIT per minute), so intervals
+            # exist only for timing/history — the legacy interval biller and the
+            # periodic billing task must never touch them (would double-charge).
             interval = SessionInterval(
                 session_id=chat_session.id,
                 started_at=datetime.now(),
                 trigger_event=ChatSessionTrigger.INITIAL_START,
-                is_billed=False,
+                is_billed=True,
             )
             db.add(interval)
 
@@ -453,7 +507,28 @@ class SessionManager:
                 interval.started_at = joined_at
 
             chat.client_joined_at = joined_at
+            session_state.minutes_charged = 0
             db.commit()
+
+            # ── Charge minute 1 UPFRONT ─────────────────────────────────────
+            # The session is now ACTIVE (both joined) and the chat channel is
+            # functional — this is the only moment we start billing. If the
+            # client can't even cover the first minute, drop straight into the
+            # grace/top-up flow rather than billing or hard-ending.
+            per_min = _per_minute_rate(session_state.rate_per_second)
+            if per_min > 0:
+                if current_balance + 1e-9 >= per_min:
+                    try:
+                        self._charge_minute(db, session_state, 1)
+                        session_state.minutes_charged = 1
+                    except TxnInsufficientBalanceError:
+                        await self._enter_grace(chat_id, session_state)
+                        return self.get_session_info(chat_id) or self._calculate_session_info(
+                            session_state, db
+                        )
+                else:
+                    await self._enter_grace(chat_id, session_state)
+                    return self._calculate_session_info(session_state, db)
 
             info = self._calculate_session_info(session_state, db)
 
@@ -461,8 +536,8 @@ class SessionManager:
                 "client_joined_session_timer_anchored",
                 chat_id=chat_id,
                 joined_at=joined_at.isoformat(),
-                max_duration=additional_seconds,
-                remaining_seconds=info.remaining_seconds,
+                minutes_charged=session_state.minutes_charged,
+                remaining_minutes=info.remaining_minutes,
             )
 
             # Timer is now running for both client and psychic.
@@ -672,6 +747,10 @@ class SessionManager:
 
         # Remove from active monitoring (stop the timer)
         paused_state = self.active_sessions.pop(chat_id)
+
+        # Freeze the meter here so a later resume continues from this point
+        # instead of jumping (the per-minute clock excludes the paused gap).
+        paused_state.paused_elapsed_seconds = max(0, elapsed_at_pause)
 
         # Store in paused sessions for later resume with pause timestamp
         self.paused_sessions[chat_id] = paused_state
@@ -898,6 +977,12 @@ class SessionManager:
         """
         from app.database.client import SessionLocal
 
+        # Out-of-balance GRACE resume: the session is still in active_sessions
+        # (never moved to paused_sessions). Charge the pending minute and continue.
+        grace_state = self.active_sessions.get(chat_id)
+        if grace_state and grace_state.is_grace:
+            return self._resume_from_grace(chat_id, grace_state)
+
         # Try to get from memory first (fast path)
         session_state = self.paused_sessions.get(chat_id)
 
@@ -998,12 +1083,13 @@ class SessionManager:
                 new_max_duration=new_max_duration,
             )
 
-            # Create new interval
+            # Create new interval (is_billed=True; the per-minute engine bills
+            # money directly, so intervals must never be interval-billed).
             interval = SessionInterval(
                 session_id=session_state.session_id,
                 started_at=datetime.now(),
                 trigger_event=ChatSessionTrigger.RESUME_AFTER_TOPUP,
-                is_billed=False,
+                is_billed=True,
             )
             db.add(interval)
 
@@ -1017,6 +1103,12 @@ class SessionManager:
             # Update session state with new values
             session_state.interval_id = interval.id
             session_state.max_session_duration_seconds = new_max_duration
+            # Continue the per-minute clock from where it stopped: exclude the
+            # paused gap so `elapsed` doesn't jump and trigger a burst of
+            # catch-up minute charges. minutes_charged is preserved; the monitor
+            # charges the next minute at the next real boundary.
+            frozen = session_state.paused_elapsed_seconds or elapsed_at_pause
+            session_state.started_at = datetime.now() - timedelta(seconds=frozen)
             session_state.warning_5min_sent = False
             session_state.warning_60s_sent = False
             session_state.warning_30s_sent = False
@@ -1128,7 +1220,9 @@ class SessionManager:
             current_balance = credit_balance + paid_balance
             chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
             rate = session_state.rate_per_second
+            per_min = _per_minute_rate(rate)
             full_duration = int(current_balance / rate) if rate > 0 else 0
+            affordable_minutes = int(current_balance / per_min) if per_min > 0 else 0
             return SessionInfo(
                 chat_id=session_state.chat_id,
                 elapsed_seconds=0,
@@ -1141,42 +1235,81 @@ class SessionManager:
                 session_status="AWAITING_JOIN",
                 started_at=session_state.started_at.isoformat(),
                 rate_per_second=rate,
+                rate_per_minute=per_min,
+                minutes_charged=0,
+                remaining_minutes=affordable_minutes,
             )
 
-        # 1. Calculate elapsed time from session start
-        elapsed_seconds = int(
-            (datetime.now() - session_state.started_at).total_seconds()
-        )
-
-        # 2. Calculate estimated cost so far
-        estimated_cost = elapsed_seconds * session_state.rate_per_second
-
-        # 3. Get current LIVE balances from DB (free credit + paid).
+        # Live balances from DB (free credit + paid).
         user = db.query(User).filter(User.id == session_state.client_id).first()
         credit_balance = float(user.credit_balance) if user else 0.0
         paid_balance = float(user.balance) if user else 0.0
         current_balance = credit_balance + paid_balance  # total spendable
 
-        # 4. Remaining time = the SMALLER of the start-time duration cap and what
-        # the client can still afford RIGHT NOW. This is the zero-balance fix:
-        # ending is driven by the LIVE balance, so when it depletes remaining
-        # hits 0 and the monitor stops the session — it no longer coasts on a
-        # stale start-time estimate.
         rate = session_state.rate_per_second
-        balance_remaining = int(current_balance / rate) if rate > 0 else 0
-        duration_remaining = max(
-            0, session_state.max_session_duration_seconds - elapsed_seconds
-        )
-        remaining_seconds = max(0, min(duration_remaining, balance_remaining))
+        per_min = _per_minute_rate(rate)
 
-        # 5. Get chat status from DB
+        # Whole minutes still affordable BEYOND what's already prepaid.
+        affordable_future_minutes = int(current_balance / per_min) if per_min > 0 else 0
+
         chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
+
+        # ── Grace pause (out of balance) ────────────────────────────────────
+        # Meter and billing are stopped; report the frozen elapsed and a live
+        # countdown so both sides see the same "topping up" state.
+        if session_state.is_grace:
+            elapsed_seconds = session_state.paused_elapsed_seconds
+            grace_age = (
+                (datetime.now() - session_state.grace_started_at).total_seconds()
+                if session_state.grace_started_at
+                else 0
+            )
+            limit = TOPUP_HOLD_CAP_SECONDS if session_state.topping_up else GRACE_SECONDS
+            grace_left = max(0, int(limit - grace_age))
+            # Estimated cost = exactly the minutes already charged.
+            estimated_cost = round(session_state.minutes_charged * per_min, 2)
+            return SessionInfo(
+                chat_id=session_state.chat_id,
+                elapsed_seconds=elapsed_seconds,
+                estimated_cost=estimated_cost,
+                remaining_seconds=0,
+                client_balance=round(current_balance, 2),
+                credit_balance=round(credit_balance, 2),
+                paid_balance=round(paid_balance, 2),
+                chat_status=chat.status.value if chat else "PAUSED",
+                session_status="GRACE",
+                started_at=session_state.started_at.isoformat(),
+                rate_per_second=rate,
+                rate_per_minute=per_min,
+                minutes_charged=session_state.minutes_charged,
+                remaining_minutes=affordable_future_minutes,
+                grace_seconds_left=grace_left,
+                is_topping_up=session_state.topping_up,
+            )
+
+        # ── Active billing ──────────────────────────────────────────────────
+        elapsed_seconds = int(
+            (datetime.now() - session_state.started_at).total_seconds()
+        )
+        # Cost so far = exactly the minutes charged upfront (no partial seconds).
+        estimated_cost = round(session_state.minutes_charged * per_min, 2)
+
+        # Seconds left inside the currently-prepaid window.
+        prepaid_remaining = max(0, session_state.minutes_charged * 60 - elapsed_seconds)
+        remaining_seconds = prepaid_remaining + affordable_future_minutes * 60
+
+        # Whole minutes left to display: the current (prepaid) minute in progress
+        # plus every further minute they can still afford.
+        remaining_minutes = affordable_future_minutes + (
+            1 if prepaid_remaining > 0 else 0
+        )
+
         chat_status = chat.status.value if chat else "UNKNOWN"
 
         return SessionInfo(
             chat_id=session_state.chat_id,
             elapsed_seconds=elapsed_seconds,
-            estimated_cost=round(estimated_cost, 2),
+            estimated_cost=estimated_cost,
             remaining_seconds=remaining_seconds,
             client_balance=round(current_balance, 2),
             credit_balance=round(credit_balance, 2),
@@ -1184,8 +1317,189 @@ class SessionManager:
             chat_status=chat_status,
             session_status="ACTIVE",
             started_at=session_state.started_at.isoformat(),
-            rate_per_second=session_state.rate_per_second,
+            rate_per_second=rate,
+            rate_per_minute=per_min,
+            minutes_charged=session_state.minutes_charged,
+            remaining_minutes=remaining_minutes,
         )
+
+    # ── Per-minute prepaid billing helpers ──────────────────────────────────
+
+    def _charge_minute(self, db: Session, session_state: SessionState, minute_number: int):
+        """
+        Debit exactly one minute's rate upfront and write ONE ledger DEBIT
+        described "Session #X - Minute N". Credit is consumed before paid (handled
+        by create_debit_transaction). Raises TxnInsufficientBalanceError if the
+        client can't cover the minute.
+        """
+        from app.services.transactions import create_debit_transaction
+
+        per_min = _per_minute_rate(session_state.rate_per_second)
+        if per_min <= 0:
+            return None
+
+        description = f"Session #{session_state.session_id} - Minute {minute_number}"
+        txn = create_debit_transaction(
+            db=db,
+            user_id=session_state.client_id,
+            amount=per_min,
+            description=description,
+            related_chat_id=session_state.chat_id,
+            related_session_interval_id=session_state.interval_id,
+            metadata={
+                "minute": minute_number,
+                "psychic_id": session_state.psychic_id,
+                "rate_per_minute": per_min,
+            },
+        )
+        logger.info(
+            "minute_charged",
+            chat_id=session_state.chat_id,
+            minute=minute_number,
+            amount=per_min,
+        )
+        return txn
+
+    async def _enter_grace(self, chat_id: int, session_state: SessionState) -> None:
+        """
+        Enter the out-of-balance GRACE pause: stop the meter and billing, lock
+        the chat (status PAUSED) on both sides, and start the top-up countdown.
+        The session stays in active_sessions so the monitor tracks the deadline.
+        """
+        from app.database.client import SessionLocal
+        from app.services.chats import broadcast_system_message
+
+        session_state.is_grace = True
+        session_state.grace_started_at = datetime.now()
+        session_state.topping_up = False
+        # Freeze the meter at the clean minute boundary already paid for.
+        session_state.paused_elapsed_seconds = session_state.minutes_charged * 60
+
+        db = SessionLocal()
+        try:
+            chat = db.query(Chat).filter(Chat.id == chat_id).first()
+            reader_name = "your reader"
+            if chat:
+                chat.status = ChatStatus.PAUSED
+                chat.paused_at = datetime.now()
+                reader_name = chat.psychic.username if chat.psychic else "your reader"
+
+            user = db.query(User).filter(User.id == session_state.client_id).first()
+            session_state.grace_entry_balance = float(user.total_balance) if user else 0.0
+
+            # End the current interval for history (already is_billed=True).
+            interval = (
+                db.query(SessionInterval)
+                .filter(SessionInterval.id == session_state.interval_id)
+                .first()
+            )
+            if interval and interval.ended_at is None:
+                interval.ended_at = datetime.now()
+                interval.termination_reason = ChatTerminationReason.PAUSE_FOR_TOPUP
+            db.commit()
+
+            info = self._calculate_session_info(session_state, db)
+            await self._broadcast_session_grace(chat_id, info, reader_name)
+
+            # Transcript event line (spec 11): session paused (out of balance).
+            await broadcast_system_message(
+                db,
+                chat_id,
+                "Session paused — client is out of Stardust. Waiting for a top-up.",
+            )
+
+            logger.info(
+                "session_entered_grace",
+                chat_id=chat_id,
+                minutes_charged=session_state.minutes_charged,
+                per_minute=_per_minute_rate(session_state.rate_per_second),
+            )
+        finally:
+            db.close()
+
+    def mark_topping_up(self, chat_id: int) -> bool:
+        """Flag that the client started a top-up during grace (extends the hold
+        to TOPUP_HOLD_CAP_SECONDS). Returns True if a grace session was flagged."""
+        ss = self.active_sessions.get(chat_id)
+        if ss and ss.is_grace:
+            ss.topping_up = True
+            logger.info("grace_topup_started", chat_id=chat_id)
+            return True
+        return False
+
+    def _resume_from_grace(
+        self, chat_id: int, session_state: SessionState
+    ) -> SessionInfo:
+        """
+        Resume a grace-paused session after a top-up: charge the pending minute
+        immediately and continue the counter from exactly where it stopped.
+        Raises InsufficientBalanceError if the top-up still isn't enough for a
+        minute.
+        """
+        from app.database.client import SessionLocal
+
+        db = SessionLocal()
+        try:
+            chat = db.query(Chat).filter(Chat.id == chat_id).first()
+            if not chat:
+                raise ValueError(f"Chat {chat_id} not found")
+            user = db.query(User).filter(User.id == session_state.client_id).first()
+            current_balance = float(user.total_balance) if user else 0.0
+            per_min = _per_minute_rate(session_state.rate_per_second)
+
+            if per_min > 0 and current_balance + 1e-9 < per_min:
+                raise InsufficientBalanceError(
+                    f"Need {per_min} points to resume (one minute)"
+                )
+
+            # How much was topped up during grace (for the transcript line).
+            session_state.last_topup_amount = round(
+                max(0.0, current_balance - session_state.grace_entry_balance), 2
+            )
+
+            # New interval for the resumed stretch (is_billed=True; billed per-minute).
+            interval = SessionInterval(
+                session_id=session_state.session_id,
+                started_at=datetime.now(),
+                trigger_event=ChatSessionTrigger.RESUME_AFTER_TOPUP,
+                is_billed=True,
+            )
+            db.add(interval)
+            chat.status = ChatStatus.ACTIVE
+            chat.paused_at = None
+            db.commit()
+            db.refresh(interval)
+            session_state.interval_id = interval.id
+
+            # Continue the meter from the frozen boundary, then charge the minute
+            # that couldn't be covered before — so it starts fresh from here.
+            session_state.started_at = datetime.now() - timedelta(
+                seconds=session_state.paused_elapsed_seconds
+            )
+            if per_min > 0:
+                next_minute = session_state.minutes_charged + 1
+                self._charge_minute(db, session_state, next_minute)
+                session_state.minutes_charged = next_minute
+
+            # Clear grace state and re-arm warnings.
+            session_state.is_grace = False
+            session_state.topping_up = False
+            session_state.grace_started_at = None
+            session_state.warning_5min_sent = False
+            session_state.warning_60s_sent = False
+            session_state.warning_30s_sent = False
+            session_state.warning_10s_sent = False
+
+            info = self._calculate_session_info(session_state, db)
+            logger.info(
+                "session_resumed_from_grace",
+                chat_id=chat_id,
+                minutes_charged=session_state.minutes_charged,
+                topped_up=session_state.last_topup_amount,
+            )
+            return info
+        finally:
+            db.close()
 
     async def _monitor_sessions(self):
         """
@@ -1256,26 +1570,92 @@ class SessionManager:
                         if session_state.awaiting_join:
                             continue
 
-                        # Calculate current state using fresh DB session
-                        info = self._calculate_session_info(session_state, db)
+                        # ── Grace pause: run the top-up countdown ──────────────
+                        # No billing here. End cleanly when the countdown (60s, or
+                        # 5 min once a top-up started) expires with no resume.
+                        if session_state.is_grace:
+                            grace_age = (
+                                datetime.now() - session_state.grace_started_at
+                            ).total_seconds() if session_state.grace_started_at else 0
+                            limit = (
+                                TOPUP_HOLD_CAP_SECONDS
+                                if session_state.topping_up
+                                else GRACE_SECONDS
+                            )
+                            if grace_age >= limit:
+                                logger.info(
+                                    "grace_expired_ending_session",
+                                    chat_id=chat_id,
+                                    topping_up=session_state.topping_up,
+                                    grace_age=grace_age,
+                                )
+                                from app.services.chats import (
+                                    broadcast_system_message,
+                                )
 
-                        # Track minimum for adaptive sleep
+                                # Transcript event line (spec 11): ended, no top-up.
+                                await broadcast_system_message(
+                                    db,
+                                    chat_id,
+                                    "Session ended — no top-up was made in time.",
+                                )
+                                await self.end_session(
+                                    chat_id, ChatTerminationReason.NO_TOPUP
+                                )
+                            else:
+                                min_remaining = min(min_remaining, 1)
+                            continue
+
+                        # ── Per-minute prepaid charging ────────────────────────
+                        # Charge one full minute upfront at each boundary. Before
+                        # each charge, check the balance; if it can't cover the
+                        # next minute, drop into grace instead of ending.
+                        elapsed = (
+                            datetime.now() - session_state.started_at
+                        ).total_seconds()
+                        due_minutes = int(elapsed // 60) + 1
+                        per_min = _per_minute_rate(session_state.rate_per_second)
+                        charged_now = False
+                        entered_grace = False
+
+                        while session_state.minutes_charged < due_minutes:
+                            next_minute = session_state.minutes_charged + 1
+                            if per_min <= 0:
+                                # Free reader: nothing to charge, just advance.
+                                session_state.minutes_charged = next_minute
+                                continue
+
+                            user = (
+                                db.query(User)
+                                .filter(User.id == session_state.client_id)
+                                .first()
+                            )
+                            balance = float(user.total_balance) if user else 0.0
+                            if balance + 1e-9 >= per_min:
+                                try:
+                                    self._charge_minute(db, session_state, next_minute)
+                                    session_state.minutes_charged = next_minute
+                                    charged_now = True
+                                except TxnInsufficientBalanceError:
+                                    await self._enter_grace(chat_id, session_state)
+                                    entered_grace = True
+                                    break
+                            else:
+                                await self._enter_grace(chat_id, session_state)
+                                entered_grace = True
+                                break
+
+                        if entered_grace:
+                            continue
+
+                        # Recompute after any charge; refetch balances for the UI.
+                        info = self._calculate_session_info(session_state, db)
                         min_remaining = min(min_remaining, info.remaining_seconds)
 
-                        # Check if session time has run out (remaining < 1 second)
-                        # This is based on max_session_duration calculated at start
-                        if info.remaining_seconds < 1:
-                            logger.warning(
-                                "session_time_depleted_ending_session",
-                                chat_id=chat_id,
-                                elapsed_seconds=info.elapsed_seconds,
-                                max_duration=session_state.max_session_duration_seconds,
-                                remaining_seconds=info.remaining_seconds,
-                            )
-                            await self.end_session(
-                                chat_id, ChatTerminationReason.INSUFFICIENT_FUNDS
-                            )
-                            continue
+                        if charged_now:
+                            # Push the new balance + minute count so the client UI
+                            # refetches balance on every minute charge (spec b).
+                            await self._broadcast_minute_charged(chat_id, info)
 
                         # Check for client disconnect timeout
                         if session_state.client_disconnected_at:
@@ -1371,12 +1751,10 @@ class SessionManager:
             await notification_manager.send_to_user(
                 balance_low_ws, session_state.client_id
             )
-
-            await broadcast_system_message(
-                db,
-                session_state.chat_id,
-                "Your session will end in 5 minutes. Please top up to continue.",
-            )
+            # No hardcoded "ends in 5 minutes" transcript line — in the per-minute
+            # model the out-of-balance GRACE pause is the interruption mechanism,
+            # and all countdown copy is derived from real remaining time on the
+            # client. This just flags "balance low" via the WS warning above.
 
         # 60 seconds warning
         elif remaining <= 60 and not session_state.warning_60s_sent:
@@ -1409,11 +1787,62 @@ class SessionManager:
                     "elapsed_seconds": info.elapsed_seconds,
                     "estimated_cost": info.estimated_cost,
                     "remaining_seconds": info.remaining_seconds,
+                    "remaining_minutes": info.remaining_minutes,
+                    "minutes_charged": info.minutes_charged,
                     "client_balance": info.client_balance,
+                    "credit_balance": info.credit_balance,
+                    "paid_balance": info.paid_balance,
                     "chat_status": info.chat_status,
                     "session_status": info.session_status,
                     "started_at": info.started_at,
                     "rate_per_second": info.rate_per_second,
+                    "rate_per_minute": info.rate_per_minute,
+                },
+            },
+            str(chat_id),
+        )
+
+    async def _broadcast_minute_charged(self, chat_id: int, info: SessionInfo):
+        """Broadcast that a minute was charged upfront — carries the fresh balance
+        so both UIs re-anchor (client header + time-left refetch on every charge)."""
+        await manager.send_to_chat(
+            {
+                "event": "session_minute_charged",
+                "data": {
+                    "chat_id": info.chat_id,
+                    "elapsed_seconds": info.elapsed_seconds,
+                    "estimated_cost": info.estimated_cost,
+                    "remaining_seconds": info.remaining_seconds,
+                    "remaining_minutes": info.remaining_minutes,
+                    "minutes_charged": info.minutes_charged,
+                    "client_balance": info.client_balance,
+                    "credit_balance": info.credit_balance,
+                    "paid_balance": info.paid_balance,
+                    "rate_per_minute": info.rate_per_minute,
+                },
+            },
+            str(chat_id),
+        )
+
+    async def _broadcast_session_grace(
+        self, chat_id: int, info: SessionInfo, reader_name: str
+    ):
+        """Broadcast the out-of-balance GRACE pause: countdown + top-up prompt."""
+        await manager.send_to_chat(
+            {
+                "event": "session_grace",
+                "data": {
+                    "chat_id": info.chat_id,
+                    "chat_status": "PAUSED",
+                    "session_status": "GRACE",
+                    "reader_name": reader_name,
+                    "grace_seconds": info.grace_seconds_left,
+                    "minutes_charged": info.minutes_charged,
+                    "estimated_cost": info.estimated_cost,
+                    "client_balance": info.client_balance,
+                    "credit_balance": info.credit_balance,
+                    "paid_balance": info.paid_balance,
+                    "rate_per_minute": info.rate_per_minute,
                 },
             },
             str(chat_id),
@@ -1503,8 +1932,13 @@ class SessionManager:
                     "chat_status": "ACTIVE",
                     "elapsed_seconds": info.elapsed_seconds,
                     "remaining_seconds": info.remaining_seconds,
+                    "remaining_minutes": info.remaining_minutes,
+                    "minutes_charged": info.minutes_charged,
                     "client_balance": info.client_balance,
+                    "credit_balance": info.credit_balance,
+                    "paid_balance": info.paid_balance,
                     "rate_per_second": info.rate_per_second,
+                    "rate_per_minute": info.rate_per_minute,
                 },
             },
             str(chat_id),

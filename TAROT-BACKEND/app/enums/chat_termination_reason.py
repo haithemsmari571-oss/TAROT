@@ -10,3 +10,4 @@ class ChatTerminationReason(str, Enum):
     PAUSE_FOR_TOPUP = "PAUSE_FOR_TOPUP"  # Session paused for top-up
     PAUSE_TIMEOUT = "PAUSE_TIMEOUT"  # Paused session exceeded 30 minute timeout
     CLIENT_DISCONNECTED = "CLIENT_DISCONNECTED"  # Client disconnected for too long
+    NO_TOPUP = "NO_TOPUP"  # Out-of-balance grace expired without a top-up

@@ -7,7 +7,7 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useChats } from "../hooks/useChats";
 import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
-import { getChatMessages, getChatSessionTime, resumeChat, pauseChatManual, Chat } from "../api/chatApi";
+import { getChatMessages, getChatSessionTime, resumeChat, pauseChatManual, pauseChat, Chat } from "../api/chatApi";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
@@ -402,6 +402,56 @@ const ClientChat = () => {
     });
   }, [dispatch, selectedChatData]);
 
+  // Per-minute prepaid: a minute was charged upfront. Fold the fresh balance /
+  // minute count through SYNC and refresh the header balance (spec b).
+  const handleSessionMinuteCharged = useCallback((p: any) => {
+    console.log('[ClientChat] Minute charged:', p);
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: p.elapsedSeconds ?? sessionState.elapsedSeconds,
+        estimated_cost: p.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: p.clientBalance,
+        credit_balance: p.creditBalance,
+        paid_balance: p.paidBalance,
+        remaining_seconds: p.remainingSeconds,
+        session_status: 'ACTIVE',
+        rate_per_minute: p.ratePerMinute,
+        remaining_minutes: p.remainingMinutes,
+        minutes_charged: p.minutesCharged,
+      },
+    });
+    if (typeof p.clientBalance === 'number') {
+      window.dispatchEvent(new CustomEvent('stardust:balance', { detail: p.clientBalance }));
+    }
+  }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
+
+  // Out-of-balance grace hold: not enough Stardust for the next minute.
+  const handleSessionGrace = useCallback((p: any) => {
+    console.log('[ClientChat] Grace hold:', p);
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: sessionState.elapsedSeconds,
+        estimated_cost: p.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: p.clientBalance,
+        credit_balance: p.creditBalance,
+        paid_balance: p.paidBalance,
+        session_status: 'GRACE',
+        rate_per_minute: p.ratePerMinute,
+        remaining_minutes: p.remainingMinutes,
+        minutes_charged: p.minutesCharged,
+        grace_seconds_left: p.graceSeconds,
+        grace_reader_name: p.readerName,
+      },
+    });
+    if (typeof p.clientBalance === 'number') {
+      window.dispatchEvent(new CustomEvent('stardust:balance', { detail: p.clientBalance }));
+    }
+  }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
+
   const handleConnected = useCallback(async () => {
     console.log('[ClientChat] Connected to chat');
     // Load previous messages when connected
@@ -486,6 +536,8 @@ const ClientChat = () => {
       [ChatEventType.MESSAGES_READ]: handleMessagesRead,
       [ChatEventType.SESSION_INFO]: handleSessionInfo,
       [ChatEventType.SESSION_STARTED]: handleSessionStarted,
+      [ChatEventType.SESSION_MINUTE_CHARGED]: handleSessionMinuteCharged,
+      [ChatEventType.SESSION_GRACE]: handleSessionGrace,
       [ChatEventType.SESSION_ENDING_SOON]: handleSessionEndingSoon,
       [ChatEventType.SESSION_ENDED]: handleSessionEndedWebSocket,
       [ChatEventType.BALANCE_INSUFFICIENT]: handleBalanceInsufficient,
@@ -757,15 +809,23 @@ const ClientChat = () => {
   const handleAddStardust = useCallback(() => {
     if (!selectedChat) return;
     const chatId = selectedChat;
+    // Already in the out-of-balance GRACE hold? The session is paused, so don't
+    // re-pause — instead flag the top-up (/topup → mark_topping_up) to extend the
+    // hold from 60s to the 5-minute cap while checkout completes.
+    const inGrace = sessionState.sessionStatus === 'GRACE';
     openTopUp({
       reason:
         "Add Stardust to keep your reading going — we'll pause the clock while you top up.",
       returnUrl: `/chats?chat_id=${chatId}&resume=1`,
       onBeforeCheckout: async () => {
-        await pauseChatManual(chatId);
+        if (inGrace) {
+          await pauseChat(chatId).catch(() => {});
+        } else {
+          await pauseChatManual(chatId);
+        }
       },
     });
-  }, [selectedChat, openTopUp]);
+  }, [selectedChat, openTopUp, sessionState.sessionStatus]);
 
   const handlePauseForTopUp = handleAddStardust;
   const handleTopUpClick = handleAddStardust;
@@ -954,20 +1014,25 @@ const ClientChat = () => {
 
   // --- Live session metrics for the status bar (SessionBar handles its own colour ramp) ---
   const remaining = sessionState.remainingSeconds;
+  const isGrace = sessionState.sessionStatus === 'GRACE';
+  // Per-minute model: clientBalance is the LIVE balance after each minute's
+  // upfront debit — it IS the Stardust left (don't subtract cost again).
   const stardustLeft =
     sessionState.clientBalance == null
       ? null
-      : Math.max(0, Math.floor(sessionState.clientBalance - (sessionState.estimatedCost || 0)));
+      : Math.max(0, Math.floor(sessionState.clientBalance));
+  // Whole minutes of reading still available (current prepaid minute + affordable).
+  const minutesLeft = sessionState.remainingMinutes;
   const psychicName =
     psychicDetails?.username || selectedChatData?.user_name || "Your reader";
 
   // Human-friendly "reading time left" for the low-balance banner — derived from
-  // the live remaining seconds, not hardcoded, so it tracks the real countdown.
+  // the live whole minutes remaining, not hardcoded, so it tracks reality.
   const readingTimeLeftLabel = (() => {
-    if (remaining == null) return "very little reading time";
-    if (remaining <= 60) return "less than a minute";
-    const mins = Math.round(remaining / 60);
-    return `about ${mins} minute${mins === 1 ? "" : "s"}`;
+    if (minutesLeft <= 0) {
+      return remaining != null && remaining <= 60 ? "less than a minute" : "very little time";
+    }
+    return `about ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}`;
   })();
 
   // --- MESSENGER-STYLE 2-COLUMN LAYOUT ---
@@ -1324,6 +1389,7 @@ const ClientChat = () => {
                 <SessionBar
                   elapsedSeconds={sessionState.elapsedSeconds}
                   remainingSeconds={remaining}
+                  minutesLeft={minutesLeft}
                   stardust={stardustLeft}
                   isPaused={isPaused}
                   isConnected={isConnected}
@@ -1571,16 +1637,30 @@ const ClientChat = () => {
                         <Icon icon="solar:pause-circle-bold-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-bold text-white">Reading paused</p>
+                        <p className="text-sm font-bold text-white">
+                          {isGrace ? 'Out of Stardust' : 'Reading paused'}
+                        </p>
                         <p className="text-xs text-white/60">
-                          {sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
-                            ? 'Your Stardust ran low — add more to keep going.'
-                            : 'Waiting for your reader to resume.'}
+                          {isGrace
+                            ? `Not enough Stardust for another minute with ${psychicName}.`
+                            : sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
+                              ? 'Your Stardust ran low — add more to keep going.'
+                              : 'Waiting for your reader to resume.'}
                         </p>
                       </div>
+                      {isGrace && (
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-2xl font-black tabular-nums" style={{ color: COLORS.starGold }}>
+                            0:{String(Math.max(0, sessionState.graceSecondsLeft)).padStart(2, '0')}
+                          </p>
+                          <p className="text-[10px] uppercase tracking-wider text-white/40">to top up</p>
+                        </div>
+                      )}
                     </div>
                     <p className="text-xs text-white/50 mb-4">
-                      Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn't resumed.
+                      {isGrace
+                        ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on — the reading pauses here until you do, and closes on its own if you don't.`
+                        : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn’t resumed.'}
                     </p>
                     <div className="flex gap-2 text-xs text-white/40">
                       <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
@@ -1981,6 +2061,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
           <SessionBar
             elapsedSeconds={cfg.elapsed}
             remainingSeconds={remaining}
+            minutesLeft={remaining != null ? Math.ceil(remaining / 60) : null}
             stardust={stardust}
             isPaused={isPaused}
             isConnected={true}

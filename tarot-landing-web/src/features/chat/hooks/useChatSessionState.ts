@@ -19,6 +19,12 @@ const initialState: ChatSessionState = {
   creditBalance: null,
   paidBalance: null,
   sessionStatus: null,
+  ratePerMinute: 0,
+  minutesCharged: 0,
+  remainingMinutes: 0,
+  graceSecondsLeft: 0,
+  graceReaderName: null,
+  isToppingUp: false,
   remainingBalance: null,
   remainingSeconds: null,
   isInputEnabled: false,
@@ -52,6 +58,9 @@ export function chatSessionReducer(
         session_status,
         credit_balance,
         paid_balance,
+        rate_per_minute,
+        remaining_minutes,
+        minutes_charged,
       } = action.payload;
 
       // Resolve the billing sub-state. The COCKPIT (psychic/admin) defaults to
@@ -86,6 +95,9 @@ export function chatSessionReducer(
         clientBalance: client_balance,
         creditBalance: credit_balance ?? state.creditBalance,
         paidBalance: paid_balance ?? state.paidBalance,
+        ratePerMinute: rate_per_minute ?? (psychic_rate_per_second * 60),
+        minutesCharged: minutes_charged ?? 0,
+        remainingMinutes: remaining_minutes ?? 0,
         elapsedSeconds: elapsed_seconds,
         estimatedCost: estimated_cost,
         isInputEnabled: actualStatus === 'ACTIVE' && isBilling && (remainingSeconds === null || remainingSeconds > 0),
@@ -106,61 +118,53 @@ export function chatSessionReducer(
     }
     
     case 'TICK': {
-      // Only accrue while the client has joined and billing is live. During
-      // AWAITING_JOIN the meter is frozen (the backend isn't charging yet).
+      // Per-minute prepaid model: the TICK only animates the display between
+      // backend syncs. It does NOT compute cost (cost = minutes charged × rate,
+      // set by SYNC / minute-charged events) and does NOT auto-end — running out
+      // triggers a backend GRACE pause, not a client-side end.
       if (state.isPaused || state.status !== 'ACTIVE' || state.sessionStatus !== 'ACTIVE') {
         return state;
       }
-      
+
       const newElapsed = state.elapsedSeconds + 1;
-      const newCost = newElapsed * state.psychicRatePerSecond;
-      const newRemaining = state.clientBalance !== null 
-        ? state.clientBalance - newCost 
-        : null;
-      
-      const remainingSeconds = newRemaining !== null && state.psychicRatePerSecond > 0
-        ? Math.max(0, newRemaining / state.psychicRatePerSecond)
-        : null;
-      
-      // Auto-end when timer reaches 0
-      if (remainingSeconds !== null && remainingSeconds <= 0) {
-        console.log('[useChatSessionState] Timer reached 0 - auto-ending session');
-        return {
-          ...state,
-          elapsedSeconds: newElapsed,
-          estimatedCost: newCost,
-          remainingBalance: 0,
-          remainingSeconds: 0,
-          status: 'ENDED',
-          endReason: 'insufficient_balance',
-          isInputEnabled: false,
-          showLowBalanceWarning: false,
-          showCriticalWarning: false,
-          showEndingWarning: false,
-          showCriticalEndingWarning: false,
-        };
-      }
-      
+      const remainingSeconds =
+        state.remainingSeconds !== null ? Math.max(0, state.remainingSeconds - 1) : null;
+
       return {
         ...state,
         elapsedSeconds: newElapsed,
-        estimatedCost: newCost,
-        remainingBalance: newRemaining,
         remainingSeconds,
         showLowBalanceWarning: remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
         showCriticalWarning: remainingSeconds !== null && remainingSeconds <= 60,
         showEndingWarning: remainingSeconds !== null && remainingSeconds > 10 && remainingSeconds <= 60,
         showCriticalEndingWarning: remainingSeconds !== null && remainingSeconds <= 10,
-        isInputEnabled: remainingSeconds > 0,
       };
     }
-    
+
+    case 'GRACE_TICK': {
+      // Local 1s countdown for the out-of-balance top-up hold. When it hits 0
+      // the backend ends the session (session_ended event does the rest).
+      if (state.sessionStatus !== 'GRACE') {
+        return state;
+      }
+      return {
+        ...state,
+        graceSecondsLeft: Math.max(0, state.graceSecondsLeft - 1),
+      };
+    }
+
     case 'SYNC': {
-      // Periodic re-anchor to the backend's join-anchored meter. This is the
-      // source of truth: it corrects any local TICK drift and, crucially, flips
-      // AWAITING_JOIN → ACTIVE the moment the client actually joins. Don't touch
-      // a session that's already paused/ended locally.
-      if (state.status === 'ENDED' || state.isPaused) {
+      // Re-anchor to the backend (poll every ~8s, plus the minute-charged and
+      // grace events). Source of truth for balance / minutes / billing state.
+      // NOTE: per-minute model NEVER auto-ends here — running out of balance is
+      // a backend GRACE pause, and the real end arrives via session_ended.
+      const incomingStatus = action.payload.session_status;
+      // Ignore a stray sync that would un-pause a MANUAL pause; always honor a
+      // grace update and never touch an already-ended session.
+      if (
+        state.status === 'ENDED' ||
+        (state.isPaused && incomingStatus !== 'GRACE')
+      ) {
         return state;
       }
 
@@ -173,35 +177,45 @@ export function chatSessionReducer(
         paid_balance,
         remaining_seconds,
         session_status,
+        rate_per_minute,
+        remaining_minutes,
+        minutes_charged,
+        grace_seconds_left,
+        grace_reader_name,
+        is_topping_up,
       } = action.payload;
 
       const nextSessionStatus = session_status
         ?? state.sessionStatus
         ?? (state.userRole === 'CLIENT' ? 'ACTIVE' : 'AWAITING_JOIN');
-      const isBilling = nextSessionStatus === 'ACTIVE';
       const rate = price_per_second ?? state.psychicRatePerSecond;
+      const perMinute = rate_per_minute ?? state.ratePerMinute ?? rate * 60;
 
-      const effectiveBalance = client_balance - estimated_cost;
-      const remainingSeconds = remaining_seconds ?? (
-        rate > 0 ? Math.max(0, effectiveBalance / rate) : null
-      );
+      const commonMoney = {
+        psychicRatePerSecond: rate,
+        ratePerMinute: perMinute,
+        clientBalance: client_balance,
+        creditBalance: credit_balance ?? state.creditBalance,
+        paidBalance: paid_balance ?? state.paidBalance,
+        estimatedCost: estimated_cost,
+        minutesCharged: minutes_charged ?? state.minutesCharged,
+        remainingMinutes: remaining_minutes ?? state.remainingMinutes,
+      };
 
-      // If the backend meter has depleted while billing, end locally.
-      if (isBilling && remainingSeconds !== null && remainingSeconds <= 0) {
+      // ── Out-of-balance GRACE hold ─────────────────────────────────────────
+      if (nextSessionStatus === 'GRACE') {
         return {
           ...state,
-          sessionStatus: nextSessionStatus,
-          psychicRatePerSecond: rate,
-          clientBalance: client_balance,
-          creditBalance: credit_balance ?? state.creditBalance,
-          paidBalance: paid_balance ?? state.paidBalance,
-          elapsedSeconds: elapsed_seconds,
-          estimatedCost: estimated_cost,
-          remainingBalance: 0,
-          remainingSeconds: 0,
-          status: 'ENDED',
-          endReason: 'insufficient_balance',
+          ...commonMoney,
+          sessionStatus: 'GRACE',
+          status: 'PAUSED',
+          isPaused: true,
           isInputEnabled: false,
+          remainingBalance: client_balance,
+          remainingSeconds: 0,
+          graceSecondsLeft: grace_seconds_left ?? state.graceSecondsLeft ?? 60,
+          graceReaderName: grace_reader_name ?? state.graceReaderName,
+          isToppingUp: is_topping_up ?? state.isToppingUp,
           showLowBalanceWarning: false,
           showCriticalWarning: false,
           showEndingWarning: false,
@@ -209,17 +223,22 @@ export function chatSessionReducer(
         };
       }
 
+      const isBilling = nextSessionStatus === 'ACTIVE';
+      const remainingSeconds = remaining_seconds ?? (
+        rate > 0 ? Math.max(0, (client_balance - estimated_cost) / rate) : null
+      );
+
       return {
         ...state,
+        ...commonMoney,
         sessionStatus: nextSessionStatus,
-        psychicRatePerSecond: rate,
-        clientBalance: client_balance,
-        creditBalance: credit_balance ?? state.creditBalance,
-        paidBalance: paid_balance ?? state.paidBalance,
         elapsedSeconds: elapsed_seconds,
-        estimatedCost: estimated_cost,
-        remainingBalance: effectiveBalance,
+        remainingBalance: client_balance - estimated_cost,
         remainingSeconds,
+        // Clear any lingering grace state on a healthy ACTIVE sync.
+        graceSecondsLeft: 0,
+        graceReaderName: null,
+        isToppingUp: false,
         isInputEnabled: state.status === 'ACTIVE' && isBilling && (remainingSeconds === null || remainingSeconds > 0),
         showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
         showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
@@ -256,8 +275,15 @@ export function chatSessionReducer(
           : null
       );
       
-      const estimatedCost = (elapsed_seconds ?? state.elapsedSeconds) * (rate_per_second ?? state.psychicRatePerSecond);
-      
+      // Per-minute model: cost = minutes charged × per-minute rate.
+      const p = action.payload as any;
+      const perMinute = p.rate_per_minute ?? state.ratePerMinute;
+      const minutesCharged = p.minutes_charged ?? state.minutesCharged;
+      const remainingMinutes = p.remaining_minutes ?? state.remainingMinutes;
+      const estimatedCost =
+        perMinute > 0 ? minutesCharged * perMinute
+          : (elapsed_seconds ?? state.elapsedSeconds) * (rate_per_second ?? state.psychicRatePerSecond);
+
       return {
         ...state,
         status: 'ACTIVE',
@@ -271,6 +297,13 @@ export function chatSessionReducer(
         remainingBalance: effectiveBalance - estimatedCost,
         estimatedCost,
         psychicRatePerSecond: rate_per_second ?? state.psychicRatePerSecond,
+        ratePerMinute: perMinute,
+        minutesCharged,
+        remainingMinutes,
+        // Clear the grace/top-up hold — we're billing again.
+        graceSecondsLeft: 0,
+        graceReaderName: null,
+        isToppingUp: false,
         showLowBalanceWarning: remainingSecs !== null && remainingSecs > 60 && remainingSecs <= 300,
         showCriticalWarning: remainingSecs !== null && remainingSecs <= 60,
       };
@@ -473,9 +506,14 @@ export function useChatSessionState({
             client_balance: data.client_balance,
             credit_balance: data.credit_balance,
             paid_balance: data.paid_balance,
-            remaining_seconds: (data as any).remaining_seconds,
+            remaining_seconds: data.remaining_seconds,
             // Pass through; the reducer role-defaults when absent.
             session_status: data.session_status as any,
+            rate_per_minute: data.rate_per_minute,
+            remaining_minutes: data.remaining_minutes,
+            minutes_charged: data.minutes_charged,
+            grace_seconds_left: data.grace_seconds_left,
+            is_topping_up: data.is_topping_up,
           },
         });
         // Keep the global header Stardust total live during a client's reading.
@@ -624,7 +662,19 @@ export function useChatSessionState({
       clearInterval(timer);
     };
   }, [state.status, state.isPaused, state.sessionStatus]); // Re-anchors when billing flips on join
-  
+
+  // Out-of-balance GRACE countdown — ticks the local top-up timer down each
+  // second. When it reaches 0 the backend ends the session (session_ended).
+  useEffect(() => {
+    if (state.sessionStatus !== 'GRACE') {
+      return;
+    }
+    const timer = setInterval(() => {
+      dispatch({ type: 'GRACE_TICK' });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [state.sessionStatus]);
+
   // Track if we've already called onSessionEnded to prevent multiple calls
   const hasCalledOnSessionEnded = useRef(false);
   

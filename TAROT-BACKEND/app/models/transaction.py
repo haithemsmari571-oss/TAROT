@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.transaction_status import TransactionStatus
@@ -12,9 +12,12 @@ class Transaction(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     transaction_type: Mapped[TransactionType] = mapped_column(Enum(TransactionType))
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
-    balance_before: Mapped[int] = mapped_column(Integer, nullable=False)
-    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Money stored to 2 dp (pennies) so per-minute debits at the exact reader
+    # rate (e.g. £5.20) are recorded without rounding. asdecimal=False → read
+    # back as float so existing sums/JSON serialisation keep working.
+    amount: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
+    balance_before: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
+    balance_after: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
     status: Mapped[TransactionStatus] = mapped_column(
         Enum(TransactionStatus), default=TransactionStatus.COMPLETED
     )

@@ -10,7 +10,9 @@ export type ChatStatus =
 // lifecycle). AWAITING_JOIN = psychic accepted but the client hasn't opened the
 // conversation yet → the meter is FROZEN and nothing is billed. ACTIVE = the
 // client has joined and the join-anchored meter is running.
-export type SessionStatus = 'ACTIVE' | 'AWAITING_JOIN';
+// GRACE = accepted + joined, but out of balance for the next minute → the
+// meter is frozen and the client is in the 60s top-up hold (not billing).
+export type SessionStatus = 'ACTIVE' | 'AWAITING_JOIN' | 'GRACE';
 
 export interface ChatSessionData {
   chat_id: number;
@@ -26,6 +28,10 @@ export interface ChatSessionData {
   session_status?: SessionStatus;
   credit_balance?: number;
   paid_balance?: number;
+  // Per-minute prepaid model.
+  rate_per_minute?: number;
+  remaining_minutes?: number;
+  minutes_charged?: number;
 }
 
 // Periodic re-sync from getChatSessionTime — the join-anchored source of truth
@@ -39,6 +45,14 @@ export interface ChatSessionSyncData {
   paid_balance?: number;
   remaining_seconds?: number | null;
   session_status?: SessionStatus;
+  // Per-minute prepaid model.
+  rate_per_minute?: number;
+  remaining_minutes?: number;
+  minutes_charged?: number;
+  // Grace / top-up hold.
+  grace_seconds_left?: number;
+  grace_reader_name?: string;
+  is_topping_up?: boolean;
 }
 
 export interface ChatSessionState {
@@ -63,6 +77,16 @@ export interface ChatSessionState {
   // Backend billing sub-state. While null we treat the session as not-yet-known
   // and do NOT tick. The local meter only runs when this is 'ACTIVE'.
   sessionStatus: SessionStatus | null;
+
+  // Per-minute prepaid model.
+  ratePerMinute: number;
+  minutesCharged: number;
+  remainingMinutes: number; // whole minutes left (incl. current), for the UI
+
+  // Out-of-balance grace / top-up hold.
+  graceSecondsLeft: number; // countdown before the session auto-ends
+  graceReaderName: string | null;
+  isToppingUp: boolean;
   
   // Calculated values
   remainingBalance: number | null;
@@ -90,6 +114,7 @@ export type ChatSessionAction =
   | { type: 'INITIALIZE'; payload: ChatSessionData }
   | { type: 'CHAT_ACCEPTED'; payload: ChatSessionData }
   | { type: 'TICK' }
+  | { type: 'GRACE_TICK' }
   | { type: 'SYNC'; payload: ChatSessionSyncData }
   | { type: 'CHAT_PAUSED'; payload: { reason: string; elapsed_seconds: number; estimated_cost: number } }
   | { type: 'CHAT_RESUMED'; payload: { client_balance: number; elapsed_seconds?: number; remaining_seconds?: number | null; rate_per_second?: number } }

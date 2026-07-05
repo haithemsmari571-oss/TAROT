@@ -186,6 +186,37 @@ export class ChatFacade {
         });
         break;
       
+      case 'session_minute_charged':
+        console.log('[ChatFacade] Emitting SESSION_MINUTE_CHARGED:', data);
+        this.eventBus.emit(ChatEventType.SESSION_MINUTE_CHARGED, {
+          elapsedSeconds: data.elapsed_seconds,
+          estimatedCost: data.estimated_cost,
+          remainingSeconds: data.remaining_seconds,
+          remainingMinutes: data.remaining_minutes,
+          minutesCharged: data.minutes_charged,
+          clientBalance: data.client_balance,
+          creditBalance: data.credit_balance,
+          paidBalance: data.paid_balance,
+          ratePerMinute: data.rate_per_minute,
+        });
+        break;
+
+      case 'session_grace':
+        console.log('[ChatFacade] Emitting SESSION_GRACE:', data);
+        this.eventBus.emit(ChatEventType.SESSION_GRACE, {
+          graceSeconds: data.grace_seconds,
+          readerName: data.reader_name,
+          minutesCharged: data.minutes_charged,
+          estimatedCost: data.estimated_cost,
+          remainingSeconds: 0,
+          remainingMinutes: data.remaining_minutes ?? 0,
+          clientBalance: data.client_balance,
+          creditBalance: data.credit_balance,
+          paidBalance: data.paid_balance,
+          ratePerMinute: data.rate_per_minute,
+        });
+        break;
+
       case 'messages_read':
         // Recipient opened the conversation — flip our sent messages to "seen".
         this.eventBus.emit(ChatEventType.MESSAGES_READ, {

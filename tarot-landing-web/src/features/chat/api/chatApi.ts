@@ -139,10 +139,16 @@ export interface ChatSessionTime {
   elapsed_seconds: number;
   estimated_cost: number;
   price_per_second: number;
+  rate_per_minute?: number; // exact per-minute charge (price_per_second * 60)
   client_balance: number; // total spendable = credit + paid
   credit_balance?: number; // free welcome/gift credit remaining
   paid_balance?: number; // purchased balance remaining
-  session_status?: string; // e.g. "ACTIVE" | "AWAITING_JOIN"
+  remaining_seconds?: number;
+  remaining_minutes?: number; // whole minutes still affordable (incl. current)
+  minutes_charged?: number; // minutes debited upfront so far
+  session_status?: string; // "ACTIVE" | "AWAITING_JOIN" | "GRACE"
+  grace_seconds_left?: number; // out-of-balance top-up countdown
+  is_topping_up?: boolean;
 }
 
 /**

@@ -82,10 +82,12 @@ def create_credit_transaction(
         raise InvalidTransactionAmountError("Credit amount must be positive")
 
     try:
-        # Lock user row and get current balances
+        # Lock user row and get current balances. Balances are NUMERIC(10,2) →
+        # SQLAlchemy returns Decimal; normalize to float so arithmetic with
+        # float amounts/rates never raises Decimal-vs-float TypeErrors.
         user, _ = get_user_balance_with_lock(db, user_id)
-        credit_before = user.credit_balance or 0
-        paid_before = user.balance or 0
+        credit_before = float(user.credit_balance or 0)
+        paid_before = float(user.balance or 0)
         # balance_before/after track TOTAL spendable (credit + paid).
         balance_before = credit_before + paid_before
 
@@ -204,11 +206,16 @@ def create_debit_transaction(
         )
         raise InvalidTransactionAmountError("Debit amount must be positive")
 
+    # Money is stored to 2 dp (pennies); normalize the debit amount so a
+    # per-minute charge like £5.20 is applied exactly.
+    amount = round(float(amount), 2)
+
     try:
-        # Lock user row and get current balances
+        # Lock user row and get current balances. NUMERIC(10,2) → Decimal;
+        # normalize to float to avoid Decimal-vs-float arithmetic errors.
         user, _ = get_user_balance_with_lock(db, user_id)
-        credit_before = user.credit_balance or 0
-        paid_before = user.balance or 0
+        credit_before = float(user.credit_balance or 0)
+        paid_before = float(user.balance or 0)
         # balance_before/after track TOTAL spendable (credit + paid) so the
         # ledger reads as one running balance.
         balance_before = credit_before + paid_before

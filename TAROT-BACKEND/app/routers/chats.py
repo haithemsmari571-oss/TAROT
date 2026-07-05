@@ -399,15 +399,21 @@ def get_chat_session_time_endpoint(
         # No active session
         credit_balance = float(chat.user.credit_balance) if chat.user else 0.0
         paid_balance = float(chat.user.balance) if chat.user else 0.0
+        rate = chat.psychic.price_per_second or 0.0
+        per_min = round(rate * 60, 2)
+        total = credit_balance + paid_balance
         return JSONResponse(
             content={
                 "elapsed_seconds": 0,
                 "estimated_cost": 0.0,
-                "price_per_second": chat.psychic.price_per_second or 0.0,
-                "client_balance": credit_balance + paid_balance,
+                "price_per_second": rate,
+                "rate_per_minute": per_min,
+                "client_balance": total,
                 "credit_balance": credit_balance,
                 "paid_balance": paid_balance,
                 "remaining_seconds": 0,
+                "remaining_minutes": int(total / per_min) if per_min > 0 else 0,
+                "minutes_charged": 0,
             },
             status_code=200,
         )
@@ -418,14 +424,20 @@ def get_chat_session_time_endpoint(
             "elapsed_seconds": session_info.elapsed_seconds,
             "estimated_cost": session_info.estimated_cost,
             "price_per_second": session_info.rate_per_second,
+            "rate_per_minute": session_info.rate_per_minute,
             "client_balance": session_info.client_balance,
             "credit_balance": session_info.credit_balance,
             "paid_balance": session_info.paid_balance,
             "remaining_seconds": session_info.remaining_seconds,
+            "remaining_minutes": session_info.remaining_minutes,
+            "minutes_charged": session_info.minutes_charged,
             "total_seconds": session_info.elapsed_seconds,  # For backwards compatibility
-            # AWAITING_JOIN until the client actually joins/views — lets the admin
-            # panel show a frozen "waiting" state instead of a climbing counter.
+            # AWAITING_JOIN before the client joins; ACTIVE while billing; GRACE
+            # during the out-of-balance top-up hold. Drives the cockpit/client UI.
             "session_status": session_info.session_status,
+            # Grace countdown (only meaningful while session_status == "GRACE").
+            "grace_seconds_left": session_info.grace_seconds_left,
+            "is_topping_up": session_info.is_topping_up,
         },
         status_code=200,
     )
@@ -843,6 +855,15 @@ async def topup_chat_balance(
     elapsed_seconds = 0
     estimated_cost = 0.0
 
+    # If the chat is already PAUSED in the out-of-balance GRACE hold, don't
+    # re-pause — just flag that a top-up is in progress so the monitor extends
+    # the hold from 60s to the 5-minute cap while the client completes checkout.
+    if chat.status == ChatStatus.PAUSED:
+        try:
+            get_session_manager().mark_topping_up(chat_id)
+        except Exception:
+            pass
+
     # Pause the chat if it's currently ACTIVE using SessionManager
     if chat.status == ChatStatus.ACTIVE:
         session_mgr = get_session_manager()
@@ -1065,9 +1086,25 @@ async def resume_paused_chat(
 
     session_mgr = get_session_manager()
     try:
+        # Detect the out-of-balance grace resume before resuming so we can emit
+        # the "+£X topped up" transcript line afterwards.
+        grace_state = session_mgr.active_sessions.get(chat_id)
+        was_grace = bool(grace_state and grace_state.is_grace)
+
         session_info = session_mgr.resume_session(chat_id)
 
         await session_mgr._broadcast_session_resumed(chat_id, session_info)
+
+        # Transcript event lines (spec 11): client topped up +£X, then resumed.
+        if was_grace:
+            from app.services.chats import broadcast_system_message
+
+            resumed_state = session_mgr.active_sessions.get(chat_id)
+            topped = float(resumed_state.last_topup_amount) if resumed_state else 0.0
+            if topped > 0:
+                await broadcast_system_message(
+                    db, chat_id, f"Client topped up +£{topped:.2f}."
+                )
 
         # Send CHAT_RESUMED notification to both users
         from app.notification_manager import notification_manager

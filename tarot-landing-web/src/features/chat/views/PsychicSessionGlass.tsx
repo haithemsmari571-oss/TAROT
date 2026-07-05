@@ -443,6 +443,48 @@ const PsychicSessionGlass = () => {
     });
   }, [dispatch, currentChat]);
 
+  // Per-minute prepaid: fold a minute-charge / grace update through SYNC so the
+  // cockpit meter, minutes-left, balance and grace state stay live even while
+  // the chat is PAUSED (when the periodic session-time poll is idle).
+  const handleSessionMinuteCharged = useCallback((p: any) => {
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: p.elapsedSeconds ?? sessionState.elapsedSeconds,
+        estimated_cost: p.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: p.clientBalance,
+        credit_balance: p.creditBalance,
+        paid_balance: p.paidBalance,
+        remaining_seconds: p.remainingSeconds,
+        session_status: 'ACTIVE',
+        rate_per_minute: p.ratePerMinute,
+        remaining_minutes: p.remainingMinutes,
+        minutes_charged: p.minutesCharged,
+      },
+    });
+  }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
+
+  const handleSessionGrace = useCallback((p: any) => {
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: sessionState.elapsedSeconds,
+        estimated_cost: p.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: p.clientBalance,
+        credit_balance: p.creditBalance,
+        paid_balance: p.paidBalance,
+        session_status: 'GRACE',
+        rate_per_minute: p.ratePerMinute,
+        remaining_minutes: p.remainingMinutes,
+        minutes_charged: p.minutesCharged,
+        grace_seconds_left: p.graceSeconds,
+        grace_reader_name: p.readerName,
+      },
+    });
+  }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
+
   const handleConnected = useCallback(async () => {
     console.log('[PsychicSessionGlass] Connected to chat');
     // Load previous messages when connected
@@ -510,6 +552,8 @@ const PsychicSessionGlass = () => {
       [ChatEventType.MESSAGE_RECEIVED]: handleMessageReceived,
       [ChatEventType.MESSAGES_READ]: handleMessagesRead,
       [ChatEventType.SESSION_STARTED]: handleSessionStarted,
+      [ChatEventType.SESSION_MINUTE_CHARGED]: handleSessionMinuteCharged,
+      [ChatEventType.SESSION_GRACE]: handleSessionGrace,
       [ChatEventType.SESSION_PAUSED]: handleSessionPaused,
       [ChatEventType.SESSION_RESUMED]: handleSessionResumed,
       [ChatEventType.SESSION_TIMER_TICK]: handleSessionTimerTick,
@@ -1534,7 +1578,9 @@ const PsychicSessionGlass = () => {
                   onSend={handleSendMessage}
                   disabled={
                     !canParticipate ||
-                    currentChat?.status !== "ACTIVE"
+                    currentChat?.status !== "ACTIVE" ||
+                    // Lock input during the out-of-balance top-up hold (spec 6).
+                    sessionState.sessionStatus === "GRACE"
                   }
                   placeholder={
                     !canParticipate
@@ -1564,6 +1610,9 @@ const PsychicSessionGlass = () => {
                   creditBalance={sessionState.creditBalance}
                   paidBalance={sessionState.paidBalance}
                   sessionStatus={sessionState.sessionStatus}
+                  remainingMinutes={sessionState.remainingMinutes}
+                  graceSecondsLeft={sessionState.graceSecondsLeft}
+                  isToppingUp={sessionState.isToppingUp}
                   showCriticalWarning={sessionState.showCriticalWarning}
                   showLowBalanceWarning={sessionState.showLowBalanceWarning}
                   onEndChat={handleEndChat}

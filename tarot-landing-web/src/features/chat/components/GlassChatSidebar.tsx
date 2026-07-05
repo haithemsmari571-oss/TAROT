@@ -14,7 +14,11 @@ interface GlassChatSidebarProps {
   paidBalance?: number | null;
   // Billing sub-state: 'AWAITING_JOIN' = accepted, client not joined yet →
   // frozen meter, "not billing". 'ACTIVE' = client joined, meter running.
-  sessionStatus?: 'ACTIVE' | 'AWAITING_JOIN' | null;
+  // 'GRACE' = out of balance, client in the top-up hold.
+  sessionStatus?: 'ACTIVE' | 'AWAITING_JOIN' | 'GRACE' | null;
+  remainingMinutes?: number;
+  graceSecondsLeft?: number;
+  isToppingUp?: boolean;
   showCriticalWarning?: boolean;
   showLowBalanceWarning?: boolean;
   onEndChat: () => void;
@@ -31,6 +35,9 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
   creditBalance,
   paidBalance,
   sessionStatus,
+  remainingMinutes,
+  graceSecondsLeft,
+  isToppingUp,
   showCriticalWarning = false,
   showLowBalanceWarning = false,
   onEndChat,
@@ -113,9 +120,11 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
   // The chat is live (accepted) but the client hasn't opened it yet → the meter
   // is frozen and NOTHING is billed. Show a clear "not billing" state instead of
   // a 00:00 counter that looks broken.
-  const isAwaitingJoin = chat.status === "ACTIVE" && sessionStatus === "AWAITING_JOIN";
-  // Client has joined → the join-anchored meter is running.
-  const isBillingLive = chat.status === "ACTIVE" && sessionStatus === "ACTIVE";
+  const isAwaitingJoin = sessionStatus === "AWAITING_JOIN";
+  // Client has joined → the join-anchored per-minute meter is running.
+  const isBillingLive = sessionStatus === "ACTIVE" && chat.status !== "ENDED";
+  // Out of balance → client is in the top-up hold; billing frozen, input locked.
+  const isGrace = sessionStatus === "GRACE";
 
   return (
     <motion.div
@@ -339,9 +348,75 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           </motion.div>
         )}
 
+        {/* Out-of-balance grace: client is topping up — psychic please hold. */}
+        {isGrace && (
+          <motion.div
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div
+              className="px-5 py-5 rounded-xl text-center relative overflow-hidden border"
+              style={{
+                backgroundColor: "rgba(251, 146, 60, 0.14)",
+                borderColor: "rgba(251, 146, 60, 0.45)",
+                boxShadow: `inset 0 2px 10px ${COLORS.dark}40`,
+              }}
+            >
+              <div className="flex flex-col items-center gap-2 relative z-10">
+                <motion.div
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <Icon
+                    icon={isToppingUp ? "solar:card-bold-duotone" : "solar:hourglass-line-duotone"}
+                    className="text-3xl"
+                    style={{ color: "#FB923C" }}
+                  />
+                </motion.div>
+                <span className="text-sm font-black uppercase tracking-wider" style={{ color: "#FB923C" }}>
+                  {isToppingUp ? "Client is topping up" : "Client is out of Stardust"}
+                </span>
+                <span className="text-[11px] font-bold text-white/70">
+                  {isToppingUp ? "Please hold — resuming after payment" : "Please hold — offering a top-up"}
+                </span>
+                {typeof graceSecondsLeft === "number" && graceSecondsLeft > 0 && !isToppingUp && (
+                  <span className="text-2xl font-black tabular-nums" style={{ color: "#FB923C" }}>
+                    0:{String(Math.max(0, graceSecondsLeft)).padStart(2, "0")}
+                  </span>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Session Time & Earnings — only once the client has joined (billing). */}
         {isBillingLive && (
           <>
+            {/* Minutes remaining (per-minute prepaid) */}
+            {typeof remainingMinutes === "number" && (
+              <motion.div
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.28 }}
+              >
+                <p
+                  className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
+                  style={{ color: COLORS.neutralGray }}
+                >
+                  Minutes Remaining
+                </p>
+                <div
+                  className="px-5 py-3 rounded-xl text-center border"
+                  style={{ backgroundColor: `${COLORS.primary}12`, borderColor: `${COLORS.primary}33` }}
+                >
+                  <span className="text-2xl font-black" style={{ color: COLORS.neutralWhite }}>
+                    {Math.max(0, remainingMinutes)} min
+                  </span>
+                </div>
+              </motion.div>
+            )}
+
             {/* Session Time Card */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
@@ -536,9 +611,9 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           </>
         )}
 
-        {/* Balance + controls — shown whether awaiting join or actively billing
-            (a psychic needs the client's balance and an End button either way). */}
-        {(isAwaitingJoin || isBillingLive) && (
+        {/* Balance + controls — shown whether awaiting join, billing, or in the
+            grace hold (a psychic needs the client's balance and an End button). */}
+        {(isAwaitingJoin || isBillingLive || isGrace) && (
           <>
             {/* Client Balance Display — total + free/paid split. Orange = free
                 welcome/gift credit, purple = purchased balance. */}
