@@ -60,6 +60,11 @@ export interface TransactionFilters {
   limit?: number;
   sort_by?: "created_at" | "amount" | "user_id";
   sort_order?: "asc" | "desc";
+  // ISO timestamps for the selectable period (real totals + filtered list).
+  date_from?: string;
+  date_to?: string;
+  // Pseudo-type filter, e.g. "adjustment" (admin gifts/adjustments).
+  category?: string;
 }
 
 // User balance info

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { transactionsApi } from "../api/transactionsApi";
+import { transactionsApi, type TransactionsSummary } from "../api/transactionsApi";
 import type {
   TransactionListResponse,
   TransactionFilters,
@@ -11,16 +11,21 @@ export const useTransactions = () => {
   const [transactions, setTransactions] = useState<TransactionListResponse | null>(
     null
   );
+  const [summary, setSummary] = useState<TransactionsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch all transactions across all users
+  // Fetch all transactions across all users + the REAL period totals in parallel.
   const fetchAllTransactions = useCallback(async (filters?: TransactionFilters) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await transactionsApi.getAllTransactions(filters);
+      const [data, sum] = await Promise.all([
+        transactionsApi.getAllTransactions(filters),
+        transactionsApi.getSummary(filters).catch(() => null),
+      ]);
       setTransactions(data);
+      if (sum) setSummary(sum);
       return data;
     } catch (err: any) {
       const errorMessage =
@@ -92,6 +97,7 @@ export const useTransactions = () => {
 
   return {
     transactions,
+    summary,
     loading,
     error,
     fetchAllTransactions,

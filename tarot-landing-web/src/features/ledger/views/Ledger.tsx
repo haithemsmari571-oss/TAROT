@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useTransactions } from "../hooks/useTransactions";
 import { TransactionType, TransactionStatus } from "../types/transaction.types";
 import type { Transaction } from "../types/transaction.types";
-import { paymentApi } from "../../payment/api/paymentApi";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -30,71 +29,76 @@ function useDebounce<T>(value: T, delay: number): T {
 const Ledger = () => {
   const {
     transactions: transactionsData,
+    summary,
     loading,
     error,
     fetchAllTransactions,
   } = useTransactions();
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TransactionType | "All">("All");
+  // typeFilter includes the pseudo-type "Adjustment" (admin gifts/adjustments).
+  const [typeFilter, setTypeFilter] = useState<TransactionType | "All" | "Adjustment">("All");
   const [statusFilter, setStatusFilter] = useState<TransactionStatus | "All">("All");
+  const [period, setPeriod] = useState<"today" | "7d" | "30d" | "month" | "all">("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [unitPriceCents, setUnitPriceCents] = useState(100);
 
-  useEffect(() => {
-    paymentApi.getUnitPrice().then((res) => setUnitPriceCents(res.unit_price_cents)).catch(() => {});
-  }, []);
+  // Compute the ISO date range for the selected period.
+  const dateRange = useMemo(() => {
+    if (period === "all") return { date_from: undefined, date_to: undefined };
+    const now = new Date();
+    const to = now.toISOString();
+    const start = new Date(now);
+    if (period === "today") start.setHours(0, 0, 0, 0);
+    else if (period === "7d") start.setDate(start.getDate() - 7);
+    else if (period === "30d") start.setDate(start.getDate() - 30);
+    else if (period === "month") { start.setDate(1); start.setHours(0, 0, 0, 0); }
+    return { date_from: start.toISOString(), date_to: to };
+  }, [period]);
 
   // Debounce search to avoid too many API calls
   const debouncedSearch = useDebounce(search, 500);
 
-  // Fetch transactions on component mount and when filters change
+  // Fetch transactions + real period totals when filters change
   useEffect(() => {
     const filters = {
       search: debouncedSearch || undefined,
-      transaction_type: typeFilter !== "All" ? typeFilter : undefined,
+      transaction_type:
+        typeFilter !== "All" && typeFilter !== "Adjustment"
+          ? (typeFilter as TransactionType)
+          : undefined,
+      category: typeFilter === "Adjustment" ? "adjustment" : undefined,
       status: statusFilter !== "All" ? statusFilter : undefined,
+      date_from: dateRange.date_from,
+      date_to: dateRange.date_to,
       page: currentPage,
       limit: 20,
     };
     fetchAllTransactions(filters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, typeFilter, statusFilter, currentPage]);
+  }, [debouncedSearch, typeFilter, statusFilter, period, currentPage]);
 
   // Reset filters
   const handleResetFilters = () => {
     setSearch("");
     setTypeFilter("All");
     setStatusFilter("All");
+    setPeriod("all");
     setCurrentPage(1);
   };
 
   // Check if any filters are active
   const hasActiveFilters =
-    search !== "" || typeFilter !== "All" || statusFilter !== "All";
+    search !== "" || typeFilter !== "All" || statusFilter !== "All" || period !== "all";
+
+  const periodLabel =
+    period === "today" ? "Today"
+      : period === "7d" ? "Last 7 days"
+      : period === "30d" ? "Last 30 days"
+      : period === "month" ? "This month"
+      : "All time";
 
   const transactions = transactionsData?.transactions || [];
-  const totalTransactions = transactionsData?.total || 0;
-
-  // Calculate statistics
-  const stats = useMemo(() => {
-    const completed = transactions.filter(
-      (t) => t.status === TransactionStatus.COMPLETED
-    );
-    const totalCredits = completed
-      .filter((t) => t.transaction_type === TransactionType.CREDIT)
-      .reduce((sum, t) => sum + t.amount, 0);
-    const totalDebits = completed
-      .filter((t) => t.transaction_type === TransactionType.DEBIT)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    return {
-      totalCredits,
-      totalDebits,
-      netFlow: totalCredits - totalDebits,
-      completedCount: completed.length,
-    };
-  }, [transactions]);
+  const totalTransactions = summary?.count ?? transactionsData?.total ?? 0;
 
   // Format currency (amount is in points; 1 point = £1) — exact shared format.
   const formatCurrency = (amount: number) => formatGbp(amount);
@@ -362,13 +366,13 @@ const Ledger = () => {
             </span>
           </div>
           <div className="text-3xl font-black" style={{ color: "#4ADE80" }}>
-            {formatCurrency(stats.totalCredits)}
+            {formatCurrency(summary?.total_credits ?? 0)}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
             style={{ color: COLORS.neutralGray }}
           >
-            Current Page
+            {periodLabel}
           </div>
         </div>
 
@@ -391,13 +395,13 @@ const Ledger = () => {
             </span>
           </div>
           <div className="text-3xl font-black" style={{ color: "#F87171" }}>
-            {formatCurrency(stats.totalDebits)}
+            {formatCurrency(summary?.total_debits ?? 0)}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
             style={{ color: COLORS.neutralGray }}
           >
-            Current Page
+            {periodLabel}
           </div>
         </div>
 
@@ -422,17 +426,17 @@ const Ledger = () => {
           <div
             className="text-3xl font-black"
             style={{
-              color: stats.netFlow >= 0 ? "#4ADE80" : "#F87171",
+              color: (summary?.net_flow ?? 0) >= 0 ? "#4ADE80" : "#F87171",
             }}
           >
-            {stats.netFlow >= 0 ? "+" : ""}
-            {formatCurrency(stats.netFlow)}
+            {(summary?.net_flow ?? 0) >= 0 ? "+" : ""}
+            {formatCurrency(summary?.net_flow ?? 0)}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
             style={{ color: COLORS.neutralGray }}
           >
-            Current Page
+            {periodLabel}
           </div>
         </div>
       </div>
@@ -449,7 +453,23 @@ const Ledger = () => {
             placeholder="Search by user, description, or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            iconLeft="solar:magnifer-bold-duotone"
+            iconLeft={<Icon icon="solar:magnifer-bold-duotone" />}
+          />
+        </div>
+
+        {/* Period Filter — drives the real totals + the list window */}
+        <div className="w-[180px]">
+          <PrimarySelect
+            label="Period"
+            value={period}
+            onChange={(value) => { setPeriod(value as any); setCurrentPage(1); }}
+            options={[
+              { value: "all", label: "All time" },
+              { value: "today", label: "Today" },
+              { value: "7d", label: "Last 7 days" },
+              { value: "30d", label: "Last 30 days" },
+              { value: "month", label: "This month" },
+            ]}
           />
         </div>
 
@@ -458,13 +478,14 @@ const Ledger = () => {
           <PrimarySelect
             label="Transaction Type"
             value={typeFilter}
-            onChange={(value) =>
-              setTypeFilter(value as TransactionType | "All")
-            }
+            onChange={(value) => { setTypeFilter(value as any); setCurrentPage(1); }}
             options={[
               { value: "All", label: "All Types" },
-              { value: TransactionType.CREDIT, label: "Credit" },
-              { value: TransactionType.DEBIT, label: "Debit" },
+              { value: TransactionType.CREDIT, label: "Credit (purchase)" },
+              { value: TransactionType.DEBIT, label: "Debit (spend)" },
+              { value: TransactionType.BONUS, label: "Bonus" },
+              { value: TransactionType.GIFT, label: "Gift" },
+              { value: "Adjustment", label: "Adjustment" },
               { value: TransactionType.REFUND, label: "Refund" },
               { value: TransactionType.REVERSAL, label: "Reversal" },
             ]}

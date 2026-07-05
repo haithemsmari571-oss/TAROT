@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
@@ -21,6 +23,7 @@ from app.schemas.transaction import (
 from app.services.transactions import (
     get_all_transactions,
     get_transaction_history,
+    get_transactions_summary,
 )
 
 router = APIRouter(
@@ -112,6 +115,9 @@ def get_all_transactions_admin(
     search: Optional[str] = Query(
         None, description="Search by username, email, or description"
     ),
+    date_from: Optional[datetime] = Query(None, description="Only rows at/after this time"),
+    date_to: Optional[datetime] = Query(None, description="Only rows at/before this time"),
+    category: Optional[str] = Query(None, description="Pseudo-type filter, e.g. 'adjustment'"),
     admin: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -125,6 +131,9 @@ def get_all_transactions_admin(
         search=search,
         page=page,
         limit=limit,
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
     )
 
     total_pages = (total + limit - 1) // limit
@@ -136,3 +145,31 @@ def get_all_transactions_admin(
         limit=limit,
         total_pages=total_pages,
     )
+
+
+@router.get("/transactions/summary")
+def get_transactions_summary_admin(
+    transaction_type: Optional[TransactionType] = Query(None),
+    status: Optional[TransactionStatus] = Query(None),
+    user_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    category: Optional[str] = Query(None),
+    admin: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """REAL ledger totals for the selected filters/period (all matching rows, not
+    just the current page): credits, debits, net, count, and per-type breakdown."""
+    bind_user_to_context(admin.id)
+    summary = get_transactions_summary(
+        db=db,
+        transaction_type=transaction_type,
+        status=status,
+        user_id=user_id,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
+    )
+    return JSONResponse(content=summary)

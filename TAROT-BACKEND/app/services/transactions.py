@@ -465,6 +465,124 @@ def get_transaction_history(
     return transactions, total
 
 
+# Transaction types that ADD to a client's balance (money in). DEBIT is the only
+# money-out type (client spend). Used for the ledger's credits/debits/net totals.
+CREDIT_DIRECTION_TYPES = (
+    TransactionType.CREDIT,
+    TransactionType.BONUS,
+    TransactionType.GIFT,
+    TransactionType.REFUND,
+)
+
+
+def _apply_transaction_filters(
+    query,
+    *,
+    transaction_type=None,
+    status=None,
+    user_id=None,
+    search=None,
+    date_from=None,
+    date_to=None,
+    category=None,
+):
+    """Shared filter application for the admin ledger list + summary, so the
+    displayed rows and the period totals always agree."""
+    from sqlalchemy import or_
+
+    if transaction_type:
+        query = query.filter(Transaction.transaction_type == transaction_type)
+    if status:
+        query = query.filter(Transaction.status == status)
+    if user_id:
+        query = query.filter(Transaction.user_id == user_id)
+    if date_from:
+        query = query.filter(Transaction.created_at >= date_from)
+    if date_to:
+        query = query.filter(Transaction.created_at <= date_to)
+    # "Adjustment" isn't a distinct DB type — admin gifts/adjustments are
+    # CREDIT/DEBIT rows; match them by their standardized descriptions.
+    if category == "adjustment":
+        query = query.filter(
+            or_(
+                Transaction.description.ilike("%adjustment%"),
+                Transaction.description.ilike("Admin gift%"),
+            )
+        )
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                User.username.ilike(search_term),
+                User.email.ilike(search_term),
+                Transaction.description.ilike(search_term),
+            )
+        )
+    return query
+
+
+def get_transactions_summary(
+    db: Session,
+    transaction_type: Optional[TransactionType] = None,
+    status: Optional[TransactionStatus] = None,
+    user_id: Optional[int] = None,
+    search: Optional[str] = None,
+    date_from=None,
+    date_to=None,
+    category: Optional[str] = None,
+) -> dict:
+    """
+    REAL period totals across ALL matching rows (not just the current page):
+    money in (credits), client spend (debits), net, count, and a per-type
+    breakdown. Powers the ledger's summary cards.
+    """
+    from sqlalchemy import func
+
+    base = db.query(Transaction).join(User, Transaction.user_id == User.id)
+    base = _apply_transaction_filters(
+        base,
+        transaction_type=transaction_type,
+        status=status,
+        user_id=user_id,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
+    )
+
+    rows = (
+        base.with_entities(
+            Transaction.transaction_type,
+            func.coalesce(func.sum(Transaction.amount), 0),
+            func.count(Transaction.id),
+        )
+        .group_by(Transaction.transaction_type)
+        .all()
+    )
+
+    by_type = {}
+    total_credits = 0.0
+    total_debits = 0.0
+    count = 0
+    for ttype, amount_sum, cnt in rows:
+        amt = round(float(amount_sum or 0), 2)
+        key = ttype.value if hasattr(ttype, "value") else str(ttype)
+        by_type[key] = {"amount": amt, "count": int(cnt)}
+        count += int(cnt)
+        if ttype in CREDIT_DIRECTION_TYPES:
+            total_credits += amt
+        elif ttype == TransactionType.DEBIT:
+            total_debits += amt
+
+    return {
+        "total_credits": round(total_credits, 2),
+        "total_debits": round(total_debits, 2),
+        "net_flow": round(total_credits - total_debits, 2),
+        "count": count,
+        "by_type": by_type,
+    }
+
+
 def get_all_transactions(
     db: Session,
     transaction_type: Optional[TransactionType] = None,
@@ -473,6 +591,9 @@ def get_all_transactions(
     search: Optional[str] = None,
     page: int = 1,
     limit: int = 50,
+    date_from=None,
+    date_to=None,
+    category: Optional[str] = None,
 ) -> Tuple[List[dict], int]:
     """
     Get paginated transaction history for all users (admin only).
@@ -490,29 +611,17 @@ def get_all_transactions(
     Returns:
         Tuple of (transactions_list_with_user_info, total_count)
     """
-    from sqlalchemy import or_
-
     query = db.query(Transaction).join(User, Transaction.user_id == User.id)
-
-    # Apply filters if provided
-    if transaction_type:
-        query = query.filter(Transaction.transaction_type == transaction_type)
-
-    if status:
-        query = query.filter(Transaction.status == status)
-
-    if user_id:
-        query = query.filter(Transaction.user_id == user_id)
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                User.username.ilike(search_term),
-                User.email.ilike(search_term),
-                Transaction.description.ilike(search_term),
-            )
-        )
+    query = _apply_transaction_filters(
+        query,
+        transaction_type=transaction_type,
+        status=status,
+        user_id=user_id,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
+    )
 
     # Get total count
     total = query.count()

@@ -6,6 +6,14 @@ import type {
   UserBalance,
 } from "../types/transaction.types";
 
+export interface TransactionsSummary {
+  total_credits: number;
+  total_debits: number;
+  net_flow: number;
+  count: number;
+  by_type: Record<string, { amount: number; count: number }>;
+}
+
 export const transactionsApi = {
   /**
    * Get transaction history for a specific user (admin endpoint)
@@ -49,6 +57,9 @@ export const transactionsApi = {
     if (filters?.search) params.append("search", filters.search);
     if (filters?.page) params.append("page", String(filters.page));
     if (filters?.limit) params.append("limit", String(filters.limit));
+    if (filters?.date_from) params.append("date_from", filters.date_from);
+    if (filters?.date_to) params.append("date_to", filters.date_to);
+    if (filters?.category) params.append("category", filters.category);
 
     const response = await axiosClient.get(
       `/admin/transactions/all?${params.toString()}`
@@ -61,6 +72,26 @@ export const transactionsApi = {
       limit: response.data.limit || 50,
       pages: response.data.total_pages || 1,
     };
+  },
+
+  /**
+   * REAL period totals for the current filters (all matching rows, not a page).
+   */
+  getSummary: async (filters?: TransactionFilters): Promise<TransactionsSummary> => {
+    const params = new URLSearchParams();
+    if (filters?.transaction_type)
+      params.append("transaction_type", filters.transaction_type);
+    if (filters?.status) params.append("status", filters.status);
+    if (filters?.user_id) params.append("user_id", String(filters.user_id));
+    if (filters?.search) params.append("search", filters.search);
+    if (filters?.date_from) params.append("date_from", filters.date_from);
+    if (filters?.date_to) params.append("date_to", filters.date_to);
+    if (filters?.category) params.append("category", filters.category);
+
+    const response = await axiosClient.get(
+      `/admin/transactions/summary?${params.toString()}`
+    );
+    return response.data;
   },
 
   /**
