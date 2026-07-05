@@ -153,6 +153,7 @@ const Sidebar = () => {
       label: "Management",
       items: [
         { label: "Users", path: "/admin/users", icon: "solar:users-group-rounded-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Clients", path: "/admin/clients", icon: "solar:folder-with-files-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
         { label: "Psychics", path: "/admin/psychics", icon: "solar:magic-stick-3-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
         { label: "Categories", path: "/admin/categories", icon: "solar:folder-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
       ],

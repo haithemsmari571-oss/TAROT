@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.enums.transaction_type import TransactionType
 from app.logging_config import get_logger
+from app.models.chat import Chat
 from app.models.client_note import ClientNote
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -200,6 +201,59 @@ def get_chat_spend_split(db: Session, chat_id: int) -> dict:
     }
 
 
+def get_client_sessions(db: Session, client_id: int, limit: int = 50) -> list:
+    """
+    A client's past readings, newest first. One row per billed chat (grouped by
+    related_chat_id from the per-minute DEBITs): the reader, the reading date,
+    minutes billed, and total client spend. Client spend only — psychics are
+    salaried, there is no cut. Powers the superadmin dossier's session history.
+    """
+    rows = (
+        db.query(
+            Transaction.related_chat_id.label("chat_id"),
+            func.coalesce(func.sum(Transaction.amount), 0).label("spend"),
+            func.count(Transaction.id).label("minutes"),
+            func.max(Transaction.created_at).label("last_at"),
+        )
+        .filter(
+            Transaction.user_id == client_id,
+            Transaction.transaction_type == TransactionType.DEBIT,
+            Transaction.related_chat_id.isnot(None),
+        )
+        .group_by(Transaction.related_chat_id)
+        .order_by(func.max(Transaction.created_at).desc())
+        .limit(limit)
+        .all()
+    )
+
+    chat_ids = [r.chat_id for r in rows]
+    chats = {}
+    if chat_ids:
+        chats = {c.id: c for c in db.query(Chat).filter(Chat.id.in_(chat_ids)).all()}
+
+    # Resolve reader (psychic) names in one pass.
+    psychic_ids = {c.psychic_id for c in chats.values() if c.psychic_id}
+    names = {}
+    if psychic_ids:
+        for u in db.query(User).filter(User.id.in_(psychic_ids)).all():
+            names[u.id] = u.username
+
+    out = []
+    for r in rows:
+        chat = chats.get(r.chat_id)
+        psychic_id = chat.psychic_id if chat else None
+        out.append(
+            {
+                "chat_id": r.chat_id,
+                "reader_name": names.get(psychic_id) or "A reader",
+                "spend": round(float(r.spend or 0), 2),
+                "minutes": int(r.minutes or 0),
+                "last_at": r.last_at.isoformat() if r.last_at else None,
+            }
+        )
+    return out
+
+
 def get_client_astro(client: User) -> dict:
     """Zodiac + life path derived from the client's DOB (reuses /oracle utils)."""
     dob = client.date_of_birth
@@ -259,6 +313,7 @@ def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
 
     stats = get_client_stats(db, client_id)
     astro = get_client_astro(client)
+    sessions = get_client_sessions(db, client_id)
 
     return {
         "client": {
@@ -268,5 +323,6 @@ def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
             **astro,
         },
         "stats": stats,
+        "sessions": sessions,
         "notes": notes_out,
     }

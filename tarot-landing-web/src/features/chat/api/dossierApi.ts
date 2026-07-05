@@ -23,6 +23,14 @@ export interface ClientDossierStats {
   is_returning: boolean;
 }
 
+export interface ClientDossierSession {
+  chat_id: number;
+  reader_name: string;
+  spend: number;
+  minutes: number;
+  last_at: string | null;
+}
+
 export interface ClientDossier {
   client: {
     id: number;
@@ -33,6 +41,8 @@ export interface ClientDossier {
     life_path: number | null;
   };
   stats: ClientDossierStats;
+  /** Past readings, newest first (superadmin dossier). Absent in older payloads. */
+  sessions?: ClientDossierSession[];
   notes: ClientDossierNote[];
 }
 

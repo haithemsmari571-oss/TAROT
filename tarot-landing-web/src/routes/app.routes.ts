@@ -9,6 +9,7 @@ import dashboardRoutes from "./dashboard.routes";
 import browseRoutes from "./browse.routes";
 import profileRoutes from "./profile.routes";
 import ledgerRoutes from "./ledger.routes";
+import clientsRoutes from "./clients.routes";
 import billingRoutes from "./billing.routes";
 import zodiacRoutes from "./zodiac.routes";
 import lifepathRoutes from "./lifepath.routes";
@@ -57,6 +58,7 @@ const routes: RouteConfig[] = [
 ...browseRoutes,
 ...profileRoutes,
 ...ledgerRoutes,
+...clientsRoutes,
 ...billingRoutes,
 ...zodiacRoutes,
 ...lifepathRoutes,
