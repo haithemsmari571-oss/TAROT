@@ -7,8 +7,9 @@ import type {
 
 export const earningsApi = {
   /**
-   * Get earnings for the current psychic user
-   * Fetches all transactions where the psychic earned money from chat sessions
+   * Client-spend records for the current psychic: the per-minute charges the
+   * psychic's clients paid across their readings. Client spend only — psychics
+   * are salaried, there is no reader cut.
    */
   getMyEarnings: async (
     filters?: EarningsFilters

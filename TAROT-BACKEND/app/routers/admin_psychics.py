@@ -52,8 +52,20 @@ def get_my_earnings_summary(
         .scalar()
     ) or 0
 
-    total_sessions = (
+    # One DEBIT row is charged per billed minute, so counting rows gives minutes
+    # read — NOT sessions. Sessions are distinct billed chats.
+    total_minutes = (
         db.query(func.count(Transaction.id))
+        .join(Chat, Transaction.related_chat_id == Chat.id)
+        .filter(
+            Transaction.transaction_type == TransactionType.DEBIT,
+            Chat.psychic_id == user.id,
+        )
+        .scalar()
+    ) or 0
+
+    total_sessions = (
+        db.query(func.count(func.distinct(Transaction.related_chat_id)))
         .join(Chat, Transaction.related_chat_id == Chat.id)
         .filter(
             Transaction.transaction_type == TransactionType.DEBIT,
@@ -72,10 +84,13 @@ def get_my_earnings_summary(
         .scalar()
     ) or 0
 
+    # Client-spend / activity report (GBP). Psychics are salaried — these are the
+    # CLIENT's spend across this reader's sessions, never the reader's earnings.
     return {
-        "totalEarnings": total_completed,
-        "pendingEarnings": total_pending,
-        "totalSessions": total_sessions,
+        "totalClientSpend": total_completed,
+        "pendingClientSpend": total_pending,
+        "minutesRead": total_minutes,
+        "sessions": total_sessions,
         "uniqueClients": unique_clients,
     }
 

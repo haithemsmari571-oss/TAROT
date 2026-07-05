@@ -48,10 +48,13 @@ export interface AdminDashboardStats {
   unitPriceCents: number;
 }
 
+// Client-spend / activity summary (GBP). Client spend only — psychics are
+// salaried, so there is no "earnings" or reader cut here.
 export interface EarningsSummary {
-  totalEarnings: number;
-  pendingEarnings: number;
-  totalSessions: number;
+  totalClientSpend: number;
+  pendingClientSpend: number;
+  minutesRead: number;
+  sessions: number;
   uniqueClients: number;
 }
 

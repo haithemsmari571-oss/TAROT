@@ -183,7 +183,7 @@ const Sidebar = () => {
     {
       label: "Performance",
       items: [
-        { label: "Earnings", path: "/admin/earnings", icon: "solar:dollar-bold-duotone", roles: [UserRole.PSYCHIC] },
+        { label: "Client Activity", path: "/admin/earnings", icon: "solar:chart-2-bold-duotone", roles: [UserRole.PSYCHIC] },
         { label: "Reviews", path: "/admin/my-reviews", icon: "solar:star-bold-duotone", roles: [UserRole.PSYCHIC] },
       ],
     },

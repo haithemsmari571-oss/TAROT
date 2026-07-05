@@ -1,13 +1,13 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { PrimaryTable, type Column } from "../../../components/Table/PrimaryTable";
 import PrimarySelect from "../../../components/CustomInputs/PrimarySelect";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatGbp } from "../../../lib/currency";
 import { useEarnings } from "../hooks/useEarnings";
 import { TransactionStatus } from "../../ledger/types/transaction.types";
 import type { Transaction } from "../../ledger/types/transaction.types";
-import { paymentApi } from "../../payment/api/paymentApi";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -39,7 +39,6 @@ const Earnings = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TransactionStatus | "All">("All");
   const [currentPage, setCurrentPage] = useState(1);
-  const [unitPriceCents, setUnitPriceCents] = useState(100);
 
   // Debounce search to avoid too many API calls
   const debouncedSearch = useDebounce(search, 500);
@@ -59,9 +58,6 @@ const Earnings = () => {
   // Fetch summary on mount
   useEffect(() => {
     fetchSummary();
-    paymentApi.getUnitPrice()
-      .then((data) => setUnitPriceCents(data.unit_price_cents))
-      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -76,28 +72,10 @@ const Earnings = () => {
   const hasActiveFilters = search !== "" || statusFilter !== "All";
 
   const earnings = earningsData?.transactions || [];
-  const totalEarnings = earningsData?.total || 0;
+  const totalEntries = earningsData?.total || 0;
 
-  // Calculate statistics from current page
-  const currentPageStats = useMemo(() => {
-    const completed = earnings.filter(
-      (t) => t.status === TransactionStatus.COMPLETED
-    );
-    const totalAmount = completed.reduce((sum, t) => sum + t.amount, 0);
-
-    return {
-      totalAmount,
-      completedCount: completed.length,
-    };
-  }, [earnings]);
-
-  // Format currency (points to GBP for display; 1 point = £1)
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: "GBP",
-    }).format((amount * unitPriceCents) / 100);
-  };
+  // 1 point = £1; use the one shared formatter (exact value, no truncation).
+  const formatCurrency = (amount: number) => formatGbp(amount || 0);
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -163,19 +141,19 @@ const Earnings = () => {
     },
     {
       key: "amount",
-      label: "Earned",
+      label: "Client Spent",
       sortable: true,
       render: (transaction) => {
         return (
           <div className="flex flex-col">
             <span
-              className="text-white font-bold text-sm"
-              style={{ color: "#4ADE80" }}
+              className="font-bold text-sm"
+              style={{ color: COLORS.starGold }}
             >
-              +{formatCurrency(transaction.amount)}
+              {formatCurrency(transaction.amount)}
             </span>
             <span className="text-[9px] text-white/20 uppercase font-black">
-              Points earned
+              Client spend
             </span>
           </div>
         );
@@ -238,20 +216,20 @@ const Earnings = () => {
             style={TYPOGRAPHY.headings.h2}
             className="uppercase italic tracking-tighter"
           >
-            My <span style={{ color: COLORS.primary }}>Earnings</span>
+            Client <span style={{ color: COLORS.primary }}>Activity</span>
           </h1>
           <p
             style={{ color: COLORS.neutralGray }}
             className="text-[10px] font-bold uppercase tracking-[0.5em] mt-2 opacity-50"
           >
-            Track Your Session Earnings
+            What Your Clients Spend Across Readings
           </p>
         </div>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards — client-spend / activity (salaried: no earnings) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        {/* Total Earnings */}
+        {/* Total Client Spend */}
         <div
           className="p-6 rounded-[24px] border border-white/5"
           style={{ backgroundColor: COLORS.surface }}
@@ -260,27 +238,56 @@ const Earnings = () => {
             <Icon
               icon="solar:wallet-money-bold-duotone"
               className="text-3xl"
+              style={{ color: COLORS.starGold }}
+            />
+            <span
+              className="text-[9px] font-black uppercase tracking-widest"
+              style={{ color: COLORS.neutralGray }}
+            >
+              Client Spend
+            </span>
+          </div>
+          <div className="text-3xl font-black" style={{ color: COLORS.starGold }}>
+            {summary ? formatCurrency(summary.totalClientSpend) : "£0"}
+          </div>
+          <div
+            className="text-[9px] font-black uppercase tracking-widest mt-1"
+            style={{ color: COLORS.neutralGray }}
+          >
+            All Time · GBP
+          </div>
+        </div>
+
+        {/* Minutes Read */}
+        <div
+          className="p-6 rounded-[24px] border border-white/5"
+          style={{ backgroundColor: COLORS.surface }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <Icon
+              icon="solar:clock-circle-bold-duotone"
+              className="text-3xl"
               style={{ color: COLORS.primary }}
             />
             <span
               className="text-[9px] font-black uppercase tracking-widest"
               style={{ color: COLORS.neutralGray }}
             >
-              Total Earned
+              Minutes
             </span>
           </div>
-          <div className="text-3xl font-black" style={{ color: "#4ADE80" }}>
-            {summary ? formatCurrency(summary.totalEarnings) : "£0.00"}
+          <div className="text-3xl font-black text-white">
+            {summary?.minutesRead || 0}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
             style={{ color: COLORS.neutralGray }}
           >
-            All Time
+            Minutes Read
           </div>
         </div>
 
-        {/* Total Sessions */}
+        {/* Sessions */}
         <div
           className="p-6 rounded-[24px] border border-white/5"
           style={{ backgroundColor: COLORS.surface }}
@@ -299,13 +306,13 @@ const Earnings = () => {
             </span>
           </div>
           <div className="text-3xl font-black text-white">
-            {summary?.totalSessions || 0}
+            {summary?.sessions || 0}
           </div>
           <div
             className="text-[9px] font-black uppercase tracking-widest mt-1"
             style={{ color: COLORS.neutralGray }}
           >
-            Total Sessions
+            Readings Given
           </div>
         </div>
 
@@ -337,35 +344,6 @@ const Earnings = () => {
             Unique Clients
           </div>
         </div>
-
-        {/* Pending Earnings */}
-        <div
-          className="p-6 rounded-[24px] border border-white/5"
-          style={{ backgroundColor: COLORS.surface }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <Icon
-              icon="solar:clock-circle-bold-duotone"
-              className="text-3xl"
-              style={{ color: "#F59E0B" }}
-            />
-            <span
-              className="text-[9px] font-black uppercase tracking-widest"
-              style={{ color: COLORS.neutralGray }}
-            >
-              Pending
-            </span>
-          </div>
-          <div className="text-3xl font-black" style={{ color: "#F59E0B" }}>
-            {summary ? formatCurrency(summary.pendingEarnings) : "£0.00"}
-          </div>
-          <div
-            className="text-[9px] font-black uppercase tracking-widest mt-1"
-            style={{ color: COLORS.neutralGray }}
-          >
-            Processing
-          </div>
-        </div>
       </div>
 
       {/* Controls Container */}
@@ -376,11 +354,11 @@ const Earnings = () => {
         {/* Search */}
         <div className="flex-1 min-w-[300px]">
           <PrimaryInput
-            label="Search Earnings"
+            label="Search Activity"
             placeholder="Search by client, description, or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            icon="solar:magnifer-bold-duotone"
+            iconLeft={<Icon icon="solar:magnifer-linear" />}
           />
         </div>
 
@@ -438,7 +416,7 @@ const Earnings = () => {
               style={{ color: COLORS.neutralGray }}
             >
               Page {currentPage} of {earningsData?.pages || 1} • Total:{" "}
-              {totalEarnings} earnings
+              {totalEntries} entries
             </div>
 
             <div
@@ -530,7 +508,7 @@ const Earnings = () => {
           data={earnings}
           isDataLoading={loading}
           searchEnabled={false}
-          title="Earnings Records"
+          title="Client Spend Records"
           pageSize={100}
         />
       </div>

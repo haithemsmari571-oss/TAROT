@@ -552,9 +552,9 @@ const PsychicView = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: "Total Earnings", val: formatAmount(earnings?.totalEarnings || 0, unitPriceCents), icon: "solar:dollar-bold-duotone", color: COLORS.primary },
-          { label: "Pending Earnings", val: formatAmount(earnings?.pendingEarnings || 0, unitPriceCents), icon: "solar:clock-circle-bold-duotone", color: COLORS.starGold },
-          { label: "Total Sessions", val: formatNumber(earnings?.totalSessions || 0), icon: "solar:chat-round-line-bold-duotone", color: COLORS.secondary },
+          { label: "Client Spend", val: formatAmount(earnings?.totalClientSpend || 0, unitPriceCents), icon: "solar:wallet-money-bold-duotone", color: COLORS.starGold },
+          { label: "Minutes Read", val: formatNumber(earnings?.minutesRead || 0), icon: "solar:clock-circle-bold-duotone", color: COLORS.primary },
+          { label: "Sessions", val: formatNumber(earnings?.sessions || 0), icon: "solar:chat-round-line-bold-duotone", color: COLORS.secondary },
           { label: "Unique Clients", val: formatNumber(earnings?.uniqueClients || 0), icon: "solar:users-group-rounded-bold-duotone", color: COLORS.primaryLight },
         ].map((stat) => (
           <motion.div

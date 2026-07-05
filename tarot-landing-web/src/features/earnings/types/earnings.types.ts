@@ -19,10 +19,12 @@ export interface EarningsListResponse {
   pages: number;
 }
 
-// Earnings summary
+// Client-spend / activity summary (GBP). Client spend only — psychics are
+// salaried, so there is no "earnings" or reader cut anywhere here.
 export interface EarningsSummary {
-  totalEarnings: number;
-  pendingEarnings: number;
-  totalSessions: number;
+  totalClientSpend: number;
+  pendingClientSpend: number;
+  minutesRead: number;
+  sessions: number;
   uniqueClients: number;
 }
