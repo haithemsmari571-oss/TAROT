@@ -13,8 +13,6 @@ from .admin_zodiac import router as admin_zodiac_router
 from .reviews import router as review_router
 from .settings import router as settings_router
 from .notifications import router as notification_router
-from .buy_options import router as buy_option_router
-from .admin_buy_options import router as admin_buy_option_router
 from .admin_transactions import router as admin_transaction_router
 from .admin_psychics import router as admin_psychic_router
 from .dashboard import router as dashboard_router
@@ -38,8 +36,6 @@ __all__ = [
     "review_router",
     "settings_router",
     "notification_router",
-    "buy_option_router",
-    "admin_buy_option_router",
     "admin_transaction_router",
     "admin_psychic_router",
     "dashboard_router",

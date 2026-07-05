@@ -22,8 +22,6 @@ from app.routers import (
     review_router,
     settings_router,
     notification_router,
-    buy_option_router,
-    admin_buy_option_router,
     admin_transaction_router,
     admin_psychic_router,
     dashboard_router,
@@ -168,18 +166,6 @@ app.include_router(
     notification_router,
     prefix="/api/notifications",
     tags=["Notifications"],
-)
-
-app.include_router(
-    buy_option_router,
-    prefix="/api/buy-options",
-    tags=["Buy Options"],
-)
-
-app.include_router(
-    admin_buy_option_router,
-    prefix="/api/admin",
-    tags=["Admin - Buy Options"],
 )
 
 app.include_router(
