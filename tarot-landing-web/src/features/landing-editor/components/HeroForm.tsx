@@ -28,20 +28,6 @@ export const HeroForm = ({ content, onChange }: HeroFormProps) => {
         />
       </FieldSet>
 
-      <FieldSet label="Name">
-        <input
-          value={content.name}
-          onChange={(e) => update("name", e.target.value)}
-          placeholder="Haithem Smari"
-          className="w-full px-4 py-3 rounded-xl outline-none transition-all"
-          style={{
-            backgroundColor: COLORS.surface,
-            border: `1px solid ${COLORS.neutralDarkGray}`,
-            color: COLORS.neutralWhite,
-          }}
-        />
-      </FieldSet>
-
       <div className="grid grid-cols-2 gap-6">
         <FieldSet label="Headline (before gradient)">
           <input
@@ -86,36 +72,6 @@ export const HeroForm = ({ content, onChange }: HeroFormProps) => {
           }}
         />
       </FieldSet>
-
-      <div className="grid grid-cols-2 gap-6">
-        <FieldSet label="Primary CTA">
-          <input
-            value={content.primaryCta}
-            onChange={(e) => update("primaryCta", e.target.value)}
-            placeholder="HIRE ME"
-            className="w-full px-4 py-3 rounded-xl outline-none transition-all"
-            style={{
-              backgroundColor: COLORS.surface,
-              border: `1px solid ${COLORS.neutralDarkGray}`,
-              color: COLORS.neutralWhite,
-            }}
-          />
-        </FieldSet>
-
-        <FieldSet label="Secondary CTA">
-          <input
-            value={content.secondaryCta}
-            onChange={(e) => update("secondaryCta", e.target.value)}
-            placeholder="THE ARCHIVE"
-            className="w-full px-4 py-3 rounded-xl outline-none transition-all"
-            style={{
-              backgroundColor: COLORS.surface,
-              border: `1px solid ${COLORS.neutralDarkGray}`,
-              color: COLORS.neutralWhite,
-            }}
-          />
-        </FieldSet>
-      </div>
     </div>
   );
 };

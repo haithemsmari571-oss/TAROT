@@ -59,7 +59,7 @@ export const PsychicsForm = ({ content, onChange }: PsychicsFormProps) => {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 gap-6">
         <FieldSet label="Heading">
           <input
             value={content.heading}
@@ -79,19 +79,9 @@ export const PsychicsForm = ({ content, onChange }: PsychicsFormProps) => {
             style={inputStyle}
           />
         </FieldSet>
-
-        <FieldSet label="Subtitle">
-          <input
-            value={content.subtitle}
-            onChange={(e) => update("subtitle", e.target.value)}
-            placeholder="Ready to feel clearer?"
-            className="w-full px-4 py-3 rounded-xl outline-none transition-all"
-            style={inputStyle}
-          />
-        </FieldSet>
       </div>
 
-      <FieldSet label="Subtitle Line 2">
+      <FieldSet label="Subtitle (line below the free-credit note)">
         <input
           value={content.subtitleLine2}
           onChange={(e) => update("subtitleLine2", e.target.value)}

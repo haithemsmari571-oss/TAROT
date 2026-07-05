@@ -15,7 +15,6 @@ import {
 const DEFAULT_PSYCHICS_SECTION = {
   heading: "Find the psychic reader who",
   headingHighlighted: "feels right",
-  subtitle: "Ready to feel clearer? Your Nebula spiritual advisor is waiting",
   subtitleLine2: "Find a spiritual advisor online for your needs",
   featuredPsychicIds: [] as number[],
 };

@@ -1,7 +1,7 @@
 export interface LandingContentSection {
   id: number;
   section: string;
-  content: HeroContent | ServiceContent | PackageContent | TestimonialContent | FooterContent | AboutContent | PsychicsContent;
+  content: HeroContent | TestimonialContent | FooterContent | AboutContent | PsychicsContent;
 }
 
 export interface SocialLink {
@@ -40,60 +40,15 @@ export interface AboutContent {
 export interface PsychicsContent {
   heading: string;
   headingHighlighted: string;
-  subtitle: string;
   subtitleLine2: string;
   featuredPsychicIds: number[];
 }
 
 export interface HeroContent {
   badge: string;
-  name: string;
   headline: string;
   headlineHighlighted: string;
   subtitle: string;
-  primaryCta: string;
-  secondaryCta: string;
-}
-
-export interface ServiceCard {
-  icon: string;
-  title: string;
-  desc: string;
-  energy: string;
-}
-
-export interface StatItem {
-  label: string;
-  value: string;
-}
-
-export interface ServiceContent {
-  badge: string;
-  heading: string;
-  headingHighlighted: string;
-  cards: ServiceCard[];
-  cta: string;
-  stats: StatItem[];
-}
-
-export interface PackageItem {
-  title: string;
-  price: string;
-  points: number;
-  tagline: string;
-  features: string[];
-  footer: string;
-  cta: string;
-  popular: boolean;
-  label: string;
-}
-
-export interface PackageContent {
-  badge: string;
-  heading: string;
-  headingHighlighted: string;
-  subheading: string;
-  packages: PackageItem[];
 }
 
 export interface TestimonialItem {

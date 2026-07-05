@@ -7,13 +7,10 @@ import axiosClient from "../../../lib/axiosClient";
 
 const DEFAULT_HERO = {
   badge: "Psychic & Intuitive Readings",
-  name: "Haithem Smari",
   headline: "Clarity, Guidance",
   headlineHighlighted: "& Divine Truth",
   subtitle:
     "Navigate life's complexity with insights you can trust. Reveal the deeper truths that matter most.",
-  primaryCta: "HIRE ME",
-  secondaryCta: "THE ARCHIVE",
 };
 
 const HeroSection = () => {
