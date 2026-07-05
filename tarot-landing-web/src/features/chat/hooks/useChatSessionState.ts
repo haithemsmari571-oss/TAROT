@@ -49,12 +49,17 @@ export function chatSessionReducer(
         psychic_id,
         elapsed_seconds = 0,
         estimated_cost = 0,
-        // Default AWAITING_JOIN: never assume billing has started at accept. The
-        // meter stays frozen until a session-time sync confirms the client joined.
-        session_status = 'AWAITING_JOIN',
+        session_status,
         credit_balance,
         paid_balance,
       } = action.payload;
+
+      // Resolve the billing sub-state. The COCKPIT (psychic/admin) defaults to
+      // AWAITING_JOIN so the meter stays frozen until a session-time sync
+      // confirms the client joined. The CLIENT is, by virtue of viewing the
+      // chat, already joined — never freeze their meter/input, so default ACTIVE.
+      const resolvedSessionStatus: 'ACTIVE' | 'AWAITING_JOIN' =
+        session_status ?? (state.userRole === 'CLIENT' ? 'ACTIVE' : 'AWAITING_JOIN');
 
       // Calculate remaining balance and time based on current session state
       const effectiveBalance = client_balance - estimated_cost;
@@ -63,7 +68,7 @@ export function chatSessionReducer(
         : null;
 
       // Only bill/warn while the client has actually joined.
-      const isBilling = session_status === 'ACTIVE';
+      const isBilling = resolvedSessionStatus === 'ACTIVE';
 
       // If balance already depleted (while billing), immediately set to ENDED.
       const actualStatus = (chat_status === 'ACTIVE' && isBilling && remainingSeconds !== null && remainingSeconds <= 0)
@@ -74,7 +79,7 @@ export function chatSessionReducer(
         ...state,
         chatId: chat_id,
         status: actualStatus,
-        sessionStatus: session_status,
+        sessionStatus: resolvedSessionStatus,
         psychicId: psychic_id,
         sessionStartedAt: session_started_at,
         psychicRatePerSecond: psychic_rate_per_second,
@@ -170,7 +175,9 @@ export function chatSessionReducer(
         session_status,
       } = action.payload;
 
-      const nextSessionStatus = session_status ?? state.sessionStatus;
+      const nextSessionStatus = session_status
+        ?? state.sessionStatus
+        ?? (state.userRole === 'CLIENT' ? 'ACTIVE' : 'AWAITING_JOIN');
       const isBilling = nextSessionStatus === 'ACTIVE';
       const rate = price_per_second ?? state.psychicRatePerSecond;
 
@@ -419,9 +426,10 @@ export function useChatSessionState({
             paid_balance: data.paid_balance,
             elapsed_seconds: data.elapsed_seconds,
             estimated_cost: data.estimated_cost,
-            // Honor the backend billing status so the meter stays frozen while
-            // AWAITING_JOIN instead of ticking from accept.
-            session_status: (data.session_status as any) ?? 'AWAITING_JOIN',
+            // Pass the backend billing status through (may be undefined). The
+            // reducer applies the role-aware default (CLIENT → ACTIVE, cockpit →
+            // AWAITING_JOIN) so the client is never frozen out of their own chat.
+            session_status: data.session_status as any,
           }
         });
       } catch (error) {
@@ -432,13 +440,16 @@ export function useChatSessionState({
     fetchInitialData();
   }, [chatId, currentChatStatus]);
 
-  // Periodic re-sync (cockpit / non-client) — re-anchors the local meter to the
-  // backend's JOIN-anchored session-time every few seconds. This is what fixes
-  // the accrual drift: the meter no longer starts at accept and floats ahead of
-  // the real billing. It also flips AWAITING_JOIN → ACTIVE the moment the client
-  // joins, so "Waiting for client — not billing" clears on the real join.
+  // Periodic re-sync — re-anchors the local meter to the backend's JOIN-anchored
+  // session-time every few seconds. This is what fixes the accrual drift: the
+  // meter no longer starts at accept and floats ahead of the real billing. On
+  // the cockpit it also flips AWAITING_JOIN → ACTIVE the moment the client joins
+  // ("Waiting for client — not billing" clears on the real join). On the CLIENT
+  // it keeps the live balance / TIME LEFT anchored to backend truth across
+  // sessions (fixes the stale "computed from full 15" balance) and feeds the
+  // header its live Stardust total.
   useEffect(() => {
-    if (!chatId || userRole === 'CLIENT') {
+    if (!chatId) {
       return;
     }
     // Only poll while the chat is live (accepted). Ended/requested chats don't
@@ -463,9 +474,17 @@ export function useChatSessionState({
             credit_balance: data.credit_balance,
             paid_balance: data.paid_balance,
             remaining_seconds: (data as any).remaining_seconds,
-            session_status: (data.session_status as any) ?? 'AWAITING_JOIN',
+            // Pass through; the reducer role-defaults when absent.
+            session_status: data.session_status as any,
           },
         });
+        // Keep the global header Stardust total live during a client's reading.
+        // getChatSessionTime.client_balance is the live credit+paid total.
+        if (userRole === 'CLIENT' && typeof data.client_balance === 'number') {
+          window.dispatchEvent(
+            new CustomEvent('stardust:balance', { detail: data.client_balance })
+          );
+        }
       } catch (error) {
         console.error('[useChatSessionState] Periodic session-time sync failed:', error);
       }

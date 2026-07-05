@@ -54,6 +54,33 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
     }
   }, [isAuthenticated, location.pathname]);
 
+  // Keep the header Stardust total live. The pathname-only refetch above goes
+  // stale during a reading (route doesn't change while the meter debits every
+  // second). ClientChat's session-time sync emits `stardust:balance` with the
+  // live credit+paid total; also re-fetch when the tab regains focus.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const onBalanceEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'number' && !Number.isNaN(detail)) {
+        setBalance(detail);
+      }
+    };
+    const onFocus = () => {
+      paymentApi.getMyBalance()
+        .then(data => setBalance(data.balance))
+        .catch(() => {});
+    };
+
+    window.addEventListener('stardust:balance', onBalanceEvent as EventListener);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('stardust:balance', onBalanceEvent as EventListener);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [isAuthenticated]);
+
   // Derive final prices from the live unit price once both have loaded
   const buyOptions = useMemo(
     () =>

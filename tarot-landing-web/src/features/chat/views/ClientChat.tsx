@@ -961,6 +961,15 @@ const ClientChat = () => {
   const psychicName =
     psychicDetails?.username || selectedChatData?.user_name || "Your reader";
 
+  // Human-friendly "reading time left" for the low-balance banner — derived from
+  // the live remaining seconds, not hardcoded, so it tracks the real countdown.
+  const readingTimeLeftLabel = (() => {
+    if (remaining == null) return "very little reading time";
+    if (remaining <= 60) return "less than a minute";
+    const mins = Math.round(remaining / 60);
+    return `about ${mins} minute${mins === 1 ? "" : "s"}`;
+  })();
+
   // --- MESSENGER-STYLE 2-COLUMN LAYOUT ---
   return (
     <div
@@ -1501,7 +1510,7 @@ const ClientChat = () => {
                       <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
                     </div>
                     <p className="flex-1 text-sm leading-snug text-white/80">
-                      You have about <span className="font-bold text-white">1 minute</span> of reading time left. Add Stardust to keep your reading going.
+                      You have <span className="font-bold text-white">{readingTimeLeftLabel}</span> of reading time left. Add Stardust to keep your reading going.
                     </p>
                     <button
                       onClick={handlePauseForTopUp}
