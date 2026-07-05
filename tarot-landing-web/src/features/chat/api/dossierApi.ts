@@ -67,6 +67,16 @@ export const saveClientNote = async (
   return res.data;
 };
 
+/** Edit an existing dossier note (title and/or body). */
+export const updateClientNote = async (
+  clientId: number,
+  noteId: number,
+  data: { note?: string; title?: string | null }
+): Promise<ClientDossierNote> => {
+  const res = await axiosClient.patch(`/clients/${clientId}/notes/${noteId}`, data);
+  return res.data;
+};
+
 /** End-screen spend summary for one reading (free/paid split + today/week). */
 export const getChatSpendSummary = async (
   chatId: number

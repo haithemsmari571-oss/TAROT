@@ -25,7 +25,15 @@ const fmtDate = (iso: string | null) =>
  * lifetime client spend, past reading count, and every past note from any
  * reader — so the client never has to repeat themselves. Client spend only.
  */
-export const ClientDossierCard = ({ dossier }: { dossier: ClientDossier | null }) => {
+export const ClientDossierCard = ({
+  dossier,
+  chatId,
+  onChanged,
+}: {
+  dossier: ClientDossier | null;
+  chatId?: number | null;
+  onChanged?: () => void;
+}) => {
   const [notesOpen, setNotesOpen] = useState(true);
   if (!dossier) return null;
 
@@ -104,7 +112,14 @@ export const ClientDossierCard = ({ dossier }: { dossier: ClientDossier | null }
             </span>
             <Icon icon={notesOpen ? "solar:alt-arrow-up-linear" : "solar:alt-arrow-down-linear"} />
           </button>
-          {notesOpen && <DossierNotes notes={notes} />}
+          {notesOpen && (
+            <DossierNotes
+              notes={notes}
+              clientId={client.id}
+              chatId={chatId}
+              onChanged={onChanged}
+            />
+          )}
         </div>
       </div>
     </motion.div>

@@ -63,6 +63,29 @@ def create_client_note(
     return entry
 
 
+def update_client_note(
+    db: Session,
+    note_id: int,
+    title: Optional[str] = None,
+    note: Optional[str] = None,
+) -> Optional[ClientNote]:
+    """Edit an existing dossier note's title and/or body. Returns None if missing."""
+    entry = db.query(ClientNote).filter(ClientNote.id == note_id).first()
+    if not entry:
+        return None
+    if note is not None:
+        entry.note = note.strip()
+        # If no explicit title was ever set, keep the auto-title in sync.
+        if title is None and not (entry.title or "").strip():
+            entry.title = _auto_title(entry.note)
+    if title is not None:
+        entry.title = (title.strip() or _auto_title(entry.note))[:200]
+    db.commit()
+    db.refresh(entry)
+    logger.info("client_note_updated", note_id=note_id)
+    return entry
+
+
 def _spend_since(db: Session, client_id: int, since: Optional[datetime]) -> float:
     """Sum of a client's DEBITs (their spend) since `since` (or all-time)."""
     q = db.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(

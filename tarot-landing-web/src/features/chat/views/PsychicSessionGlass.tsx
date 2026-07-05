@@ -94,17 +94,19 @@ const PsychicSessionGlass = () => {
   }, [isAdmin, selectedChat, activeView, toast]);
 
   // Load the client's platform-wide dossier (past notes, spend, astro) for the
-  // cockpit context card — every reader sees the client's full history.
-  useEffect(() => {
-    if (!clientId || activeView !== "chat") {
-      return;
-    }
-    let cancelled = false;
+  // cockpit context card — every reader sees the client's full history. Exposed
+  // as a callback so the notes UI can refresh it after an add/edit.
+  const loadDossier = useCallback(() => {
+    if (!clientId) return;
     getClientDossier(clientId)
-      .then((d) => { if (!cancelled) setDossier(d); })
-      .catch(() => { if (!cancelled) setDossier(null); });
-    return () => { cancelled = true; };
-  }, [clientId, activeView, selectedChat]);
+      .then((d) => setDossier(d))
+      .catch(() => setDossier(null));
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId || activeView !== "chat") return;
+    loadDossier();
+  }, [clientId, activeView, selectedChat, loadDossier]);
 
   // Chat session state management with WebSocket (for psychic role)
   const {
@@ -809,6 +811,42 @@ const PsychicSessionGlass = () => {
     }
   };
 
+  // Copy the ENTIRE conversation as plain text (all messages in order, with
+  // sender names + timestamps). Works during a session and after it ends.
+  const [isCopying, setIsCopying] = useState(false);
+  const handleCopyTranscript = useCallback(async () => {
+    if (!selectedChat) return;
+    setIsCopying(true);
+    try {
+      const resp = await getChatMessages(selectedChat, 1000, 0);
+      const msgs = (resp.messages || []).slice().sort(
+        (a: any, b: any) =>
+          new Date(a.created_at || a.timestamp || 0).getTime() -
+          new Date(b.created_at || b.timestamp || 0).getTime()
+      );
+      const psychicName = currentChat?.psychic_name || "Psychic";
+      const clientName = currentChat?.user_name || "Client";
+      const lines = msgs.map((m: any) => {
+        const ts = m.created_at || m.timestamp;
+        const t = ts ? new Date(ts).toLocaleString("en-GB") : "";
+        if (m.is_system) return `[${t}] — ${m.content}`;
+        const sender = m.sender_id === currentChat?.psychic_id ? psychicName : clientName;
+        return `[${t}] ${sender}: ${m.content}`;
+      });
+      const text =
+        `Transcript — ${clientName} & ${psychicName} (Chat #${selectedChat})\n` +
+        `${lines.length} message${lines.length === 1 ? "" : "s"}\n\n` +
+        lines.join("\n");
+      await navigator.clipboard.writeText(text);
+      toast.success(`Transcript copied (${lines.length} messages)`);
+    } catch (err) {
+      console.error("[PsychicSessionGlass] copy transcript failed:", err);
+      toast.error("Couldn't copy the transcript");
+    } finally {
+      setIsCopying(false);
+    }
+  }, [selectedChat, currentChat?.psychic_name, currentChat?.user_name, currentChat?.psychic_id, toast]);
+
   // Manual pause/resume (psychic/admin). Pause reuses the backend's existing
   // pause_session via /pause (no top-up flow); resume reuses /resume.
   const [isPausing, setIsPausing] = useState(false);
@@ -1278,30 +1316,50 @@ const PsychicSessionGlass = () => {
                     </div>
                   </div>
 
-                  {/* Connection indicator */}
-                  <div
-                    className="px-3 py-1.5 rounded-full border flex items-center gap-2"
-                    style={{
-                      backgroundColor: isConnected
-                        ? "rgba(74, 222, 128, 0.1)"
-                        : "rgba(248, 113, 113, 0.1)",
-                      borderColor: isConnected
-                        ? "rgba(74, 222, 128, 0.3)"
-                        : "rgba(248, 113, 113, 0.3)",
-                    }}
-                  >
-                    <div
-                      className="w-2 h-2 rounded-full"
+                  <div className="flex items-center gap-2">
+                    {/* Copy transcript — works during a session and after it ends */}
+                    <button
+                      onClick={handleCopyTranscript}
+                      disabled={isCopying}
+                      title="Copy the full conversation to your clipboard"
+                      className="px-3 py-1.5 rounded-full border flex items-center gap-1.5 transition-all hover:scale-105 disabled:opacity-50"
                       style={{
-                        backgroundColor: isConnected ? "#4ADE80" : "#F87171",
+                        backgroundColor: `${COLORS.primary}14`,
+                        borderColor: `${COLORS.primary}44`,
+                        color: COLORS.primary,
                       }}
-                    />
-                    <span
-                      className="text-[9px] font-black uppercase tracking-wider"
-                      style={{ color: isConnected ? "#4ADE80" : "#F87171" }}
                     >
-                      {isConnected ? "Connected" : "Disconnected"}
-                    </span>
+                      <Icon icon={isCopying ? "svg-spinners:3-dots-fade" : "solar:copy-bold-duotone"} className="text-sm" />
+                      <span className="text-[9px] font-black uppercase tracking-wider">
+                        {isCopying ? "Copying" : "Copy transcript"}
+                      </span>
+                    </button>
+
+                    {/* Connection indicator */}
+                    <div
+                      className="px-3 py-1.5 rounded-full border flex items-center gap-2"
+                      style={{
+                        backgroundColor: isConnected
+                          ? "rgba(74, 222, 128, 0.1)"
+                          : "rgba(248, 113, 113, 0.1)",
+                        borderColor: isConnected
+                          ? "rgba(74, 222, 128, 0.3)"
+                          : "rgba(248, 113, 113, 0.3)",
+                      }}
+                    >
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          backgroundColor: isConnected ? "#4ADE80" : "#F87171",
+                        }}
+                      />
+                      <span
+                        className="text-[9px] font-black uppercase tracking-wider"
+                        style={{ color: isConnected ? "#4ADE80" : "#F87171" }}
+                      >
+                        {isConnected ? "Connected" : "Disconnected"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -1635,8 +1693,9 @@ const PsychicSessionGlass = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                {/* Platform-wide client dossier — history, spend, astro, notes */}
-                <ClientDossierCard dossier={dossier} />
+                {/* Platform-wide client dossier — history, spend, astro, notes.
+                    Notes are add/edit-able here too (works for ended chats). */}
+                <ClientDossierCard dossier={dossier} chatId={selectedChat} onChanged={loadDossier} />
                 <GlassChatSidebar
                   chat={currentChat}
                   clientDob={clientDob}

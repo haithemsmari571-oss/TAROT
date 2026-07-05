@@ -16,12 +16,13 @@ from app.enums.role import Role
 from app.logging_config import get_logger
 from app.models.user import User
 from app.models.chat import Chat
-from app.schemas.client_dossier import ClientNoteCreate
+from app.schemas.client_dossier import ClientNoteCreate, ClientNoteUpdate
 from app.services.client_dossier import (
     create_client_note,
     get_chat_spend_split,
     get_client_dossier,
     get_client_stats,
+    update_client_note,
 )
 
 router = APIRouter()
@@ -121,4 +122,34 @@ def add_note(
             "created_at": entry.created_at.isoformat() if entry.created_at else None,
         },
         status_code=201,
+    )
+
+
+@router.patch("/clients/{client_id}/notes/{note_id}")
+def edit_note(
+    client_id: int,
+    note_id: int,
+    body: ClientNoteUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Edit an existing dossier note (title and/or body). Psychic/admin/superadmin."""
+    if user.role not in _ALLOWED:
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+
+    entry = update_client_note(db, note_id, title=body.title, note=body.note)
+    if entry is None:
+        return JSONResponse(content={"detail": "Note not found"}, status_code=404)
+
+    return JSONResponse(
+        content={
+            "id": entry.id,
+            "client_id": entry.client_id,
+            "author_psychic_id": entry.author_psychic_id,
+            "chat_id": entry.chat_id,
+            "title": entry.title,
+            "note": entry.note,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        },
+        status_code=200,
     )
