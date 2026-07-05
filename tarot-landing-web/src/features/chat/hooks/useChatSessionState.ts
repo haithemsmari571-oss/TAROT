@@ -70,19 +70,24 @@ export function chatSessionReducer(
       const resolvedSessionStatus: 'ACTIVE' | 'AWAITING_JOIN' =
         session_status ?? (state.userRole === 'CLIENT' ? 'ACTIVE' : 'AWAITING_JOIN');
 
-      // Calculate remaining balance and time based on current session state
-      const effectiveBalance = client_balance - estimated_cost;
-      const remainingSeconds = psychic_rate_per_second > 0
-        ? Math.max(0, effectiveBalance / psychic_rate_per_second)
-        : null;
-
-      // Only bill/warn while the client has actually joined.
       const isBilling = resolvedSessionStatus === 'ACTIVE';
+      const perMinute = rate_per_minute ?? (psychic_rate_per_second * 60);
+      const remainingFromPayload = (action.payload as any).remaining_seconds;
 
-      // If balance already depleted (while billing), immediately set to ENDED.
-      const actualStatus = (chat_status === 'ACTIVE' && isBilling && remainingSeconds !== null && remainingSeconds <= 0)
-        ? 'ENDED'
-        : chat_status;
+      // Per-minute model: `client_balance` is the LIVE remaining balance (already
+      // debited). NEVER subtract estimated_cost — that double-counts and, on a low
+      // balance (e.g. 0.8 left after a £5.20 minute), yields a negative "remaining"
+      // that falsely flips the session to ENDED. Remaining time = the current
+      // prepaid minute still running + every further minute they can afford.
+      const affordableFuture = perMinute > 0 ? Math.floor(client_balance / perMinute) : 0;
+      const prepaidRemaining = Math.max(0, (minutes_charged ?? 0) * 60 - elapsed_seconds);
+      const computedRemaining = prepaidRemaining + affordableFuture * 60;
+      const remainingSeconds = remainingFromPayload != null ? remainingFromPayload : computedRemaining;
+      const computedRemainingMinutes = affordableFuture + (prepaidRemaining > 0 ? 1 : 0);
+
+      // The CLIENT never decides the session ended from its own balance math — the
+      // backend drives grace → end and sends SESSION_ENDED. Just honor chat_status.
+      const actualStatus = chat_status;
 
       const newState = {
         ...state,
@@ -95,25 +100,27 @@ export function chatSessionReducer(
         clientBalance: client_balance,
         creditBalance: credit_balance ?? state.creditBalance,
         paidBalance: paid_balance ?? state.paidBalance,
-        ratePerMinute: rate_per_minute ?? (psychic_rate_per_second * 60),
+        ratePerMinute: perMinute,
         minutesCharged: minutes_charged ?? 0,
-        remainingMinutes: remaining_minutes ?? 0,
+        remainingMinutes: remaining_minutes ?? computedRemainingMinutes,
         elapsedSeconds: elapsed_seconds,
         estimatedCost: estimated_cost,
-        isInputEnabled: actualStatus === 'ACTIVE' && isBilling && (remainingSeconds === null || remainingSeconds > 0),
+        isInputEnabled: actualStatus === 'ACTIVE' && isBilling,
         isPaused: false,
-        remainingBalance: effectiveBalance,
+        remainingBalance: client_balance,
         remainingSeconds,
-        // Fresh session: no end reason yet. If it initializes already-depleted,
-        // that IS a balance end.
-        endReason: actualStatus === 'ENDED' ? 'insufficient_balance' : null,
+        endReason: null,
         // Balance warnings only make sense once the meter is actually running.
         showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
         showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
       };
 
-      console.log('[useChatSessionState] New state after INITIALIZE:', newState);
-      console.log('[useChatSessionState] Balance check - effectiveBalance:', effectiveBalance, 'remainingSeconds:', remainingSeconds, 'actualStatus:', actualStatus);
+      console.log('[meter-init] INITIALIZE', {
+        chat_id, chat_status, session_status: resolvedSessionStatus,
+        client_balance, estimated_cost, elapsed_seconds,
+        minutes_charged, perMinute, prepaidRemaining, affordableFuture,
+        remainingSeconds, remainingMinutes: newState.remainingMinutes, status: actualStatus,
+      });
       return newState;
     }
     
@@ -224,8 +231,13 @@ export function chatSessionReducer(
       }
 
       const isBilling = nextSessionStatus === 'ACTIVE';
+      // client_balance is LIVE (already debited) — don't subtract estimated_cost
+      // (double-count). Prefer the backend's remaining_seconds; else affordable.
       const remainingSeconds = remaining_seconds ?? (
-        rate > 0 ? Math.max(0, (client_balance - estimated_cost) / rate) : null
+        perMinute > 0
+          ? Math.max(0, (minutes_charged ?? state.minutesCharged) * 60 - elapsed_seconds)
+            + Math.floor(client_balance / perMinute) * 60
+          : null
       );
 
       return {
@@ -233,13 +245,13 @@ export function chatSessionReducer(
         ...commonMoney,
         sessionStatus: nextSessionStatus,
         elapsedSeconds: elapsed_seconds,
-        remainingBalance: client_balance - estimated_cost,
+        remainingBalance: client_balance,
         remainingSeconds,
         // Clear any lingering grace state on a healthy ACTIVE sync.
         graceSecondsLeft: 0,
         graceReaderName: null,
         isToppingUp: false,
-        isInputEnabled: state.status === 'ACTIVE' && isBilling && (remainingSeconds === null || remainingSeconds > 0),
+        isInputEnabled: state.status === 'ACTIVE' && isBilling,
         showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
         showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
         showEndingWarning: isBilling && remainingSeconds !== null && remainingSeconds > 10 && remainingSeconds <= 60,
@@ -459,11 +471,15 @@ export function useChatSessionState({
             paid_balance: data.paid_balance,
             elapsed_seconds: data.elapsed_seconds,
             estimated_cost: data.estimated_cost,
+            rate_per_minute: data.rate_per_minute,
+            remaining_minutes: data.remaining_minutes,
+            minutes_charged: data.minutes_charged,
+            remaining_seconds: data.remaining_seconds,
             // Pass the backend billing status through (may be undefined). The
             // reducer applies the role-aware default (CLIENT → ACTIVE, cockpit →
             // AWAITING_JOIN) so the client is never frozen out of their own chat.
             session_status: data.session_status as any,
-          }
+          } as any
         });
       } catch (error) {
         console.error('[useChatSessionState] Error fetching initial session data:', error);

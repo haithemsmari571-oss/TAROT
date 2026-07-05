@@ -383,24 +383,31 @@ const ClientChat = () => {
     });
   }, [dispatch, selectedChatData]);
 
-  const handleSessionStarted = useCallback(({ chatId, psychicRate, clientBalance, startedAt }: { chatId: number; psychicRate?: number; clientBalance?: number; startedAt?: string }) => {
-    console.log('[ClientChat] Session started:', { chatId, psychicRate, clientBalance, startedAt });
-    console.log('[ClientChat] selectedChatData:', selectedChatData);
+  const handleSessionStarted = useCallback((p: any) => {
+    console.log('[meter-init] SESSION_STARTED (WS) received:', p);
 
     const payload = {
-      chat_id: chatId,
+      chat_id: p.chatId,
       chat_status: 'ACTIVE' as const,
-      session_started_at: startedAt || new Date().toISOString(),
-      psychic_rate_per_second: psychicRate || 0,
-      client_balance: clientBalance || 0,
+      session_started_at: p.startedAt || new Date().toISOString(),
+      psychic_rate_per_second: p.psychicRate || 0,
+      client_balance: p.clientBalance || 0,
+      credit_balance: p.creditBalance,
+      paid_balance: p.paidBalance,
       psychic_id: selectedChatData?.psychic_id || 0,
+      // Carry the full session snapshot so the meter anchors correctly from the
+      // WS event alone (doesn't depend on a follow-up sync to un-freeze).
+      elapsed_seconds: p.elapsedSeconds ?? 0,
+      estimated_cost: p.estimatedCost ?? 0,
+      remaining_seconds: p.remainingSeconds,
+      remaining_minutes: p.remainingMinutes,
+      minutes_charged: p.minutesCharged,
+      rate_per_minute: p.ratePerMinute,
+      // session_started only fires once the client has joined → billing ACTIVE.
+      session_status: (p.sessionStatus as any) ?? 'ACTIVE',
     };
 
-    console.log('[ClientChat] Dispatching INITIALIZE with payload:', payload);
-    dispatch({
-      type: 'INITIALIZE',
-      payload
-    });
+    dispatch({ type: 'INITIALIZE', payload: payload as any });
   }, [dispatch, selectedChatData]);
 
   // Per-minute prepaid: a minute was charged upfront. Fold the fresh balance /
@@ -581,7 +588,18 @@ const ClientChat = () => {
 
   // Auto-disconnect WebSocket and show modal when timer reaches 0
   useEffect(() => {
+    console.log('[meter-end] end-effect check', {
+      status: sessionState.status,
+      sessionStatus: sessionState.sessionStatus,
+      remainingSeconds: sessionState.remainingSeconds,
+      elapsedSeconds: sessionState.elapsedSeconds,
+      clientBalance: sessionState.clientBalance,
+      estimatedCost: sessionState.estimatedCost,
+      endReason: sessionState.endReason,
+      handled: hasHandledSessionEnd.current,
+    });
     if (sessionState.status === 'ENDED' && sessionState.remainingSeconds === 0 && !hasHandledSessionEnd.current) {
+      console.log('[meter-end] SHOWING END MODAL — status ENDED & remaining 0. endReason:', sessionState.endReason);
       // Skip if session was never active (e.g., declined request)
       if (sessionState.elapsedSeconds === 0 && sessionState.estimatedCost === 0) {
         hasHandledSessionEnd.current = true;

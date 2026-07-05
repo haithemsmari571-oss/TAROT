@@ -32,6 +32,7 @@ export interface ChatSessionData {
   rate_per_minute?: number;
   remaining_minutes?: number;
   minutes_charged?: number;
+  remaining_seconds?: number;
 }
 
 // Periodic re-sync from getChatSessionTime — the join-anchored source of truth

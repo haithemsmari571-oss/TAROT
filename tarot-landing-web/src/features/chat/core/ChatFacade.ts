@@ -167,9 +167,19 @@ export class ChatFacade {
         console.log('[ChatFacade] Emitting SESSION_STARTED:', data);
         this.eventBus.emit(ChatEventType.SESSION_STARTED, {
           chatId: data.chat_id || this.chatId,
-          psychicRate: data.psychic_rate,
+          // Backend sends rate_per_second (not psychic_rate) — read both.
+          psychicRate: data.rate_per_second ?? data.psychic_rate,
           clientBalance: data.client_balance,
+          creditBalance: data.credit_balance,
+          paidBalance: data.paid_balance,
           startedAt: data.session_started_at || data.started_at,
+          elapsedSeconds: data.elapsed_seconds,
+          estimatedCost: data.estimated_cost,
+          remainingSeconds: data.remaining_seconds,
+          remainingMinutes: data.remaining_minutes,
+          minutesCharged: data.minutes_charged,
+          ratePerMinute: data.rate_per_minute,
+          sessionStatus: data.session_status,
         });
         break;
       
