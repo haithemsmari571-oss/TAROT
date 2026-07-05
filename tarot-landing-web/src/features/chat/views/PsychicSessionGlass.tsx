@@ -429,6 +429,11 @@ const PsychicSessionGlass = () => {
       psychic_rate_per_second: psychicRate || 0,
       client_balance: clientBalance || 0,
       psychic_id: currentChat?.psychic_id || 0,
+      // SESSION_STARTED fires at ACCEPT, before the client has joined. Do NOT
+      // start billing here — mark AWAITING_JOIN so the meter stays frozen. The
+      // periodic getChatSessionTime sync flips it to ACTIVE on the real join,
+      // keeping the cockpit meter anchored to actual (join-anchored) billing.
+      session_status: 'AWAITING_JOIN' as const,
     };
 
     console.log('[PsychicSessionGlass] Dispatching INITIALIZE with payload:', payload);
@@ -451,12 +456,16 @@ const PsychicSessionGlass = () => {
         console.log('[PsychicSessionGlass] Fetched session data:', sessionData);
 
         dispatch({
-          type: 'SYNC_WITH_SERVER',
+          type: 'SYNC',
           payload: {
             elapsed_seconds: sessionData.elapsed_seconds,
             estimated_cost: sessionData.estimated_cost,
             price_per_second: sessionData.price_per_second,
             client_balance: sessionData.client_balance,
+            credit_balance: sessionData.credit_balance,
+            paid_balance: sessionData.paid_balance,
+            remaining_seconds: (sessionData as any).remaining_seconds,
+            session_status: (sessionData.session_status as any) ?? 'AWAITING_JOIN',
           }
         });
       } catch (error) {
@@ -478,10 +487,21 @@ const PsychicSessionGlass = () => {
   // Handle session timer ticks from WebSocket
   const handleSessionTimerTick = useCallback((payload: { elapsedSeconds: number; estimatedCost: number; effectiveBalance: number; remainingSeconds: number }) => {
     console.log('[PsychicSessionGlass] Session timer tick:', payload);
-    console.log('[PsychicSessionGlass] Dispatching SYNC_TIMER with payload:', payload);
-    dispatch({ type: 'SYNC_TIMER', payload });
-    console.log('[PsychicSessionGlass] SYNC_TIMER dispatched');
-  }, [dispatch]);
+    // Backend no longer broadcasts ticks (the periodic getChatSessionTime sync
+    // in useChatSessionState is the re-anchor). If a tick ever arrives, fold it
+    // through the real SYNC action rather than the removed SYNC_TIMER no-op.
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: payload.elapsedSeconds,
+        estimated_cost: payload.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: sessionState.clientBalance ?? 0,
+        remaining_seconds: payload.remainingSeconds,
+        session_status: 'ACTIVE',
+      },
+    });
+  }, [dispatch, sessionState.psychicRatePerSecond, sessionState.clientBalance]);
 
   useChatEvents({
     facade,
@@ -1290,7 +1310,7 @@ const PsychicSessionGlass = () => {
                         The client needs to top up their balance to continue. This session will automatically end in 30 minutes if not resumed.
                       </p>
                       <div className="text-xs text-white/50 mb-3">
-                        <span className="font-semibold">Earnings so far:</span> £{(sessionState.estimatedCost || 0).toFixed(2)}
+                        <span className="font-semibold">Client spent so far:</span> £{(sessionState.estimatedCost || 0).toFixed(2)}
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -1541,6 +1561,9 @@ const PsychicSessionGlass = () => {
                   estimatedCost={sessionState.estimatedCost}
                   remainingSeconds={sessionState.remainingSeconds}
                   clientBalance={sessionState.clientBalance}
+                  creditBalance={sessionState.creditBalance}
+                  paidBalance={sessionState.paidBalance}
+                  sessionStatus={sessionState.sessionStatus}
                   showCriticalWarning={sessionState.showCriticalWarning}
                   showLowBalanceWarning={sessionState.showLowBalanceWarning}
                   onEndChat={handleEndChat}

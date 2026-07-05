@@ -10,6 +10,11 @@ interface GlassChatSidebarProps {
   estimatedCost: number;
   remainingSeconds?: number | null;
   clientBalance?: number | null;
+  creditBalance?: number | null;
+  paidBalance?: number | null;
+  // Billing sub-state: 'AWAITING_JOIN' = accepted, client not joined yet →
+  // frozen meter, "not billing". 'ACTIVE' = client joined, meter running.
+  sessionStatus?: 'ACTIVE' | 'AWAITING_JOIN' | null;
   showCriticalWarning?: boolean;
   showLowBalanceWarning?: boolean;
   onEndChat: () => void;
@@ -23,6 +28,9 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
   estimatedCost,
   remainingSeconds,
   clientBalance,
+  creditBalance,
+  paidBalance,
+  sessionStatus,
   showCriticalWarning = false,
   showLowBalanceWarning = false,
   onEndChat,
@@ -101,6 +109,13 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
   };
 
   const statusColor = getStatusColor(chat.status);
+
+  // The chat is live (accepted) but the client hasn't opened it yet → the meter
+  // is frozen and NOTHING is billed. Show a clear "not billing" state instead of
+  // a 00:00 counter that looks broken.
+  const isAwaitingJoin = chat.status === "ACTIVE" && sessionStatus === "AWAITING_JOIN";
+  // Client has joined → the join-anchored meter is running.
+  const isBillingLive = chat.status === "ACTIVE" && sessionStatus === "ACTIVE";
 
   return (
     <motion.div
@@ -281,8 +296,51 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           </div>
         </motion.div>
 
-        {/* Session Time & Earnings - Only for Active */}
-        {chat.status === "ACTIVE" && (
+        {/* Waiting for client — accepted but not joined yet → NOT billing. */}
+        {isAwaitingJoin && (
+          <motion.div
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div
+              className="px-5 py-5 rounded-xl text-center relative overflow-hidden border"
+              style={{
+                backgroundColor: "rgba(251, 146, 60, 0.12)",
+                borderColor: "rgba(251, 146, 60, 0.4)",
+                boxShadow: `inset 0 2px 10px ${COLORS.dark}40`,
+              }}
+            >
+              <div className="flex flex-col items-center gap-2 relative z-10">
+                <motion.div
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <Icon
+                    icon="solar:hourglass-line-duotone"
+                    className="text-3xl"
+                    style={{ color: "#FB923C" }}
+                  />
+                </motion.div>
+                <span
+                  className="text-sm font-black uppercase tracking-wider"
+                  style={{ color: "#FB923C" }}
+                >
+                  Waiting for client
+                </span>
+                <span
+                  className="text-[10px] font-bold uppercase tracking-[0.15em]"
+                  style={{ color: COLORS.neutralGray }}
+                >
+                  Not billing — timer starts on join
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Session Time & Earnings — only once the client has joined (billing). */}
+        {isBillingLive && (
           <>
             {/* Session Time Card */}
             <motion.div
@@ -475,7 +533,15 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
               </motion.div>
             )}
 
-            {/* Client Balance Display */}
+          </>
+        )}
+
+        {/* Balance + controls — shown whether awaiting join or actively billing
+            (a psychic needs the client's balance and an End button either way). */}
+        {(isAwaitingJoin || isBillingLive) && (
+          <>
+            {/* Client Balance Display — total + free/paid split. Orange = free
+                welcome/gift credit, purple = purchased balance. */}
             {clientBalance !== null && clientBalance !== undefined && (
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
@@ -508,6 +574,29 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                       {formatCurrency(clientBalance)}
                     </span>
                   </div>
+                  {/* Free vs paid split */}
+                  {(creditBalance != null || paidBalance != null) && (
+                    <div className="flex items-center justify-center gap-3 mt-2 relative z-10">
+                      <span
+                        className="text-[10px] font-bold tracking-wide"
+                        style={{ color: "#FB923C" }}
+                      >
+                        {formatCurrency(creditBalance ?? 0)} free
+                      </span>
+                      <span
+                        className="text-[10px] font-bold"
+                        style={{ color: COLORS.neutralDarkGray }}
+                      >
+                        ·
+                      </span>
+                      <span
+                        className="text-[10px] font-bold tracking-wide"
+                        style={{ color: COLORS.primary }}
+                      >
+                        {formatCurrency(paidBalance ?? 0)} paid
+                      </span>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}

@@ -16,6 +16,9 @@ const initialState: ChatSessionState = {
   psychicRatePerSecond: 0,
   estimatedCost: 0,
   clientBalance: null,
+  creditBalance: null,
+  paidBalance: null,
+  sessionStatus: null,
   remainingBalance: null,
   remainingSeconds: null,
   isInputEnabled: false,
@@ -37,47 +40,59 @@ export function chatSessionReducer(
     case 'INITIALIZE':
     case 'CHAT_ACCEPTED': {
       console.log('[useChatSessionState] INITIALIZE/CHAT_ACCEPTED action:', action);
-      const { 
-        chat_id, 
-        chat_status, 
-        session_started_at, 
-        psychic_rate_per_second, 
+      const {
+        chat_id,
+        chat_status,
+        session_started_at,
+        psychic_rate_per_second,
         client_balance,
         psychic_id,
         elapsed_seconds = 0,
-        estimated_cost = 0
+        estimated_cost = 0,
+        // Default AWAITING_JOIN: never assume billing has started at accept. The
+        // meter stays frozen until a session-time sync confirms the client joined.
+        session_status = 'AWAITING_JOIN',
+        credit_balance,
+        paid_balance,
       } = action.payload;
-      
+
       // Calculate remaining balance and time based on current session state
       const effectiveBalance = client_balance - estimated_cost;
-      const remainingSeconds = psychic_rate_per_second > 0 
+      const remainingSeconds = psychic_rate_per_second > 0
         ? Math.max(0, effectiveBalance / psychic_rate_per_second)
         : null;
-      
-      // If balance already depleted, immediately set to ENDED
-      const actualStatus = (chat_status === 'ACTIVE' && remainingSeconds !== null && remainingSeconds <= 0) 
-        ? 'ENDED' 
+
+      // Only bill/warn while the client has actually joined.
+      const isBilling = session_status === 'ACTIVE';
+
+      // If balance already depleted (while billing), immediately set to ENDED.
+      const actualStatus = (chat_status === 'ACTIVE' && isBilling && remainingSeconds !== null && remainingSeconds <= 0)
+        ? 'ENDED'
         : chat_status;
-      
+
       const newState = {
         ...state,
         chatId: chat_id,
         status: actualStatus,
+        sessionStatus: session_status,
         psychicId: psychic_id,
         sessionStartedAt: session_started_at,
         psychicRatePerSecond: psychic_rate_per_second,
         clientBalance: client_balance,
+        creditBalance: credit_balance ?? state.creditBalance,
+        paidBalance: paid_balance ?? state.paidBalance,
         elapsedSeconds: elapsed_seconds,
         estimatedCost: estimated_cost,
-        isInputEnabled: actualStatus === 'ACTIVE' && (remainingSeconds === null || remainingSeconds > 0),
+        isInputEnabled: actualStatus === 'ACTIVE' && isBilling && (remainingSeconds === null || remainingSeconds > 0),
         isPaused: false,
         remainingBalance: effectiveBalance,
         remainingSeconds,
         // Fresh session: no end reason yet. If it initializes already-depleted,
         // that IS a balance end.
         endReason: actualStatus === 'ENDED' ? 'insufficient_balance' : null,
-        showLowBalanceWarning: remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
-        showCriticalWarning: remainingSeconds !== null && remainingSeconds <= 60,
+        // Balance warnings only make sense once the meter is actually running.
+        showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
+        showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
       };
 
       console.log('[useChatSessionState] New state after INITIALIZE:', newState);
@@ -86,7 +101,9 @@ export function chatSessionReducer(
     }
     
     case 'TICK': {
-      if (state.isPaused || state.status !== 'ACTIVE') {
+      // Only accrue while the client has joined and billing is live. During
+      // AWAITING_JOIN the meter is frozen (the backend isn't charging yet).
+      if (state.isPaused || state.status !== 'ACTIVE' || state.sessionStatus !== 'ACTIVE') {
         return state;
       }
       
@@ -133,8 +150,77 @@ export function chatSessionReducer(
       };
     }
     
-    // SYNC_TIMER removed - no longer syncing with backend
-    
+    case 'SYNC': {
+      // Periodic re-anchor to the backend's join-anchored meter. This is the
+      // source of truth: it corrects any local TICK drift and, crucially, flips
+      // AWAITING_JOIN → ACTIVE the moment the client actually joins. Don't touch
+      // a session that's already paused/ended locally.
+      if (state.status === 'ENDED' || state.isPaused) {
+        return state;
+      }
+
+      const {
+        elapsed_seconds,
+        estimated_cost,
+        price_per_second,
+        client_balance,
+        credit_balance,
+        paid_balance,
+        remaining_seconds,
+        session_status,
+      } = action.payload;
+
+      const nextSessionStatus = session_status ?? state.sessionStatus;
+      const isBilling = nextSessionStatus === 'ACTIVE';
+      const rate = price_per_second ?? state.psychicRatePerSecond;
+
+      const effectiveBalance = client_balance - estimated_cost;
+      const remainingSeconds = remaining_seconds ?? (
+        rate > 0 ? Math.max(0, effectiveBalance / rate) : null
+      );
+
+      // If the backend meter has depleted while billing, end locally.
+      if (isBilling && remainingSeconds !== null && remainingSeconds <= 0) {
+        return {
+          ...state,
+          sessionStatus: nextSessionStatus,
+          psychicRatePerSecond: rate,
+          clientBalance: client_balance,
+          creditBalance: credit_balance ?? state.creditBalance,
+          paidBalance: paid_balance ?? state.paidBalance,
+          elapsedSeconds: elapsed_seconds,
+          estimatedCost: estimated_cost,
+          remainingBalance: 0,
+          remainingSeconds: 0,
+          status: 'ENDED',
+          endReason: 'insufficient_balance',
+          isInputEnabled: false,
+          showLowBalanceWarning: false,
+          showCriticalWarning: false,
+          showEndingWarning: false,
+          showCriticalEndingWarning: false,
+        };
+      }
+
+      return {
+        ...state,
+        sessionStatus: nextSessionStatus,
+        psychicRatePerSecond: rate,
+        clientBalance: client_balance,
+        creditBalance: credit_balance ?? state.creditBalance,
+        paidBalance: paid_balance ?? state.paidBalance,
+        elapsedSeconds: elapsed_seconds,
+        estimatedCost: estimated_cost,
+        remainingBalance: effectiveBalance,
+        remainingSeconds,
+        isInputEnabled: state.status === 'ACTIVE' && isBilling && (remainingSeconds === null || remainingSeconds > 0),
+        showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
+        showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
+        showEndingWarning: isBilling && remainingSeconds !== null && remainingSeconds > 10 && remainingSeconds <= 60,
+        showCriticalEndingWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 10,
+      };
+    }
+
     case 'CHAT_PAUSED': {
       return {
         ...state,
@@ -168,6 +254,7 @@ export function chatSessionReducer(
       return {
         ...state,
         status: 'ACTIVE',
+        sessionStatus: 'ACTIVE',
         isPaused: false,
         pauseReason: null,
         isInputEnabled: true,
@@ -235,13 +322,14 @@ export function chatSessionReducer(
         ? (newBalance - state.estimatedCost) / state.psychicRatePerSecond
         : null;
       
+      const isBilling = state.sessionStatus === 'ACTIVE';
       return {
         ...state,
         clientBalance: newBalance,
         remainingBalance: newBalance - state.estimatedCost,
         remainingSeconds,
-        showLowBalanceWarning: remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
-        showCriticalWarning: remainingSeconds !== null && remainingSeconds <= 60,
+        showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
+        showCriticalWarning: isBilling && remainingSeconds !== null && remainingSeconds <= 60,
       };
     }
     
@@ -327,8 +415,13 @@ export function useChatSessionState({
             chat_status: 'ACTIVE',
             psychic_rate_per_second: data.price_per_second,
             client_balance: data.client_balance,
+            credit_balance: data.credit_balance,
+            paid_balance: data.paid_balance,
             elapsed_seconds: data.elapsed_seconds,
             estimated_cost: data.estimated_cost,
+            // Honor the backend billing status so the meter stays frozen while
+            // AWAITING_JOIN instead of ticking from accept.
+            session_status: (data.session_status as any) ?? 'AWAITING_JOIN',
           }
         });
       } catch (error) {
@@ -338,6 +431,56 @@ export function useChatSessionState({
     
     fetchInitialData();
   }, [chatId, currentChatStatus]);
+
+  // Periodic re-sync (cockpit / non-client) — re-anchors the local meter to the
+  // backend's JOIN-anchored session-time every few seconds. This is what fixes
+  // the accrual drift: the meter no longer starts at accept and floats ahead of
+  // the real billing. It also flips AWAITING_JOIN → ACTIVE the moment the client
+  // joins, so "Waiting for client — not billing" clears on the real join.
+  useEffect(() => {
+    if (!chatId || userRole === 'CLIENT') {
+      return;
+    }
+    // Only poll while the chat is live (accepted). Ended/requested chats don't
+    // have a running session to re-anchor to.
+    if (currentChatStatus !== 'ACTIVE') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const sync = async () => {
+      try {
+        const data = await getChatSessionTime(chatId);
+        if (cancelled) return;
+        dispatch({
+          type: 'SYNC',
+          payload: {
+            elapsed_seconds: data.elapsed_seconds,
+            estimated_cost: data.estimated_cost,
+            price_per_second: data.price_per_second,
+            client_balance: data.client_balance,
+            credit_balance: data.credit_balance,
+            paid_balance: data.paid_balance,
+            remaining_seconds: (data as any).remaining_seconds,
+            session_status: (data.session_status as any) ?? 'AWAITING_JOIN',
+          },
+        });
+      } catch (error) {
+        console.error('[useChatSessionState] Periodic session-time sync failed:', error);
+      }
+    };
+
+    // Immediate sync on entry, then every 8s to keep drift bounded while the
+    // local 1s TICK animates the counter between syncs.
+    sync();
+    const interval = setInterval(sync, 8000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [chatId, currentChatStatus, userRole]);
 
   // Initialize paused state when loading a PAUSED chat
   useEffect(() => {
@@ -437,30 +580,31 @@ export function useChatSessionState({
     }
   }, [chatId]);
   
-  // Local 1-second countdown timer - runs independently
+  // Local 1-second countdown timer - runs independently between backend syncs.
   useEffect(() => {
-    // Only run timer if session is ACTIVE and not paused
-    if (state.status !== 'ACTIVE' || state.isPaused) {
+    // Only run the meter once the client has actually joined (sessionStatus
+    // ACTIVE). While AWAITING_JOIN the meter is frozen — nothing is billed yet.
+    if (state.status !== 'ACTIVE' || state.isPaused || state.sessionStatus !== 'ACTIVE') {
       return;
     }
-    
+
     // Stop timer if no remaining time
     if (state.remainingSeconds !== null && state.remainingSeconds <= 0) {
       console.log('[useChatSessionState] Timer stopped - no remaining time');
       return;
     }
-    
+
     console.log('[useChatSessionState] Starting countdown timer');
-    
+
     const timer = setInterval(() => {
       dispatch({ type: 'TICK' });
     }, 1000);
-    
+
     return () => {
       console.log('[useChatSessionState] Stopping countdown timer');
       clearInterval(timer);
     };
-  }, [state.status, state.isPaused]); // Removed remainingSeconds from deps to prevent recreation
+  }, [state.status, state.isPaused, state.sessionStatus]); // Re-anchors when billing flips on join
   
   // Track if we've already called onSessionEnded to prevent multiple calls
   const hasCalledOnSessionEnded = useRef(false);
