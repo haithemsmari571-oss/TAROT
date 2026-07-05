@@ -1,519 +1,191 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { PrimaryTable, type Column } from "../../../components/Table/PrimaryTable";
 import PrimarySelect from "../../../components/CustomInputs/PrimarySelect";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { formatGbp } from "../../../lib/currency";
-import { useEarnings } from "../hooks/useEarnings";
-import { TransactionStatus } from "../../ledger/types/transaction.types";
-import type { Transaction } from "../../ledger/types/transaction.types";
+import { earningsApi } from "../api/earningsApi";
+import type {
+  ActivityPeriod,
+  ReaderActivity,
+  ReaderActivityResponse,
+} from "../types/earnings.types";
 
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+const PERIOD_OPTIONS: { value: ActivityPeriod; label: string }[] = [
+  { value: "all", label: "All Time" },
+  { value: "today", label: "Today" },
+  { value: "7d", label: "Last 7 Days" },
+  { value: "30d", label: "Last 30 Days" },
+  { value: "month", label: "This Month" },
+];
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
-const Earnings = () => {
-  const {
-    earnings: earningsData,
-    summary,
-    loading,
-    error,
-    fetchEarnings,
-    fetchSummary,
-  } = useEarnings();
-
+// Superadmin Reader Activity — per-psychic workload monitor. For every salaried
+// reader: minutes read, sessions, unique clients, and the client spend their
+// readings generated (GBP), over a selectable period. Client spend only — there
+// is no reader cut or "earnings" anywhere.
+const ReaderActivity = () => {
+  const [period, setPeriod] = useState<ActivityPeriod>("all");
+  const [data, setData] = useState<ReaderActivityResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TransactionStatus | "All">("All");
-  const [currentPage, setCurrentPage] = useState(1);
 
-  // Debounce search to avoid too many API calls
-  const debouncedSearch = useDebounce(search, 500);
-
-  // Fetch earnings on component mount and when filters change
   useEffect(() => {
-    const filters = {
-      search: debouncedSearch || undefined,
-      status: statusFilter !== "All" ? statusFilter : undefined,
-      page: currentPage,
-      limit: 20,
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    earningsApi
+      .getReaderActivity(period)
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err?.response?.data?.detail || "Failed to load reader activity.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    fetchEarnings(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, currentPage]);
+  }, [period]);
 
-  // Fetch summary on mount
-  useEffect(() => {
-    fetchSummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const rows = useMemo(() => {
+    const list = data?.psychics || [];
+    const q = search.trim().toLowerCase();
+    return q ? list.filter((p) => p.username.toLowerCase().includes(q)) : list;
+  }, [data, search]);
 
-  // Reset filters
-  const handleResetFilters = () => {
-    setSearch("");
-    setStatusFilter("All");
-    setCurrentPage(1);
-  };
+  const totals = data?.totals;
 
-  // Check if any filters are active
-  const hasActiveFilters = search !== "" || statusFilter !== "All";
-
-  const earnings = earningsData?.transactions || [];
-  const totalEntries = earningsData?.total || 0;
-
-  // 1 point = £1; use the one shared formatter (exact value, no truncation).
-  const formatCurrency = (amount: number) => formatGbp(amount || 0);
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
-  };
-
-  // Get status display
-  const getStatusDisplay = (status: TransactionStatus) => {
-    switch (status) {
-      case TransactionStatus.COMPLETED:
-        return { color: "#4ADE80", label: "Completed" };
-      case TransactionStatus.PENDING:
-        return { color: COLORS.starGold, label: "Pending" };
-      case TransactionStatus.FAILED:
-        return { color: "#F87171", label: "Failed" };
-      case TransactionStatus.REVERSED:
-        return { color: COLORS.secondary, label: "Reversed" };
-    }
-  };
-
-  const columns: Column<Transaction>[] = [
+  const columns: Column<ReaderActivity>[] = [
     {
-      key: "id",
-      label: "Session ID",
+      key: "username",
+      label: "Reader",
       sortable: true,
-      render: (transaction) => (
-        <div className="flex flex-col">
-          <span
-            className="text-white font-bold leading-tight"
-            style={{ fontSize: TYPOGRAPHY.fontSize.sm }}
+      render: (p) => (
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 uppercase font-black text-sm"
+            style={{ backgroundColor: `${COLORS.primary}18`, color: COLORS.primary, border: `1px solid ${COLORS.primary}33` }}
           >
-            TXN-{transaction.id.toString().padStart(6, "0")}
-          </span>
-          <span
-            style={{ color: COLORS.neutralGray, fontSize: "9px" }}
-            className="uppercase font-black tracking-widest opacity-40"
-          >
-            {formatDate(transaction.created_at)}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: "user_id",
-      label: "Client",
-      render: (transaction) => (
-        <div className="flex flex-col">
-          <span className="text-white font-bold text-xs">
-            {transaction.username || `User #${transaction.user_id}`}
-          </span>
-          <span className="text-[9px] text-white/20 uppercase font-black">
-            {transaction.user_email || `ID: ${transaction.user_id}`}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: "amount",
-      label: "Client Spent",
-      sortable: true,
-      render: (transaction) => {
-        return (
+            {(p.username || "?").charAt(0)}
+          </div>
           <div className="flex flex-col">
-            <span
-              className="font-bold text-sm"
-              style={{ color: COLORS.starGold }}
-            >
-              {formatCurrency(transaction.amount)}
-            </span>
-            <span className="text-[9px] text-white/20 uppercase font-black">
-              Client spend
+            <span className="text-white font-bold text-sm leading-tight">{p.username}</span>
+            <span className="text-[9px] text-white/25 uppercase font-black tracking-widest">
+              {p.minutes_read > 0 ? "Active" : "No activity"}
             </span>
           </div>
-        );
-      },
+        </div>
+      ),
     },
     {
-      key: "status",
-      label: "Status",
-      render: (transaction) => {
-        const statusDisplay = getStatusDisplay(transaction.status);
-        return (
-          <div className="flex items-center gap-2">
-            <div
-              className="w-1 h-1 rounded-full animate-pulse"
-              style={{
-                backgroundColor: statusDisplay.color,
-                boxShadow: `0 0 6px ${statusDisplay.color}`,
-              }}
-            />
-            <span
-              style={{ color: statusDisplay.color, fontSize: "9px" }}
-              className="font-black uppercase tracking-widest"
-            >
-              {statusDisplay.label}
-            </span>
-          </div>
-        );
-      },
+      key: "minutes_read",
+      label: "Minutes",
+      sortable: true,
+      render: (p) => <span className="text-white font-black text-base tabular-nums">{p.minutes_read.toLocaleString()}</span>,
     },
     {
-      key: "description",
-      label: "Description",
-      render: (transaction) => (
-        <div className="max-w-xs">
-          <span className="text-white/60 text-[10px] font-medium truncate block">
-            {transaction.description}
-          </span>
-          {transaction.related_chat_id && (
-            <span className="text-[9px] text-white/20 uppercase font-black">
-              Chat #{transaction.related_chat_id}
-            </span>
-          )}
+      key: "sessions",
+      label: "Sessions",
+      sortable: true,
+      render: (p) => <span className="text-white/80 font-bold tabular-nums">{p.sessions.toLocaleString()}</span>,
+    },
+    {
+      key: "unique_clients",
+      label: "Clients",
+      sortable: true,
+      render: (p) => <span className="text-white/80 font-bold tabular-nums">{p.unique_clients.toLocaleString()}</span>,
+    },
+    {
+      key: "client_spend",
+      label: "Client Spend",
+      sortable: true,
+      render: (p) => (
+        <div className="flex flex-col">
+          <span className="font-black text-sm" style={{ color: COLORS.starGold }}>{formatGbp(p.client_spend)}</span>
+          <span className="text-[9px] text-white/20 uppercase font-black">Client spend</span>
         </div>
       ),
     },
   ];
 
+  const statCards = [
+    { label: "Readers", val: totals ? `${totals.active_count}/${totals.psychic_count}` : "0/0", sub: "Active / Total", icon: "solar:magic-stick-3-bold-duotone", color: COLORS.primary },
+    { label: "Minutes", val: totals ? totals.minutes_read.toLocaleString() : "0", sub: "Minutes Read", icon: "solar:clock-circle-bold-duotone", color: COLORS.secondary },
+    { label: "Sessions", val: totals ? totals.sessions.toLocaleString() : "0", sub: "Readings Given", icon: "solar:chat-round-line-bold-duotone", color: COLORS.primaryLight },
+    { label: "Client Spend", val: totals ? formatGbp(totals.client_spend) : "£0", sub: "GBP · Period", icon: "solar:wallet-money-bold-duotone", color: COLORS.starGold },
+  ];
+
   return (
-    <div
-      className="p-12 min-h-screen"
-      style={{
-        backgroundColor: COLORS.dark,
-        fontFamily: TYPOGRAPHY.fontFamily.body,
-      }}
-    >
+    <div className="p-12 min-h-screen" style={{ backgroundColor: COLORS.dark, fontFamily: TYPOGRAPHY.fontFamily.body }}>
       {/* Header */}
-      <div className="mb-12 flex justify-between items-end">
+      <div className="mb-8 flex flex-wrap justify-between items-end gap-6">
         <div>
-          <h1
-            style={TYPOGRAPHY.headings.h2}
-            className="uppercase italic tracking-tighter"
-          >
-            Client <span style={{ color: COLORS.primary }}>Activity</span>
+          <h1 style={TYPOGRAPHY.headings.h2} className="uppercase italic tracking-tighter">
+            Reader <span style={{ color: COLORS.primary }}>Activity</span>
           </h1>
-          <p
-            style={{ color: COLORS.neutralGray }}
-            className="text-[10px] font-bold uppercase tracking-[0.5em] mt-2 opacity-50"
-          >
-            What Your Clients Spend Across Readings
+          <p style={{ color: COLORS.neutralGray }} className="text-[10px] font-bold uppercase tracking-[0.5em] mt-2 opacity-50">
+            Per-Reader Workload · Client Spend
           </p>
         </div>
-      </div>
-
-      {/* Statistics Cards — client-spend / activity (salaried: no earnings) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        {/* Total Client Spend */}
-        <div
-          className="p-6 rounded-[24px] border border-white/5"
-          style={{ backgroundColor: COLORS.surface }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <Icon
-              icon="solar:wallet-money-bold-duotone"
-              className="text-3xl"
-              style={{ color: COLORS.starGold }}
-            />
-            <span
-              className="text-[9px] font-black uppercase tracking-widest"
-              style={{ color: COLORS.neutralGray }}
-            >
-              Client Spend
-            </span>
-          </div>
-          <div className="text-3xl font-black" style={{ color: COLORS.starGold }}>
-            {summary ? formatCurrency(summary.totalClientSpend) : "£0"}
-          </div>
-          <div
-            className="text-[9px] font-black uppercase tracking-widest mt-1"
-            style={{ color: COLORS.neutralGray }}
-          >
-            All Time · GBP
-          </div>
-        </div>
-
-        {/* Minutes Read */}
-        <div
-          className="p-6 rounded-[24px] border border-white/5"
-          style={{ backgroundColor: COLORS.surface }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <Icon
-              icon="solar:clock-circle-bold-duotone"
-              className="text-3xl"
-              style={{ color: COLORS.primary }}
-            />
-            <span
-              className="text-[9px] font-black uppercase tracking-widest"
-              style={{ color: COLORS.neutralGray }}
-            >
-              Minutes
-            </span>
-          </div>
-          <div className="text-3xl font-black text-white">
-            {summary?.minutesRead || 0}
-          </div>
-          <div
-            className="text-[9px] font-black uppercase tracking-widest mt-1"
-            style={{ color: COLORS.neutralGray }}
-          >
-            Minutes Read
-          </div>
-        </div>
-
-        {/* Sessions */}
-        <div
-          className="p-6 rounded-[24px] border border-white/5"
-          style={{ backgroundColor: COLORS.surface }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <Icon
-              icon="solar:chat-round-line-bold-duotone"
-              className="text-3xl"
-              style={{ color: COLORS.secondary }}
-            />
-            <span
-              className="text-[9px] font-black uppercase tracking-widest"
-              style={{ color: COLORS.neutralGray }}
-            >
-              Sessions
-            </span>
-          </div>
-          <div className="text-3xl font-black text-white">
-            {summary?.sessions || 0}
-          </div>
-          <div
-            className="text-[9px] font-black uppercase tracking-widest mt-1"
-            style={{ color: COLORS.neutralGray }}
-          >
-            Readings Given
-          </div>
-        </div>
-
-        {/* Unique Clients */}
-        <div
-          className="p-6 rounded-[24px] border border-white/5"
-          style={{ backgroundColor: COLORS.surface }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <Icon
-              icon="solar:users-group-rounded-bold-duotone"
-              className="text-3xl"
-              style={{ color: COLORS.starGold }}
-            />
-            <span
-              className="text-[9px] font-black uppercase tracking-widest"
-              style={{ color: COLORS.neutralGray }}
-            >
-              Clients
-            </span>
-          </div>
-          <div className="text-3xl font-black" style={{ color: COLORS.starGold }}>
-            {summary?.uniqueClients || 0}
-          </div>
-          <div
-            className="text-[9px] font-black uppercase tracking-widest mt-1"
-            style={{ color: COLORS.neutralGray }}
-          >
-            Unique Clients
-          </div>
+        <div className="w-[200px]">
+          <PrimarySelect
+            label="Period"
+            value={period}
+            onChange={(v) => setPeriod(v as ActivityPeriod)}
+            options={PERIOD_OPTIONS}
+          />
         </div>
       </div>
 
-      {/* Controls Container */}
-      <div
-        className="p-6 rounded-[32px] border border-white/5 mb-10 flex flex-wrap items-end gap-6 shadow-2xl backdrop-blur-sm"
-        style={{ backgroundColor: `${COLORS.surface}80` }}
-      >
-        {/* Search */}
-        <div className="flex-1 min-w-[300px]">
+      {/* Totals */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {statCards.map((s) => (
+          <div key={s.label} className="p-6 rounded-[24px] border border-white/5" style={{ backgroundColor: COLORS.surface }}>
+            <div className="flex items-center justify-between mb-4">
+              <Icon icon={s.icon} className="text-3xl" style={{ color: s.color }} />
+              <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: COLORS.neutralGray }}>{s.label}</span>
+            </div>
+            <div className="text-3xl font-black" style={{ color: s.color === COLORS.starGold ? COLORS.starGold : COLORS.neutralWhite }}>{s.val}</div>
+            <div className="text-[9px] font-black uppercase tracking-widest mt-1" style={{ color: COLORS.neutralGray }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="p-6 rounded-[32px] border border-white/5 mb-8 shadow-2xl backdrop-blur-sm" style={{ backgroundColor: `${COLORS.surface}80` }}>
+        <div className="max-w-md">
           <PrimaryInput
-            label="Search Activity"
-            placeholder="Search by client, description, or ID..."
+            label="Search Readers"
+            placeholder="Search by reader name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             iconLeft={<Icon icon="solar:magnifer-linear" />}
+            fullWidth
           />
         </div>
-
-        {/* Status Filter */}
-        <div className="w-[200px]">
-          <PrimarySelect
-            label="Status"
-            value={statusFilter}
-            onChange={(value) =>
-              setStatusFilter(value as TransactionStatus | "All")
-            }
-            options={[
-              { value: "All", label: "All Statuses" },
-              { value: TransactionStatus.COMPLETED, label: "Completed" },
-              { value: TransactionStatus.PENDING, label: "Pending" },
-              { value: TransactionStatus.FAILED, label: "Failed" },
-              { value: TransactionStatus.REVERSED, label: "Reversed" },
-            ]}
-          />
-        </div>
-
-        {/* Clear Filters Button */}
-        {hasActiveFilters && (
-          <button
-            onClick={handleResetFilters}
-            className="px-6 py-3 rounded-xl border transition-all duration-300 hover:scale-105 flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
-            style={{
-              backgroundColor: COLORS.surfaceAccent,
-              borderColor: COLORS.neutralDarkGray,
-              color: COLORS.primary,
-            }}
-          >
-            <Icon icon="solar:refresh-bold-duotone" className="text-lg" />
-            Clear Filters
-          </button>
-        )}
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div
-          className="p-4 rounded-2xl border border-red-500/20 mb-6"
-          style={{ backgroundColor: "rgba(248, 113, 113, 0.1)" }}
-        >
+        <div className="p-4 rounded-2xl border border-red-500/20 mb-6" style={{ backgroundColor: "rgba(248, 113, 113, 0.1)" }}>
           <p className="text-red-400 text-sm">{error}</p>
         </div>
       )}
 
-      {/* Table with server-side pagination info */}
-      <div className="space-y-4">
-        {!loading && earnings.length > 0 && (
-          <div className="flex items-center justify-between px-4">
-            <div
-              className="text-[9px] font-black uppercase tracking-[0.2em]"
-              style={{ color: COLORS.neutralGray }}
-            >
-              Page {currentPage} of {earningsData?.pages || 1} • Total:{" "}
-              {totalEntries} entries
-            </div>
-
-            <div
-              className="flex items-center gap-2 p-1.5 rounded-2xl border"
-              style={{
-                backgroundColor: COLORS.surface,
-                borderColor: COLORS.neutralDarkGray,
-              }}
-            >
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((prev) => prev - 1)}
-                className="p-2 rounded-xl transition-all hover:bg-white/5 disabled:opacity-20 disabled:cursor-not-allowed"
-              >
-                <Icon
-                  icon="solar:alt-arrow-left-linear"
-                  className="text-white text-lg"
-                />
-              </button>
-
-              <div className="flex items-center gap-1.5 px-2">
-                {Array.from({ length: earningsData?.pages || 1 }, (_, i) => i + 1)
-                  .filter((page) => {
-                    // Show first page, last page, current page, and pages around current
-                    const totalPages = earningsData?.pages || 1;
-                    return (
-                      page === 1 ||
-                      page === totalPages ||
-                      Math.abs(page - currentPage) <= 1
-                    );
-                  })
-                  .map((page, idx, arr) => {
-                    // Add ellipsis if there's a gap
-                    const prevPage = arr[idx - 1];
-                    const showEllipsis = prevPage && page - prevPage > 1;
-
-                    return (
-                      <React.Fragment key={page}>
-                        {showEllipsis && (
-                          <span
-                            className="px-2 text-[10px]"
-                            style={{ color: COLORS.neutralGray }}
-                          >
-                            ...
-                          </span>
-                        )}
-                        <button
-                          onClick={() => setCurrentPage(page)}
-                          className={`w-8 h-8 rounded-xl text-[10px] font-black transition-all border ${
-                            currentPage === page ? "shadow-lg" : "border-transparent"
-                          }`}
-                          style={{
-                            backgroundColor:
-                              currentPage === page ? COLORS.primary : "transparent",
-                            color:
-                              currentPage === page ? COLORS.dark : COLORS.neutralGray,
-                            borderColor:
-                              currentPage === page ? COLORS.primary : "transparent",
-                            boxShadow:
-                              currentPage === page
-                                ? `0 0 15px ${COLORS.primary}40`
-                                : "none",
-                          }}
-                        >
-                          {page}
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-              </div>
-
-              <button
-                disabled={currentPage === (earningsData?.pages || 1)}
-                onClick={() => setCurrentPage((prev) => prev + 1)}
-                className="p-2 rounded-xl transition-all hover:bg-white/5 disabled:opacity-20 disabled:cursor-not-allowed"
-              >
-                <Icon
-                  icon="solar:alt-arrow-right-linear"
-                  className="text-white text-lg"
-                />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Table - pageSize set to high number to show all items from current server page */}
-        <PrimaryTable
-          columns={columns}
-          data={earnings}
-          isDataLoading={loading}
-          searchEnabled={false}
-          title="Client Spend Records"
-          pageSize={100}
-        />
-      </div>
+      <PrimaryTable
+        columns={columns}
+        data={rows}
+        isDataLoading={loading}
+        searchEnabled={false}
+        title="Reader Activity"
+        pageSize={100}
+      />
     </div>
   );
 };
 
-export default Earnings;
+export default ReaderActivity;

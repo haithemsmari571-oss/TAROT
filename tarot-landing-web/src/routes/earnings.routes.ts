@@ -4,11 +4,11 @@ import type { RouteConfig } from "./app.routes";
 
 const earningsRoutes: RouteConfig[] = [
   {
-    path: "/admin/earnings",
-    name: "Earnings Page",
+    path: "/admin/reader-activity",
+    name: "Reader Activity",
     component: EarningsPage,
     layout: "private",
-    allowedRoles: [UserRole.PSYCHIC],
+    allowedRoles: [UserRole.SUPERADMIN],
   },
 ];
 

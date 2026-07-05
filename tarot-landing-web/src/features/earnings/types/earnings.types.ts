@@ -1,30 +1,28 @@
-import type { Transaction, TransactionStatus } from "../../ledger/types/transaction.types";
+// Per-psychic Reader Activity (SUPERADMIN). Client spend only — psychics are
+// salaried, there is no reader cut. Powers the superadmin workload monitor.
 
-// Earnings filters
-export interface EarningsFilters {
-  status?: TransactionStatus;
-  search?: string;
-  page?: number;
-  limit?: number;
-  start_date?: string;
-  end_date?: string;
-}
+export type ActivityPeriod = "all" | "today" | "7d" | "30d" | "month";
 
-// Paginated earnings response
-export interface EarningsListResponse {
-  transactions: Transaction[];
-  total: number;
-  page: number;
-  limit: number;
-  pages: number;
-}
-
-// Client-spend / activity summary (GBP). Client spend only — psychics are
-// salaried, so there is no "earnings" or reader cut anywhere here.
-export interface EarningsSummary {
-  totalClientSpend: number;
-  pendingClientSpend: number;
-  minutesRead: number;
+export interface ReaderActivity {
+  psychic_id: number;
+  username: string;
+  minutes_read: number;
   sessions: number;
-  uniqueClients: number;
+  unique_clients: number;
+  client_spend: number; // GBP
+}
+
+export interface ReaderActivityTotals {
+  psychic_count: number;
+  active_count: number;
+  minutes_read: number;
+  sessions: number;
+  unique_clients: number;
+  client_spend: number;
+}
+
+export interface ReaderActivityResponse {
+  period: ActivityPeriod;
+  psychics: ReaderActivity[];
+  totals: ReaderActivityTotals;
 }
