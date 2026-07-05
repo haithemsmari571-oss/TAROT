@@ -24,18 +24,30 @@ from app.utils.zodiac_calculator import get_zodiac_sign_from_date
 logger = get_logger(__name__)
 
 
+def _auto_title(note: str) -> str:
+    """Derive a short title from the first ~6 words of the body."""
+    words = (note or "").strip().split()
+    title = " ".join(words[:6])
+    if len(words) > 6:
+        title += "…"
+    return title or "Note"
+
+
 def create_client_note(
     db: Session,
     client_id: int,
     author_psychic_id: Optional[int],
     chat_id: Optional[int],
     note: str,
+    title: Optional[str] = None,
 ) -> ClientNote:
     """Save a dossier note against the CLIENT's profile (platform-wide)."""
+    clean_title = (title or "").strip() or _auto_title(note)
     entry = ClientNote(
         client_id=client_id,
         author_psychic_id=author_psychic_id,
         chat_id=chat_id,
+        title=clean_title[:200],
         note=note.strip(),
     )
     db.add(entry)
@@ -211,6 +223,8 @@ def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
     notes_out = [
         {
             "id": n.id,
+            # Legacy notes have no stored title — auto-title from the body.
+            "title": (n.title or "").strip() or _auto_title(n.note),
             "note": n.note,
             "chat_id": n.chat_id,
             "author_psychic_id": n.author_psychic_id,

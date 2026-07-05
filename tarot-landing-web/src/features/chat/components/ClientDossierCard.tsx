@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 import { COLORS } from "../../../theme";
 import { ClientDossier } from "../api/dossierApi";
 import { formatGbp } from "../../../lib/currency";
+import { DossierNotes } from "./DossierNotes";
 
 // Zodiac glyphs for a quick, warm visual cue.
 const ZODIAC_ICON: Record<string, string> = {
@@ -103,30 +104,7 @@ export const ClientDossierCard = ({ dossier }: { dossier: ClientDossier | null }
             </span>
             <Icon icon={notesOpen ? "solar:alt-arrow-up-linear" : "solar:alt-arrow-down-linear"} />
           </button>
-          {notesOpen && (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {notes.length === 0 ? (
-                <p className="text-[11px] text-white/35 italic py-2">
-                  No past notes yet — anything you save at the end of this reading appears here next time.
-                </p>
-              ) : (
-                notes.map((n) => (
-                  <div
-                    key={n.id}
-                    className="rounded-xl border p-3"
-                    style={{ backgroundColor: `${COLORS.neutralWhite}05`, borderColor: `${COLORS.neutralWhite}12` }}
-                  >
-                    <p className="text-[12px] text-white/85 leading-snug whitespace-pre-wrap">{n.note}</p>
-                    <div className="flex items-center gap-1.5 mt-1.5 text-[9px] text-white/35">
-                      <Icon icon="solar:user-circle-linear" />
-                      <span>{n.author_name}</span>
-                      {n.created_at && <span>· {fmtDate(n.created_at)}</span>}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+          {notesOpen && <DossierNotes notes={notes} />}
         </div>
       </div>
     </motion.div>

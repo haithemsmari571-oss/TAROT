@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -27,6 +27,9 @@ class ClientNote(Base):
     )
     # The reading it came from (optional — a note may be added outside a session).
     chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"), nullable=True)
+    # Short title for the file-card view (nullable — legacy notes auto-title from
+    # the first words of the body on the client).
+    title: Mapped[str] = mapped_column(String(200), nullable=True)
     note: Mapped[str] = mapped_column(Text, nullable=False)
 
     client: Mapped["User"] = relationship("User", foreign_keys=[client_id])

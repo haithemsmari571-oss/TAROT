@@ -106,6 +106,7 @@ def add_note(
         author_psychic_id=user.id,
         chat_id=body.chat_id,
         note=body.note,
+        title=body.title,
     )
 
     return JSONResponse(
@@ -114,6 +115,7 @@ def add_note(
             "client_id": entry.client_id,
             "author_psychic_id": entry.author_psychic_id,
             "chat_id": entry.chat_id,
+            "title": entry.title,
             "note": entry.note,
             "author_name": user.username,
             "created_at": entry.created_at.isoformat() if entry.created_at else None,

@@ -6,6 +6,7 @@ import axiosClient from "@/lib/axiosClient";
 
 export interface ClientDossierNote {
   id: number;
+  title?: string | null;
   note: string;
   chat_id: number | null;
   author_psychic_id: number | null;
@@ -60,7 +61,7 @@ export const getClientDossier = async (
 /** Save a dossier note against the client's profile (follows them forever). */
 export const saveClientNote = async (
   clientId: number,
-  data: { note: string; chat_id?: number | null }
+  data: { note: string; title?: string | null; chat_id?: number | null }
 ): Promise<ClientDossierNote> => {
   const res = await axiosClient.post(`/clients/${clientId}/notes`, data);
   return res.data;

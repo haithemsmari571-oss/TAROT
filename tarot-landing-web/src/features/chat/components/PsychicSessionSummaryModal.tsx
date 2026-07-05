@@ -42,6 +42,7 @@ export const PsychicSessionSummaryModal = ({
   duration,
 }: Props) => {
   const [summary, setSummary] = useState<ChatSpendSummary | null>(null);
+  const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -50,6 +51,7 @@ export const PsychicSessionSummaryModal = ({
   useEffect(() => {
     if (!isOpen || !chatId) return;
     setSummary(null);
+    setTitle("");
     setNote("");
     setSaved(false);
     setError(null);
@@ -79,7 +81,11 @@ export const PsychicSessionSummaryModal = ({
     setSaving(true);
     setError(null);
     try {
-      await saveClientNote(effectiveClientId, { note: note.trim(), chat_id: chatId ?? undefined });
+      await saveClientNote(effectiveClientId, {
+        note: note.trim(),
+        title: title.trim() || undefined,
+        chat_id: chatId ?? undefined,
+      });
       setSaved(true);
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Couldn't save the note. Please try again.");
@@ -177,6 +183,14 @@ export const PsychicSessionSummaryModal = ({
               <label className="text-[11px] font-black uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: COLORS.starGold }}>
                 <Icon icon="solar:notes-bold-duotone" /> Dossier note (saved to client profile)
               </label>
+              <input
+                value={title}
+                onChange={(e) => { setTitle(e.target.value); setSaved(false); }}
+                maxLength={200}
+                placeholder="Title (e.g. “Career change & ex situation”)"
+                className="w-full rounded-2xl px-3 py-2.5 mb-2 text-sm font-semibold text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all"
+                style={{ backgroundColor: `${COLORS.neutralWhite}08`, border: `1px solid ${COLORS.neutralWhite}18` }}
+              />
               <textarea
                 value={note}
                 onChange={(e) => { setNote(e.target.value); setSaved(false); }}
@@ -185,6 +199,7 @@ export const PsychicSessionSummaryModal = ({
                 className="w-full rounded-2xl p-3 text-sm text-white placeholder:text-white/30 resize-none focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all"
                 style={{ backgroundColor: `${COLORS.neutralWhite}08`, border: `1px solid ${COLORS.neutralWhite}18` }}
               />
+              <p className="text-[10px] text-white/30 mt-1">Untitled notes auto-title from the first few words.</p>
               <p className="text-[10px] text-white/35 mt-1.5">
                 Follows {clientName || "the client"} into every future reading — they never repeat themselves.
               </p>
