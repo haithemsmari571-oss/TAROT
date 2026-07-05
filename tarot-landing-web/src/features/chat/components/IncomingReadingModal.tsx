@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@iconify/react";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
@@ -36,6 +37,7 @@ export default function IncomingReadingModal() {
   const { onNotification } = useNotifications();
   const { open: openTopUp } = useTopUp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [incoming, setIncoming] = useState<Incoming | null>(null);
   const [joining, setJoining] = useState(false);
@@ -228,6 +230,11 @@ export default function IncomingReadingModal() {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await joinChat(id);
+        // Billing is now anchored + minute 1 charged. Refresh the chats query so
+        // ClientChat sees the chat as ACTIVE and initialises its session meter —
+        // otherwise the client's meter can sit frozen at 0:00 (stale status →
+        // the session-time init/sync never runs) and the reading looks stuck.
+        queryClient.invalidateQueries({ queryKey: ["chats"] });
         break;
       } catch (e) {
         if (attempt === 2) {
@@ -238,7 +245,7 @@ export default function IncomingReadingModal() {
       }
     }
     setJoining(false);
-  }, [incoming, joining, clear, navigate]);
+  }, [incoming, joining, clear, navigate, queryClient]);
 
   if (!incoming) return null;
 

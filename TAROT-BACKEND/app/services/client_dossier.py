@@ -106,18 +106,38 @@ def get_client_stats(db: Session, client_id: int) -> dict:
 
 def get_chat_spend_split(db: Session, chat_id: int) -> dict:
     """
-    What the client spent in ONE reading, split into free credit vs paid — read
-    from each per-minute DEBIT's metadata (credit_spent / paid_spent). Used by the
-    psychic end screen. Client spend only (no psychic cut).
+    What the client spent in THIS reading (the current session only), split into
+    free credit vs paid — read from each per-minute DEBIT's metadata
+    (credit_spent / paid_spent). Used by the psychic end screen. Client spend only.
+
+    Chat rows are REUSED across repeat readings with the same psychic, so scope to
+    the latest ChatSession — otherwise this sums every past session's spend
+    (lifetime totals live in the dossier, not the session receipt).
     """
-    debits = (
-        db.query(Transaction)
-        .filter(
-            Transaction.related_chat_id == chat_id,
-            Transaction.transaction_type == TransactionType.DEBIT,
-        )
-        .all()
+    from app.models.chat_session import ChatSession
+    from app.models.session_intervals import SessionInterval
+
+    session = (
+        db.query(ChatSession)
+        .filter(ChatSession.chat_id == chat_id)
+        .order_by(ChatSession.id.desc())
+        .first()
     )
+
+    debits = []
+    if session:
+        debits = (
+            db.query(Transaction)
+            .join(
+                SessionInterval,
+                Transaction.related_session_interval_id == SessionInterval.id,
+            )
+            .filter(
+                SessionInterval.session_id == session.id,
+                Transaction.transaction_type == TransactionType.DEBIT,
+            )
+            .all()
+        )
     total = 0.0
     credit_spent = 0.0
     paid_spent = 0.0
