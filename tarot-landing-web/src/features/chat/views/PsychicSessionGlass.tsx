@@ -55,7 +55,7 @@ const PsychicSessionGlass = () => {
   });
   // The ended reading the psychic end screen (client spend + dossier note) is for.
   // Captured before selectedChat is cleared so the summary/note survive the reset.
-  const [summaryChat, setSummaryChat] = useState<{ chatId: number; clientName: string } | null>(null);
+  const [summaryChat, setSummaryChat] = useState<{ chatId: number; clientName: string; clientId: number | null } | null>(null);
 
   // Admin-specific: Store psychic_token for impersonation
   const [psychicToken, setPsychicToken] = useState<string | null>(null);
@@ -392,12 +392,12 @@ const PsychicSessionGlass = () => {
       endReason: "Session ended - client's insufficient balance (less than 10 seconds remaining)",
     });
     if (selectedChat) {
-      setSummaryChat({ chatId: selectedChat, clientName: currentChat?.user_name || "Client" });
+      setSummaryChat({ chatId: selectedChat, clientName: currentChat?.user_name || "Client", clientId });
     }
     setShowSessionSummaryModal(true);
 
     queryClient.invalidateQueries({ queryKey: ["chats"] });
-  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, queryClient, selectedChat, currentChat?.user_name]);
+  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, queryClient, selectedChat, currentChat?.user_name, clientId]);
 
   const handleSessionEndedWebSocket = useCallback(({ reason }: { reason?: string }) => {
     console.log("[PsychicSessionGlass] SESSION_ENDED WebSocket event received, reason:", reason);
@@ -422,7 +422,7 @@ const PsychicSessionGlass = () => {
           : reason || "Session ended",
       });
       if (selectedChat) {
-        setSummaryChat({ chatId: selectedChat, clientName: currentChat?.user_name || "Client" });
+        setSummaryChat({ chatId: selectedChat, clientName: currentChat?.user_name || "Client", clientId });
       }
       setShowSessionSummaryModal(true);
     }
@@ -444,7 +444,7 @@ const PsychicSessionGlass = () => {
       setActiveView("queue");
       setSelectedChat(null);
     }
-  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, selectedChat, queryClient, activeView, dispatch, currentChat?.user_name]);
+  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, selectedChat, queryClient, activeView, dispatch, currentChat?.user_name, clientId]);
 
   const handleSessionStarted = useCallback(({ chatId, psychicRate, clientBalance, startedAt }: { chatId: number; psychicRate?: number; clientBalance?: number; startedAt?: string }) => {
     console.log('[PsychicSessionGlass] Session started:', { chatId, psychicRate, clientBalance, startedAt });
@@ -786,6 +786,7 @@ const PsychicSessionGlass = () => {
     // Capture for the end screen (client spend + dossier note) before we reset.
     const endedChatId = selectedChat;
     const endedClientName = currentChat?.user_name || "Client";
+    const endedClientId = clientId;
     const endedDuration = sessionState.elapsedSeconds;
 
     setIsTerminating(true);
@@ -794,7 +795,7 @@ const PsychicSessionGlass = () => {
       toast.success("Chat session ended successfully");
       // Surface the psychic end screen (client spend only + dossier note).
       setSessionSummaryData({ duration: endedDuration, cost: sessionState.estimatedCost, endReason: "user_initiated" });
-      setSummaryChat({ chatId: endedChatId, clientName: endedClientName });
+      setSummaryChat({ chatId: endedChatId, clientName: endedClientName, clientId: endedClientId });
       setShowSessionSummaryModal(true);
       setActiveView("queue");
       setSelectedChat(null);
@@ -1668,7 +1669,7 @@ const PsychicSessionGlass = () => {
         isOpen={showSessionSummaryModal}
         onClose={() => setShowSessionSummaryModal(false)}
         chatId={summaryChat?.chatId ?? null}
-        clientId={null}
+        clientId={summaryChat?.clientId ?? null}
         clientName={summaryChat?.clientName}
         duration={sessionSummaryData.duration}
       />

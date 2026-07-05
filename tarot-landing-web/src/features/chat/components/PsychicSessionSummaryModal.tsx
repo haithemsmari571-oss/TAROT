@@ -70,7 +70,12 @@ export const PsychicSessionSummaryModal = ({
   const effectiveClientId = clientId ?? summary?.client_id ?? null;
 
   const handleSaveNote = async () => {
-    if (!effectiveClientId || !note.trim() || saving) return;
+    if (!note.trim() || saving) return;
+    if (!effectiveClientId) {
+      // Never fail silently — surface why the save can't proceed.
+      setError("Couldn't identify the client yet — give it a second and try again.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
