@@ -102,6 +102,7 @@ export interface ChatDetails {
     id: number;
     username: string;
     email: string;
+    date_of_birth?: string | null;
   };
   psychic_token: string;
 }

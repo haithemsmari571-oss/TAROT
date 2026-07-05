@@ -20,6 +20,7 @@ from .admin_psychics import router as admin_psychic_router
 from .dashboard import router as dashboard_router
 from .landing import router as landing_router
 from .public_settings import router as public_settings_router
+from .client_dossier import router as client_dossier_router
 
 __all__ = [
     "auth_router",
@@ -44,4 +45,5 @@ __all__ = [
     "dashboard_router",
     "landing_router",
     "public_settings_router",
+    "client_dossier_router",
 ]

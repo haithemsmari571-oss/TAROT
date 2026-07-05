@@ -29,6 +29,7 @@ from app.routers import (
     dashboard_router,
     landing_router,
     public_settings_router,
+    client_dossier_router,
 )
 import app.models
 
@@ -209,6 +210,12 @@ app.include_router(
     public_settings_router,
     prefix="/api",
     tags=["Public Settings"],
+)
+
+app.include_router(
+    client_dossier_router,
+    prefix="/api",
+    tags=["Client Dossier"],
 )
 
 

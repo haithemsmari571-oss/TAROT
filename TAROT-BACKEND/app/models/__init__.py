@@ -16,6 +16,7 @@ from .review import Review
 from .notification import Notification
 from .buy_option import BuyOption
 from .landing_content import LandingContent
+from .client_note import ClientNote
 
 __all__ = [
     "User",
@@ -36,4 +37,5 @@ __all__ = [
     "Notification",
     "BuyOption",
     "LandingContent",
+    "ClientNote",
 ]

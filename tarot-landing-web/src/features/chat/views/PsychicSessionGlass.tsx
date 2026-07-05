@@ -18,7 +18,9 @@ import { GlassChatListItem } from "../components/GlassChatListItem";
 import { MessageBubble } from "../components/MessageBubble";
 import { GlassChatInput } from "../components/GlassChatInput";
 import { GlassChatSidebar } from "../components/GlassChatSidebar";
-import { SessionSummaryModal } from "../components/SessionSummaryModal";
+import { PsychicSessionSummaryModal } from "../components/PsychicSessionSummaryModal";
+import { ClientDossierCard } from "../components/ClientDossierCard";
+import { getClientDossier, ClientDossier } from "../api/dossierApi";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
@@ -51,35 +53,57 @@ const PsychicSessionGlass = () => {
     cost: 0,
     endReason: "",
   });
+  // The ended reading the psychic end screen (client spend + dossier note) is for.
+  // Captured before selectedChat is cleared so the summary/note survive the reset.
+  const [summaryChat, setSummaryChat] = useState<{ chatId: number; clientName: string } | null>(null);
 
   // Admin-specific: Store psychic_token for impersonation
   const [psychicToken, setPsychicToken] = useState<string | null>(null);
   const [clientDob, setClientDob] = useState<string | null>(null);
+  // The client behind the current reading + their platform-wide dossier.
+  const [clientId, setClientId] = useState<number | null>(null);
+  const [dossier, setDossier] = useState<ClientDossier | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
 
   const currentChat = chats.find((c) => c.id === selectedChat);
 
-  // Fetch psychic_token when admin enters a chat
+  // On entering a chat, fetch its details to get the client id + DOB (and, for
+  // admins, the psychic_token for impersonation). Works for the assigned psychic
+  // and admins/superadmins alike.
   useEffect(() => {
-    if (isAdmin && selectedChat && activeView === "chat") {
+    if (selectedChat && activeView === "chat") {
       getChatDetails(selectedChat)
         .then((details) => {
-          console.log('[PsychicSessionGlass] Fetched psychic_token for admin:', details.psychic_token ? 'received' : 'not received');
-          setPsychicToken(details.psychic_token);
+          if (isAdmin) setPsychicToken(details.psychic_token);
           setClientDob(details.client?.date_of_birth ?? null);
+          setClientId(details.client?.id ?? null);
         })
         .catch((err) => {
+          // Non-participants get 403 here — that's fine, just no dossier.
           console.error('[PsychicSessionGlass] Failed to fetch chat details:', err);
-          toast.error('Failed to fetch chat details');
         });
-    } else if (!isAdmin || !selectedChat || activeView !== "chat") {
-      // Clear token when leaving chat or if not admin
+    } else {
       setPsychicToken(null);
       setClientDob(null);
+      setClientId(null);
+      setDossier(null);
     }
   }, [isAdmin, selectedChat, activeView, toast]);
+
+  // Load the client's platform-wide dossier (past notes, spend, astro) for the
+  // cockpit context card — every reader sees the client's full history.
+  useEffect(() => {
+    if (!clientId || activeView !== "chat") {
+      return;
+    }
+    let cancelled = false;
+    getClientDossier(clientId)
+      .then((d) => { if (!cancelled) setDossier(d); })
+      .catch(() => { if (!cancelled) setDossier(null); });
+    return () => { cancelled = true; };
+  }, [clientId, activeView, selectedChat]);
 
   // Chat session state management with WebSocket (for psychic role)
   const {
@@ -367,11 +391,13 @@ const PsychicSessionGlass = () => {
       cost: sessionState.estimatedCost,
       endReason: "Session ended - client's insufficient balance (less than 10 seconds remaining)",
     });
-
+    if (selectedChat) {
+      setSummaryChat({ chatId: selectedChat, clientName: currentChat?.user_name || "Client" });
+    }
     setShowSessionSummaryModal(true);
 
     queryClient.invalidateQueries({ queryKey: ["chats"] });
-  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, queryClient]);
+  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, queryClient, selectedChat, currentChat?.user_name]);
 
   const handleSessionEndedWebSocket = useCallback(({ reason }: { reason?: string }) => {
     console.log("[PsychicSessionGlass] SESSION_ENDED WebSocket event received, reason:", reason);
@@ -395,7 +421,9 @@ const PsychicSessionGlass = () => {
           ? "Session ended - client's insufficient balance"
           : reason || "Session ended",
       });
-
+      if (selectedChat) {
+        setSummaryChat({ chatId: selectedChat, clientName: currentChat?.user_name || "Client" });
+      }
       setShowSessionSummaryModal(true);
     }
 
@@ -416,7 +444,7 @@ const PsychicSessionGlass = () => {
       setActiveView("queue");
       setSelectedChat(null);
     }
-  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, selectedChat, queryClient, activeView, dispatch]);
+  }, [sessionState.elapsedSeconds, sessionState.estimatedCost, selectedChat, queryClient, activeView, dispatch, currentChat?.user_name]);
 
   const handleSessionStarted = useCallback(({ chatId, psychicRate, clientBalance, startedAt }: { chatId: number; psychicRate?: number; clientBalance?: number; startedAt?: string }) => {
     console.log('[PsychicSessionGlass] Session started:', { chatId, psychicRate, clientBalance, startedAt });
@@ -755,10 +783,19 @@ const PsychicSessionGlass = () => {
   const handleEndChat = async () => {
     if (!selectedChat) return;
 
+    // Capture for the end screen (client spend + dossier note) before we reset.
+    const endedChatId = selectedChat;
+    const endedClientName = currentChat?.user_name || "Client";
+    const endedDuration = sessionState.elapsedSeconds;
+
     setIsTerminating(true);
     try {
       await updateChatStatus(selectedChat, { status: "ENDED" });
       toast.success("Chat session ended successfully");
+      // Surface the psychic end screen (client spend only + dossier note).
+      setSessionSummaryData({ duration: endedDuration, cost: sessionState.estimatedCost, endReason: "user_initiated" });
+      setSummaryChat({ chatId: endedChatId, clientName: endedClientName });
+      setShowSessionSummaryModal(true);
       setActiveView("queue");
       setSelectedChat(null);
       // Invalidate queries to refresh chat list
@@ -1600,6 +1637,8 @@ const PsychicSessionGlass = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
               >
+                {/* Platform-wide client dossier — history, spend, astro, notes */}
+                <ClientDossierCard dossier={dossier} />
                 <GlassChatSidebar
                   chat={currentChat}
                   clientDob={clientDob}
@@ -1624,11 +1663,14 @@ const PsychicSessionGlass = () => {
         )}
       </AnimatePresence>
 
-      {/* Session Summary Modal */}
-      <SessionSummaryModal
+      {/* Psychic end screen — client spend only + dossier note */}
+      <PsychicSessionSummaryModal
         isOpen={showSessionSummaryModal}
         onClose={() => setShowSessionSummaryModal(false)}
-        sessionData={sessionSummaryData}
+        chatId={summaryChat?.chatId ?? null}
+        clientId={null}
+        clientName={summaryChat?.clientName}
+        duration={sessionSummaryData.duration}
       />
     </div>
   );
