@@ -8,6 +8,7 @@ import GiftBalanceModal from "../../../components/modals/GiftBalanceModal";
 import PrimarySelect from "../../../components/CustomInputs/PrimarySelect";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatGbp } from "../../../lib/currency";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useUsers } from "../hooks/useUsers";
 import { Role, UserStatus } from "../types/user.types";
@@ -212,7 +213,7 @@ const Users = () => {
       render: (user) => (
         <div className="flex flex-col">
           <span className="text-white font-bold text-xs">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((user.balance * unitPriceCents) / 100)}
+            {formatGbp(user.balance)}
           </span>
           <span className="text-[9px] text-white/20 uppercase font-black">{user.email}</span>
         </div>

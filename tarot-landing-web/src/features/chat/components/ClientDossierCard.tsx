@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS } from "../../../theme";
 import { ClientDossier } from "../api/dossierApi";
+import { formatGbp } from "../../../lib/currency";
 
 // Zodiac glyphs for a quick, warm visual cue.
 const ZODIAC_ICON: Record<string, string> = {
@@ -10,8 +11,7 @@ const ZODIAC_ICON: Record<string, string> = {
   Libra: "♎", Scorpio: "♏", Sagittarius: "♐", Capricorn: "♑", Aquarius: "♒", Pisces: "♓",
 };
 
-const gbp = (n: number) =>
-  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n || 0);
+const gbp = (n: number) => formatGbp(n || 0);
 
 const fmtDate = (iso: string | null) =>
   iso

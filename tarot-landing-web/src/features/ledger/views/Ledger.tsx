@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Icon } from "@iconify/react";
+import { formatGbp } from "../../../lib/currency";
 import { PrimaryTable, type Column } from "../../../components/Table/PrimaryTable";
 import PrimarySelect from "../../../components/CustomInputs/PrimarySelect";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
@@ -95,14 +96,8 @@ const Ledger = () => {
     };
   }, [transactions]);
 
-  // Format currency (amount is in points; 1 point = £1)
-  const formatCurrency = (amount: number) => {
-    const pounds = (amount * unitPriceCents) / 100;
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: "GBP",
-    }).format(pounds);
-  };
+  // Format currency (amount is in points; 1 point = £1) — exact shared format.
+  const formatCurrency = (amount: number) => formatGbp(amount);
 
   // Format date
   const formatDate = (dateString: string) => {

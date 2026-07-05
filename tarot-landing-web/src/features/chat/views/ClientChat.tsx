@@ -23,6 +23,7 @@ import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
 import "../../../styles/starfield.css";
 import PageBackground from "../../../components/PageBackground";
 import chatBackground from "../../../assets/backgrounds/chat-background.webp";
+import { formatGbp } from "../../../lib/currency";
 
 const ClientChat = () => {
   const queryClient = useQueryClient();
@@ -1016,11 +1017,12 @@ const ClientChat = () => {
   const remaining = sessionState.remainingSeconds;
   const isGrace = sessionState.sessionStatus === 'GRACE';
   // Per-minute model: clientBalance is the LIVE balance after each minute's
-  // upfront debit — it IS the Stardust left (don't subtract cost again).
+  // upfront debit — it IS the Stardust left (don't subtract cost again). Keep it
+  // EXACT (no floor) so the counter matches the header (9.6, not 9).
   const stardustLeft =
     sessionState.clientBalance == null
       ? null
-      : Math.max(0, Math.floor(sessionState.clientBalance));
+      : Math.max(0, sessionState.clientBalance);
   // Whole minutes of reading still available (current prepaid minute + affordable).
   const minutesLeft = sessionState.remainingMinutes;
   const psychicName =
@@ -1664,7 +1666,7 @@ const ClientChat = () => {
                     </p>
                     <div className="flex gap-2 text-xs text-white/40">
                       <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
-                      <span>Session cost so far: £{(sessionState.estimatedCost || 0).toFixed(2)}</span>
+                      <span>Session cost so far: {formatGbp(sessionState.estimatedCost || 0)}</span>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">

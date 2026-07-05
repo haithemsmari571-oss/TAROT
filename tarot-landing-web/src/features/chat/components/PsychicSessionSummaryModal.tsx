@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { getChatSpendSummary, saveClientNote, ChatSpendSummary } from "../api/dossierApi";
+import { formatGbp, formatStardust } from "../../../lib/currency";
 
 interface Props {
   isOpen: boolean;
@@ -24,8 +25,7 @@ const fmtDuration = (seconds: number): string => {
     : `${m}:${sec.toString().padStart(2, "0")}`;
 };
 
-const gbp = (n: number) =>
-  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n || 0);
+const gbp = (n: number) => formatGbp(n || 0);
 
 /**
  * Psychic-side end screen. Shows CLIENT SPEND only (Stardust + £ + duration +
@@ -136,7 +136,7 @@ export const PsychicSessionSummaryModal = ({
             </h2>
             <p className="text-center text-white/60 text-sm mb-6">
               {clientName ? `${clientName} spent` : "Client spent"}{" "}
-              <span className="font-bold text-white">{spent.toLocaleString()} Stardust</span>{" "}
+              <span className="font-bold text-white">{formatStardust(spent)} Stardust</span>{" "}
               ({gbp(spent)}) over <span className="font-bold text-white">{fmtDuration(duration)}</span>
             </p>
 

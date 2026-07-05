@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatStardust } from "../../../lib/currency";
 
 interface SessionSummaryModalProps {
   isOpen: boolean;
@@ -27,9 +28,7 @@ const formatDuration = (seconds: number): string => {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 };
 
-const formatCost = (cost: number): string => {
-  return cost.toFixed(2);
-};
+const formatCost = (cost: number): string => formatStardust(cost);
 
 export const SessionSummaryModal = ({
   isOpen,

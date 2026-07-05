@@ -8,6 +8,7 @@ import { usePayment } from "../features/payment/hooks/usePayment"; // Imported h
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
 import { StardustModal, type PurchasePackage } from "./StardustModal";
 import { useTopUp } from "../features/payment/context/TopUpContext";
+import { formatStardust } from "../lib/currency";
 import "../styles/starfield.css";
 
 export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
@@ -199,7 +200,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                  >
                    <Icon icon="ph:sparkle-fill" className="text-black text-sm" />
                    <span className="text-[11px] font-black text-black tracking-widest uppercase">
-                     {balance !== null ? balance.toLocaleString() : '...'}
+                     {balance !== null ? formatStardust(balance) : '...'}
                    </span>
                    <Icon icon="ph:plus-circle-bold" className="text-black/40 text-xs group-hover:text-black transition-colors" />
                  </div>
@@ -348,7 +349,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
               >
                 <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
                 <span className="text-sm font-black text-black tracking-wider uppercase">
-                  {balance !== null ? balance.toLocaleString() : '...'} Stardust
+                  {balance !== null ? formatStardust(balance) : '...'} Stardust
                 </span>
                 <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
               </div>

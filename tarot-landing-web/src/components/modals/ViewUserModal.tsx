@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import type { AdminUserListItem } from "../../features/users/types/user.types";
 import { COLORS, TYPOGRAPHY } from "../../theme";
+import { formatGbp } from "../../lib/currency";
 
 interface ViewUserModalProps {
   isOpen: boolean;
@@ -150,7 +151,7 @@ const ViewUserModal = ({ isOpen, onClose, user, unitPriceCents = 100 }: ViewUser
                 <div className="flex flex-col gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Balance</span>
                   <span className="text-2xl font-black text-white">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((user.balance * unitPriceCents) / 100)}
+                    {formatGbp(user.balance)}
                   </span>
                 </div>
               </div>

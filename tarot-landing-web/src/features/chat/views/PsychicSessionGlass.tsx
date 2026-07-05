@@ -21,6 +21,7 @@ import { GlassChatSidebar } from "../components/GlassChatSidebar";
 import { PsychicSessionSummaryModal } from "../components/PsychicSessionSummaryModal";
 import { ClientDossierCard } from "../components/ClientDossierCard";
 import { getClientDossier, ClientDossier } from "../api/dossierApi";
+import { formatGbp } from "../../../lib/currency";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
@@ -866,12 +867,8 @@ const PsychicSessionGlass = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: "GBP",
-    }).format(amount / 100);
-  };
+  // 1 point = £1 (no /100); exact shared formatting.
+  const formatCurrency = (amount: number) => formatGbp(amount || 0);
 
   const tabs = [
     { key: "ALL", label: "All", count: chats.length },
@@ -1392,7 +1389,7 @@ const PsychicSessionGlass = () => {
                         The client needs to top up their balance to continue. This session will automatically end in 30 minutes if not resumed.
                       </p>
                       <div className="text-xs text-white/50 mb-3">
-                        <span className="font-semibold">Client spent so far:</span> £{(sessionState.estimatedCost || 0).toFixed(2)}
+                        <span className="font-semibold">Client spent so far:</span> {formatGbp(sessionState.estimatedCost || 0)}
                       </div>
                       <div className="flex gap-2">
                         <button

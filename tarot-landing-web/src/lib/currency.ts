@@ -31,9 +31,27 @@ export function welcomeCreditMinutes(pricePerSecond: number): number {
 }
 
 /**
- * Format an amount already denominated in GBP (wallet top-ups, session cost,
- * balances) — just adds the £ symbol. 1 credit = £1.
+ * THE shared money/stardust formatter — use everywhere (header, session bar,
+ * cockpit, modals, ledger, admin) so every screen shows the exact same number.
+ *
+ * Shows the EXACT value: whole numbers stay whole ("15"), fractional values keep
+ * their decimals up to 2 dp ("9.6", "0.2"), never truncated, floored or rounded,
+ * and no trailing zeros. Balances are stored to 2 dp (pennies), so 2 dp is the
+ * full precision.
  */
-export function formatGbp(amount: number, decimals = 2): string {
-  return `${GBP}${amount.toFixed(decimals)}`;
+export function formatStardust(amount: number | null | undefined): string {
+  const n = Number(amount);
+  if (!isFinite(n)) return "0";
+  // Snap to 2 dp to kill float noise (e.g. 9.599999), then drop trailing zeros.
+  const twoDp = (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2);
+  return twoDp.replace(/\.?0+$/, "");
+}
+
+/**
+ * Format an amount already denominated in GBP (wallet top-ups, session cost,
+ * balances) with the £ symbol. Uses the shared exact formatter (1 credit = £1),
+ * so "£15", "£9.6", "£0.2" — matching the Stardust figure everywhere.
+ */
+export function formatGbp(amount: number): string {
+  return `${GBP}${formatStardust(amount)}`;
 }

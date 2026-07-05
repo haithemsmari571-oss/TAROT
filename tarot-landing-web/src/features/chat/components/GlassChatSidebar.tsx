@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS } from "../../../theme";
+import { formatGbp } from "../../../lib/currency";
 
 interface GlassChatSidebarProps {
   chat: any;
@@ -70,17 +71,10 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
     }
   };
 
+  // Exact, shared formatting (1 point = £1) — matches every other screen.
   const formatCurrency = (amount: number) => {
-    if (isNaN(amount) || amount < 0) {
-      return "£0.00";
-    }
-    // amount is already in points (1 point = £1) — do NOT divide by 100.
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: "GBP",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
+    if (isNaN(amount) || amount < 0) return "£0";
+    return formatGbp(amount);
   };
 
   const displayName = chat.user_name || "Unknown User";

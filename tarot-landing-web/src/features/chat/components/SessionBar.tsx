@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatStardust } from "../../../lib/currency";
 
 interface SessionBarProps {
   /** Elapsed reading time (seconds) — shown as a small caption, not a headline. */
@@ -113,7 +114,7 @@ export const SessionBar = ({
             style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: GOLD }}
           >
             <Icon icon="ph:sparkle-fill" className="text-sm" />
-            {stardust == null ? "—" : stardust.toLocaleString()}
+            {stardust == null ? "—" : formatStardust(stardust)}
           </div>
         </button>
       </div>
