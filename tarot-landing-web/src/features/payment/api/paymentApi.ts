@@ -4,7 +4,7 @@ import type {
   CreateCheckoutSessionResponse,
   TopUpResponse,
   UnitPriceResponse,
-  BuyOptionResponse,
+  StardustTiersResponse,
   CreateStardustCheckoutSessionRequest,
 } from "../types/payment.types";
 import type {
@@ -92,10 +92,11 @@ export const paymentApi = {
   },
 
   /**
-   * Get active buy options for point packages
+   * Read-only view of the live Stardust bonus tiers (source of truth is the
+   * backend checkout engine). Used by the admin "Stardust Tiers" page.
    */
-  getBuyOptions: async (): Promise<BuyOptionResponse[]> => {
-    const response = await axiosClient.get("/buy-options");
+  getStardustTiers: async (): Promise<StardustTiersResponse> => {
+    const response = await axiosClient.get("/payment/stardust-tiers");
     return response.data;
   },
 };

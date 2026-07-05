@@ -1,12 +1,10 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { TYPOGRAPHY, COLORS } from "../theme";
 import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
-import { usePayment } from "../features/payment/hooks/usePayment"; // Imported hook from payment features
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
-import { StardustModal, type PurchasePackage } from "./StardustModal";
 import { useTopUp } from "../features/payment/context/TopUpContext";
 import { formatStardust } from "../lib/currency";
 import "../styles/starfield.css";
@@ -15,18 +13,13 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
-  
-  // Connect explicitly to the shared payment hook engine
-  const { createCheckoutSession, loading: paymentLoading, fetchMyBalance } = usePayment();
+
+  // Every "Add Stardust" entry point opens the shared Glider top-up modal.
   const { open: openTopUp } = useTopUp();
 
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
-  const [isCurrencyModalOpen, setIsCurrencyModalOpen] = useState(false);
-  const [rawBuyOptions, setRawBuyOptions] = useState<PurchasePackage[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null);
-  const [unitPriceCents, setUnitPriceCents] = useState(100);
 
   // Sync internal layout balance with background ledger fetches
   useEffect(() => {
@@ -34,24 +27,6 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
       paymentApi.getMyBalance()
         .then(data => setBalance(data.balance))
         .catch(() => setBalance(null));
-
-      paymentApi.getUnitPrice()
-        .then(data => setUnitPriceCents(data.unit_price_cents))
-        .catch(() => {});
-
-      paymentApi.getBuyOptions()
-        .then(data => {
-          const mapped = data.map((o: any, idx: number) => ({
-            ...o,
-            id: o.id || o._id || `tier-${idx}`,
-            points: o.points || o.amount || 0,
-            amount: o.points || o.amount || 0,
-            label: o.label || "Stardust Pack",
-            price: o.price_cents || o.price || 0,
-          }));
-          setRawBuyOptions(mapped);
-        })
-        .catch(() => {});
     }
   }, [isAuthenticated, location.pathname]);
 
@@ -82,44 +57,11 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
     };
   }, [isAuthenticated]);
 
-  // Derive final prices from the live unit price once both have loaded
-  const buyOptions = useMemo(
-    () =>
-      rawBuyOptions.map((pkg) => ({
-        ...pkg,
-        price: pkg.price || unitPriceCents * pkg.points,
-      })),
-    [rawBuyOptions, unitPriceCents],
-  );
-
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // CAROUSEL LOGIC MIGRATION: Connects actions to the Stripe session creation method
-  const handleDirectPurchase = async (pkg: PurchasePackage) => {
-    const targetId = pkg.id || pkg._id;
-    if (!targetId) return;
-
-    try {
-      setSelectedPkgId(targetId);
-      
-      // Matches payload structure expected by createCheckoutSession in usePayment
-      await createCheckoutSession({
-        points_amount: pkg.points,
-        return_url: window.location.origin + "/billing?status=success", 
-      });
-
-      setIsCurrencyModalOpen(false);
-    } catch (error) {
-      console.error("Navbar modal session routing execution failed:", error);
-    }
-  };
-
-  // Computes active processing layer indicators dynamically
-  const loadingTierId = paymentLoading ? selectedPkgId : null;
 
   const navItems = isAuthenticated
     ? [
@@ -374,15 +316,6 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
           </div>
         </div>
       </div>
-
-      {/* Synchronized Modal Portal */}
-      <StardustModal 
-        isOpen={isCurrencyModalOpen}
-        onClose={() => setIsCurrencyModalOpen(false)}
-        buyOptions={buyOptions}
-        loadingTierId={loadingTierId}
-        onPurchase={handleDirectPurchase}
-      />
     </>
   );
 }

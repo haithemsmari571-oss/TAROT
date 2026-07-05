@@ -28,6 +28,31 @@ LIFETIME_COPY = (
     "Lifetime Access Unlocked — 1 hour of reading time, daily, for life."
 )
 
+# The bonus-tier bands, in one place. These MUST mirror the thresholds used in
+# ``calculate_stardust_quote`` below (kept co-located so they can't drift). This
+# is what the admin "Stardust Tiers" page reads so it always shows the real,
+# live pricing rather than the retired ``buy_options`` rows.
+STARDUST_BANDS = [
+    {"key": TIER_BASE, "name": "Stardust", "bonus_pct": 0.0, "min_usd": STARDUST_MIN_USD, "max_usd": 99},
+    {"key": TIER_WHISPER, "name": "Whisper", "bonus_pct": 0.25, "min_usd": 100, "max_usd": 249},
+    {"key": TIER_REVELATION, "name": "Revelation", "bonus_pct": 0.40, "min_usd": 250, "max_usd": 449},
+    {"key": TIER_DEVOTION, "name": "Devotion", "bonus_pct": 0.60, "min_usd": 450, "max_usd": 999},
+]
+
+
+def get_public_tiers() -> dict:
+    """Read-only view of the live Stardust pricing (bands + range + lifetime).
+
+    Derived from the same constants the checkout engine uses, so the admin page
+    never drifts from what customers actually pay. Money is GBP (£1 = 1 point).
+    """
+    return {
+        "min_usd": STARDUST_MIN_USD,
+        "max_usd": STARDUST_MAX_USD,
+        "lifetime_copy": LIFETIME_COPY,
+        "bands": STARDUST_BANDS,
+    }
+
 
 @dataclass
 class StardustQuote:

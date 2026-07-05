@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { paymentApi } from "../api/paymentApi";
-import type { CreateCheckoutSessionRequest, UnitPriceResponse, BuyOptionResponse, CreateStardustCheckoutSessionRequest } from "../types/payment.types";
+import type { CreateCheckoutSessionRequest, UnitPriceResponse, CreateStardustCheckoutSessionRequest } from "../types/payment.types";
 import type {
   TransactionListResponse,
   TransactionFilters,
@@ -13,7 +13,6 @@ export const usePayment = () => {
   const [transactions, setTransactions] = useState<TransactionListResponse | null>(null);
   const [balance, setBalance] = useState<UserBalance | null>(null);
   const [unitPrice, setUnitPrice] = useState<UnitPriceResponse | null>(null);
-  const [buyOptions, setBuyOptions] = useState<BuyOptionResponse[] | null>(null);
 
   const createCheckoutSession = async (request: CreateCheckoutSessionRequest) => {
     setLoading(true);
@@ -95,22 +94,6 @@ export const usePayment = () => {
     }
   };
 
-  const fetchBuyOptions = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await paymentApi.getBuyOptions();
-      setBuyOptions(data);
-      return data;
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to fetch buy options";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const topupChat = async (chatId: number) => {
     setLoading(true);
     setError(null);
@@ -133,13 +116,11 @@ export const usePayment = () => {
     transactions,
     balance,
     unitPrice,
-    buyOptions,
     createCheckoutSession,
     createStardustCheckoutSession,
     fetchMyTransactions,
     fetchMyBalance,
     fetchUnitPrice,
-    fetchBuyOptions,
     topupChat,
   };
 };

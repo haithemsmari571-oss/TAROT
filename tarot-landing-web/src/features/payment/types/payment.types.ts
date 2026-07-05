@@ -32,12 +32,18 @@ export interface PointsPackage {
   bonus?: number; // bonus points
 }
 
-export interface BuyOptionResponse {
-  id: number;
-  label: string;
-  points: number;
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
+/** One live Stardust bonus band (read-only mirror of app/services/stardust.py). */
+export interface StardustTierBand {
+  key: string;
+  name: string;
+  bonus_pct: number; // 0.25 == +25%
+  min_usd: number;
+  max_usd: number;
+}
+
+export interface StardustTiersResponse {
+  min_usd: number;
+  max_usd: number; // top of the range == Lifetime Access
+  lifetime_copy: string;
+  bands: StardustTierBand[];
 }

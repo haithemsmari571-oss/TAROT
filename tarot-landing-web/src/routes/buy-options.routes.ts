@@ -5,7 +5,7 @@ import type { RouteConfig } from "./app.routes";
 const buyOptionsRoutes: RouteConfig[] = [
   {
     path: "/admin/buy-options",
-    name: "Buy Options Page",
+    name: "Stardust Tiers Page",
     component: BuyOptionsPage,
     layout: "private",
     allowedRoles: [UserRole.ADMIN, UserRole.SUPERADMIN],

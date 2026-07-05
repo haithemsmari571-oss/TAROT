@@ -15,12 +15,28 @@ from app.schemas.payment import (
     CreateStardustCheckoutSessionRequest,
     UnitPriceResponse,
 )
-from app.services.stardust import LIFETIME_COPY, calculate_stardust_quote
+from app.services.stardust import (
+    LIFETIME_COPY,
+    calculate_stardust_quote,
+    get_public_tiers,
+)
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 settings = get_app_settings()
+
+
+@router.get("/stardust-tiers")
+async def get_stardust_tiers():
+    """Read-only view of the live Stardust bonus tiers (public).
+
+    The single source of truth for pricing lives in the checkout engine
+    (``app/services/stardust.py``); this exposes it so the admin "Stardust
+    Tiers" page always reflects what customers actually pay. Editing happens in
+    code, not here.
+    """
+    return get_public_tiers()
 
 
 @router.get("/unit-price", response_model=UnitPriceResponse)
