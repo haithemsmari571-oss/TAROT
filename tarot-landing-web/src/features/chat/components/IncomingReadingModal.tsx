@@ -5,6 +5,9 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
 import { joinChat, getMyChatsWithDetails, getPsychicDetails } from "../api/chatApi";
+import { paymentApi } from "@/features/payment/api/paymentApi";
+import { useTopUp } from "@/features/payment/context/TopUpContext";
+import { formatGbp } from "@/lib/currency";
 import { COLORS, TYPOGRAPHY } from "@/theme";
 
 interface Incoming {
@@ -12,6 +15,7 @@ interface Incoming {
   psychicName: string;
   psychicId?: number;
   photo?: string | null;
+  perMinute?: number | null; // reader's £/min — for the affordability gate
 }
 
 /**
@@ -30,10 +34,12 @@ interface Incoming {
 export default function IncomingReadingModal() {
   const { user } = useAuth();
   const { onNotification } = useNotifications();
+  const { open: openTopUp } = useTopUp();
   const navigate = useNavigate();
 
   const [incoming, setIncoming] = useState<Incoming | null>(null);
   const [joining, setJoining] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Chats already joined/dismissed THIS mount — stops the reload-proof fallback
   // from re-surfacing the prompt with stale data the instant after a join (the
@@ -82,12 +88,17 @@ export default function IncomingReadingModal() {
       if (base.psychicId) {
         getPsychicDetails(base.psychicId)
           .then((p) => {
+            const perMin =
+              p?.price_per_second != null
+                ? Math.round(p.price_per_second * 60 * 100) / 100
+                : null;
             setIncoming((cur) =>
               cur && cur.chatId === base.chatId
                 ? {
                     ...cur,
                     photo: p?.profile_picture_url ?? cur.photo ?? null,
                     psychicName: p?.username || cur.psychicName,
+                    perMinute: perMin ?? cur.perMinute ?? null,
                   }
                 : cur
             );
@@ -179,6 +190,18 @@ export default function IncomingReadingModal() {
   // Safety: stop the ring if this ever unmounts.
   useEffect(() => () => stopRing(), [stopRing]);
 
+  // Load the client's live balance whenever a join prompt appears, so we can
+  // gate Join on affordability (one full minute at the reader's rate).
+  useEffect(() => {
+    if (!incoming) return;
+    let cancelled = false;
+    paymentApi
+      .getMyBalance()
+      .then((b: any) => { if (!cancelled) setBalance(Number(b?.balance ?? 0)); })
+      .catch(() => { if (!cancelled) setBalance(null); });
+    return () => { cancelled = true; };
+  }, [incoming?.chatId]);
+
   // Dev-only visual preview: any page + `?incoming=preview` shows the prompt with
   // mock data so the look can be eyeballed without a live accept. Remove before ship.
   useEffect(() => {
@@ -218,6 +241,12 @@ export default function IncomingReadingModal() {
   }, [incoming, joining, clear, navigate]);
 
   if (!incoming) return null;
+
+  // Block Join when the client can't cover even one minute at the reader's rate
+  // (the first minute is charged upfront on join, so it would insta-die).
+  const perMin = incoming.perMinute ?? null;
+  const cantAffordJoin =
+    perMin != null && perMin > 0 && balance != null && balance < perMin;
 
   return (
     <div
@@ -268,25 +297,47 @@ export default function IncomingReadingModal() {
         </h2>
         <p className="text-sm text-white/55 mt-1 mb-8">is ready to begin your reading</p>
 
-        <button
-          onClick={onJoin}
-          disabled={joining}
-          className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
-          style={{
-            background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-            boxShadow: `0 12px 34px ${COLORS.primary}55`,
-          }}
-        >
-          {joining ? (
-            <>
-              <Icon icon="svg-spinners:3-dots-fade" className="text-base" /> Joining…
-            </>
-          ) : (
-            <>
-              <Icon icon="solar:chat-round-dots-bold" className="text-lg" /> Join {incoming.psychicName}
-            </>
-          )}
-        </button>
+        {cantAffordJoin ? (
+          <>
+            <div className="mb-4 text-sm rounded-2xl p-3.5 text-white/80 bg-white/[0.04] border border-white/10">
+              You need at least{" "}
+              <span className="font-bold text-white">{formatGbp(perMin!)}</span> for one
+              minute with {incoming.psychicName}.
+            </div>
+            <button
+              onClick={() =>
+                openTopUp({
+                  returnUrl: `/chats?chat_id=${incoming.chatId}`,
+                  reason: `Add Stardust to begin your reading with ${incoming.psychicName}.`,
+                })
+              }
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest transition-transform hover:scale-[1.02]"
+              style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
+            >
+              <Icon icon="ph:sparkle-fill" className="text-lg" /> Add Stardust
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onJoin}
+            disabled={joining}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
+            style={{
+              background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+              boxShadow: `0 12px 34px ${COLORS.primary}55`,
+            }}
+          >
+            {joining ? (
+              <>
+                <Icon icon="svg-spinners:3-dots-fade" className="text-base" /> Joining…
+              </>
+            ) : (
+              <>
+                <Icon icon="solar:chat-round-dots-bold" className="text-lg" /> Join {incoming.psychicName}
+              </>
+            )}
+          </button>
+        )}
 
         <button
           onClick={clear}

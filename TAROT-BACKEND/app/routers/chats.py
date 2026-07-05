@@ -81,6 +81,32 @@ async def requset_chat_endpoint(
                 status_code=400,
             )
 
+    # ── Affordability gate ──────────────────────────────────────────────────
+    # The first minute is charged upfront on join, so block a request the client
+    # can't afford for even one minute — otherwise the reading starts and
+    # insta-dies. Admins/superadmins (testing / connected-as-psychic) bypass.
+    if user.role not in (Role.ADMIN, Role.SUPERADMIN):
+        from app.services.billing import minimum_balance_to_start
+
+        psychic_row = (
+            db.query(User).filter(User.id == chat_data.psychic_id).first()
+        )
+        if psychic_row and psychic_row.price_per_second:
+            required = minimum_balance_to_start(psychic_row.price_per_second)
+            if float(user.total_balance) < required:
+                return JSONResponse(
+                    content={
+                        "detail": (
+                            f"You need at least £{required:.2f} for one minute with "
+                            f"{psychic_row.username}."
+                        ),
+                        "required": required,
+                        "balance": round(float(user.total_balance), 2),
+                        "psychic_name": psychic_row.username,
+                    },
+                    status_code=402,
+                )
+
     # Create/update chat and get chat_id
     chat_id = req_start_chat(db, user.id, chat_data)
 

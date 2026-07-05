@@ -191,6 +191,11 @@ def update_user_admin(db: Session, user_id: int, user_data: AdminUserUpdate) -> 
     if password:
         user.password_hash = hash_password(password)
 
+    # NEVER set balance directly here — every balance change must go through the
+    # ledger (a CREDIT/DEBIT transaction recording which admin did it) so the
+    # ledger always reconciles with balances. The router writes that transaction.
+    update_data.pop("balance", None)
+
     # Update remaining fields
     for field, value in update_data.items():
         setattr(user, field, value)

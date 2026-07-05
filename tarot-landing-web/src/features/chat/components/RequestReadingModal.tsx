@@ -4,12 +4,16 @@ import { useNotifications } from "@/features/notifications/hooks/useNotification
 import { NotificationType } from "@/features/notifications/types/notification.types";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { requestChat } from "../api/chatApi";
+import { paymentApi } from "@/features/payment/api/paymentApi";
+import { formatGbp } from "@/lib/currency";
 import { COLORS, TYPOGRAPHY } from "@/theme";
 
 interface RequestReadingModalProps {
   psychicId: number;
   psychicName: string;
   psychicPhoto?: string | null;
+  /** Reader's per-second rate — used to gate the request on affordability. */
+  pricePerSecond?: number;
   onClose: () => void;
 }
 
@@ -28,6 +32,7 @@ export default function RequestReadingModal({
   psychicId,
   psychicName,
   psychicPhoto,
+  pricePerSecond,
   onClose,
 }: RequestReadingModalProps) {
   const { onNotification } = useNotifications();
@@ -37,6 +42,23 @@ export default function RequestReadingModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsTopUp, setNeedsTopUp] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  // One full minute at the reader's rate — the minimum to start (charged upfront
+  // on join). Below this the reading would insta-die, so we block it here.
+  const perMinute = pricePerSecond != null ? Math.round(pricePerSecond * 60 * 100) / 100 : null;
+  const cantAfford =
+    perMinute != null && perMinute > 0 && balance != null && balance < perMinute;
+
+  // Load the client's live balance so the gate can pre-empt an unaffordable start.
+  useEffect(() => {
+    let cancelled = false;
+    paymentApi
+      .getMyBalance()
+      .then((b: any) => { if (!cancelled) setBalance(Number(b?.balance ?? 0)); })
+      .catch(() => { if (!cancelled) setBalance(null); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Hand off to the global IncomingReadingModal the moment she's accepted (or if
   // the request is cancelled/declined). pid may be absent on some payloads — in
@@ -63,6 +85,12 @@ export default function RequestReadingModal({
 
   const handleSubmit = useCallback(async () => {
     if (submitting) return;
+    // Pre-empt an unaffordable start (also enforced server-side with a 402).
+    if (cantAfford && perMinute != null) {
+      setNeedsTopUp(true);
+      setError(`You need at least ${formatGbp(perMinute)} for one minute with ${psychicName}.`);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setNeedsTopUp(false);
@@ -75,19 +103,20 @@ export default function RequestReadingModal({
       });
       setStep("waiting");
     } catch (err: any) {
-      const detail =
-        err?.response?.data?.detail ?? err?.response?.data?.message ?? "";
-      if (/insufficient/i.test(detail)) {
-        // Genuinely not enough balance — offer a top-up path instead of a dead end.
+      const status = err?.response?.status;
+      const data = err?.response?.data ?? {};
+      const detail = data.detail ?? data.message ?? "";
+      // 402 = server affordability gate; also catch the legacy "insufficient" text.
+      if (status === 402 || /insufficient|need at least/i.test(detail)) {
         setNeedsTopUp(true);
-        setError("You need a little more Stardust to begin this reading.");
+        setError(detail || "You need a little more Stardust to begin this reading.");
       } else {
         setError(detail || "We couldn't send your request. Please try again.");
       }
     } finally {
       setSubmitting(false);
     }
-  }, [submitting, psychicId, question]);
+  }, [submitting, psychicId, question, cantAfford, perMinute, psychicName]);
 
   return (
     <div
@@ -156,19 +185,23 @@ export default function RequestReadingModal({
               }}
             />
 
-            {error && (
+            {/* Proactive affordability message (before any submit) */}
+            {(error || cantAfford) && (
               <div
                 className={`mt-3 text-sm rounded-xl p-3 ${
-                  needsTopUp
+                  needsTopUp || cantAfford
                     ? "text-white/70 bg-white/[0.04] border border-white/10"
                     : "text-red-400 bg-red-500/10 border border-red-500/20"
                 }`}
               >
-                {error}
+                {error ||
+                  (perMinute != null
+                    ? `You need at least ${formatGbp(perMinute)} for one minute with ${psychicName}.`
+                    : "")}
               </div>
             )}
 
-            {needsTopUp && (
+            {(needsTopUp || cantAfford) && (
               <button
                 onClick={() =>
                   openTopUp({
@@ -185,8 +218,8 @@ export default function RequestReadingModal({
 
             <button
               onClick={handleSubmit}
-              disabled={submitting}
-              className="mt-5 w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
+              disabled={submitting || cantAfford}
+              className="mt-5 w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest text-white transition-transform hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
                 background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
                 boxShadow: `0 12px 34px ${COLORS.primary}55`,

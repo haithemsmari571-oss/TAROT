@@ -267,17 +267,21 @@ def bill_all_unbilled_intervals(db: Session, chat_id: int) -> List[Transaction]:
     return transactions
 
 
+def minimum_balance_to_start(price_per_second: float) -> float:
+    """The exact balance needed to start a reading = one full minute at the
+    reader's rate (per-minute prepaid model), to 2 dp. £2.40/min → £2.40."""
+    from app.config import get_app_settings
+
+    min_seconds = get_app_settings().SESSION_MINIMUM_BALANCE_SECONDS
+    return round((price_per_second or 0) * min_seconds, 2)
+
+
 def check_user_can_start_session(db: Session, user_id: int, psychic_id: int) -> bool:
     """
-    Check if user has enough balance to start a session (at least 2 minutes).
+    Check if the user can afford to start a reading — at least one full minute at
+    the reader's rate (the first minute is charged upfront on join).
 
-    Args:
-        db: Database session
-        user_id: User ID
-        psychic_id: Psychic ID
-
-    Returns:
-        True if user has sufficient balance, False otherwise
+    Returns True if they have enough, False otherwise.
     """
     user = db.query(User).filter(User.id == user_id).first()
     psychic = db.query(User).filter(User.id == psychic_id).first()
@@ -285,16 +289,11 @@ def check_user_can_start_session(db: Session, user_id: int, psychic_id: int) -> 
     if not user or not psychic or not psychic.price_per_second:
         return False
 
-    # Reserve the same minimum the session itself requires to start, so the
-    # request gate can't be stricter than the door it opens. (Was hardcoded to
-    # 120s, which blocked clients who had enough to actually begin — e.g. ~90s
-    # of balance passed start but failed request.)
-    from app.config import get_app_settings
+    # Exact per-minute rate (no int floor) so the gate matches what the session
+    # actually charges on join.
+    required_balance = minimum_balance_to_start(psychic.price_per_second)
 
-    min_seconds = get_app_settings().SESSION_MINIMUM_BALANCE_SECONDS
-    required_balance = int(psychic.price_per_second * min_seconds)
-
-    return user.total_balance >= required_balance
+    return float(user.total_balance) >= required_balance
 
 
 def get_unbilled_active_sessions(

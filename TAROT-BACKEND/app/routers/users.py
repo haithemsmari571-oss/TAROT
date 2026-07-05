@@ -201,6 +201,38 @@ def update_user(
             detail="Only superadmin can change password or balance",
         )
 
+    # A balance change from the edit form must be written to the ledger (never a
+    # silent setattr) so balances always reconcile with transactions. Treat the
+    # edited value as the new PAID balance and record the delta as a CREDIT/DEBIT
+    # adjustment stamped with the acting admin. update_user_admin ignores balance.
+    if user_data.balance is not None:
+        old_paid = float(target_user.balance or 0)
+        delta = round(float(user_data.balance) - old_paid, 2)
+        if abs(delta) >= 0.01:
+            meta = {
+                "admin_id": admin.id,
+                "admin_username": admin.username,
+                "adjustment_type": "admin_edit",
+                "set_to": round(float(user_data.balance), 2),
+            }
+            desc = f"Admin balance adjustment by {admin.username}"
+            if delta > 0:
+                create_credit_transaction(
+                    db=db, user_id=user_id, amount=delta, description=desc, metadata=meta
+                )
+            else:
+                from app.exceptions.transactions import InsufficientBalanceError
+
+                try:
+                    create_debit_transaction(
+                        db=db, user_id=user_id, amount=abs(delta), description=desc, metadata=meta
+                    )
+                except InsufficientBalanceError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot reduce balance below the user's available funds.",
+                    )
+
     user = update_user_admin(db, user_id, user_data)
     user_detail = AdminUserDetail.model_validate(user)
     return transform_user_profile_picture(user_detail)

@@ -881,6 +881,7 @@ const PsychicDetails = () => {
           psychicId={psychic.id}
           psychicName={psychic.username}
           psychicPhoto={psychic.profile_picture_url}
+          pricePerSecond={psychic.price_per_second}
           onClose={() => setShowRequestPanel(false)}
         />
       )}
