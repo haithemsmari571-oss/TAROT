@@ -8,6 +8,8 @@ export interface Chat {
   last_message: string;
   psychic_id?: number;
   psychic_details?: PsychicDetails;
+  /** ISO string of last activity — used to order the admin Chats list newest-first. */
+  updated_at?: string | null;
 }
 
 export interface PsychicDetails {

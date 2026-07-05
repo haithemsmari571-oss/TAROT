@@ -892,9 +892,15 @@ const PsychicSessionGlass = () => {
       (chat.user_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (chat.psychic_name || "").toLowerCase().includes(searchQuery.toLowerCase())
     ).sort((a, b) => {
+      // Keep ACTIVE/pending at the top for triage, then newest activity first
+      // within each group (falls back to id when a timestamp is missing).
       const pa = statusPriority[a.status] ?? 2;
       const pb = statusPriority[b.status] ?? 2;
-      return pa - pb;
+      if (pa !== pb) return pa - pb;
+      const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      if (tb !== ta) return tb - ta;
+      return b.id - a.id;
     });
 
   const formatTime = (totalSeconds: number | null | undefined) => {

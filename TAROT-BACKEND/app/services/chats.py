@@ -166,6 +166,7 @@ def get_chats(db: Session, user_id: int):
                 user_profile_pic_url=profile_pic_url,
                 last_message=last_msg.content if last_msg else "No messages yet",
                 psychic_id=chat.psychic_id,
+                updated_at=chat.updated_at.isoformat() if chat.updated_at else None,
             )
         )
     return chat_list

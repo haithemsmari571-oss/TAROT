@@ -29,6 +29,10 @@ class ChatOut(BaseModel):
     user_name: str
     last_message: str
     psychic_id: int
+    # ISO string of the chat's last activity — used to order the admin Chats
+    # list newest-first (chat rows are reused across repeat readings, so id is
+    # not a reliable recency signal).
+    updated_at: Optional[str] = None
 
 
 class SocketBase(BaseModel):
