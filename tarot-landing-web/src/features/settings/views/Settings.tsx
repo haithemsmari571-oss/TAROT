@@ -115,8 +115,11 @@ const Settings = () => {
           className="font-mono text-xs overflow-hidden text-ellipsis max-w-xs"
           style={{ color: COLORS.neutralWhite }}
         >
-          {setting.key === "stripe_api_key" ? (
-            <span className="tracking-widest">••••••••••••••••••••••••••••</span>
+          {(setting as any).is_secret ? (
+            // Value already redacted server-side (e.g. ••••1234) — never the raw secret.
+            <span className="tracking-widest" title="Secret — hidden for security">
+              {setting.value || "••••••••"}
+            </span>
           ) : isLongText(setting.key) ? (
             <span className="text-[10px] text-white/40 italic">
               {setting.value.length > 100

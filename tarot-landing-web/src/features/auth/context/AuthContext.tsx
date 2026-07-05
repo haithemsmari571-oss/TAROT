@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useState, useEffect, useMemo, type ReactNode } from "react";
 import {
   getToken,
   saveToken,
@@ -106,15 +106,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setUser(newUser);
   };
 
-  const value: AuthContextType = {
-    user,
-    token,
-    isAuthenticated: !!token && !!user,
-    isLoading,
-    login,
-    logout,
-    setUser: updateUser,
-  };
+  // Memoized so the context value is stable across re-renders — consumers (esp.
+  // the notification socket, keyed on token) don't churn when only `user`'s
+  // identity changes from a background /auth/me refetch.
+  const value: AuthContextType = useMemo(
+    () => ({
+      user,
+      token,
+      isAuthenticated: !!token && !!user,
+      isLoading,
+      login,
+      logout,
+      setUser: updateUser,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, token, isLoading],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

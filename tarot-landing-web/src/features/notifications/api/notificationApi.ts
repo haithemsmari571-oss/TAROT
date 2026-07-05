@@ -58,9 +58,10 @@ export class NotificationWebSocket {
   private onDisconnectCallback?: () => void;
   private onErrorCallback?: (error: any) => void;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 8;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
+  private stableTimer: NodeJS.Timeout | null = null;
 
   constructor(token: string) {
     this.token = token;
@@ -79,8 +80,6 @@ export class NotificationWebSocket {
 
     this.ws.onopen = () => {
       console.log("Notification WebSocket opened, sending authentication...");
-      this.reconnectAttempts = 0;
-      
       // Authenticate immediately after connection
       this.ws?.send(
         JSON.stringify({
@@ -88,6 +87,14 @@ export class NotificationWebSocket {
           token: this.token,
         })
       );
+
+      // Only clear the backoff once the connection has proven STABLE (open for
+      // 15s). Resetting on every open let a backend that drops us right after
+      // auth reconnect forever with no backoff.
+      if (this.stableTimer) clearTimeout(this.stableTimer);
+      this.stableTimer = setTimeout(() => {
+        this.reconnectAttempts = 0;
+      }, 15000);
 
       // Start ping interval to keep connection alive
       this.startPingInterval();
@@ -131,10 +138,19 @@ export class NotificationWebSocket {
         event.code,
         event.reason
       );
+      if (this.stableTimer) {
+        clearTimeout(this.stableTimer);
+        this.stableTimer = null;
+      }
       this.stopPingInterval();
       this.onDisconnectCallback?.();
 
-      // Attempt to reconnect
+      // Don't reconnect if the server rejected auth (bad/expired token) — that
+      // would loop until a fresh token arrives via a new socket.
+      if (event.code === 4001) {
+        console.log("Notification WebSocket auth rejected — not reconnecting");
+        return;
+      }
       this.attemptReconnect();
     };
   }
@@ -192,7 +208,11 @@ export class NotificationWebSocket {
 
   disconnect() {
     this.stopPingInterval();
-    
+
+    if (this.stableTimer) {
+      clearTimeout(this.stableTimer);
+      this.stableTimer = null;
+    }
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

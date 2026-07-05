@@ -117,11 +117,21 @@ export default function App() {
         })}
       </Route>
 
-      {/* Private / Admin Layout Routes */}
+      {/* /admin/life-path is a stale link — the real route is /admin/lifepath. */}
+      <Route path="/admin/life-path" element={<Navigate to="/admin/lifepath" replace />} />
+
+      {/* Private / Admin Layout Routes. The whole /admin shell is gated to the
+          admin family — a plain USER who reaches /admin is sent back to browse
+          (previously they landed on the shell with an empty sidebar). */}
       <Route
         element={
           <ProtectedRoute>
-            <AdminLayout />
+            <RoleProtectedRoute
+              allowedRoles={[UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN]}
+              redirectTo="/psychics-browse"
+            >
+              <AdminLayout />
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       >
