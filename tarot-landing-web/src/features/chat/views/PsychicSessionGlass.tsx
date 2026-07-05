@@ -54,6 +54,7 @@ const PsychicSessionGlass = () => {
 
   // Admin-specific: Store psychic_token for impersonation
   const [psychicToken, setPsychicToken] = useState<string | null>(null);
+  const [clientDob, setClientDob] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
@@ -67,6 +68,7 @@ const PsychicSessionGlass = () => {
         .then((details) => {
           console.log('[PsychicSessionGlass] Fetched psychic_token for admin:', details.psychic_token ? 'received' : 'not received');
           setPsychicToken(details.psychic_token);
+          setClientDob(details.client?.date_of_birth ?? null);
         })
         .catch((err) => {
           console.error('[PsychicSessionGlass] Failed to fetch chat details:', err);
@@ -75,6 +77,7 @@ const PsychicSessionGlass = () => {
     } else if (!isAdmin || !selectedChat || activeView !== "chat") {
       // Clear token when leaving chat or if not admin
       setPsychicToken(null);
+      setClientDob(null);
     }
   }, [isAdmin, selectedChat, activeView, toast]);
 
@@ -1533,6 +1536,7 @@ const PsychicSessionGlass = () => {
               >
                 <GlassChatSidebar
                   chat={currentChat}
+                  clientDob={clientDob}
                   seconds={sessionState.elapsedSeconds}
                   estimatedCost={sessionState.estimatedCost}
                   remainingSeconds={sessionState.remainingSeconds}

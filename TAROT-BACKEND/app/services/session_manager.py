@@ -196,7 +196,7 @@ class SessionManager:
                 # For existing sessions, estimate max duration from current state
                 # max_duration = elapsed + (current_balance / rate)
                 estimated_max_duration = elapsed + int(
-                    user.balance / chat.psychic.price_per_second
+                    user.total_balance / chat.psychic.price_per_second
                     if chat.psychic.price_per_second > 0
                     else 0
                 )
@@ -211,7 +211,7 @@ class SessionManager:
                     psychic_id=chat.psychic_id,
                     rate_per_second=chat.psychic.price_per_second,
                     max_session_duration_seconds=estimated_max_duration,
-                    initial_balance=float(user.balance),  # Current balance as proxy
+                    initial_balance=float(user.total_balance),  # Current balance as proxy
                     last_check_at=datetime.now(),
                     # If the client never joined, keep the timer gated after restart.
                     awaiting_join=(chat.client_joined_at is None),
@@ -424,9 +424,12 @@ class SessionManager:
 
             joined_at = datetime.now()
 
-            # Recompute the max session duration from the balance available now.
+            # Recompute the max session duration from the total spendable
+            # balance available now (free credit + paid). Using paid-only here
+            # would give a credit-only new member 0 seconds and end the session
+            # the instant they join.
             user = db.query(User).filter(User.id == chat.user_id).first()
-            current_balance = float(user.balance) if user else 0.0
+            current_balance = float(user.total_balance) if user else 0.0
             rate = session_state.rate_per_second
             additional_seconds = int(current_balance / rate) if rate > 0 else 0
 
@@ -935,7 +938,7 @@ class SessionManager:
 
             # Use provided balance or fetch from DB
             current_balance = (
-                new_balance if new_balance is not None else float(user.balance)
+                new_balance if new_balance is not None else float(user.total_balance)
             )
 
             # Validate minimum balance (at least 1 second worth)

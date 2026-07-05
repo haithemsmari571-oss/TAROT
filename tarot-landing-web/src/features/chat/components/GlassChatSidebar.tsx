@@ -5,6 +5,7 @@ import { COLORS } from "../../../theme";
 
 interface GlassChatSidebarProps {
   chat: any;
+  clientDob?: string | null;
   seconds: number;
   estimatedCost: number;
   remainingSeconds?: number | null;
@@ -17,6 +18,7 @@ interface GlassChatSidebarProps {
 
 export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
   chat,
+  clientDob,
   seconds,
   estimatedCost,
   remainingSeconds,
@@ -55,16 +57,15 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
 
   const formatCurrency = (amount: number) => {
     if (isNaN(amount) || amount < 0) {
-      return "$0.00";
+      return "£0.00";
     }
-    // API returns cost in cents, so divide by 100 to get dollars
-    const dollarAmount = amount / 100;
-    return new Intl.NumberFormat("en-US", {
+    // amount is already in points (1 point = £1) — do NOT divide by 100.
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency: "USD",
+      currency: "GBP",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(dollarAmount);
+    }).format(amount);
   };
 
   const displayName = chat.user_name || "Unknown User";
@@ -192,6 +193,21 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
             style={{ color: COLORS.neutralGray }}
           >
             Chat #{chat.id}
+          </p>
+          {/* Client date of birth — the reader needs this for the reading */}
+          <p
+            className="text-[11px] font-bold tracking-wide mt-1 flex items-center justify-center gap-1.5"
+            style={{ color: clientDob ? COLORS.starGold : COLORS.neutralGray }}
+          >
+            <Icon icon="solar:calendar-bold-duotone" className="text-xs" />
+            DOB:{" "}
+            {clientDob
+              ? new Date(clientDob).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "not provided"}
           </p>
         </motion.div>
 
@@ -347,7 +363,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                 className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
                 style={{ color: COLORS.neutralGray }}
               >
-                Estimated Earnings
+                Charged so far · what the client pays
               </p>
               <div
                 className="px-5 py-4 rounded-xl text-center relative overflow-hidden border"
@@ -372,7 +388,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
 
                 <div className="flex items-center justify-center gap-3 relative z-10">
                   <Icon
-                    icon="solar:dollar-bold-duotone"
+                    icon="solar:banknote-2-bold-duotone"
                     className="text-2xl"
                     style={{ color: COLORS.starGold }}
                   />

@@ -280,6 +280,11 @@ def get_chat_details_endpoint(
             "id": client.id,
             "username": client.username,
             "email": client.email,
+            # Surfaced so the reader can see the client's date of birth during a
+            # reading (astrology). Null for accounts that predate DOB capture.
+            "date_of_birth": client.date_of_birth.isoformat()
+            if client.date_of_birth
+            else None,
         }
         if client
         else None,
@@ -1694,7 +1699,7 @@ async def monitor_user_balance(
                 print(f"[Balance Monitor] User {user_id} not found, exiting monitor")
                 break
 
-            current_balance = float(user.balance)
+            current_balance = float(user.total_balance)
 
             # Calculate remaining time in seconds
             if psychic_price_per_second <= 0:
