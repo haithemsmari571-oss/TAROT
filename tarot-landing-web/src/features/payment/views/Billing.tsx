@@ -68,6 +68,24 @@ const getTypeDisplay = (type: TransactionType) => {
         color: "#F87171",
         label: "Debit",
       };
+    case TransactionType.BONUS:
+      return {
+        icon: "solar:gift-bold-duotone",
+        color: "#F2AE40",
+        label: "Welcome credit",
+      };
+    case TransactionType.GIFT:
+      return {
+        icon: "solar:gift-bold-duotone",
+        color: "#F2AE40",
+        label: "Gift",
+      };
+    case TransactionType.REFUND:
+      return {
+        icon: "solar:arrow-down-bold-duotone",
+        color: "#4ADE80",
+        label: "Refund",
+      };
     default:
       return {
         icon: "solar:transfer-horizontal-bold-duotone",
@@ -604,8 +622,12 @@ const Billing = () => {
                     transaction.transaction_type,
                   );
                   const statusDisplay = getStatusDisplay(transaction.status);
-                  const isCredit =
-                    transaction.transaction_type === TransactionType.CREDIT;
+                  const isCredit = [
+                    TransactionType.CREDIT,
+                    TransactionType.BONUS,
+                    TransactionType.GIFT,
+                    TransactionType.REFUND,
+                  ].includes(transaction.transaction_type);
 
                   return (
                     <div

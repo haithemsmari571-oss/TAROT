@@ -57,7 +57,9 @@ class BalanceResponse(BaseModel):
     """Response schema for user balance."""
 
     user_id: int
-    balance: int
+    balance: int  # total spendable = credit + paid
+    credit_balance: int = 0  # free welcome/gift credit remaining
+    paid_balance: int = 0  # purchased balance remaining
     last_updated: datetime
 
 

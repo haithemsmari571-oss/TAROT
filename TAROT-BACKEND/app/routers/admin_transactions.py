@@ -90,7 +90,11 @@ def get_user_balance_admin(
         raise UserNotFoundError()
 
     return BalanceResponse(
-        user_id=user.id, balance=user.balance, last_updated=user.updated_at
+        user_id=user.id,
+        balance=user.total_balance,
+        credit_balance=user.credit_balance or 0,
+        paid_balance=user.balance or 0,
+        last_updated=user.updated_at,
     )
 
 

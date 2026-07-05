@@ -5,6 +5,8 @@ export enum TransactionType {
   DEBIT = "DEBIT",
   REFUND = "REFUND",
   REVERSAL = "REVERSAL",
+  BONUS = "BONUS",
+  GIFT = "GIFT",
 }
 
 export enum TransactionStatus {
