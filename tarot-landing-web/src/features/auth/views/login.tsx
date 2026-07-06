@@ -106,9 +106,11 @@ const LoginPage = () => {
               <label className="text-sm font-semibold text-white/70 ml-1">Email</label>
               <div className="relative">
                 <Icon icon="ph:user-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
-                <input 
-                  required 
-                  type="email" 
+                <input
+                  required
+                  type="email"
+                  name="email"
+                  autoComplete="username"
                   placeholder="you@email.com"
                   className={`${inputClasses} pl-12`}
                   value={email}
@@ -126,10 +128,12 @@ const LoginPage = () => {
               </div>
               <div className="relative">
                 <Icon icon="ph:lock-key-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
-                <input 
-                  required 
-                  type="password" 
-                  placeholder="••••••••••••" 
+                <input
+                  required
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••••••"
                   className={`${inputClasses} pl-12`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
