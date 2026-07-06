@@ -258,7 +258,21 @@ def seed_life_path_compatibility(db: Session):
 
 
 def seed_users(db: Session, users_list: List[Dict]):
-    default_password = hash_password("password@2026")
+    # The default password for seeded accounts is env-driven so a KNOWN password
+    # can never ship to production. In prod (ENVIRONMENT=prod) SEED_DEFAULT_PASSWORD
+    # MUST be set — otherwise we refuse to seed rather than create accounts with a
+    # public default. Locally it falls back to a dev-only convenience value.
+    from app.config import get_app_settings
+
+    seed_password = os.environ.get("SEED_DEFAULT_PASSWORD")
+    if not seed_password:
+        if get_app_settings().ENVIRONMENT == "prod":
+            raise RuntimeError(
+                "SEED_DEFAULT_PASSWORD must be set when seeding in production — "
+                "refusing to seed users with a known default password."
+            )
+        seed_password = "password@2026"  # dev-only convenience
+    default_password = hash_password(seed_password)
     now = datetime.utcnow()
     for i, user_data in enumerate(users_list):
         # Check if user already exists

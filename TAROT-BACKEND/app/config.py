@@ -30,7 +30,9 @@ class AppSettings(BaseSettings):
         "b3bdc70d9d8fb5594b135a7a45d148ab51947cb29508655af27ff84e7492b257"
     )
     JWT_ALGORITHM: str = "HS256"
-    JWT_TOKEN_EXPIRE_MINUTES: int = 9999
+    # 24h. Production sets its own value via env; this default is deliberately
+    # sane (not 9999) so a long-lived token can never ship by omission.
+    JWT_TOKEN_EXPIRE_MINUTES: int = 1440
 
     APP_BASE_URL: str = "https://askvalentina.co.uk/api"
     FRONT_BASE_URL: str = "https://askvalentina.co.uk/"
