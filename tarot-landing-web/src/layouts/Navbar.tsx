@@ -5,7 +5,6 @@ import { TYPOGRAPHY, COLORS } from "../theme";
 import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
-import { useTopUp } from "../features/payment/context/TopUpContext";
 import { formatStardust } from "../lib/currency";
 import "../styles/starfield.css";
 
@@ -13,9 +12,6 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
-
-  // Every "Add Stardust" entry point opens the shared Glider top-up modal.
-  const { open: openTopUp } = useTopUp();
 
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -136,7 +132,8 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
              {isAuthenticated ? (
                <>
                  <div
-                   onClick={() => openTopUp()}
+                   onClick={() => navigate("/profile")}
+                   title="Your Constellation — your Stardust balance"
                    style={{ backgroundColor: COLORS.primary }}
                    className="flex items-center gap-2 px-4 py-2 rounded-full cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.3)] transition-all hover:shadow-[0_0_30px_rgba(0,0,0,0.4)] hover:scale-105 group"
                  >
@@ -144,7 +141,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                    <span className="text-[11px] font-black text-black tracking-widest uppercase">
                      {balance !== null ? formatStardust(balance) : '...'}
                    </span>
-                   <Icon icon="ph:plus-circle-bold" className="text-black/40 text-xs group-hover:text-black transition-colors" />
+                   <Icon icon="ph:caret-right-bold" className="text-black/40 text-xs group-hover:text-black transition-colors" />
                  </div>
 
                  <button 
@@ -165,7 +162,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                      <span className="text-sm font-black text-white/90 uppercase tracking-wide group-hover:text-primary transition-colors">
                        {user?.username || 'User'}
                      </span>
-                     <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wide">View profile</span>
+                     <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wide">Your Constellation</span>
                    </div>
                  </button>
 
@@ -248,6 +245,25 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
 
           <div className="flex-1 overflow-y-auto p-4">
             <div className="space-y-1">
+              {/* Flagship: the daily-habit Constellation is the FIRST item on mobile. */}
+              {isAuthenticated && (
+                <button
+                  onClick={() => { navigate("/profile"); setMobileNavOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-white/5"
+                  style={{
+                    fontFamily: TYPOGRAPHY.fontFamily.heading,
+                    backgroundColor: location.pathname === "/profile" ? "rgba(210, 185, 255, 0.08)" : "transparent",
+                  }}
+                >
+                  <Icon icon="ph:star-four-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                  <span
+                    className="text-sm font-bold uppercase tracking-wider"
+                    style={{ color: location.pathname === "/profile" ? COLORS.primary : "rgba(255,255,255,0.85)" }}
+                  >
+                    Your Constellation
+                  </span>
+                </button>
+              )}
               {navItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
@@ -279,39 +295,92 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   </button>
                 );
               })}
+              {/* Notifications was desktop-only (the bell) — reachable on mobile now. */}
+              {isAuthenticated && (
+                <button
+                  onClick={() => { navigate("/notifications"); setMobileNavOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-white/5"
+                  style={{
+                    fontFamily: TYPOGRAPHY.fontFamily.heading,
+                    backgroundColor: location.pathname === "/notifications" ? "rgba(210, 185, 255, 0.08)" : "transparent",
+                  }}
+                >
+                  <Icon icon="ph:bell-duotone" className="text-xl" style={{ color: location.pathname === "/notifications" ? COLORS.primary : "rgba(255,255,255,0.3)" }} />
+                  <span
+                    className="text-sm font-bold uppercase tracking-wider"
+                    style={{ color: location.pathname === "/notifications" ? COLORS.primary : "rgba(255,255,255,0.5)" }}
+                  >
+                    Notifications
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
           <div className="p-4 border-t border-white/5">
             <div className="space-y-3">
-              <div 
-                onClick={() => { openTopUp(); setMobileNavOpen(false); }}
-                style={{ backgroundColor: COLORS.primary }}
-                className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
-              >
-                <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
-                <span className="text-sm font-black text-black tracking-wider uppercase">
-                  {balance !== null ? formatStardust(balance) : '...'} Stardust
-                </span>
-                <Icon icon="ph:plus-circle-bold" className="text-black/40 group-hover:text-black transition-colors" />
-              </div>
+              {isAuthenticated ? (
+                <>
+                  {/* Stardust pill taps through to its home — the Constellation balance. */}
+                  <div
+                    onClick={() => { navigate("/profile"); setMobileNavOpen(false); }}
+                    style={{ backgroundColor: COLORS.primary }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105 group"
+                  >
+                    <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
+                    <span className="text-sm font-black text-black tracking-wider uppercase">
+                      {balance !== null ? formatStardust(balance) : '...'} Stardust
+                    </span>
+                    <Icon icon="ph:caret-right-bold" className="text-black/40 group-hover:text-black transition-colors" />
+                  </div>
 
-              <a
-                href="mailto:support@askvalentina.co.uk"
-                onClick={() => setMobileNavOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all"
-              >
-                <Icon icon="ph:lifebuoy-duotone" className="text-xl" style={{ color: COLORS.primary }} />
-                <span className="text-sm font-bold uppercase tracking-wider text-white/70">Help &amp; Support</span>
-              </a>
+                  <a
+                    href="mailto:support@askvalentina.co.uk"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all"
+                  >
+                    <Icon icon="ph:lifebuoy-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                    <span className="text-sm font-bold uppercase tracking-wider text-white/70">Help &amp; Support</span>
+                  </a>
 
-              <button
-                onClick={() => { logout(); setMobileNavOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
-              >
-                <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: COLORS.error }} />
-                <span className="text-sm font-bold uppercase tracking-wider" style={{ color: COLORS.error }}>Sign Out</span>
-              </button>
+                  <button
+                    onClick={() => { logout(); setMobileNavOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition-all"
+                  >
+                    <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: COLORS.error }} />
+                    <span className="text-sm font-bold uppercase tracking-wider" style={{ color: COLORS.error }}>Sign Out</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Guests must be able to sign up / log in from the drawer, not see "Sign Out". */}
+                  <button
+                    onClick={() => { navigate("/register"); setMobileNavOpen(false); }}
+                    style={{ backgroundColor: COLORS.primary }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer shadow-lg transition-all hover:scale-105"
+                  >
+                    <Icon icon="ph:sparkle-fill" className="text-black text-lg" />
+                    <span className="text-sm font-black text-black tracking-wider uppercase">Get £15 Free</span>
+                  </button>
+
+                  <button
+                    onClick={() => { navigate("/login"); setMobileNavOpen(false); }}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-all"
+                  >
+                    <Icon icon="ph:sign-in-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                    <span className="text-sm font-bold uppercase tracking-wider text-white/70">Login</span>
+                  </button>
+
+                  <a
+                    href="mailto:support@askvalentina.co.uk"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all"
+                  >
+                    <Icon icon="ph:lifebuoy-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                    <span className="text-sm font-bold uppercase tracking-wider text-white/70">Help &amp; Support</span>
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
