@@ -9,5 +9,6 @@ class Permission(enum.Enum):
     MANAGE_BUY_OPTIONS = "manage_buy_options"
     MANAGE_SETTINGS = "manage_settings"
     MANAGE_CATEGORIES = "manage_categories"
+    MANAGE_TASKS = "manage_tasks"  # gamification tasks + claims queue
     VIEW_EARNINGS = "view_earnings"
     VIEW_TRANSACTIONS = "view_transactions"

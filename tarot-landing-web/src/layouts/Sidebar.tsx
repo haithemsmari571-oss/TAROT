@@ -169,6 +169,13 @@ const Sidebar = () => {
       ],
     },
     {
+      label: "Engagement",
+      items: [
+        { label: "Rituals", path: "/admin/tasks", icon: "solar:magic-stick-3-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+        { label: "Claims", path: "/admin/claims", icon: "solar:inbox-archive-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
+      ],
+    },
+    {
       label: "Finance",
       items: [
         { label: "Ledger", path: "/admin/ledger", icon: "solar:wallet-money-bold-duotone", roles: [UserRole.ADMIN, UserRole.SUPERADMIN] },
@@ -196,6 +203,8 @@ const Sidebar = () => {
     {
       label: "System",
       items: [
+        { label: "AI Prompts", path: "/admin/ai-prompts", icon: "solar:chat-square-code-bold-duotone", roles: [UserRole.SUPERADMIN] },
+        { label: "Rituals Settings", path: "/admin/rituals-settings", icon: "solar:tuning-square-2-bold-duotone", roles: [UserRole.SUPERADMIN] },
         { label: "Settings", path: "/admin/settings", icon: "solar:settings-bold-duotone", roles: [UserRole.SUPERADMIN] },
       ],
     },

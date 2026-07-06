@@ -42,6 +42,17 @@ class AppSettings(BaseSettings):
     STRIPE_ENDPOINT_SECRET: str = ""
     STRIPE_API_KEY: str = ""
 
+    # Claude API key for the nightly content engine + AI Prompt "Run test".
+    # Paste your key from console.anthropic.com into TAROT-BACKEND/.env as
+    # ANTHROPIC_API_KEY=sk-ant-... — never commit it, never expose to frontend.
+    ANTHROPIC_API_KEY: str = ""
+    # Model for the content engine (Claude Haiku — cheap, fast).
+    CONTENT_MODEL: str = "claude-haiku-4-5-20251001"
+    # Cost guard: hard ceiling on total tokens per nightly run.
+    CONTENT_RUN_TOKEN_BUDGET: int = 200_000
+    # Hour (UTC) the nightly job runs to prepare the NEXT day's content.
+    CONTENT_JOB_HOUR_UTC: int = 3
+
     BILLING_TASK_MAX_RETRIES: int = 3
     BILLING_TASK_RETRY_DELAY_SECONDS: int = 5
 

@@ -62,6 +62,10 @@ class BalanceResponse(BaseModel):
     balance: float  # total spendable = credit + paid (pennies)
     credit_balance: float = 0  # free welcome/gift credit remaining
     paid_balance: float = 0  # purchased balance remaining
+    earned_balance: float = 0  # earned (gamification) Stardust, unexpired
+    # Total Stardust to DISPLAY (spendable + earned). Single source of truth for
+    # the "Stardust" pill so it matches the Constellation balance card.
+    stardust_total: float = 0
     last_updated: Optional[datetime] = None
 
 

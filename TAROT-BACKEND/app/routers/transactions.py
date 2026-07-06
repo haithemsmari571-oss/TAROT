@@ -73,11 +73,19 @@ def get_my_balance(
     # Refresh user to get latest balance
     db.refresh(user)
 
+    from app.services.stardust_rewards import get_earned_stardust_balance
+
+    earned = get_earned_stardust_balance(db, user.id)
+
     return BalanceResponse(
         user_id=user.id,
         balance=user.total_balance,
         credit_balance=user.credit_balance or 0,
         paid_balance=user.balance or 0,
+        earned_balance=earned,
+        # Displayed "Stardust" total includes earned so the navbar pill matches
+        # the Constellation balance card (single source of truth).
+        stardust_total=round(float(user.total_balance) + earned, 2),
         last_updated=user.updated_at,
     )
 

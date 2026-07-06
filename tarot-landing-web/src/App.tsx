@@ -9,6 +9,7 @@ import NotFound from "./features/misc/views/NotFound";
 import { ProtectedRoute, RoleProtectedRoute } from "./features/auth/components";
 import { useAuth } from "./features/auth/hooks";
 import { UserRole } from "./features/auth/types/auth.types";
+import BrandedLoader from "./components/motion/BrandedLoader";
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -25,11 +26,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <BrandedLoader fullscreen label="Entering your world…" />;
   }
 
   if (isLoading || !user) {

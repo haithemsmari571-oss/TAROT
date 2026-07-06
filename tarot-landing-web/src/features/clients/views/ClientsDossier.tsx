@@ -308,6 +308,31 @@ const ClientsDossier = () => {
                   />
                 </div>
               </div>
+
+              {/* Stardust gift history (superadmin personal gifts) */}
+              {Array.isArray((dossier as any).gifts) && (dossier as any).gifts.length > 0 && (
+                <div className="mt-5 rounded-[24px] border border-white/5 p-5" style={{ backgroundColor: COLORS.surface }}>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-3" style={{ color: COLORS.neutralGray }}>
+                    Stardust gifts ({(dossier as any).gifts.length})
+                  </p>
+                  <div className="space-y-1">
+                    {(dossier as any).gifts.map((g: any) => (
+                      <div key={g.id} className="flex items-start justify-between gap-3 py-2 border-b border-white/5 last:border-0">
+                        <div className="min-w-0">
+                          <p className="text-sm text-white/80">{g.message || "(no message)"}</p>
+                          <p className="text-[10px] text-white/30">
+                            {g.sent_by ? `by ${g.sent_by} · ` : ""}
+                            {g.created_at ? new Date(g.created_at).toLocaleDateString() : ""}
+                          </p>
+                        </div>
+                        <span className="text-sm font-bold shrink-0" style={{ color: COLORS.starGold }}>
+                          +{g.amount} ⭐
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           ) : null}
         </div>

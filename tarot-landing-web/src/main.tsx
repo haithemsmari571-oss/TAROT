@@ -10,6 +10,7 @@ import { ToastProvider } from './components/Toast'
 import { NotificationProvider } from './features/notifications/context/NotificationContext'
 import IncomingReadingModal from './features/chat/components/IncomingReadingModal'
 import { TopUpProvider } from './features/payment/context/TopUpContext'
+import { CelebrationProvider } from './features/celebrations/CelebrationProvider'
 
 const queryClient = new QueryClient(
   {defaultOptions: {
@@ -30,9 +31,11 @@ createRoot(document.getElementById('root')!).render(
             <AuthInitializer>
               <ToastProvider>
                 <TopUpProvider>
-                  <App />
-                  {/* Global "Incoming Reading" gate — the ONLY way to join/start billing */}
-                  <IncomingReadingModal />
+                  <CelebrationProvider>
+                    <App />
+                    {/* Global "Incoming Reading" gate — the ONLY way to join/start billing */}
+                    <IncomingReadingModal />
+                  </CelebrationProvider>
                 </TopUpProvider>
               </ToastProvider>
             </AuthInitializer>

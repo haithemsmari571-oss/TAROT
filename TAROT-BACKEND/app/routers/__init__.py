@@ -19,6 +19,10 @@ from .dashboard import router as dashboard_router
 from .landing import router as landing_router
 from .public_settings import router as public_settings_router
 from .client_dossier import router as client_dossier_router
+from .admin_tasks import router as admin_tasks_router
+from .constellation import router as constellation_router
+from .admin_ai_prompts import router as admin_ai_prompts_router
+from .admin_content import router as admin_content_router
 
 __all__ = [
     "auth_router",
@@ -42,4 +46,8 @@ __all__ = [
     "landing_router",
     "public_settings_router",
     "client_dossier_router",
+    "admin_tasks_router",
+    "constellation_router",
+    "admin_ai_prompts_router",
+    "admin_content_router",
 ]

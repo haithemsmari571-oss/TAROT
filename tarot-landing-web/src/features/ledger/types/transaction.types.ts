@@ -71,6 +71,8 @@ export interface TransactionFilters {
 export interface UserBalance {
   user_id: number;
   balance: number;
+  earned_balance?: number;
+  stardust_total?: number; // spendable + earned — the number to display
   username?: string;
   email?: string;
 }

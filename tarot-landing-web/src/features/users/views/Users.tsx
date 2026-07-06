@@ -360,13 +360,16 @@ const Users = () => {
                 <Icon icon="solar:eye-bold-duotone" className="text-lg" />
               </button>
 
-              <button 
-                className="p-3 rounded-xl text-white/20 hover:text-starGold hover:bg-starGold/5 transition-all"
-                onClick={() => { setUserToGift(user); setIsGiftModalOpen(true); }}
-                title="Gift Balance"
-              >
-                <Icon icon="solar:gift-bold-duotone" className="text-lg" />
-              </button>
+              {/* Personal Stardust gifts are superadmin-only. */}
+              {currentUser?.role === Role.SUPERADMIN && (
+                <button
+                  className="p-3 rounded-xl text-white/20 hover:text-starGold hover:bg-starGold/5 transition-all"
+                  onClick={() => { setUserToGift(user); setIsGiftModalOpen(true); }}
+                  title="Gift Stardust"
+                >
+                  <Icon icon="solar:gift-bold-duotone" className="text-lg" />
+                </button>
+              )}
 
               <button 
                 className="p-3 rounded-xl text-white/20 hover:text-primary hover:bg-primary/5 transition-all"

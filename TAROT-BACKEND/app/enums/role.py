@@ -20,6 +20,7 @@ ROLE_PERMISSIONS = {
         Permission.MANAGE_BUY_OPTIONS,
         Permission.MANAGE_SETTINGS,
         Permission.MANAGE_CATEGORIES,
+        Permission.MANAGE_TASKS,
         Permission.VIEW_TRANSACTIONS,
     ],
     Role.PSYCHIC: [

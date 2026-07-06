@@ -1,0 +1,146 @@
+"""Admin — AI Prompts. The control room for every AI prompt on the platform:
+view, edit (with version history + restore), restore default, and run a live
+test against the real model. All behind MANAGE_SETTINGS (superadmin)."""
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.database.client import get_db
+from app.dependencies.authorization import require_permission
+from app.enums.permissions import Permission
+from app.services.ai import client as ai_client
+from app.services.ai import registry
+
+router = APIRouter(dependencies=[Depends(require_permission(Permission.MANAGE_SETTINGS))])
+
+
+class PromptSave(BaseModel):
+    prompt: str
+
+
+class PromptTest(BaseModel):
+    variables: Optional[dict] = None
+
+
+def _to_detail(p) -> dict:
+    return {
+        "key": p.key,
+        "name": p.name,
+        "description": p.description,
+        "model": p.model,
+        "prompt": p.prompt,
+        "default_prompt": p.default_prompt,
+        "variables": p.variables or [],
+        "status": p.status,
+        "char_count": len(p.prompt or ""),
+        "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
+        "last_run_status": p.last_run_status,
+    }
+
+
+@router.get("/ai-prompts")
+def list_ai_prompts(db: Session = Depends(get_db)):
+    rows = registry.list_prompts(db)
+    items = [
+        {
+            "key": p.key,
+            "name": p.name,
+            "description": p.description,
+            "model": p.model,
+            "status": p.status,
+            "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
+            "last_run_status": p.last_run_status,
+        }
+        for p in rows
+    ]
+    return JSONResponse(content=jsonable_encoder({"items": items, "configured": ai_client.is_configured()}))
+
+
+@router.get("/ai-prompts/{key}")
+def get_ai_prompt(key: str, db: Session = Depends(get_db)):
+    try:
+        return JSONResponse(content=jsonable_encoder(_to_detail(registry.get_prompt(db, key))))
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+
+@router.put("/ai-prompts/{key}")
+def save_ai_prompt(key: str, payload: PromptSave, db: Session = Depends(get_db)):
+    if not payload.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+    try:
+        p = registry.save_prompt(db, key, payload.prompt)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return JSONResponse(content=jsonable_encoder(_to_detail(p)))
+
+
+@router.post("/ai-prompts/{key}/restore-default")
+def restore_ai_prompt_default(key: str, db: Session = Depends(get_db)):
+    try:
+        p = registry.restore_default(db, key)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return JSONResponse(content=jsonable_encoder(_to_detail(p)))
+
+
+@router.get("/ai-prompts/{key}/versions")
+def get_ai_prompt_versions(key: str, db: Session = Depends(get_db)):
+    try:
+        versions = registry.get_versions(db, key)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    items = [
+        {
+            "id": v.id,
+            "text": v.text,
+            "char_count": len(v.text or ""),
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+        }
+        for v in versions
+    ]
+    return JSONResponse(content=jsonable_encoder({"items": items}))
+
+
+@router.post("/ai-prompts/{key}/versions/{version_id}/restore")
+def restore_ai_prompt_version(key: str, version_id: int, db: Session = Depends(get_db)):
+    try:
+        p = registry.restore_version(db, key, version_id)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt or version not found")
+    return JSONResponse(content=jsonable_encoder(_to_detail(p)))
+
+
+# Sample values used to fill any variable the tester didn't supply.
+_SAMPLE = {"zodiac_sign": "Cancer", "date": "2026-07-07", "card_name": "The Star"}
+
+
+@router.post("/ai-prompts/{key}/test")
+def test_ai_prompt(key: str, payload: PromptTest, db: Session = Depends(get_db)):
+    """Run the prompt against its real model with sample inputs and return the
+    raw output — so the owner can iterate on wording without a scheduled job."""
+    try:
+        prompt = registry.get_prompt(db, key)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if not ai_client.is_configured():
+        raise HTTPException(status_code=400, detail=str(ai_client.AiNotConfigured()))
+
+    supplied = payload.variables or {}
+    variables = {}
+    for v in prompt.variables or []:
+        name = v.get("name")
+        variables[name] = supplied.get(name) or _SAMPLE.get(name, f"<{name}>")
+
+    text = registry.render(db, key, **variables)
+    try:
+        result = ai_client.run_prompt(text, prompt.model)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Model call failed: {e}")
+    return JSONResponse(content=jsonable_encoder({"variables": variables, **result}))

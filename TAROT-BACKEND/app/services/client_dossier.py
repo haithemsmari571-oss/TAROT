@@ -274,6 +274,45 @@ def get_client_astro(client: User) -> dict:
     }
 
 
+def get_client_gifts(db: Session, client_id: int, limit: int = 20) -> list:
+    """Recent personal Stardust gifts sent to this client (newest first) — a
+    simple log for the dossier. Reads GIFT ledger rows."""
+    import json
+
+    rows = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == client_id,
+            Transaction.transaction_type == TransactionType.GIFT,
+        )
+        .order_by(Transaction.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    out = []
+    for t in rows:
+        admin_name = None
+        if t.transaction_metadata:
+            try:
+                admin_name = json.loads(t.transaction_metadata).get("admin_username")
+            except Exception:
+                admin_name = None
+        # Description is "Admin gift: <message>" — surface the note if present.
+        note = None
+        if t.description and t.description.startswith("Admin gift:"):
+            note = t.description[len("Admin gift:"):].strip() or None
+        out.append(
+            {
+                "id": t.id,
+                "amount": round(float(t.amount or 0), 2),
+                "message": note,
+                "sent_by": admin_name,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+        )
+    return out
+
+
 def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
     """
     Full dossier for a client: profile + astro + spend stats + all reading notes
@@ -325,4 +364,5 @@ def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
         "stats": stats,
         "sessions": sessions,
         "notes": notes_out,
+        "gifts": get_client_gifts(db, client_id),
     }

@@ -83,6 +83,8 @@ export default function RootLayout() {
       />
       {/* Reachable via router.push("/signup"); hidden from the tab bar. */}
       <Tabs.Screen name="signup" options={{ href: null }} />
+      {/* Reachable via router.push("/stardust"); hidden from the tab bar. */}
+      <Tabs.Screen name="stardust" options={{ href: null }} />
       </Tabs>
       </CallProvider>
     </AuthProvider>

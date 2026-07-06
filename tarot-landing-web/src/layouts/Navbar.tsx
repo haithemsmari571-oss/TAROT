@@ -25,7 +25,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
   useEffect(() => {
     if (isAuthenticated) {
       paymentApi.getMyBalance()
-        .then(data => setBalance(data.balance))
+        .then(data => setBalance(data.stardust_total ?? data.balance))
         .catch(() => setBalance(null));
     }
   }, [isAuthenticated, location.pathname]);
@@ -45,7 +45,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
     };
     const onFocus = () => {
       paymentApi.getMyBalance()
-        .then(data => setBalance(data.balance))
+        .then(data => setBalance(data.stardust_total ?? data.balance))
         .catch(() => {});
     };
 

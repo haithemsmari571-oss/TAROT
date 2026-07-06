@@ -18,3 +18,5 @@ class NotificationType(str, Enum):
     TOPUP_SUCCESS = "TOPUP_SUCCESS"
     GIFT_BALANCE_RECEIVED = "GIFT_BALANCE_RECEIVED"
     LIFETIME_ACCESS_PURCHASED = "LIFETIME_ACCESS_PURCHASED"
+    CLAIM_APPROVED = "CLAIM_APPROVED"  # a ritual claim was approved (Stardust credited)
+    CLAIM_REJECTED = "CLAIM_REJECTED"  # a ritual claim was declined (gentle)

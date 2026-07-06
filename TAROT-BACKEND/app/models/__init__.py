@@ -17,6 +17,13 @@ from .notification import Notification
 from .buy_option import BuyOption
 from .landing_content import LandingContent
 from .client_note import ClientNote
+from .stardust_lot import StardustLot
+from .task import Task
+from .claim import Claim
+from .daily_content import DailyContent
+from .daily_pull import DailyPull
+from .ai_prompt import AiPrompt, AiPromptVersion
+from .content_generation_run import ContentGenerationRun
 
 __all__ = [
     "User",
@@ -38,4 +45,12 @@ __all__ = [
     "BuyOption",
     "LandingContent",
     "ClientNote",
+    "StardustLot",
+    "Task",
+    "Claim",
+    "DailyContent",
+    "DailyPull",
+    "AiPrompt",
+    "AiPromptVersion",
+    "ContentGenerationRun",
 ]

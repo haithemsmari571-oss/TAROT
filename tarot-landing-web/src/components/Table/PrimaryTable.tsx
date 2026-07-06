@@ -25,6 +25,8 @@ export interface PrimaryTableProps<T> {
   searchEnabled?: boolean;
   filterOptions?: { label: string; value: string }[];
   onFilterChange?: (value: string) => void;
+  emptyText?: string;
+  emptyIcon?: string;
 }
 
 type SortConfig = {
@@ -44,6 +46,8 @@ export const PrimaryTable = <T extends Record<string, any>>({
   searchEnabled = true,
   filterOptions,
   onFilterChange,
+  emptyText = "Void Detected: No Data",
+  emptyIcon = "solar:shield-warning-bold-duotone",
 }: PrimaryTableProps<T>) => {
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [search, setSearch] = useState("");
@@ -216,9 +220,9 @@ export const PrimaryTable = <T extends Record<string, any>>({
             ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={100} className="p-24 text-center">
-                  <div className="flex flex-col items-center gap-4 opacity-20">
-                    <Icon icon="solar:shield-warning-bold-duotone" className="text-7xl" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Void Detected: No Data</span>
+                  <div className="flex flex-col items-center gap-4 opacity-30">
+                    <Icon icon={emptyIcon} className="text-6xl" />
+                    <span className="text-sm font-semibold tracking-wide text-white/80">{emptyText}</span>
                   </div>
                 </td>
               </tr>

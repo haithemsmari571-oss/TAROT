@@ -107,3 +107,20 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    # Earned Stardust lots (gamification). Each lot expires on its own 30-day
+    # clock; purchased balance/credit_balance above are unaffected.
+    stardust_lots: Mapped[List["StardustLot"]] = relationship(
+        "StardustLot",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    # Task completions by this user. foreign_keys pins the relationship to
+    # user_id (Claim also has an approved_by FK back to users).
+    claims: Mapped[List["Claim"]] = relationship(
+        "Claim",
+        foreign_keys="Claim.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

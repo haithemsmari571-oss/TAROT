@@ -28,6 +28,10 @@ from app.routers import (
     landing_router,
     public_settings_router,
     client_dossier_router,
+    admin_tasks_router,
+    constellation_router,
+    admin_ai_prompts_router,
+    admin_content_router,
 )
 import app.models
 
@@ -49,6 +53,33 @@ async def lifespan(app: FastAPI):
     session_manager = initialize_session_manager()
     await session_manager.start()
     logger.info("session_manager_started")
+
+    # Housekeeping: delete evidence files whose claims resolved >60 days ago
+    # (Section 6.1). Runs on startup; the nightly job will also call it later.
+    try:
+        from app.services.tasks import cleanup_resolved_evidence
+
+        with SessionLocal() as _db:
+            cleanup_resolved_evidence(_db)
+    except Exception as e:
+        logger.warning("evidence_cleanup_startup_failed", error=str(e))
+
+    # AI Prompt Registry: ensure every shipped prompt exists in the DB.
+    try:
+        from app.services.ai import registry as ai_registry
+
+        with SessionLocal() as _db:
+            ai_registry.seed_prompts(_db)
+    except Exception as e:
+        logger.warning("ai_prompt_seed_failed", error=str(e))
+
+    # Nightly content engine scheduler (no external cron in this stack).
+    try:
+        from app.tasks.content_job import start_content_scheduler_thread
+
+        start_content_scheduler_thread()
+    except Exception as e:
+        logger.warning("content_scheduler_start_failed", error=str(e))
 
     logger.info("application_started", message="All background tasks initialized")
 
@@ -202,6 +233,30 @@ app.include_router(
     client_dossier_router,
     prefix="/api",
     tags=["Client Dossier"],
+)
+
+app.include_router(
+    admin_tasks_router,
+    prefix="/api/admin",
+    tags=["Admin - Rituals (Tasks & Claims)"],
+)
+
+app.include_router(
+    constellation_router,
+    prefix="/api",
+    tags=["Constellation (Client)"],
+)
+
+app.include_router(
+    admin_ai_prompts_router,
+    prefix="/api/admin",
+    tags=["Admin - AI Prompts"],
+)
+
+app.include_router(
+    admin_content_router,
+    prefix="/api/admin",
+    tags=["Admin - Content Engine & Settings"],
 )
 
 

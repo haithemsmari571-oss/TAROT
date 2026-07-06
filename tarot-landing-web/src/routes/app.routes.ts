@@ -12,6 +12,9 @@ import ledgerRoutes from "./ledger.routes";
 import clientsRoutes from "./clients.routes";
 import billingRoutes from "./billing.routes";
 import zodiacRoutes from "./zodiac.routes";
+import tasksRoutes from "./tasks.routes";
+import aiPromptsRoutes from "./ai-prompts.routes";
+import ritualsSettingsRoutes from "./rituals-settings.routes";
 import lifepathRoutes from "./lifepath.routes";
 import settingsRoutes from "./settings.routes";
 import oracleRoutes from "./oracle.routes";
@@ -61,6 +64,9 @@ const routes: RouteConfig[] = [
 ...clientsRoutes,
 ...billingRoutes,
 ...zodiacRoutes,
+...tasksRoutes,
+...aiPromptsRoutes,
+...ritualsSettingsRoutes,
 ...lifepathRoutes,
 ...settingsRoutes,
 ...oracleRoutes,

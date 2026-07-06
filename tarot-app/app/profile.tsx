@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS } from "../src/theme/colors";
 import { useAuth } from "../src/context/AuthContext";
+import { useStardustBalance } from "../src/hooks/useStardustBalance";
 
 export default function ProfileScreen() {
   const { user, loading } = useAuth();
@@ -32,6 +33,9 @@ export default function ProfileScreen() {
 
 function Account() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
+  const { balance, loading: balanceLoading } = useStardustBalance();
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <StatusBar style="light" />
@@ -41,6 +45,35 @@ function Account() {
         </View>
         <Text style={styles.username}>{user?.username}</Text>
         <Text style={styles.email}>{user?.email}</Text>
+
+        {/* Stardust balance + entry to the purchase screen */}
+        <TouchableOpacity
+          style={styles.stardustCard}
+          activeOpacity={0.85}
+          onPress={() => router.push("/stardust")}
+        >
+          <View style={styles.stardustLeft}>
+            <Ionicons name="sparkles" size={18} color={COLORS.gold} />
+            <View>
+              <Text style={styles.stardustLabel}>STARDUST</Text>
+              {balanceLoading && balance === null ? (
+                <ActivityIndicator
+                  color={COLORS.gold}
+                  style={{ alignSelf: "flex-start", marginTop: 2 }}
+                />
+              ) : (
+                <Text style={styles.stardustValue}>
+                  {balance != null ? balance.toLocaleString() : "—"}
+                </Text>
+              )}
+            </View>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={COLORS.textMuted}
+          />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.signOutBtn}
@@ -246,7 +279,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textMuted,
     fontFamily: "Poppins_400Regular",
-    marginBottom: 36,
+    marginBottom: 28,
+  },
+  stardustCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: "rgba(242,174,64,0.25)",
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: 28,
+  },
+  stardustLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stardustLabel: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: COLORS.textMuted,
+    fontFamily: "Poppins_600SemiBold",
+  },
+  stardustValue: {
+    fontSize: 20,
+    color: COLORS.gold,
+    fontFamily: "Poppins_700Bold",
   },
   signOutBtn: {
     borderWidth: 1,

@@ -449,15 +449,17 @@ def adjust_user_balance(
 async def gift_user_balance(
     user_id: int,
     gift_data: AdminGiftBalance,
-    admin: User = Depends(require_permission(Permission.MANAGE_TRANSACTIONS)),
+    admin: User = Depends(require_superadmin),
     db: Session = Depends(get_db),
 ):
     """
-    Gift balance to a user.
+    Gift Stardust to a client with an optional personal message.
 
-    Creates a GIFT transaction and sends a notification to the user.
+    Creates a GIFT transaction (credit-first, spendable in full — same mechanics
+    as the welcome credit) and sends a notification the client sees as a full
+    gift-opening celebration on their Constellation.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Superadmin only.
     """
     # Bind admin to context
     bind_user_to_context(admin.id)
@@ -506,6 +508,9 @@ async def gift_user_balance(
         data={
             "amount": gift_data.amount,
             "new_balance": user.balance,
+            # Raw personal note, shown hand-written in the celebration.
+            "message": gift_data.message or None,
+            "from": "Valentina",
         },
     )
     db.add(db_notification)
