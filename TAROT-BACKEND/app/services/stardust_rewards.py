@@ -216,6 +216,62 @@ def get_earned_stardust_balance(
     return _round2(total)
 
 
+def get_spendable_stardust(
+    db: Session, user, now: Optional[datetime] = None
+) -> float:
+    """Total spendable Stardust for the reading meter = purchased balance + free
+    welcome/gift credit + unexpired EARNED lots.
+
+    Per the PM decision, earned Stardust spends at full value (1 ⭐ = £1), like any
+    other Stardust — no cap, no per-minute split. It is only *displayed* separately.
+    This is the single affordability figure the billing path should use so earned
+    stars can actually fund a reading before they expire. When a user has zero
+    earned lots this returns exactly ``credit + paid`` (== ``user.total_balance``),
+    so every pre-existing billing scenario is unaffected.
+    """
+    if user is None:
+        return 0.0
+    earned = get_earned_stardust_balance(db, user.id, now=now)
+    return _round2(float(user.balance or 0) + float(user.credit_balance or 0) + earned)
+
+
+def consume_earned_lots(
+    db: Session,
+    user_id: int,
+    amount: float,
+    now: Optional[datetime] = None,
+) -> tuple[float, list]:
+    """Spend up to ``amount`` of EARNED Stardust, soonest-to-expire lot first.
+
+    Decrements ``lot.remaining`` in place (no cap — earned spends at full £1 value
+    per the PM decision) and returns ``(total_consumed, consumed)`` where
+    ``consumed`` is a list of ``{"lot_id", "amount"}`` for the ledger.
+
+    Contract: the caller MUST already hold the user row lock (via
+    :func:`get_user_balance_with_lock`) and is responsible for the commit — this
+    helper only mutates lots so it can be composed inside a single debit
+    transaction. Returns ``(0.0, [])`` when there is nothing to spend.
+    """
+    amount = _round2(amount)
+    if amount <= 0:
+        return 0.0, []
+
+    now = now or _utcnow()
+    remaining_to_take = amount
+    consumed: list = []
+    for lot in _active_lots_query(db, user_id, now).with_for_update().all():
+        if remaining_to_take <= 0:
+            break
+        take = _round2(min(float(lot.remaining), remaining_to_take))
+        if take <= 0:
+            continue
+        lot.remaining = _round2(float(lot.remaining) - take)
+        remaining_to_take = _round2(remaining_to_take - take)
+        consumed.append({"lot_id": lot.id, "amount": take})
+
+    return _round2(amount - remaining_to_take), consumed
+
+
 def get_stardust_breakdown(
     db: Session, user_id: int, now: Optional[datetime] = None
 ) -> dict:

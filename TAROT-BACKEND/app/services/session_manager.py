@@ -30,6 +30,10 @@ from app.exceptions.transactions import (
     InsufficientBalanceError as TxnInsufficientBalanceError,
 )
 from app.manager import manager  # WebSocket connection manager
+from app.services.stardust_rewards import (
+    get_earned_stardust_balance,
+    get_spendable_stardust,
+)
 
 logger = get_logger(__name__)
 settings = get_app_settings()
@@ -239,9 +243,10 @@ class SessionManager:
                 # Calculate elapsed time and remaining session time
                 elapsed = int((datetime.now() - interval.started_at).total_seconds())
                 # For existing sessions, estimate max duration from current state
-                # max_duration = elapsed + (current_balance / rate)
+                # max_duration = elapsed + (spendable_balance / rate)
+                spendable = get_spendable_stardust(db, user)
                 estimated_max_duration = elapsed + int(
-                    user.total_balance / chat.psychic.price_per_second
+                    spendable / chat.psychic.price_per_second
                     if chat.psychic.price_per_second > 0
                     else 0
                 )
@@ -261,7 +266,7 @@ class SessionManager:
                     psychic_id=chat.psychic_id,
                     rate_per_second=chat.psychic.price_per_second,
                     max_session_duration_seconds=estimated_max_duration,
-                    initial_balance=float(user.total_balance),  # Current balance as proxy
+                    initial_balance=float(spendable),  # Current spendable balance as proxy
                     last_check_at=datetime.now(),
                     # If the client never joined, keep the timer gated after restart.
                     awaiting_join=(chat.client_joined_at is None),
@@ -329,15 +334,17 @@ class SessionManager:
             user = db.query(User).filter(User.id == chat.user_id).first()
             psychic = chat.psychic
 
-            # Validate minimum balance
+            # Validate minimum balance. Spendable = earned + credit + paid, since
+            # earned Stardust funds readings at full value (spent first).
             min_required = (
                 psychic.price_per_second * settings.SESSION_MINIMUM_BALANCE_SECONDS
             )
-            if user.total_balance < min_required:
+            spendable = get_spendable_stardust(db, user)
+            if spendable < min_required:
                 logger.warning(
                     "insufficient_balance_for_session_start",
                     chat_id=chat_id,
-                    user_balance=user.total_balance,
+                    user_balance=spendable,
                     min_required=min_required,
                 )
                 raise InsufficientBalanceError(
@@ -379,10 +386,10 @@ class SessionManager:
             db.refresh(chat_session)
             db.refresh(interval)
 
-            # Calculate max session duration based on initial balance
+            # Calculate max session duration based on initial (spendable) balance.
             # This is independent of billing - session ends when elapsed time reaches this
             max_duration = (
-                int(user.total_balance / psychic.price_per_second)
+                int(spendable / psychic.price_per_second)
                 if psychic.price_per_second > 0
                 else 0
             )
@@ -400,7 +407,7 @@ class SessionManager:
                 psychic_id=chat.psychic_id,
                 rate_per_second=psychic.price_per_second,
                 max_session_duration_seconds=max_duration,
-                initial_balance=float(user.total_balance),
+                initial_balance=float(spendable),
                 last_check_at=datetime.now(),
                 # Timer does not run until the client joins the chat screen.
                 awaiting_join=True,
@@ -483,7 +490,7 @@ class SessionManager:
             # would give a credit-only new member 0 seconds and end the session
             # the instant they join.
             user = db.query(User).filter(User.id == chat.user_id).first()
-            current_balance = float(user.total_balance) if user else 0.0
+            current_balance = get_spendable_stardust(db, user) if user else 0.0
             rate = session_state.rate_per_second
             additional_seconds = int(current_balance / rate) if rate > 0 else 0
 
@@ -1021,9 +1028,9 @@ class SessionManager:
             if not user:
                 raise ValueError(f"User {chat.user_id} not found")
 
-            # Use provided balance or fetch from DB
+            # Use provided balance or fetch from DB (spendable = earned + credit + paid)
             current_balance = (
-                new_balance if new_balance is not None else float(user.total_balance)
+                new_balance if new_balance is not None else get_spendable_stardust(db, user)
             )
 
             # Validate minimum balance (at least 1 second worth)
@@ -1217,7 +1224,9 @@ class SessionManager:
             )
             credit_balance = float(user.credit_balance) if user else 0.0
             paid_balance = float(user.balance) if user else 0.0
-            current_balance = credit_balance + paid_balance
+            earned_balance = get_earned_stardust_balance(db, user.id) if user else 0.0
+            # Earned Stardust spends at full value, so it counts toward the total.
+            current_balance = credit_balance + paid_balance + earned_balance
             chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
             rate = session_state.rate_per_second
             per_min = _per_minute_rate(rate)
@@ -1240,11 +1249,14 @@ class SessionManager:
                 remaining_minutes=affordable_minutes,
             )
 
-        # Live balances from DB (free credit + paid).
+        # Live balances from DB (earned + free credit + paid). Earned Stardust
+        # spends at full value (1 ⭐ = £1) and is used first, so it counts toward
+        # the spendable total that drives the countdown.
         user = db.query(User).filter(User.id == session_state.client_id).first()
         credit_balance = float(user.credit_balance) if user else 0.0
         paid_balance = float(user.balance) if user else 0.0
-        current_balance = credit_balance + paid_balance  # total spendable
+        earned_balance = get_earned_stardust_balance(db, user.id) if user else 0.0
+        current_balance = credit_balance + paid_balance + earned_balance  # total spendable
 
         rate = session_state.rate_per_second
         per_min = _per_minute_rate(rate)
@@ -1385,7 +1397,9 @@ class SessionManager:
                 reader_name = chat.psychic.username if chat.psychic else "your reader"
 
             user = db.query(User).filter(User.id == session_state.client_id).first()
-            session_state.grace_entry_balance = float(user.total_balance) if user else 0.0
+            session_state.grace_entry_balance = (
+                get_spendable_stardust(db, user) if user else 0.0
+            )
 
             # End the current interval for history (already is_billed=True).
             interval = (
@@ -1444,7 +1458,7 @@ class SessionManager:
             if not chat:
                 raise ValueError(f"Chat {chat_id} not found")
             user = db.query(User).filter(User.id == session_state.client_id).first()
-            current_balance = float(user.total_balance) if user else 0.0
+            current_balance = get_spendable_stardust(db, user) if user else 0.0
             per_min = _per_minute_rate(session_state.rate_per_second)
 
             if per_min > 0 and current_balance + 1e-9 < per_min:
@@ -1630,7 +1644,7 @@ class SessionManager:
                                 .filter(User.id == session_state.client_id)
                                 .first()
                             )
-                            balance = float(user.total_balance) if user else 0.0
+                            balance = get_spendable_stardust(db, user) if user else 0.0
                             if balance + 1e-9 >= per_min:
                                 try:
                                     self._charge_minute(db, session_state, next_minute)

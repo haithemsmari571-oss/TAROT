@@ -92,8 +92,12 @@ async def requset_chat_endpoint(
             db.query(User).filter(User.id == chat_data.psychic_id).first()
         )
         if psychic_row and psychic_row.price_per_second:
+            from app.services.stardust_rewards import get_spendable_stardust
+
             required = minimum_balance_to_start(psychic_row.price_per_second)
-            if float(user.total_balance) < required:
+            # Spendable = earned + credit + paid (earned funds readings at full value).
+            spendable = get_spendable_stardust(db, user)
+            if spendable < required:
                 return JSONResponse(
                     content={
                         "detail": (
@@ -101,7 +105,7 @@ async def requset_chat_endpoint(
                             f"{psychic_row.username}."
                         ),
                         "required": required,
-                        "balance": round(float(user.total_balance), 2),
+                        "balance": round(spendable, 2),
                         "psychic_name": psychic_row.username,
                     },
                     status_code=402,

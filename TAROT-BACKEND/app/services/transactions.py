@@ -213,20 +213,32 @@ def create_debit_transaction(
     try:
         # Lock user row and get current balances. NUMERIC(10,2) → Decimal;
         # normalize to float to avoid Decimal-vs-float arithmetic errors.
+        # Imported locally to avoid a circular import (stardust_rewards imports
+        # get_user_balance_with_lock from this module).
+        from app.services.stardust_rewards import (
+            consume_earned_lots,
+            get_earned_stardust_balance,
+        )
+
         user, _ = get_user_balance_with_lock(db, user_id)
         credit_before = float(user.credit_balance or 0)
         paid_before = float(user.balance or 0)
-        # balance_before/after track TOTAL spendable (credit + paid) so the
-        # ledger reads as one running balance.
-        balance_before = credit_before + paid_before
+        # Earned Stardust spends at full value (1 ⭐ = £1, no cap — PM decision) and
+        # is only DISPLAYED separately. balance_before/after track TOTAL spendable
+        # (earned + credit + paid) so the ledger reads as one running balance.
+        # With zero earned lots this equals credit + paid, i.e. every pre-existing
+        # billing scenario is byte-for-byte unchanged.
+        earned_before = get_earned_stardust_balance(db, user_id)
+        balance_before = round(earned_before + credit_before + paid_before, 2)
 
-        # Check sufficient TOTAL balance (free credit + paid)
+        # Check sufficient TOTAL balance (earned + free credit + paid)
         if balance_before < amount:
             logger.warning(
                 "debit_transaction_insufficient_balance",
                 user_id=user_id,
                 amount_required=amount,
                 balance_available=balance_before,
+                earned_available=earned_before,
                 credit_available=credit_before,
                 paid_available=paid_before,
                 deficit=amount - balance_before,
@@ -236,10 +248,15 @@ def create_debit_transaction(
             )
             raise InsufficientBalanceError(required=amount, available=balance_before)
 
-        # Spend free credit first, then paid balance.
-        from_credit = min(credit_before, amount)
-        from_paid = amount - from_credit
-        balance_after = balance_before - amount
+        # Spend order: EARNED first (soonest-to-expire lot first, so fading value
+        # is used before it is lost), then free welcome/gift credit, then purchased
+        # balance. Totals and the charged amount are unchanged — only which bucket
+        # funds the charge.
+        from_earned, earned_lots = consume_earned_lots(db, user_id, amount)
+        remainder = round(amount - from_earned, 2)
+        from_credit = round(min(credit_before, remainder), 2)
+        from_paid = round(remainder - from_credit, 2)
+        balance_after = round(balance_before - amount, 2)
 
         logger.debug(
             "debit_transaction_creating",
@@ -264,15 +281,22 @@ def create_debit_transaction(
             related_chat_id=related_chat_id,
             related_session_interval_id=related_session_interval_id,
             transaction_metadata=json.dumps(
-                {**(metadata or {}), "credit_spent": from_credit, "paid_spent": from_paid}
+                {
+                    **(metadata or {}),
+                    "earned_spent": from_earned,
+                    "credit_spent": from_credit,
+                    "paid_spent": from_paid,
+                    "earned_lots": earned_lots,
+                }
             ),
         )
 
         db.add(transaction)
 
-        # Apply the split: free credit first, then paid balance.
-        user.credit_balance = credit_before - from_credit
-        user.balance = paid_before - from_paid
+        # Apply the split. Earned lots were already decremented by
+        # consume_earned_lots above; here we move credit then paid.
+        user.credit_balance = round(credit_before - from_credit, 2)
+        user.balance = round(paid_before - from_paid, 2)
 
         db.commit()
         db.refresh(transaction)

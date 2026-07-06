@@ -56,6 +56,13 @@ const StardustBalance = ({ balance }: { balance: StardustBreakdown }) => {
         </span>
       </button>
 
+      {/* Gentle nudge when earned Stardust is within 7 days of fading. */}
+      {balance.earned_expiring_soon > 0 && (
+        <p className="mt-3 text-sm font-medium" style={{ color: COLORS.starGold }}>
+          Some of your Stardust fades soon ✨
+        </p>
+      )}
+
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
@@ -66,15 +73,22 @@ const StardustBalance = ({ balance }: { balance: StardustBreakdown }) => {
           >
             <div className="mt-4 pt-4 space-y-3" style={{ borderTop: `1px solid ${COLORS.neutralWhite}12` }}>
               <Row label="Purchased" value={balance.purchased} hint="Never expires" />
-              <Row label="Earned (free)" value={balance.earned} hint="Covers up to half of any reading" />
+              <Row
+                label="Earned (free)"
+                value={balance.earned}
+                hint="Spends like any Stardust — 1 ⭐ = £1. Fades 30 days after you receive it."
+              />
               {balance.earned_expiring_soon > 0 && (
                 <Row
                   label="Fading soon"
                   value={balance.earned_expiring_soon}
-                  hint="Earned Stardust expires 30 days after you get it"
+                  hint="Use these first — they expire within 7 days."
                   warn
                 />
               )}
+              <p className="text-xs pt-1" style={{ color: `${COLORS.neutralWhite}66` }}>
+                Earned Stardust spends like any Stardust — 1 ⭐ = £1. Earned stars fade 30 days after you receive them.
+              </p>
             </div>
           </motion.div>
         )}

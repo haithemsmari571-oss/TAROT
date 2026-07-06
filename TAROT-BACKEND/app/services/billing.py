@@ -293,7 +293,11 @@ def check_user_can_start_session(db: Session, user_id: int, psychic_id: int) -> 
     # actually charges on join.
     required_balance = minimum_balance_to_start(psychic.price_per_second)
 
-    return float(user.total_balance) >= required_balance
+    # Spendable = earned + credit + paid; earned Stardust funds readings at full
+    # value (1 ⭐ = £1, spent first), so it counts toward the start gate.
+    from app.services.stardust_rewards import get_spendable_stardust
+
+    return get_spendable_stardust(db, user) >= required_balance
 
 
 def get_unbilled_active_sessions(
@@ -346,7 +350,9 @@ def get_remaining_session_time(
     if not user or psychic_price_per_second <= 0:
         return 0
 
-    # Calculate seconds remaining
-    remaining_seconds = int(user.total_balance / psychic_price_per_second)
+    # Spendable = earned + credit + paid (earned spends at full value, first).
+    from app.services.stardust_rewards import get_spendable_stardust
+
+    remaining_seconds = int(get_spendable_stardust(db, user) / psychic_price_per_second)
 
     return max(remaining_seconds, 0)
