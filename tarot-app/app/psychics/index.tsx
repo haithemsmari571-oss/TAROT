@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   FlatList,
   View,
@@ -16,10 +17,12 @@ import ScreenBackground, {
   BACKGROUNDS,
 } from "../../src/components/ScreenBackground";
 import { PsychicCard } from "../../src/components/PsychicCard";
+import { useCredit } from "../../src/context/CreditContext";
 import type { Psychic } from "../../src/types";
 
 export default function PsychicsScreen() {
   const router = useRouter();
+  const { refresh: refreshCredit } = useCredit();
   const [psychics, setPsychics] = useState<Psychic[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,6 +45,14 @@ export default function PsychicsScreen() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
+
+  // Keep the free-reading CTAs honest: re-check the welcome credit whenever
+  // this tab regains focus (e.g. right after the credit was spent on a chat).
+  useFocusEffect(
+    useCallback(() => {
+      refreshCredit();
+    }, [refreshCredit])
+  );
 
   // Pull-to-refresh handler — also the "retry" path from the error state.
   const onRefresh = useCallback(() => {

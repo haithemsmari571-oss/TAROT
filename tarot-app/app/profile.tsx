@@ -24,6 +24,7 @@ import {
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
+import { formatPounds } from "../src/context/CreditContext";
 import { useStardustBalance } from "../src/hooks/useStardustBalance";
 
 export default function ProfileScreen() {
@@ -45,7 +46,11 @@ export default function ProfileScreen() {
 function Account() {
   const { user, signOut } = useAuth();
   const router = useRouter();
-  const { balance, loading: balanceLoading } = useStardustBalance();
+  const {
+    balance,
+    creditBalance,
+    loading: balanceLoading,
+  } = useStardustBalance();
 
   return (
     <ScreenBackground scrimOpacity={0.6}>
@@ -74,9 +79,16 @@ function Account() {
                     style={{ alignSelf: "flex-start", marginTop: 2 }}
                   />
                 ) : (
-                  <Text style={styles.stardustValue}>
-                    {balance != null ? balance.toLocaleString() : "—"}
-                  </Text>
+                  <>
+                    <Text style={styles.stardustValue}>
+                      {balance != null ? balance.toLocaleString() : "—"}
+                    </Text>
+                    {creditBalance != null && creditBalance > 0 && (
+                      <Text style={styles.stardustCredit}>
+                        includes {formatPounds(creditBalance)} free credit
+                      </Text>
+                    )}
+                  </>
                 )}
               </View>
             </View>
@@ -322,6 +334,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.accentGold,
     fontFamily: FONTS.bold,
+  },
+  stardustCredit: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: alpha(COLORS.accentGold, 0.85),
+    fontFamily: FONTS.regular,
+    marginTop: 2,
   },
   signOutBtn: {
     minHeight: TOUCH_TARGET,

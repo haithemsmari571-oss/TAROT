@@ -66,3 +66,16 @@ export function getTier(
 export function perMinute(pricePerSecond: number | null): string {
   return ((pricePerSecond || 0) * 60).toFixed(2);
 }
+
+/**
+ * Whole minutes a credit amount (pounds) buys at a reader's rate. Used for the
+ * "Your £15 credit covers ~6 min with Luna" line; 0 means "don't show it".
+ */
+export function creditMinutes(
+  creditPounds: number,
+  pricePerSecond: number | null
+): number {
+  const perMin = (pricePerSecond || 0) * 60;
+  if (perMin <= 0) return 0;
+  return Math.floor(creditPounds / perMin);
+}

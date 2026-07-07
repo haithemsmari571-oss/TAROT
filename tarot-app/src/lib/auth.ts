@@ -30,13 +30,23 @@ export async function signIn(email: string, password: string): Promise<string> {
  * Register a new account. The backend returns a confirmation message (and sends
  * a verification email) but NOT tokens, so callers must sign in separately to
  * capture the access + refresh tokens.
+ *
+ * `dateOfBirth` must be an ISO "YYYY-MM-DD" string — the backend's UserSignup
+ * schema requires date_of_birth (it powers zodiac/horoscope personalisation)
+ * and rejects future dates or ages over 120.
  */
 export async function signUp(
   username: string,
   email: string,
-  password: string
+  password: string,
+  dateOfBirth: string
 ): Promise<void> {
-  await api.post("/api/auth/sign-up", { username, email, password });
+  await api.post("/api/auth/sign-up", {
+    username,
+    email,
+    password,
+    date_of_birth: dateOfBirth,
+  });
 }
 
 /** Fetch the currently authenticated user (used to tell "my" messages apart). */

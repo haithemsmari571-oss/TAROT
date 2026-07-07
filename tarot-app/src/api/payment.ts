@@ -8,6 +8,14 @@ import { api } from "./client";
 export interface StardustBalance {
   user_id: number;
   balance: number;
+  /** Remaining free welcome/gift credit, in pounds (£15 signup bonus lives here). */
+  credit_balance?: number;
+  /** Purchased balance remaining, in pounds. */
+  paid_balance?: number;
+  /** Earned (gamification) Stardust, unexpired. */
+  earned_balance?: number;
+  /** Display total (spendable + earned) — what the website's pill shows. */
+  stardust_total?: number;
   last_updated: string;
 }
 

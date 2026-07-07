@@ -3,6 +3,8 @@ import { getMyBalance } from "../api/payment";
 
 interface StardustBalanceState {
   balance: number | null;
+  /** Remaining free welcome/gift credit in pounds (null until loaded). */
+  creditBalance: number | null;
   loading: boolean;
   /** Set when the last fetch failed (e.g. no network). */
   error: string | null;
@@ -17,6 +19,7 @@ interface StardustBalanceState {
  */
 export function useStardustBalance(): StardustBalanceState {
   const [balance, setBalance] = useState<number | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
@@ -26,7 +29,10 @@ export function useStardustBalance(): StardustBalanceState {
     setError(null);
     try {
       const data = await getMyBalance();
-      if (mounted.current) setBalance(data.balance);
+      if (mounted.current) {
+        setBalance(data.balance);
+        setCreditBalance(data.credit_balance ?? 0);
+      }
       return data.balance;
     } catch {
       if (mounted.current) {
@@ -46,5 +52,5 @@ export function useStardustBalance(): StardustBalanceState {
     };
   }, [refetch]);
 
-  return { balance, loading, error, refetch };
+  return { balance, creditBalance, loading, error, refetch };
 }

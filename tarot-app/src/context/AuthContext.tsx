@@ -31,7 +31,8 @@ interface AuthState {
   signUp: (
     username: string,
     email: string,
-    password: string
+    password: string,
+    dateOfBirth: string // ISO "YYYY-MM-DD"
   ) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
 }
@@ -75,11 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       username: string,
       email: string,
-      password: string
+      password: string,
+      dateOfBirth: string
     ): Promise<SignUpResult> => {
       // Create the account first. A failure here (e.g. email already in use) is
       // surfaced to the caller so it can show the backend's message.
-      await apiSignUp(username, email, password);
+      await apiSignUp(username, email, password, dateOfBirth);
 
       // Registration returns no tokens, so sign in to capture them. On prod the
       // account isn't verified yet, so this sign-in is expected to fail with

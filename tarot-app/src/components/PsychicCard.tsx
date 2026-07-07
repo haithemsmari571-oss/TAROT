@@ -10,7 +10,14 @@ import {
   alpha,
 } from "../theme";
 import type { Psychic } from "../types";
-import { getHalo, getTier, hexToRgba, perMinute } from "../utils/psychic";
+import {
+  creditMinutes,
+  getHalo,
+  getTier,
+  hexToRgba,
+  perMinute,
+} from "../utils/psychic";
+import { useCredit, formatPounds } from "../context/CreditContext";
 
 export function PsychicCard({
   psychic,
@@ -24,6 +31,15 @@ export function PsychicCard({
   const rate = perMinute(psychic.price_per_second);
   const categories = psychic.categories ?? [];
   const shownTags = categories.slice(0, 3);
+
+  // While the welcome credit is unspent (and covers at least a minute at this
+  // reader's rate), the CTA sells the free reading instead of a paid one.
+  const { hasCredit, creditBalance } = useCredit();
+  const freeMinutes =
+    hasCredit && creditBalance != null
+      ? creditMinutes(creditBalance, psychic.price_per_second)
+      : 0;
+  const showFree = freeMinutes >= 1 && creditBalance != null;
 
   return (
     <TouchableOpacity
@@ -128,9 +144,18 @@ export function PsychicCard({
             onPress={onPress}
             disabled={!onPress}
           >
-            <Text style={styles.buttonText}>START READING →</Text>
+            <Text style={styles.buttonText}>
+              {showFree ? "START FREE READING" : "START READING →"}
+            </Text>
           </TouchableOpacity>
         </View>
+
+        {showFree && (
+          <Text style={styles.freeLine}>
+            Your {formatPounds(creditBalance)} credit covers ~{freeMinutes} min
+            with {psychic.username}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -265,5 +290,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
     fontFamily: FONTS.bold,
+  },
+  freeLine: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: alpha(COLORS.accentGold, 0.9),
+    fontFamily: FONTS.regular,
+    marginTop: 10,
   },
 });

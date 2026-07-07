@@ -12,6 +12,7 @@ import {
   alpha,
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
+import WelcomeCreditBanner from "../src/components/WelcomeCreditBanner";
 import DailyDraw from "../src/components/DailyDraw";
 
 export default function SanctuaryScreen() {
@@ -25,6 +26,9 @@ export default function SanctuaryScreen() {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
+          {/* Unspent welcome credit — hidden for signed-out/zero-credit users */}
+          <WelcomeCreditBanner />
+
           {/* Hero */}
           <View style={styles.hero}>
             <Text style={styles.logo}>V</Text>

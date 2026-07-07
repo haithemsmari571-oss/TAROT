@@ -48,8 +48,9 @@ function fmtTime(totalSeconds: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
 
-function fmtMoney(cents: number): string {
-  return `£${(Math.max(0, cents) / 100).toFixed(2)}`;
+// The /session-time endpoint returns balances in pounds (not pence).
+function fmtMoney(pounds: number): string {
+  return `£${Math.max(0, pounds).toFixed(2)}`;
 }
 
 // Remaining-time color: red under 1 min, gold under 5 min, normal otherwise.
@@ -215,7 +216,7 @@ export default function ChatScreen() {
             <View style={styles.sessionStat}>
               <Text style={styles.sessionLabel}>BALANCE</Text>
               <Text style={styles.sessionValue}>
-                {fmtMoney(timer.clientBalanceCents)}
+                {fmtMoney(timer.clientBalancePounds)}
               </Text>
             </View>
           </View>

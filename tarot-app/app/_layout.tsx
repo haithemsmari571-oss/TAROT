@@ -13,7 +13,9 @@ import {
 } from "@expo-google-fonts/bricolage-grotesque";
 import { COLORS, FONTS } from "../src/theme";
 import { AuthProvider } from "../src/context/AuthContext";
+import { CreditProvider } from "../src/context/CreditContext";
 import { CallProvider } from "../src/context/CallProvider";
+import WelcomeCelebration from "../src/components/WelcomeCelebration";
 
 // Each tab maps to an Ionicons glyph, swapping to the filled variant when active.
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -52,6 +54,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <CreditProvider>
       <CallProvider>
       <Tabs
         screenOptions={{
@@ -93,7 +96,10 @@ export default function RootLayout() {
       {/* Reachable via router.push("/stardust"); hidden from the tab bar. */}
       <Tabs.Screen name="stardust" options={{ href: null }} />
       </Tabs>
+      {/* One-time "£15 is waiting" moment for accounts with unspent credit. */}
+      <WelcomeCelebration />
       </CallProvider>
+      </CreditProvider>
     </AuthProvider>
   );
 }

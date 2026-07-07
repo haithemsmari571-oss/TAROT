@@ -6,15 +6,17 @@ export interface SessionTimer {
   ready: boolean; // session-time loaded successfully
   elapsedSeconds: number;
   remainingSeconds: number;
-  clientBalanceCents: number;
-  estimatedCostCents: number;
+  clientBalancePounds: number;
+  estimatedCostPounds: number;
   depleted: boolean; // remaining time hit zero
 }
 
 /**
  * Mirrors the website: fetch session-time once, then run a local 1s countdown.
  * elapsed counts up, remaining = (balance - elapsed*rate) / rate counts down.
- * All money values are cents; time values are seconds.
+ * Money values are POUNDS (the /session-time endpoint returns client_balance
+ * and price_per_second in £, same as the website displays them); time values
+ * are seconds. The countdown is unit-agnostic — balance/rate cancel out.
  */
 export function useSessionTimer(
   chatId: number | null,
@@ -23,8 +25,8 @@ export function useSessionTimer(
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const balanceRef = useRef(0); // cents
-  const rateRef = useRef(0); // cents/sec
+  const balanceRef = useRef(0); // pounds
+  const rateRef = useRef(0); // pounds/sec
 
   // Fetch the baseline once when the session becomes active.
   useEffect(() => {
@@ -62,7 +64,7 @@ export function useSessionTimer(
 
   const rate = rateRef.current;
   const balance = balanceRef.current;
-  const estimatedCostCents = Math.min(balance, elapsed * rate);
+  const estimatedCostPounds = Math.min(balance, elapsed * rate);
   const remainingSeconds =
     rate > 0 ? Math.max(0, (balance - elapsed * rate) / rate) : 0;
 
@@ -71,8 +73,8 @@ export function useSessionTimer(
     ready,
     elapsedSeconds: elapsed,
     remainingSeconds,
-    clientBalanceCents: balance,
-    estimatedCostCents,
+    clientBalancePounds: balance,
+    estimatedCostPounds,
     depleted: ready && rate > 0 && remainingSeconds <= 0,
   };
 }

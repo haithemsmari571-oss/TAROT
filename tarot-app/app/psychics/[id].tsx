@@ -22,19 +22,28 @@ import {
   SPACING,
   RADII,
   TOUCH_TARGET,
+  alpha,
 } from "../../src/theme";
 import ScreenBackground, {
   BACKGROUNDS,
 } from "../../src/components/ScreenBackground";
 import type { Psychic } from "../../src/types";
-import { getHalo, getTier, hexToRgba, perMinute } from "../../src/utils/psychic";
+import {
+  creditMinutes,
+  getHalo,
+  getTier,
+  hexToRgba,
+  perMinute,
+} from "../../src/utils/psychic";
 import { useAuth } from "../../src/context/AuthContext";
+import { useCredit, formatPounds } from "../../src/context/CreditContext";
 import { requestChat } from "../../src/api/chat";
 
 export default function PsychicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const { hasCredit, creditBalance } = useCredit();
   const [psychic, setPsychic] = useState<Psychic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +179,14 @@ export default function PsychicDetailScreen() {
   const categories = psychic.categories ?? [];
   const availability = psychic.availability ?? [];
 
+  // Welcome-credit framing: while the credit is unspent and covers at least a
+  // minute at this reader's rate, the sticky CTA sells the free reading.
+  const freeMinutes =
+    hasCredit && creditBalance != null
+      ? creditMinutes(creditBalance, psychic.price_per_second)
+      : 0;
+  const showFree = freeMinutes >= 1 && creditBalance != null;
+
   return (
     <ScreenBackground source={BACKGROUNDS.zodiacHall2} scrimOpacity={0.7}>
       <StatusBar style="light" />
@@ -299,6 +316,12 @@ export default function PsychicDetailScreen() {
 
       {/* STICKY CTA */}
       <SafeAreaView edges={["bottom"]} style={styles.ctaBar}>
+        {showFree && (
+          <Text style={styles.freeLine}>
+            Your {formatPounds(creditBalance)} credit covers ~{freeMinutes} min
+            with {psychic.username}
+          </Text>
+        )}
         <TouchableOpacity
           style={[styles.cta, requesting && styles.ctaDisabled]}
           activeOpacity={0.85}
@@ -308,7 +331,9 @@ export default function PsychicDetailScreen() {
           {requesting ? (
             <ActivityIndicator color={COLORS.ctaText} />
           ) : (
-            <Text style={styles.ctaText}>START READING →</Text>
+            <Text style={styles.ctaText}>
+              {showFree ? "START FREE READING" : "START READING →"}
+            </Text>
           )}
         </TouchableOpacity>
       </SafeAreaView>
@@ -472,6 +497,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     paddingHorizontal: 20,
     paddingTop: SPACING.md,
+  },
+  freeLine: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: alpha(COLORS.accentGold, 0.9),
+    fontFamily: FONTS.regular,
+    textAlign: "center",
+    marginBottom: SPACING.sm,
   },
   cta: {
     minHeight: TOUCH_TARGET,
