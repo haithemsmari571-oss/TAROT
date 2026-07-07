@@ -7,7 +7,11 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
-import { COLORS } from "../src/theme/colors";
+import {
+  BricolageGrotesque_700Bold,
+  BricolageGrotesque_800ExtraBold,
+} from "@expo-google-fonts/bricolage-grotesque";
+import { COLORS, FONTS } from "../src/theme";
 import { AuthProvider } from "../src/context/AuthContext";
 import { CallProvider } from "../src/context/CallProvider";
 
@@ -21,12 +25,15 @@ const TAB_ICON: Record<string, { active: IoniconName; inactive: IoniconName }> =
 };
 
 export default function RootLayout() {
-  // Load Poppins before rendering so fontFamily references resolve. If loading
-  // fails, `error` is set and we still render (RN falls back to system font).
+  // Load Poppins (body) + Bricolage Grotesque (headlines) before rendering so
+  // fontFamily references resolve. If loading fails, `error` is set and we
+  // still render (RN falls back to system font).
   const [loaded, error] = useFonts({
     Poppins_400Regular,
     Poppins_600SemiBold,
     Poppins_700Bold,
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
   });
 
   if (!loaded && !error) {
@@ -49,18 +56,18 @@ export default function RootLayout() {
       <Tabs
         screenOptions={{
         tabBarStyle: {
-          backgroundColor: "#0D1117",
-          borderTopColor: "rgba(255,255,255,0.06)",
+          backgroundColor: COLORS.surface,
+          borderTopColor: COLORS.border,
           borderTopWidth: 1,
           height: 85,
           paddingBottom: 20,
         },
-        tabBarActiveTintColor: COLORS.lavender,
-        tabBarInactiveTintColor: "rgba(255,255,255,0.35)",
+        tabBarActiveTintColor: COLORS.accent,
+        tabBarInactiveTintColor: COLORS.textFaint,
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 12,
           letterSpacing: 0.08,
-          fontFamily: "Poppins_400Regular",
+          fontFamily: FONTS.regular,
         },
         headerShown: false,
       }}

@@ -15,7 +15,17 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../src/api/client";
-import { COLORS } from "../../src/theme/colors";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+} from "../../src/theme";
+import ScreenBackground, {
+  BACKGROUNDS,
+} from "../../src/components/ScreenBackground";
 import type { Psychic } from "../../src/types";
 import { getHalo, getTier, hexToRgba, perMinute } from "../../src/utils/psychic";
 import { useAuth } from "../../src/context/AuthContext";
@@ -112,41 +122,45 @@ export default function PsychicDetailScreen() {
       onPress={() => router.back()}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
-      <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+      <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
     </TouchableOpacity>
   );
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.stateRoot} edges={["top"]}>
-        <StatusBar style="light" />
-        <View style={styles.topBar}>{BackButton}</View>
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.lavender} />
-        </View>
-      </SafeAreaView>
+      <ScreenBackground source={BACKGROUNDS.zodiacHall2} scrimOpacity={0.7}>
+        <SafeAreaView style={styles.stateRoot} edges={["top"]}>
+          <StatusBar style="light" />
+          <View style={styles.topBar}>{BackButton}</View>
+          <View style={styles.center}>
+            <ActivityIndicator color={COLORS.accent} />
+          </View>
+        </SafeAreaView>
+      </ScreenBackground>
     );
   }
 
   if (error || !psychic) {
     return (
-      <SafeAreaView style={styles.stateRoot} edges={["top"]}>
-        <StatusBar style="light" />
-        <View style={styles.topBar}>{BackButton}</View>
-        <View style={styles.center}>
-          <Text style={styles.error}>{error ?? "Psychic not found."}</Text>
-          <TouchableOpacity
-            style={styles.retryBtn}
-            activeOpacity={0.85}
-            onPress={() => {
-              setLoading(true);
-              load();
-            }}
-          >
-            <Text style={styles.retryText}>RETRY</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <ScreenBackground source={BACKGROUNDS.zodiacHall2} scrimOpacity={0.7}>
+        <SafeAreaView style={styles.stateRoot} edges={["top"]}>
+          <StatusBar style="light" />
+          <View style={styles.topBar}>{BackButton}</View>
+          <View style={styles.center}>
+            <Text style={styles.error}>{error ?? "Psychic not found."}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                setLoading(true);
+                load();
+              }}
+            >
+              <Text style={styles.retryText}>RETRY</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </ScreenBackground>
     );
   }
 
@@ -157,7 +171,7 @@ export default function PsychicDetailScreen() {
   const availability = psychic.availability ?? [];
 
   return (
-    <View style={styles.root}>
+    <ScreenBackground source={BACKGROUNDS.zodiacHall2} scrimOpacity={0.7}>
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.scroll} bounces>
         {/* HERO PHOTO */}
@@ -209,7 +223,7 @@ export default function PsychicDetailScreen() {
               <Ionicons
                 name="checkmark-circle"
                 size={20}
-                color={COLORS.lavender}
+                color={COLORS.accent}
                 style={{ marginLeft: 8 }}
               />
             )}
@@ -217,7 +231,7 @@ export default function PsychicDetailScreen() {
 
           {/* Rate */}
           <View style={styles.rateWrap}>
-            <Text style={[styles.rate, { color: tier.color }]}>${rate}</Text>
+            <Text style={[styles.rate, { color: tier.color }]}>£{rate}</Text>
             <Text style={styles.rateUnit}>/min</Text>
           </View>
 
@@ -238,13 +252,13 @@ export default function PsychicDetailScreen() {
                               borderColor: halo,
                               backgroundColor: hexToRgba(halo, 0.08),
                             }
-                          : { borderColor: "rgba(255,255,255,0.12)" },
+                          : { borderColor: COLORS.borderStrong },
                       ]}
                     >
                       <Text
                         style={[
                           styles.tagText,
-                          { color: isPrimary ? halo : "rgba(255,255,255,0.5)" },
+                          { color: isPrimary ? halo : COLORS.textSecondary },
                         ]}
                       >
                         {cat.title}
@@ -292,35 +306,34 @@ export default function PsychicDetailScreen() {
           disabled={requesting}
         >
           {requesting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={COLORS.ctaText} />
           ) : (
             <Text style={styles.ctaText}>START READING →</Text>
           )}
         </TouchableOpacity>
       </SafeAreaView>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  stateRoot: { flex: 1, backgroundColor: COLORS.background },
-  topBar: { paddingHorizontal: 12, paddingTop: 4 },
+  stateRoot: { flex: 1 },
+  topBar: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: SPACING.xxl,
   },
-  scroll: { paddingBottom: 24 },
+  scroll: { paddingBottom: SPACING.xl },
 
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    borderRadius: TOUCH_TARGET / 2,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: COLORS.photoScrim,
   },
 
   hero: {
@@ -333,7 +346,7 @@ const styles = StyleSheet.create({
   heroFallback: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: COLORS.surfaceElevated,
   },
   heroFade: {
     position: "absolute",
@@ -346,22 +359,22 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
-    paddingHorizontal: 12,
-    paddingTop: 4,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
   },
   tierBadge: {
     position: "absolute",
     bottom: 16,
     left: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
     borderRadius: 20,
   },
   tierText: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.8,
     color: COLORS.background,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
   onlineWrap: {
     position: "absolute",
@@ -370,7 +383,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: COLORS.photoScrim,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -382,20 +395,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.online,
   },
   onlineText: {
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1,
     color: COLORS.online,
-    fontFamily: "Poppins_600SemiBold",
+    fontFamily: FONTS.semiBold,
   },
 
   body: { padding: 20 },
   nameRow: { flexDirection: "row", alignItems: "center" },
   name: {
-    fontSize: 26,
-    color: COLORS.text,
+    ...TYPOGRAPHY.display,
     textTransform: "uppercase",
     letterSpacing: 0.6,
-    fontFamily: "Poppins_700Bold",
   },
   rateWrap: {
     flexDirection: "row",
@@ -403,22 +414,22 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 6,
   },
-  rate: { fontSize: 24, fontFamily: "Poppins_700Bold" },
+  rate: { fontSize: 26, fontFamily: FONTS.bold },
   rateUnit: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.4)",
-    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textFaint,
+    fontFamily: FONTS.regular,
   },
 
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 1.2,
-    color: "rgba(255,255,255,0.4)",
-    fontFamily: "Poppins_600SemiBold",
-    marginTop: 24,
-    marginBottom: 12,
+    color: COLORS.textFaint,
+    fontFamily: FONTS.semiBold,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.md,
   },
-  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
   tag: {
     borderWidth: 1,
     borderRadius: 20,
@@ -426,50 +437,50 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   tagText: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    fontFamily: "Poppins_600SemiBold",
+    fontFamily: FONTS.semiBold,
   },
   bio: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
   },
   availList: { gap: 10 },
   availRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomColor: COLORS.border,
     paddingBottom: 10,
   },
   availDay: {
-    fontSize: 13,
-    color: COLORS.text,
+    fontSize: 16,
+    color: COLORS.textPrimary,
     textTransform: "capitalize",
-    fontFamily: "Poppins_600SemiBold",
+    fontFamily: FONTS.semiBold,
   },
   availTime: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.regular,
   },
 
   ctaBar: {
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
+    borderTopColor: COLORS.border,
     backgroundColor: COLORS.surface,
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: SPACING.md,
   },
   cta: {
-    backgroundColor: COLORS.purple,
-    paddingVertical: 16,
-    borderRadius: 12,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    backgroundColor: COLORS.cta,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADII.md,
     alignItems: "center",
-    shadowColor: COLORS.purple,
+    shadowColor: COLORS.cta,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -477,30 +488,30 @@ const styles = StyleSheet.create({
   },
   ctaDisabled: { opacity: 0.6 },
   ctaText: {
-    color: "#fff",
-    fontSize: 13,
+    color: COLORS.ctaText,
+    fontSize: 15,
     letterSpacing: 1.2,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
   error: {
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    lineHeight: 21,
     marginBottom: 20,
   },
   retryBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: COLORS.purple,
+    borderColor: COLORS.cta,
     paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: SPACING.md,
+    borderRadius: RADII.sm,
   },
   retryText: {
-    color: COLORS.lavender,
-    fontSize: 12,
+    color: COLORS.accent,
+    fontSize: 14,
     letterSpacing: 1,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
 });

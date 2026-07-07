@@ -10,7 +10,15 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { COLORS } from "../theme/colors";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../theme";
 import {
   computeDraw,
   generateReading,
@@ -196,7 +204,7 @@ function FlipCard({
 function CardBack() {
   return (
     <LinearGradient
-      colors={["#2A1B47", "#160E29", "#0D1117"]}
+      colors={["#2A1B47", "#160E29", COLORS.surface]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.cardBack}
@@ -211,24 +219,23 @@ function CardBack() {
 const styles = StyleSheet.create({
   section: {
     width: "100%",
-    marginTop: 8,
+    marginTop: SPACING.sm,
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingBottom: SPACING.sm,
   },
   kicker: {
-    fontSize: 13,
-    color: COLORS.lavender,
+    fontSize: 14,
+    color: COLORS.accent,
     letterSpacing: 2,
     textTransform: "uppercase",
     textAlign: "center",
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
     marginBottom: 6,
   },
   sectionSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.caption,
+    fontFamily: FONTS.regular,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
     marginBottom: 20,
   },
   row: {
@@ -249,12 +256,12 @@ const styles = StyleSheet.create({
   face: {
     ...StyleSheet.absoluteFillObject,
     backfaceVisibility: "hidden",
-    borderRadius: 12,
+    borderRadius: RADII.md,
     overflow: "hidden",
   },
   frontFace: {
     borderWidth: 1.5,
-    borderColor: "rgba(242,174,64,0.55)", // subtle golden border
+    borderColor: alpha(COLORS.accentGold, 0.55), // subtle golden border
   },
   cardImage: {
     width: "100%",
@@ -269,89 +276,89 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.25)",
-    borderRadius: 12,
+    borderColor: alpha(COLORS.accent, 0.25),
+    borderRadius: RADII.md,
   },
   backFrame: {
     width: "72%",
     height: "82%",
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.3)",
-    borderRadius: 8,
+    borderColor: alpha(COLORS.accent, 0.3),
+    borderRadius: RADII.sm,
     alignItems: "center",
     justifyContent: "center",
   },
   backSigil: {
     fontSize: 34,
-    color: "rgba(210,185,255,0.85)",
-    textShadowColor: "rgba(210,185,255,0.5)",
+    color: alpha(COLORS.accent, 0.85),
+    textShadowColor: alpha(COLORS.accent, 0.5),
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
   position: {
-    fontSize: 9,
-    color: COLORS.gold,
+    fontSize: 11,
+    color: COLORS.accentGold,
     letterSpacing: 1.5,
     textAlign: "center",
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
     marginTop: 10,
   },
   cardName: {
-    fontSize: 12,
-    color: COLORS.lavender,
+    ...TYPOGRAPHY.caption,
+    color: COLORS.accent,
     textAlign: "center",
-    fontFamily: "Poppins_600SemiBold",
     marginTop: 2,
-    minHeight: 34,
+    minHeight: 40,
   },
   orientation: {
-    fontSize: 10,
+    fontSize: 12,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
+    fontFamily: FONTS.regular,
   },
-  upright: { color: COLORS.textMuted },
-  reversed: { color: "rgba(242,174,64,0.8)" },
+  upright: { color: COLORS.textSecondary },
+  reversed: { color: alpha(COLORS.accentGold, 0.8) },
   reading: {
-    fontSize: 14,
-    lineHeight: 23,
-    color: COLORS.text,
+    ...TYPOGRAPHY.body,
     textAlign: "center",
     fontStyle: "italic",
-    fontFamily: "Poppins_400Regular",
     marginTop: 28,
-    paddingHorizontal: 4,
+    paddingHorizontal: SPACING.xs,
   },
   revealBtn: {
-    backgroundColor: COLORS.purple,
-    paddingVertical: 15,
-    borderRadius: 12,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    backgroundColor: COLORS.cta,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADII.md,
     alignItems: "center",
     marginTop: 26,
-    shadowColor: COLORS.purple,
+    shadowColor: COLORS.cta,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 18,
     elevation: 6,
   },
   revealText: {
-    color: "#fff",
-    fontSize: 13,
+    color: COLORS.ctaText,
+    fontSize: 15,
     letterSpacing: 1.2,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
   bookBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
     alignSelf: "center",
     marginTop: 20,
-    paddingVertical: 12,
+    paddingVertical: SPACING.md,
     paddingHorizontal: 28,
-    borderRadius: 12,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.35)",
+    borderColor: alpha(COLORS.accent, 0.35),
   },
   bookText: {
-    color: COLORS.lavender,
-    fontSize: 13,
+    color: COLORS.accent,
+    fontSize: 15,
     letterSpacing: 0.5,
-    fontFamily: "Poppins_600SemiBold",
+    fontFamily: FONTS.semiBold,
   },
 });

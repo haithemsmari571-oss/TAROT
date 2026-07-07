@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { COLORS } from "../../src/theme/colors";
+import { COLORS } from "../../src/theme";
 
 // Nested stack inside the "Sessions" tab so the chat list can push a chat.
 export default function SessionsStackLayout() {

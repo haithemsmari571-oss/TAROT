@@ -15,7 +15,16 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { COLORS } from "../src/theme/colors";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../src/theme";
+import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
 import { useStardustBalance } from "../src/hooks/useStardustBalance";
 import { createStardustCheckoutSession } from "../src/api/payment";
@@ -95,7 +104,7 @@ export default function StardustScreen() {
         onPress={() => router.back()}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>STARDUST</Text>
       <View style={styles.backBtn} />
@@ -105,7 +114,7 @@ export default function StardustScreen() {
   // ── Signed-out guard ────────────────────────────────────────────────────
   if (!authLoading && !user) {
     return (
-      <View style={styles.root}>
+      <ScreenBackground scrimOpacity={0.65}>
         <StatusBar style="light" />
         <SafeAreaView style={styles.safe} edges={["top"]}>
           {Header}
@@ -113,7 +122,7 @@ export default function StardustScreen() {
             <Ionicons
               name="sparkles-outline"
               size={40}
-              color={COLORS.lavender}
+              color={COLORS.accent}
             />
             <Text style={styles.signedOutText}>
               Sign in to view and buy Stardust.
@@ -127,12 +136,12 @@ export default function StardustScreen() {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={styles.root}>
+    <ScreenBackground scrimOpacity={0.65}>
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         {Header}
@@ -143,20 +152,20 @@ export default function StardustScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={COLORS.lavender}
-              colors={[COLORS.lavender]}
+              tintColor={COLORS.accent}
+              colors={[COLORS.accent]}
             />
           }
         >
           {/* ── Balance card ── */}
           <View style={styles.balanceCard}>
             <View style={styles.balanceLabelRow}>
-              <Ionicons name="sparkles" size={14} color={COLORS.gold} />
+              <Ionicons name="sparkles" size={14} color={COLORS.accentGold} />
               <Text style={styles.balanceLabel}>YOUR STARDUST</Text>
             </View>
             {loading && balance === null ? (
               <ActivityIndicator
-                color={COLORS.gold}
+                color={COLORS.accentGold}
                 style={{ marginTop: 12, alignSelf: "flex-start" }}
               />
             ) : (
@@ -182,7 +191,7 @@ export default function StardustScreen() {
                 <Ionicons
                   name="open-outline"
                   size={16}
-                  color="#fff"
+                  color={COLORS.ctaText}
                   style={{ marginRight: 8 }}
                 />
                 <Text style={styles.primaryBtnText}>
@@ -219,7 +228,7 @@ export default function StardustScreen() {
                           active && styles.presetTextActive,
                         ]}
                       >
-                        ${preset}
+                        £{preset}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -238,7 +247,7 @@ export default function StardustScreen() {
                 {preview.bonusPoints > 0 && (
                   <Text style={styles.previewBonus}>
                     {preview.basePoints.toLocaleString()} base ·{" "}
-                    <Text style={{ color: COLORS.gold }}>
+                    <Text style={{ color: COLORS.accentGold }}>
                       +{preview.bonusPoints.toLocaleString()} bonus
                     </Text>{" "}
                     ({preview.tierName} +{Math.round(preview.bonusPct * 100)}%)
@@ -257,10 +266,10 @@ export default function StardustScreen() {
                 disabled={buying}
               >
                 {buying ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={COLORS.ctaText} />
                 ) : (
                   <Text style={styles.primaryBtnText}>
-                    BUY STARDUST · ${amount}
+                    BUY STARDUST · £{amount}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -270,7 +279,7 @@ export default function StardustScreen() {
                   <Ionicons
                     name="time-outline"
                     size={16}
-                    color={COLORS.lavender}
+                    color={COLORS.accent}
                     style={{ marginRight: 8 }}
                   />
                   <Text style={styles.noticeText}>{notice}</Text>
@@ -279,34 +288,38 @@ export default function StardustScreen() {
               {!!buyError && <Text style={styles.errorText}>{buyError}</Text>}
 
               <Text style={styles.secureNote}>
-                Secure Stripe checkout · USD
+                Secure Stripe checkout · GBP
               </Text>
             </View>
           )}
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
   safe: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 48 },
+  scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, paddingBottom: SPACING.xxxl },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backBtn: {
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerTitle: {
-    fontSize: 15,
+    fontFamily: FONTS.heading,
+    fontSize: 18,
     letterSpacing: 2,
-    color: COLORS.text,
-    fontFamily: "Poppins_700Bold",
+    color: COLORS.textPrimary,
   },
 
   centerBlock: {
@@ -316,11 +329,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
   signedOutText: {
-    fontSize: 15,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
-    marginTop: 16,
+    marginTop: SPACING.lg,
     marginBottom: 28,
   },
 
@@ -328,115 +340,122 @@ const styles = StyleSheet.create({
   balanceCard: {
     backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "rgba(242,174,64,0.25)",
-    borderRadius: 18,
+    borderColor: alpha(COLORS.accentGold, 0.25),
+    borderRadius: RADII.xl,
     padding: 22,
-    marginTop: 8,
+    marginTop: SPACING.sm,
     marginBottom: 28,
   },
   balanceLabelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   balanceLabel: {
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.5,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.semiBold,
   },
   balanceValue: {
+    fontFamily: FONTS.heading,
     fontSize: 44,
-    color: COLORS.gold,
-    fontFamily: "Poppins_700Bold",
+    color: COLORS.accentGold,
     marginTop: 6,
   },
 
-  section: { marginTop: 4 },
+  section: { marginTop: SPACING.xs },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 1.5,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.semiBold,
     marginBottom: 14,
   },
   bodyText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     marginBottom: 22,
   },
 
   // Presets
   presetRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   presetBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: SPACING.md,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.borderStrong,
     backgroundColor: COLORS.surface,
   },
   presetBtnActive: {
-    borderColor: COLORS.lavender,
-    backgroundColor: "rgba(210,185,255,0.12)",
+    borderColor: COLORS.accent,
+    backgroundColor: alpha(COLORS.accent, 0.12),
   },
   presetText: {
-    fontSize: 15,
-    color: COLORS.text,
-    fontFamily: "Poppins_600SemiBold",
+    fontSize: 17,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.semiBold,
   },
-  presetTextActive: { color: COLORS.lavender },
+  presetTextActive: { color: COLORS.accent },
 
   // Preview
   previewCard: {
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 16,
+    borderRadius: RADII.xl,
     padding: 18,
     marginTop: 20,
   },
   previewLabel: {
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.5,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.semiBold,
   },
-  previewValueRow: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 4 },
+  previewValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
   previewValue: {
+    fontFamily: FONTS.heading,
     fontSize: 34,
-    color: COLORS.lavender,
-    fontFamily: "Poppins_700Bold",
+    color: COLORS.accent,
   },
   previewUnit: {
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 1,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.semiBold,
   },
   previewBonus: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.regular,
     marginTop: 6,
   },
   previewNote: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: "rgba(255,255,255,0.4)",
-    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textFaint,
+    fontFamily: FONTS.regular,
     marginTop: 10,
   },
 
   // Primary button (purple CTA — matches app-wide style)
   primaryBtn: {
+    minHeight: TOUCH_TARGET,
     flexDirection: "row",
-    backgroundColor: COLORS.purple,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    backgroundColor: COLORS.cta,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: RADII.md,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 24,
-    shadowColor: COLORS.purple,
+    marginTop: SPACING.xl,
+    shadowColor: COLORS.cta,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 20,
@@ -444,10 +463,10 @@ const styles = StyleSheet.create({
   },
   primaryBtnDisabled: { opacity: 0.6 },
   primaryBtnText: {
-    color: "#fff",
-    fontSize: 13,
+    color: COLORS.ctaText,
+    fontSize: 15,
     letterSpacing: 1,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
     textAlign: "center",
   },
 
@@ -455,32 +474,32 @@ const styles = StyleSheet.create({
   noticeCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(210,185,255,0.08)",
+    backgroundColor: alpha(COLORS.accent, 0.08),
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.2)",
-    borderRadius: 12,
+    borderColor: alpha(COLORS.accent, 0.2),
+    borderRadius: RADII.md,
     padding: 14,
     marginTop: 18,
   },
   noticeText: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.lavender,
-    fontFamily: "Poppins_400Regular",
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.accent,
+    fontFamily: FONTS.regular,
   },
   errorText: {
-    color: "#FF6B6B",
-    fontSize: 13,
-    fontFamily: "Poppins_400Regular",
+    color: COLORS.error,
+    fontSize: 14,
+    fontFamily: FONTS.regular,
     marginTop: 14,
   },
   secureNote: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
-    color: "rgba(255,255,255,0.3)",
+    color: COLORS.textFaint,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
+    fontFamily: FONTS.regular,
     marginTop: 20,
   },
 });

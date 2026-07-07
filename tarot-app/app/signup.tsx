@@ -14,7 +14,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS } from "../src/theme/colors";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../src/theme";
+import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
 
 /** Pull a human-friendly message out of a backend/axios error. */
@@ -87,205 +96,218 @@ export default function SignUpScreen() {
   // Confirmation state: account created, awaiting email verification.
   if (verifyEmail) {
     return (
-      <SafeAreaView style={styles.root} edges={["top"]}>
-        <StatusBar style="light" />
-        <View style={styles.verifyContent}>
-          <View style={styles.verifyIcon}>
-            <Ionicons name="mail-outline" size={40} color={COLORS.lavender} />
+      <ScreenBackground scrimOpacity={0.6}>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <StatusBar style="light" />
+          <View style={styles.verifyContent}>
+            <View style={styles.verifyIcon}>
+              <Ionicons name="mail-outline" size={40} color={COLORS.accent} />
+            </View>
+            <Text style={styles.title}>CHECK YOUR EMAIL</Text>
+            <Text style={styles.verifyText}>
+              Your account is ready. We&apos;ve sent a verification link to{" "}
+              <Text style={styles.verifyEmail}>{verifyEmail}</Text>. Verify it,
+              then sign in to start your first reading.
+            </Text>
+            <TouchableOpacity
+              style={styles.submitBtn}
+              activeOpacity={0.85}
+              onPress={() => router.replace("/profile")}
+            >
+              <Text style={styles.submitText}>BACK TO SIGN IN</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.title}>CHECK YOUR EMAIL</Text>
-          <Text style={styles.verifyText}>
-            Your account is ready. We&apos;ve sent a verification link to{" "}
-            <Text style={styles.verifyEmail}>{verifyEmail}</Text>. Verify it,
-            then sign in to start your first reading.
-          </Text>
-          <TouchableOpacity
-            style={styles.submitBtn}
-            activeOpacity={0.85}
-            onPress={() => router.replace("/profile")}
-          >
-            <Text style={styles.submitText}>BACK TO SIGN IN</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </ScreenBackground>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <SafeAreaView style={styles.root} edges={["top"]}>
-        <StatusBar style="light" />
-        <ScrollView
-          contentContainerStyle={styles.formContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <TouchableOpacity
-            style={styles.backLink}
-            activeOpacity={0.7}
-            onPress={() => router.back()}
+    <ScreenBackground scrimOpacity={0.6}>
+      <KeyboardAvoidingView
+        style={styles.safe}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <StatusBar style="light" />
+          <ScrollView
+            contentContainerStyle={styles.formContent}
+            keyboardShouldPersistTaps="handled"
           >
-            <Ionicons name="chevron-back" size={18} color={COLORS.textMuted} />
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.backLink}
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={18}
+                color={COLORS.textSecondary}
+              />
+              <Text style={styles.backText}>Back</Text>
+            </TouchableOpacity>
 
-          <Text style={styles.title}>CREATE ACCOUNT</Text>
-          <Text style={styles.subtitle}>
-            Join Ask Valentina to connect with your psychic.
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Name"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            autoCapitalize="words"
-            autoCorrect={false}
-            value={username}
-            onChangeText={setUsername}
-            editable={!submitting}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={email}
-            onChangeText={setEmail}
-            editable={!submitting}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            secureTextEntry
-            autoCapitalize="none"
-            value={password}
-            onChangeText={setPassword}
-            editable={!submitting}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm password"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            secureTextEntry
-            autoCapitalize="none"
-            value={confirm}
-            onChangeText={setConfirm}
-            editable={!submitting}
-            onSubmitEditing={onSubmit}
-            returnKeyType="go"
-          />
-
-          {!!error && <Text style={styles.error}>{error}</Text>}
-
-          <TouchableOpacity
-            style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-            activeOpacity={0.85}
-            onPress={onSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitText}>CREATE ACCOUNT</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.switchLink}
-            activeOpacity={0.7}
-            onPress={() => router.replace("/profile")}
-          >
-            <Text style={styles.switchText}>
-              Already have an account?{" "}
-              <Text style={styles.switchTextAccent}>Sign in</Text>
+            <Text style={styles.title}>CREATE ACCOUNT</Text>
+            <Text style={styles.subtitle}>
+              Join Ask Valentina to connect with your psychic.
             </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Name"
+              placeholderTextColor={COLORS.textFaint}
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={username}
+              onChangeText={setUsername}
+              editable={!submitting}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={COLORS.textFaint}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={email}
+              onChangeText={setEmail}
+              editable={!submitting}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={COLORS.textFaint}
+              secureTextEntry
+              autoCapitalize="none"
+              value={password}
+              onChangeText={setPassword}
+              editable={!submitting}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm password"
+              placeholderTextColor={COLORS.textFaint}
+              secureTextEntry
+              autoCapitalize="none"
+              value={confirm}
+              onChangeText={setConfirm}
+              editable={!submitting}
+              onSubmitEditing={onSubmit}
+              returnKeyType="go"
+            />
+
+            {!!error && <Text style={styles.error}>{error}</Text>}
+
+            <TouchableOpacity
+              style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+              activeOpacity={0.85}
+              onPress={onSubmit}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color={COLORS.ctaText} />
+              ) : (
+                <Text style={styles.submitText}>CREATE ACCOUNT</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.switchLink}
+              activeOpacity={0.7}
+              onPress={() => router.replace("/profile")}
+            >
+              <Text style={styles.switchText}>
+                Already have an account?{" "}
+                <Text style={styles.switchTextAccent}>Sign in</Text>
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1 },
   formContent: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 28,
-    paddingVertical: 24,
+    paddingVertical: SPACING.xl,
   },
   backLink: {
+    minHeight: TOUCH_TARGET,
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    marginBottom: 20,
+    marginBottom: SPACING.sm,
   },
   backText: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
+    color: COLORS.textSecondary,
+    fontSize: 16,
+    fontFamily: FONTS.regular,
     marginLeft: 2,
   },
   title: {
-    fontSize: 26,
-    color: COLORS.text,
+    ...TYPOGRAPHY.display,
     letterSpacing: 1,
-    fontFamily: "Poppins_700Bold",
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   subtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     marginBottom: 28,
   },
   input: {
+    minHeight: TOUCH_TARGET,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: COLORS.text,
-    fontFamily: "Poppins_400Regular",
+    borderColor: COLORS.borderStrong,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 13,
+    fontSize: 17,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.regular,
     marginBottom: 14,
   },
   error: {
-    color: "#FF6B6B",
-    fontSize: 13,
-    fontFamily: "Poppins_400Regular",
-    marginBottom: 12,
+    color: COLORS.error,
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    marginBottom: SPACING.md,
   },
   submitBtn: {
-    backgroundColor: COLORS.purple,
-    paddingVertical: 16,
-    borderRadius: 12,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    backgroundColor: COLORS.cta,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADII.md,
     alignItems: "center",
     marginTop: 6,
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitText: {
-    color: "#fff",
-    fontSize: 13,
+    color: COLORS.ctaText,
+    fontSize: 15,
     letterSpacing: 1.2,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
-  switchLink: { alignItems: "center", marginTop: 22 },
+  switchLink: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: SPACING.lg,
+  },
   switchText: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
+    color: COLORS.textSecondary,
+    fontSize: 16,
+    fontFamily: FONTS.regular,
   },
   switchTextAccent: {
-    color: COLORS.lavender,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.accent,
+    fontFamily: FONTS.semiBold,
   },
   // Verification confirmation state
   verifyContent: {
@@ -300,22 +322,20 @@ const styles = StyleSheet.create({
     borderRadius: 44,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.3)",
+    borderColor: alpha(COLORS.accent, 0.3),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: SPACING.xl,
   },
   verifyText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    marginTop: 8,
-    marginBottom: 32,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xxl,
   },
   verifyEmail: {
-    color: COLORS.lavender,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.accent,
+    fontFamily: FONTS.semiBold,
   },
 });

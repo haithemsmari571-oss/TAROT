@@ -10,7 +10,14 @@ import {
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS } from "../theme/colors";
+import {
+  COLORS,
+  FONTS,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../theme";
 import { useAuth } from "./AuthContext";
 import { useRingtone } from "../hooks/useRingtone";
 import { getValidAccessToken } from "../lib/refresh";
@@ -143,7 +150,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         <View style={styles.overlay}>
           <View style={styles.card}>
             <View style={styles.avatar}>
-              <Ionicons name="sparkles" size={40} color={COLORS.lavender} />
+              <Ionicons name="sparkles" size={40} color={COLORS.accent} />
             </View>
             <Text style={styles.calling}>INCOMING READING</Text>
             <Text style={styles.name}>{incomingCall?.psychicName}</Text>
@@ -154,7 +161,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
               activeOpacity={0.85}
               onPress={onAccept}
             >
-              <Ionicons name="chatbubbles" size={18} color="#fff" />
+              <Ionicons name="chatbubbles" size={18} color={COLORS.ctaText} />
               <Text style={styles.joinText}>JOIN READING</Text>
             </TouchableOpacity>
 
@@ -180,10 +187,10 @@ export function useCall(): CallState {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(5,5,8,0.92)",
+    backgroundColor: COLORS.overlay,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: SPACING.xxl,
   },
   card: {
     width: "100%",
@@ -191,68 +198,77 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 40,
     paddingHorizontal: 28,
-    borderRadius: 28,
+    borderRadius: RADII.xxl,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.25)",
+    borderColor: alpha(COLORS.accent, 0.25),
   },
   avatar: {
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: "rgba(210,185,255,0.08)",
+    backgroundColor: alpha(COLORS.accent, 0.08),
     borderWidth: 1,
-    borderColor: "rgba(210,185,255,0.35)",
+    borderColor: alpha(COLORS.accent, 0.35),
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 22,
   },
   calling: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 2.5,
-    color: COLORS.gold,
-    fontFamily: "Poppins_700Bold",
+    color: COLORS.accentGold,
+    fontFamily: FONTS.bold,
     marginBottom: 10,
   },
   name: {
-    fontSize: 24,
-    color: COLORS.lavender,
-    fontFamily: "Poppins_700Bold",
+    fontSize: 26,
+    lineHeight: 32,
+    color: COLORS.accent,
+    fontFamily: FONTS.heading,
     textAlign: "center",
   },
   sub: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontFamily: "Poppins_400Regular",
-    marginTop: 4,
+    fontSize: 16,
+    lineHeight: 24,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.regular,
+    marginTop: SPACING.xs,
     marginBottom: 34,
     textAlign: "center",
   },
   joinBtn: {
+    minHeight: TOUCH_TARGET,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
     width: "100%",
-    backgroundColor: COLORS.purple,
-    paddingVertical: 16,
-    borderRadius: 14,
-    shadowColor: COLORS.purple,
+    backgroundColor: COLORS.cta,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADII.lg,
+    shadowColor: COLORS.cta,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 20,
     elevation: 6,
   },
   joinText: {
-    color: "#fff",
-    fontSize: 14,
+    color: COLORS.ctaText,
+    fontSize: 15,
     letterSpacing: 1.2,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
-  dismissBtn: { marginTop: 18, paddingVertical: 8, paddingHorizontal: 20 },
+  dismissBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    marginTop: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: 20,
+  },
   dismissText: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    fontFamily: FONTS.semiBold,
   },
 });

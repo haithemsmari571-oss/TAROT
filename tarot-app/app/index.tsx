@@ -2,14 +2,23 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
-import { COLORS } from "../src/theme/colors";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../src/theme";
+import ScreenBackground from "../src/components/ScreenBackground";
 import DailyDraw from "../src/components/DailyDraw";
 
 export default function SanctuaryScreen() {
   const router = useRouter();
 
   return (
-    <View style={styles.root}>
+    <ScreenBackground scrimOpacity={0.55}>
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScrollView
@@ -42,12 +51,11 @@ export default function SanctuaryScreen() {
           <DailyDraw />
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
   safe: { flex: 1 },
   scroll: {
     flexGrow: 1,
@@ -56,56 +64,53 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: SPACING.xxl,
     paddingTop: 40,
     paddingBottom: 44,
   },
   logo: {
     fontSize: 64,
-    color: COLORS.lavender,
-    fontFamily: "Poppins_700Bold",
-    marginBottom: 32,
-    textShadowColor: "rgba(210,185,255,0.4)",
+    color: COLORS.accent,
+    fontFamily: FONTS.headingExtra,
+    marginBottom: SPACING.xxl,
+    textShadowColor: alpha(COLORS.accent, 0.4),
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 24,
   },
   headline: {
-    fontSize: 30,
-    lineHeight: 38,
-    color: COLORS.text,
+    ...TYPOGRAPHY.displayLarge,
     textAlign: "center",
-    fontFamily: "Poppins_700Bold",
     marginBottom: 18,
   },
   subtext: {
-    fontSize: 15,
-    lineHeight: 23,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
     marginBottom: 40,
   },
   cta: {
-    backgroundColor: COLORS.purple,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    backgroundColor: COLORS.cta,
     paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: COLORS.purple,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADII.md,
+    shadowColor: COLORS.cta,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 6,
   },
   ctaText: {
-    color: "#fff",
-    fontSize: 13,
+    color: COLORS.ctaText,
+    fontSize: 15,
     letterSpacing: 1.2,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
   divider: {
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: COLORS.border,
     marginHorizontal: 40,
-    marginBottom: 32,
+    marginBottom: SPACING.xxl,
   },
 });

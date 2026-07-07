@@ -1,4 +1,4 @@
-import { COLORS } from "../theme/colors";
+import { COLORS } from "../theme";
 
 // Category -> halo color (mirrors the web app)
 export const CATEGORY_HALO: Record<string, string> = {

@@ -11,7 +11,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { api } from "../../src/api/client";
-import { COLORS } from "../../src/theme/colors";
+import { COLORS, TYPOGRAPHY, SPACING } from "../../src/theme";
+import ScreenBackground, {
+  BACKGROUNDS,
+} from "../../src/components/ScreenBackground";
 import { PsychicCard } from "../../src/components/PsychicCard";
 import type { Psychic } from "../../src/types";
 
@@ -48,9 +51,11 @@ export default function PsychicsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.lavender} />
-      </View>
+      <ScreenBackground source={BACKGROUNDS.moonlitBalcony} scrimOpacity={0.7}>
+        <View style={styles.center}>
+          <ActivityIndicator color={COLORS.accent} />
+        </View>
+      </ScreenBackground>
     );
   }
 
@@ -58,8 +63,8 @@ export default function PsychicsScreen() {
     <RefreshControl
       refreshing={refreshing}
       onRefresh={onRefresh}
-      tintColor={COLORS.lavender}
-      colors={[COLORS.lavender]}
+      tintColor={COLORS.accent}
+      colors={[COLORS.accent]}
       progressBackgroundColor={COLORS.surface}
     />
   );
@@ -68,73 +73,72 @@ export default function PsychicsScreen() {
   // "Pull to retry" affordance the message promises.
   if (error) {
     return (
-      <SafeAreaView style={styles.root} edges={["top"]}>
-        <StatusBar style="light" />
-        <FlatList
-          data={[]}
-          keyExtractor={() => "none"}
-          renderItem={null}
-          contentContainerStyle={styles.errorList}
-          refreshControl={refreshControl}
-          ListEmptyComponent={<Text style={styles.error}>{error}</Text>}
-        />
-      </SafeAreaView>
+      <ScreenBackground source={BACKGROUNDS.moonlitBalcony} scrimOpacity={0.7}>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <StatusBar style="light" />
+          <FlatList
+            data={[]}
+            keyExtractor={() => "none"}
+            renderItem={null}
+            contentContainerStyle={styles.errorList}
+            refreshControl={refreshControl}
+            ListEmptyComponent={<Text style={styles.error}>{error}</Text>}
+          />
+        </SafeAreaView>
+      </ScreenBackground>
     );
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
-      <StatusBar style="light" />
-      <FlatList
-        data={psychics}
-        keyExtractor={(p) => String(p.id)}
-        contentContainerStyle={styles.list}
-        refreshControl={refreshControl}
-        renderItem={({ item }) => (
-          <PsychicCard
-            psychic={item}
-            onPress={() => router.push(`/psychics/${item.id}`)}
-          />
-        )}
-        ListHeaderComponent={<Text style={styles.header}>OUR PSYCHICS</Text>}
-        ListEmptyComponent={
-          <Text style={styles.error}>No psychics available right now.</Text>
-        }
-      />
-    </SafeAreaView>
+    <ScreenBackground source={BACKGROUNDS.moonlitBalcony} scrimOpacity={0.7}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <StatusBar style="light" />
+        <FlatList
+          data={psychics}
+          keyExtractor={(p) => String(p.id)}
+          contentContainerStyle={styles.list}
+          refreshControl={refreshControl}
+          renderItem={({ item }) => (
+            <PsychicCard
+              psychic={item}
+              onPress={() => router.push(`/psychics/${item.id}`)}
+            />
+          )}
+          ListHeaderComponent={<Text style={styles.header}>OUR PSYCHICS</Text>}
+          ListEmptyComponent={
+            <Text style={styles.error}>No psychics available right now.</Text>
+          }
+        />
+      </SafeAreaView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1 },
   center: {
     flex: 1,
-    backgroundColor: COLORS.background,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: SPACING.xxl,
   },
-  list: { padding: 16, paddingBottom: 40 },
+  list: { padding: SPACING.lg, paddingBottom: 40 },
   errorList: {
     flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: SPACING.xxl,
     paddingVertical: 80,
   },
   header: {
-    fontSize: 22,
-    color: COLORS.text,
+    ...TYPOGRAPHY.display,
     letterSpacing: 1,
-    marginBottom: 16,
-    marginTop: 4,
-    fontFamily: "Poppins_700Bold",
+    marginBottom: SPACING.lg,
+    marginTop: SPACING.xs,
   },
   error: {
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    lineHeight: 21,
   },
 });

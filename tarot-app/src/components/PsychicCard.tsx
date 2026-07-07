@@ -1,6 +1,14 @@
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../theme/colors";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../theme";
 import type { Psychic } from "../types";
 import { getHalo, getTier, hexToRgba, perMinute } from "../utils/psychic";
 
@@ -85,13 +93,13 @@ export function PsychicCard({
                         borderColor: halo,
                         backgroundColor: hexToRgba(halo, 0.08),
                       }
-                    : { borderColor: "rgba(255,255,255,0.12)" },
+                    : { borderColor: COLORS.borderStrong },
                 ]}
               >
                 <Text
                   style={[
                     styles.tagText,
-                    { color: isPrimary ? halo : "rgba(255,255,255,0.5)" },
+                    { color: isPrimary ? halo : COLORS.textSecondary },
                   ]}
                 >
                   {cat.title}
@@ -111,7 +119,7 @@ export function PsychicCard({
         {/* Bottom row: rate + button */}
         <View style={styles.bottomRow}>
           <View style={styles.rateWrap}>
-            <Text style={[styles.rate, { color: tier.color }]}>${rate}</Text>
+            <Text style={[styles.rate, { color: tier.color }]}>£{rate}</Text>
             <Text style={styles.rateUnit}>/min</Text>
           </View>
           <TouchableOpacity
@@ -131,10 +139,10 @@ export function PsychicCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     overflow: "hidden",
-    marginBottom: 16,
+    marginBottom: SPACING.lg,
     // Soft halo glow (iOS shadow + Android elevation)
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
@@ -145,15 +153,15 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 3 / 4,
     position: "relative",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: RADII.md,
+    borderTopRightRadius: RADII.md,
     overflow: "hidden",
   },
   photo: { width: "100%", height: "100%" },
   photoFallback: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: COLORS.surfaceElevated,
   },
   photoFade: {
     position: "absolute",
@@ -171,11 +179,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   tierText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.8,
     color: COLORS.background,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
   onlineWrap: {
     position: "absolute",
@@ -184,7 +192,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: COLORS.photoScrim,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 20,
@@ -196,20 +204,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.online,
   },
   onlineText: {
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1,
     color: COLORS.online,
     fontWeight: "700",
-    fontFamily: "Poppins_600SemiBold",
+    fontFamily: FONTS.semiBold,
   },
-  body: { padding: 16 },
+  body: { padding: SPACING.lg },
   name: {
-    fontSize: 18,
-    color: COLORS.text,
+    ...TYPOGRAPHY.headline,
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginBottom: 10,
-    fontFamily: "Poppins_700Bold",
   },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 },
   tag: {
@@ -219,41 +225,45 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   tagText: {
-    fontSize: 10,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    fontFamily: "Poppins_600SemiBold",
+    fontFamily: FONTS.semiBold,
   },
   bio: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     fontStyle: "italic",
     marginBottom: 14,
-    fontFamily: "Poppins_400Regular",
   },
   bottomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
-    paddingTop: 12,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.md,
   },
   rateWrap: { flexDirection: "row", alignItems: "baseline", gap: 3 },
-  rate: { fontSize: 18, fontFamily: "Poppins_700Bold" },
-  rateUnit: { fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "Poppins_400Regular" },
+  rate: { fontSize: 20, fontFamily: FONTS.bold },
+  rateUnit: {
+    fontSize: 13,
+    color: COLORS.textFaint,
+    fontFamily: FONTS.regular,
+  },
   button: {
-    backgroundColor: COLORS.purple,
-    paddingHorizontal: 16,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    backgroundColor: COLORS.cta,
+    paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: RADII.sm,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 11,
+    color: COLORS.ctaText,
+    fontSize: 14,
     letterSpacing: 0.8,
     textTransform: "uppercase",
-    fontFamily: "Poppins_700Bold",
+    fontFamily: FONTS.bold,
   },
 });
