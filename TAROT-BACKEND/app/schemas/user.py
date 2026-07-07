@@ -200,3 +200,10 @@ class AdminUserListResponse(BaseModel):
     page: int
     limit: int
     pages: int
+
+
+class PushTokenReq(BaseModel):
+    """Expo push token registration from the mobile app."""
+
+    token: str
+    platform: Optional[str] = None  # "ios" | "android"

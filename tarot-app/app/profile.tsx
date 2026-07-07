@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   COLORS,
   FONTS,
@@ -26,6 +27,11 @@ import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
 import { formatPounds } from "../src/context/CreditContext";
 import { useStardustBalance } from "../src/hooks/useStardustBalance";
+import {
+  getPushPermission,
+  requestPushPermissionAndRegister,
+  type PushPermission,
+} from "../src/lib/notifications";
 
 export default function ProfileScreen() {
   const { user, loading } = useAuth();
@@ -51,6 +57,42 @@ function Account() {
     creditBalance,
     loading: balanceLoading,
   } = useStardustBalance();
+
+  // Quiet notifications re-entry point (the only place we offer it again
+  // after a "Not now"). Hidden entirely in Expo Go ("unsupported").
+  const [pushStatus, setPushStatus] = useState<PushPermission | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getPushPermission().then((s) => {
+        if (active) setPushStatus(s);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const onNotificationsPress = useCallback(async () => {
+    setPushBusy(true);
+    const enabled = await requestPushPermissionAndRegister();
+    if (!enabled) {
+      // iOS won't re-show the dialog once denied — the OS settings screen is
+      // the only way back in.
+      const s = await getPushPermission();
+      if (s === "denied") {
+        try {
+          await Linking.openSettings();
+        } catch {
+          // nothing else to do
+        }
+      }
+    }
+    setPushStatus(await getPushPermission());
+    setPushBusy(false);
+  }, []);
 
   return (
     <ScreenBackground scrimOpacity={0.6}>
@@ -98,6 +140,51 @@ function Account() {
               color={COLORS.textSecondary}
             />
           </TouchableOpacity>
+
+          {/* Notifications — quiet status/re-entry row (hidden in Expo Go) */}
+          {pushStatus != null && pushStatus !== "unsupported" && (
+            <TouchableOpacity
+              style={styles.notifCard}
+              activeOpacity={pushStatus === "granted" ? 1 : 0.85}
+              onPress={
+                pushStatus === "granted" ? undefined : onNotificationsPress
+              }
+              disabled={pushBusy}
+            >
+              <View style={styles.notifLeft}>
+                <Ionicons
+                  name={
+                    pushStatus === "granted"
+                      ? "notifications"
+                      : "notifications-outline"
+                  }
+                  size={18}
+                  color={
+                    pushStatus === "granted"
+                      ? COLORS.accent
+                      : COLORS.textSecondary
+                  }
+                />
+                <View style={styles.notifBody}>
+                  <Text style={styles.notifLabel}>NOTIFICATIONS</Text>
+                  <Text style={styles.notifText}>
+                    {pushStatus === "granted"
+                      ? "On — you'll know the moment your reading begins"
+                      : "Off — tap to know the moment your reading begins"}
+                  </Text>
+                </View>
+              </View>
+              {pushBusy ? (
+                <ActivityIndicator size="small" color={COLORS.accent} />
+              ) : pushStatus !== "granted" ? (
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={COLORS.textSecondary}
+                />
+              ) : null}
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.signOutBtn}
@@ -339,6 +426,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: alpha(COLORS.accentGold, 0.85),
+    fontFamily: FONTS.regular,
+    marginTop: 2,
+  },
+  notifCard: {
+    minHeight: TOUCH_TARGET,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADII.lg,
+    paddingHorizontal: 18,
+    paddingVertical: SPACING.lg,
+    marginBottom: 28,
+    gap: SPACING.md,
+  },
+  notifLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+  },
+  notifBody: { flex: 1 },
+  notifLabel: {
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.semiBold,
+  },
+  notifText: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: COLORS.textPrimary,
     fontFamily: FONTS.regular,
     marginTop: 2,
   },

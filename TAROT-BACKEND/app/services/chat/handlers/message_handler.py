@@ -101,6 +101,26 @@ class MessageHandler(BaseEventHandler):
         # Broadcast to all chat participants (manager expects string chat_id)
         await manager.send_to_chat(message=message_data, chat_id=str(self.chat_id))
 
+        # Push when the CLIENT is unreachable live: status == SENT means the
+        # recipient has no socket anywhere (app closed/backgrounded). Clients
+        # only — psychics work from their own panel — and never for the
+        # sender's own message (recipient_id is always the other party).
+        # Fire-and-forget; a push failure never breaks the broadcast.
+        if status == MessageStatus.SENT and recipient_id == chat.user_id:
+            from app.services.push import notify_user_push
+
+            preview = content if len(content) <= 120 else content[:117] + "…"
+            notify_user_push(
+                recipient_id,
+                title=f"New message from {user.username}",
+                body=preview,
+                data={
+                    "type": "new_message",
+                    "chat_id": self.chat_id,
+                    "psychic_name": user.username,
+                },
+            )
+
         logger.debug(
             "message_broadcast_complete",
             chat_id=self.chat_id,

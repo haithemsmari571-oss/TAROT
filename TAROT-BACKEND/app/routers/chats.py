@@ -585,6 +585,24 @@ async def update_chat_status_endpoint(
             }
             await notification_manager.send_to_user(notification_data, chat_obj.user_id)
 
+            # Push to the client's phone (locked / app closed). Fire-and-forget:
+            # scheduled as a background task with its own DB session, so a push
+            # failure can never break the accept flow. If the app is open, its
+            # foreground handler suppresses the banner (the in-app INCOMING
+            # READING modal already covers that case).
+            from app.services.push import notify_user_push
+
+            notify_user_push(
+                chat_obj.user_id,
+                title="Your reading is starting ✦",
+                body=f"{psychic_name} accepted your request — tap to join",
+                data={
+                    "type": "chat_accepted",
+                    "chat_id": chat_id,
+                    "psychic_name": psychic_name,
+                },
+            )
+
             logger.info(
                 "session_started_via_api",
                 chat_id=chat_id,

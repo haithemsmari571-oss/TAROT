@@ -10,12 +10,14 @@ from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.models.user import User
 from app.schemas.auth import ChangePasswordReq
-from app.schemas.user import UserProfileRead, UserProfileUpdate
+from app.logging_config import get_logger
+from app.schemas.user import PushTokenReq, UserProfileRead, UserProfileUpdate
 from app.services.auth import change_password
 from app.services.users import update_user_profile
 
 router = APIRouter()
 settings = get_app_settings()
+logger = get_logger(__name__)
 
 
 def transform_profile_picture_url(user: User) -> UserProfileRead:
@@ -195,3 +197,37 @@ def change_user_password(
     return JSONResponse(
         content={"message": "Password changed successfully"}, status_code=200
     )
+
+
+@router.post("/me/push-token")
+def register_push_token(
+    body: PushTokenReq,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Register (or reassign) this device's Expo push token to the signed-in user.
+
+    **Permissions:** Authenticated user
+
+    Upserts by token: a device that switches accounts moves its token to the
+    new account instead of creating a duplicate. Called by the mobile app after
+    the user grants notification permission, and again on every sign-in
+    (tokens are per-device, accounts are not).
+    """
+    from app.models.push_token import PushToken
+
+    token = (body.token or "").strip()
+    if not token or len(token) > 255:
+        raise HTTPException(status_code=422, detail="Invalid push token")
+
+    existing = db.query(PushToken).filter(PushToken.token == token).first()
+    if existing:
+        existing.user_id = user.id
+        existing.platform = body.platform or existing.platform
+    else:
+        db.add(PushToken(user_id=user.id, token=token, platform=body.platform))
+    db.commit()
+
+    logger.info("push_token_registered", user_id=user.id, platform=body.platform)
+    return JSONResponse(content={"message": "Push token registered"}, status_code=200)

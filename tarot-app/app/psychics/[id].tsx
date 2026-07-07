@@ -40,6 +40,11 @@ import { useCredit, formatPounds } from "../../src/context/CreditContext";
 import { requestChat } from "../../src/api/chat";
 import { getMyBalance } from "../../src/api/payment";
 import { openBillingPage } from "../../src/lib/billing";
+import {
+  markPushPromptDeclined,
+  requestPushPermissionAndRegister,
+  shouldOfferPushPrompt,
+} from "../../src/lib/notifications";
 import BottomSheet, {
   SheetTitle,
   SheetBody,
@@ -72,6 +77,10 @@ export default function PsychicDetailScreen() {
   const [shortfall, setShortfall] = useState<{ spendable: number } | null>(null);
   const [sheetBusy, setSheetBusy] = useState(false);
   const [sheetNote, setSheetNote] = useState<string | null>(null);
+  // Branded pre-permission sheet, shown once right after her first request —
+  // the OS dialog only fires if she taps ENABLE. Never re-shown after "Not now".
+  const [pushSheet, setPushSheet] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -125,6 +134,13 @@ export default function PsychicDetailScreen() {
 
     try {
       await requestChat(psychic.id, "Hello, I'd like to start a reading.");
+      // First meaningful moment for the push ask: she just requested a reading
+      // and will want to know the instant it's accepted. Our branded sheet
+      // first — the OS dialog only on ENABLE. (No-op in Expo Go.)
+      if (await shouldOfferPushPrompt()) {
+        setPushSheet(true);
+        return;
+      }
       // Land on the Sessions tab so the new pending request is visible.
       router.push("/sessions");
     } catch (err: any) {
@@ -197,6 +213,25 @@ export default function PsychicDetailScreen() {
       setSheetBusy(false);
     }
   }, [psychic, refreshCredit]);
+
+  // Push pre-permission sheet actions. Both paths end on the Sessions tab so
+  // she sees her pending request either way.
+  const finishPushSheet = useCallback(() => {
+    setPushSheet(false);
+    router.push("/sessions");
+  }, [router]);
+
+  const onEnablePush = useCallback(async () => {
+    setPushBusy(true);
+    await requestPushPermissionAndRegister();
+    setPushBusy(false);
+    finishPushSheet();
+  }, [finishPushSheet]);
+
+  const onDeclinePush = useCallback(() => {
+    void markPushPromptDeclined();
+    finishPushSheet();
+  }, [finishPushSheet]);
 
   const BackButton = (
     <TouchableOpacity
@@ -432,6 +467,21 @@ export default function PsychicDetailScreen() {
           onPress={onSheetTopUp}
         />
         <SheetQuietButton label="Not now" onPress={() => setShortfall(null)} />
+      </BottomSheet>
+
+      {/* Push pre-permission — our sheet first, the OS dialog only on ENABLE. */}
+      <BottomSheet visible={pushSheet} onClose={onDeclinePush}>
+        <SheetTitle>Know the moment it begins</SheetTitle>
+        <SheetBody>
+          Get notified the moment your psychic accepts — even if your phone is
+          locked.
+        </SheetBody>
+        <SheetPrimaryButton
+          label="ENABLE NOTIFICATIONS"
+          loading={pushBusy}
+          onPress={onEnablePush}
+        />
+        <SheetQuietButton label="Not now" onPress={onDeclinePush} />
       </BottomSheet>
     </ScreenBackground>
   );

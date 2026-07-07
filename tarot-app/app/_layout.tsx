@@ -16,6 +16,7 @@ import { AuthProvider } from "../src/context/AuthContext";
 import { CreditProvider } from "../src/context/CreditContext";
 import { CallProvider } from "../src/context/CallProvider";
 import WelcomeCelebration from "../src/components/WelcomeCelebration";
+import PushManager from "../src/components/PushManager";
 
 // Each tab maps to an Ionicons glyph, swapping to the filled variant when active.
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -98,6 +99,9 @@ export default function RootLayout() {
       </Tabs>
       {/* One-time "£15 is waiting" moment for accounts with unspent credit. */}
       <WelcomeCelebration />
+      {/* Push notifications: foreground suppression, token registration,
+          tap-to-open-chat routing. Inert in Expo Go. */}
+      <PushManager />
       </CallProvider>
       </CreditProvider>
     </AuthProvider>
