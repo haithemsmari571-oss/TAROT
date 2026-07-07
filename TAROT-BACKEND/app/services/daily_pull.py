@@ -1,14 +1,16 @@
 """Daily card pull mechanics (Step 4).
 
 One pull per client per day, gated on date-of-birth (needed to choose the
-zodiac content). The reward is a weighted-random 1-10 Stardust — common at the
-low end, 10 genuinely rare, averaging ~3.3 — and is credited server-side through
-the earned-Stardust ledger (Step 1). The client never sends or sees the amount
-until it lands.
+zodiac content). The reward is a weighted-random 0.1-1.0 Stardust — common at
+the low end, the full 1.0 ⭐ genuinely rare, averaging ~0.33 — and is credited
+server-side through the earned-Stardust ledger (Step 1). The client never sends
+or sees the amount until it lands.
 
 Streak: consecutive days build a 7-day cycle; completing a multiple of 7 awards
-a +10 bonus. Both the pull reward and the streak bonus use idempotency keys so a
-retried request can never double-pay.
+a +0.5 bonus. A full cycle therefore earns ≈ £2.79 total (7 × ~0.33 + 0.5) —
+deliberately modest: roughly one minute of reading time at an average rate.
+Both the pull reward and the streak bonus use idempotency keys so a retried
+request can never double-pay.
 """
 
 import random
@@ -31,25 +33,26 @@ from app.utils.zodiac_calculator import get_zodiac_sign_from_date
 
 logger = get_logger(__name__)
 
-# Weighted reward table for the daily pull. Low values common, 10 rare.
-# Expected value ≈ 3.27 ⭐ (within the target 3-4 average).
+# Weighted reward table for the daily pull. Low values common, 1.0 ⭐ rare.
+# Expected value ≈ 0.327 ⭐/day → ~£2.29 across a 7-day cycle (1 ⭐ = £1).
 REWARD_WEIGHTS = {
-    1: 22, 2: 22, 3: 20, 4: 12, 5: 9, 6: 6, 7: 4, 8: 2, 9: 2, 10: 1,
+    0.1: 22, 0.2: 22, 0.3: 20, 0.4: 12, 0.5: 9,
+    0.6: 6, 0.7: 4, 0.8: 2, 0.9: 2, 1.0: 1,
 }
 STREAK_CYCLE = 7
-STREAK_BONUS = 10  # ⭐ awarded on completing each 7-day cycle
+STREAK_BONUS = 0.5  # ⭐ on completing each 7-day cycle (≈ £2.79 cycle total)
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def roll_reward(rng: Optional[random.Random] = None) -> int:
-    """Weighted-random 1-10 ⭐. Always within bounds. Server-side only."""
+def roll_reward(rng: Optional[random.Random] = None) -> float:
+    """Weighted-random 0.1-1.0 ⭐. Always within bounds. Server-side only."""
     rng = rng or random
     values = list(REWARD_WEIGHTS.keys())
     weights = list(REWARD_WEIGHTS.values())
-    return int(rng.choices(values, weights=weights, k=1)[0])
+    return float(rng.choices(values, weights=weights, k=1)[0])
 
 
 def _last_pull_before(db: Session, user_id: int, on_date: date) -> Optional[DailyPull]:

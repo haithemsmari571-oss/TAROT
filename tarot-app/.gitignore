@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Raw art sources (processed into assets/zodiac/ — not bundled)
+assets/zodiac-raw/
