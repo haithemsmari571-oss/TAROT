@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
-  Linking,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -26,17 +26,24 @@ import {
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
+import { useCredit } from "../src/context/CreditContext";
 import { useStardustBalance } from "../src/hooks/useStardustBalance";
 import { createStardustCheckoutSession } from "../src/api/payment";
 import { STARDUST_PRESETS, previewStardust } from "../src/lib/stardust";
-
 // Purchases on iOS are handled on the website (App Store policy on digital
-// goods), so the app sends iOS users to the web Billing page in Safari.
-const BILLING_URL = "https://askvalentina.co.uk/billing";
+// goods), so the app sends iOS users to the web Billing page in a browser tab.
+import { openBillingPage } from "../src/lib/billing";
+
+// Crediting happens via a server-side Stripe webhook, so a just-completed
+// payment can take a few seconds to land. After any return from a checkout,
+// poll the balance quietly for ~30s instead of asking her to pull-to-refresh.
+const PAYMENT_POLL_ATTEMPTS = 5;
+const PAYMENT_POLL_INTERVAL_MS = 6000;
 
 export default function StardustScreen() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { refresh: refreshCredit } = useCredit();
   const { balance, loading, error, refetch } = useStardustBalance();
 
   const [amount, setAmount] = useState<number>(50);
@@ -44,9 +51,59 @@ export default function StardustScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // True while the post-checkout payment poll runs ("Checking for your payment…").
+  const [checking, setChecking] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const preview = previewStardust(amount);
   const isIOS = Platform.OS === "ios";
+
+  const stopPoll = useCallback(() => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = null;
+  }, []);
+
+  useEffect(() => stopPoll, [stopPoll]);
+
+  // Quietly re-check the balance a few times over ~30s after a checkout
+  // returns. Announces success when the credit lands; stops silently if not —
+  // pull-to-refresh still works as a manual fallback.
+  const pollForPayment = useCallback(
+    async (before: number | null) => {
+      stopPoll();
+      setChecking(true);
+      setNotice(null);
+      let attempts = 0;
+      const attempt = async () => {
+        const after = await refetch();
+        void refreshCredit(); // keep welcome-credit surfaces in sync
+        if (after != null && before != null && after > before) {
+          setChecking(false);
+          setNotice(
+            `Success — ${(after - before).toLocaleString()} Stardust added.`
+          );
+          return;
+        }
+        attempts += 1;
+        if (attempts >= PAYMENT_POLL_ATTEMPTS) {
+          setChecking(false); // stop silently
+          return;
+        }
+        pollTimerRef.current = setTimeout(attempt, PAYMENT_POLL_INTERVAL_MS);
+      };
+      await attempt();
+    },
+    [refetch, refreshCredit, stopPoll]
+  );
+
+  // Safety net: whenever the app returns to the foreground (e.g. back from an
+  // external browser), silently re-fetch the balance.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refetch();
+    });
+    return () => sub.remove();
+  }, [refetch]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -56,9 +113,7 @@ export default function StardustScreen() {
   };
 
   // Android: create a Stripe Checkout session, open it in an in-app browser
-  // tab, then re-fetch the balance once the tab closes. Crediting happens via a
-  // server-side Stripe webhook, so a just-completed payment may take a couple of
-  // seconds to land — we surface that as a "processing" hint, not an error.
+  // tab, then poll for the webhook credit once the tab closes.
   const onBuy = async () => {
     setBuying(true);
     setNotice(null);
@@ -71,12 +126,7 @@ export default function StardustScreen() {
       await WebBrowser.openBrowserAsync(url);
 
       // Browser dismissed (for any reason) — reconcile against the server.
-      const after = await refetch();
-      if (after != null && before != null && after > before) {
-        setNotice(`Success — ${(after - before).toLocaleString()} Stardust added.`);
-      } else {
-        setNotice("Payment processing, pull to refresh in a few seconds.");
-      }
+      await pollForPayment(before);
     } catch {
       setBuyError(
         "Couldn't start checkout. Check your connection and try again."
@@ -88,11 +138,9 @@ export default function StardustScreen() {
 
   const onManageOnWebsite = async () => {
     setBuyError(null);
-    try {
-      await Linking.openURL(BILLING_URL);
-    } catch {
-      setBuyError("Couldn't open the website. Please try again.");
-    }
+    const before = balance;
+    await openBillingPage();
+    await pollForPayment(before);
   };
 
   // ── Header (shared) ─────────────────────────────────────────────────────
@@ -175,6 +223,16 @@ export default function StardustScreen() {
             )}
             {!!error && <Text style={styles.errorText}>{error}</Text>}
           </View>
+
+          {/* Post-checkout: quiet auto-check instead of "pull to refresh" */}
+          {checking && (
+            <View style={styles.checkingRow}>
+              <ActivityIndicator size="small" color={COLORS.accent} />
+              <Text style={styles.checkingText}>
+                Checking for your payment…
+              </Text>
+            </View>
+          )}
 
           {isIOS ? (
             // ── iOS: read-only, purchases managed on the website ──
@@ -468,6 +526,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontFamily: FONTS.bold,
     textAlign: "center",
+  },
+
+  // Post-checkout payment check
+  checkingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: SPACING.lg,
+  },
+  checkingText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.regular,
   },
 
   // Notices / errors

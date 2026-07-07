@@ -38,16 +38,40 @@ import {
 import { useAuth } from "../../src/context/AuthContext";
 import { useCredit, formatPounds } from "../../src/context/CreditContext";
 import { requestChat } from "../../src/api/chat";
+import { getMyBalance } from "../../src/api/payment";
+import { openBillingPage } from "../../src/lib/billing";
+import BottomSheet, {
+  SheetTitle,
+  SheetBody,
+  SheetNote,
+  SheetPrimaryButton,
+  SheetQuietButton,
+} from "../../src/components/BottomSheet";
+
+/** One full minute at the reader's rate — the backend's affordability gate. */
+function requiredToStart(pricePerSecond: number | null): number {
+  return Math.round((pricePerSecond || 0) * 60 * 100) / 100;
+}
+
+/** Spendable total in pounds (earned + credit + paid), same as the backend. */
+async function fetchSpendable(): Promise<number> {
+  const bal = await getMyBalance();
+  return bal.stardust_total ?? (bal.balance ?? 0) + (bal.earned_balance ?? 0);
+}
 
 export default function PsychicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { hasCredit, creditBalance } = useCredit();
+  const { hasCredit, creditBalance, refresh: refreshCredit } = useCredit();
   const [psychic, setPsychic] = useState<Psychic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
+  // Insufficient-balance sheet: set with her spendable £ when a reading can't start.
+  const [shortfall, setShortfall] = useState<{ spendable: number } | null>(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const [sheetNote, setSheetNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -83,6 +107,22 @@ export default function PsychicDetailScreen() {
     }
 
     setRequesting(true);
+
+    // Soft client-side affordability check (server stays authoritative): show
+    // the top-up sheet without a doomed round trip. A failed balance fetch
+    // falls through to the request — the 402 handler below catches it anyway.
+    try {
+      const spendable = await fetchSpendable();
+      if (spendable < requiredToStart(psychic.price_per_second)) {
+        setSheetNote(null);
+        setShortfall({ spendable });
+        setRequesting(false);
+        return;
+      }
+    } catch {
+      // ignore — proceed to the request
+    }
+
     try {
       await requestChat(psychic.id, "Hello, I'd like to start a reading.");
       // Land on the Sessions tab so the new pending request is visible.
@@ -91,6 +131,16 @@ export default function PsychicDetailScreen() {
       const status = err?.response?.status;
       const detail = err?.response?.data?.detail;
       const existingChatId = err?.response?.data?.existing_chat_id;
+
+      // Backend affordability gate — never surface this as a raw error.
+      if (status === 402) {
+        const serverBalance = err?.response?.data?.balance;
+        setSheetNote(null);
+        setShortfall({
+          spendable: typeof serverBalance === "number" ? serverBalance : 0,
+        });
+        return;
+      }
 
       // Backend blocks a new request while another chat is active/paused.
       if (status === 400 && existingChatId) {
@@ -123,6 +173,30 @@ export default function PsychicDetailScreen() {
       setRequesting(false);
     }
   }, [psychic, user, router]);
+
+  // Sheet CTA: open the website billing page, then re-check on return. If the
+  // payment landed, close the sheet so her next tap starts the reading; if not
+  // yet, keep it open with the fresh number and a gentle note.
+  const onSheetTopUp = useCallback(async () => {
+    if (!psychic) return;
+    setSheetBusy(true);
+    setSheetNote(null);
+    await openBillingPage();
+    try {
+      const spendable = await fetchSpendable();
+      await refreshCredit();
+      if (spendable >= requiredToStart(psychic.price_per_second)) {
+        setShortfall(null);
+      } else {
+        setShortfall({ spendable });
+        setSheetNote("Payments can take a few seconds to arrive.");
+      }
+    } catch {
+      setSheetNote("Couldn't check your balance — give it a few seconds.");
+    } finally {
+      setSheetBusy(false);
+    }
+  }, [psychic, refreshCredit]);
 
   const BackButton = (
     <TouchableOpacity
@@ -337,6 +411,28 @@ export default function PsychicDetailScreen() {
           )}
         </TouchableOpacity>
       </SafeAreaView>
+
+      {/* Insufficient balance — branded top-up sheet, never a dead end. */}
+      <BottomSheet visible={!!shortfall} onClose={() => setShortfall(null)}>
+        <SheetTitle>Top up to begin your reading</SheetTitle>
+        <SheetBody>
+          {psychic.username} is £{rate}/min — you have £
+          {(shortfall?.spendable ?? 0).toFixed(2)}.
+        </SheetBody>
+        {hasCredit && creditBalance != null && (
+          <SheetNote>
+            Your {formatPounds(creditBalance)} welcome credit doesn&apos;t cover
+            a full minute at this rate.
+          </SheetNote>
+        )}
+        {!!sheetNote && <SheetNote>{sheetNote}</SheetNote>}
+        <SheetPrimaryButton
+          label="TOP UP STARDUST"
+          loading={sheetBusy}
+          onPress={onSheetTopUp}
+        />
+        <SheetQuietButton label="Not now" onPress={() => setShortfall(null)} />
+      </BottomSheet>
     </ScreenBackground>
   );
 }

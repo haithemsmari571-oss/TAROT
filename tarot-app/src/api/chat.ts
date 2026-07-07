@@ -53,10 +53,21 @@ export async function requestChat(
 
 export interface SessionTime {
   elapsed_seconds: number;
-  estimated_cost: number; // cents
-  price_per_second: number; // cents per second
-  client_balance: number; // cents
+  estimated_cost: number; // pounds
+  price_per_second: number; // pounds per second
+  client_balance: number; // pounds (credit + paid + earned, live from DB)
+  credit_balance?: number; // pounds — free welcome/gift credit portion
+  paid_balance?: number; // pounds — purchased portion
   remaining_seconds: number;
+  /**
+   * AWAITING_JOIN before the client joins; ACTIVE while billing; GRACE during
+   * the out-of-balance top-up hold (meter stopped, short countdown to auto-end).
+   */
+  session_status?: string;
+  /** Seconds left before a GRACE session auto-ends (only while GRACE). */
+  grace_seconds_left?: number;
+  /** True while a top-up checkout for this session is in flight. */
+  is_topping_up?: boolean;
 }
 
 /** Current session duration, cost, rate and client balance for an active chat. */

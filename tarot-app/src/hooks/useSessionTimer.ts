@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionTime } from "../api/chat";
 
 export interface SessionTimer {
@@ -9,6 +9,12 @@ export interface SessionTimer {
   clientBalancePounds: number;
   estimatedCostPounds: number;
   depleted: boolean; // remaining time hit zero
+  /**
+   * Re-fetch the server baseline (balance, elapsed anchor). Call after a
+   * top-up returns: /session-time reads live DB balances, so added funds
+   * extend remainingSeconds immediately.
+   */
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -25,10 +31,32 @@ export function useSessionTimer(
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const balanceRef = useRef(0); // pounds
-  const rateRef = useRef(0); // pounds/sec
+  const [balance, setBalance] = useState(0); // pounds
+  const [rate, setRate] = useState(0); // pounds/sec
+  const mounted = useRef(true);
 
-  // Fetch the baseline once when the session becomes active.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const fetchBaseline = useCallback(async (): Promise<boolean> => {
+    if (!chatId) return false;
+    try {
+      const s = await getSessionTime(chatId);
+      if (!mounted.current) return false;
+      setBalance(s.client_balance ?? 0);
+      setRate(s.price_per_second ?? 0);
+      setElapsed(Math.max(0, Math.floor(s.elapsed_seconds ?? 0)));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [chatId]);
+
+  // Fetch the baseline when the session becomes active.
   useEffect(() => {
     if (!chatId || !enabled) {
       setReady(false);
@@ -36,16 +64,9 @@ export function useSessionTimer(
     }
     let cancelled = false;
     setLoading(true);
-    getSessionTime(chatId)
-      .then((s) => {
-        if (cancelled) return;
-        balanceRef.current = s.client_balance ?? 0;
-        rateRef.current = s.price_per_second ?? 0;
-        setElapsed(Math.max(0, Math.floor(s.elapsed_seconds ?? 0)));
-        setReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setReady(false);
+    fetchBaseline()
+      .then((ok) => {
+        if (!cancelled && ok) setReady(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -53,7 +74,7 @@ export function useSessionTimer(
     return () => {
       cancelled = true;
     };
-  }, [chatId, enabled]);
+  }, [chatId, enabled, fetchBaseline]);
 
   // Local per-second tick while active.
   useEffect(() => {
@@ -62,8 +83,10 @@ export function useSessionTimer(
     return () => clearInterval(id);
   }, [ready, enabled]);
 
-  const rate = rateRef.current;
-  const balance = balanceRef.current;
+  const refresh = useCallback(async () => {
+    await fetchBaseline();
+  }, [fetchBaseline]);
+
   const estimatedCostPounds = Math.min(balance, elapsed * rate);
   const remainingSeconds =
     rate > 0 ? Math.max(0, (balance - elapsed * rate) / rate) : 0;
@@ -76,5 +99,6 @@ export function useSessionTimer(
     clientBalancePounds: balance,
     estimatedCostPounds,
     depleted: ready && rate > 0 && remainingSeconds <= 0,
+    refresh,
   };
 }

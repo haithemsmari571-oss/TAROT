@@ -30,7 +30,26 @@ import ScreenBackground, {
 import { useAuth } from "../../src/context/AuthContext";
 import { useChatWebSocket } from "../../src/hooks/useChatWebSocket";
 import { useSessionTimer } from "../../src/hooks/useSessionTimer";
-import { endChat, joinChat, type ChatMessage } from "../../src/api/chat";
+import {
+  endChat,
+  getMyChats,
+  getSessionTime,
+  joinChat,
+  requestChat,
+  type ChatMessage,
+} from "../../src/api/chat";
+import { openBillingPage } from "../../src/lib/billing";
+import BottomSheet, {
+  SheetTitle,
+  SheetBody,
+  SheetNote,
+  SheetPrimaryButton,
+  SheetQuietButton,
+} from "../../src/components/BottomSheet";
+
+// Below this many remaining seconds, the session bar shows the gentle
+// "running low" top-up prompt.
+const LOW_BALANCE_SECONDS = 180;
 
 const STATUS_LABEL = {
   connecting: "Connecting…",
@@ -82,11 +101,19 @@ export default function ChatScreen() {
     loadingHistory,
     error,
     sessionPaused,
+    endedNoBalance,
   } = useChatWebSocket(Number.isFinite(chatId) ? chatId : null);
 
   const [draft, setDraft] = useState("");
   const [ended, setEnded] = useState(false);
   const [ending, setEnding] = useState(false);
+  // Which kind of pause: the reader paused, or the balance ran out (GRACE).
+  const [pauseKind, setPauseKind] = useState<"reader" | "balance" | null>(null);
+  const [toppingUp, setToppingUp] = useState(false);
+  // Balance-ended sheet state.
+  const [endSheetDismissed, setEndSheetDismissed] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   // Announce that the client has joined so the backend anchors the session
@@ -100,14 +127,101 @@ export default function ChatScreen() {
   }, [chatId, status]);
 
   // Session timer runs only while active, not ended, and not paused.
-  const sessionActive = status === "ACTIVE" && !ended && !sessionPaused;
+  const sessionActive =
+    status === "ACTIVE" && !ended && !sessionPaused && !endedNoBalance;
   const timer = useSessionTimer(
     Number.isFinite(chatId) ? chatId : null,
     sessionActive
   );
-  const sessionEnded = ended || timer.depleted;
-  const showSession = status === "ACTIVE" && timer.ready && !sessionEnded;
-  const paused = status === "ACTIVE" && sessionPaused && !sessionEnded;
+  // Ended because the money ran out: the server said so, or the local
+  // countdown hit zero while the server isn't holding a top-up (GRACE) pause.
+  const balanceEnded =
+    status === "ACTIVE" &&
+    !ended &&
+    (endedNoBalance || (timer.depleted && !sessionPaused));
+  const sessionEnded = ended || balanceEnded;
+  const showSession =
+    status === "ACTIVE" && timer.ready && !sessionEnded && !sessionPaused;
+  const paused =
+    status === "ACTIVE" && sessionPaused && !ended && !endedNoBalance;
+  const showEndSheet = balanceEnded && !endSheetDismissed;
+
+  // Classify a pause by asking the server: session_status === "GRACE" (or a
+  // top-up in flight) means her balance ran out; anything else is the reader's
+  // own pause. Re-checks every 10s while paused so the copy stays truthful.
+  useEffect(() => {
+    if (!paused || !Number.isFinite(chatId)) {
+      setPauseKind(null);
+      return;
+    }
+    let cancelled = false;
+    const classify = async () => {
+      try {
+        const s = await getSessionTime(chatId);
+        if (cancelled) return;
+        setPauseKind(
+          s.session_status === "GRACE" || s.is_topping_up ? "balance" : "reader"
+        );
+      } catch {
+        if (!cancelled) setPauseKind("reader");
+      }
+    };
+    classify();
+    const id = setInterval(classify, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [paused, chatId]);
+
+  // Open the website billing page; on return re-anchor the timer to the live
+  // server balance (session-time reads the DB, so added funds extend the
+  // countdown; a GRACE pause is auto-resumed by the payment webhook).
+  const onTopUp = useCallback(async () => {
+    setToppingUp(true);
+    await openBillingPage();
+    await timer.refresh();
+    setToppingUp(false);
+  }, [timer]);
+
+  // From the "session ended" sheet: top up, then either the webhook has already
+  // revived the held session (best case) or we request a fresh reading with the
+  // same psychic and land on Sessions to wait for the accept.
+  const onTopUpReconnect = useCallback(async () => {
+    setReconnecting(true);
+    setSheetError(null);
+    await openBillingPage();
+    try {
+      const s = await getSessionTime(chatId);
+      if (s.session_status === "ACTIVE" && (s.remaining_seconds ?? 0) > 0) {
+        setEndSheetDismissed(true);
+        await timer.refresh();
+        return;
+      }
+    } catch {
+      // fall through to re-requesting
+    }
+    try {
+      const chats = await getMyChats();
+      const mine = chats.find((c) => c.id === chatId);
+      if (!mine) throw new Error("chat not found");
+      await requestChat(mine.psychic_id, "I'd like to continue my reading.");
+      setEndSheetDismissed(true);
+      router.replace("/sessions");
+    } catch (err: any) {
+      if (err?.response?.data?.existing_chat_id) {
+        // A live/paused chat already exists — nothing to re-request.
+        setEndSheetDismissed(true);
+        await timer.refresh();
+      } else {
+        setSheetError(
+          "Payments can take a few seconds to arrive — try again in a moment."
+        );
+      }
+    } finally {
+      setReconnecting(false);
+    }
+  }, [chatId, router, timer]);
 
   const onSend = () => {
     const text = draft.trim();
@@ -221,19 +335,68 @@ export default function ChatScreen() {
             </View>
           </View>
         )}
+        {/* Gentle low-balance prompt attached to the session bar */}
+        {showSession && timer.remainingSeconds <= LOW_BALANCE_SECONDS && (
+          <View style={styles.lowRow}>
+            <Text style={styles.lowText}>
+              Running low — top up to keep going
+            </Text>
+            <TouchableOpacity
+              style={styles.lowTopUpBtn}
+              activeOpacity={0.85}
+              onPress={onTopUp}
+              disabled={toppingUp}
+            >
+              {toppingUp ? (
+                <ActivityIndicator size="small" color={COLORS.accentGold} />
+              ) : (
+                <Text style={styles.lowTopUpText}>+ TOP UP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
         {sessionEnded && status === "ACTIVE" && (
           <View style={styles.endedBanner}>
             <Text style={styles.endedText}>Session ended</Text>
           </View>
         )}
-        {paused && (
+        {/* Two distinct pauses: out-of-balance (top up to continue) vs the
+            reader's own pause. */}
+        {paused && pauseKind === "balance" ? (
+          <View style={styles.graceBanner}>
+            <View style={styles.graceRow}>
+              <Ionicons
+                name="hourglass-outline"
+                size={16}
+                color={COLORS.accentGold}
+              />
+              <Text style={styles.pausedText}>
+                Your balance ran out — top up to continue. Your reading resumes
+                automatically.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.graceTopUpBtn}
+              activeOpacity={0.85}
+              onPress={onTopUp}
+              disabled={toppingUp}
+            >
+              {toppingUp ? (
+                <ActivityIndicator size="small" color={COLORS.background} />
+              ) : (
+                <Text style={styles.graceTopUpText}>+ TOP UP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : paused ? (
           <View style={styles.pausedBanner}>
             <Ionicons name="pause-circle" size={16} color={COLORS.accentGold} />
             <Text style={styles.pausedText}>
-              Reading paused — waiting for your reader to resume.
+              {title || "Your reader"} paused the session — they&apos;ll resume
+              shortly.
             </Text>
           </View>
-        )}
+        ) : null}
 
         <KeyboardAvoidingView
           style={styles.flex}
@@ -311,7 +474,9 @@ export default function ChatScreen() {
                 sessionEnded
                   ? "Session ended"
                   : paused
-                  ? "Reading paused"
+                  ? pauseKind === "balance"
+                    ? "Top up to continue"
+                    : "Reading paused"
                   : "Type a message…"
               }
               placeholderTextColor={COLORS.textFaint}
@@ -336,6 +501,29 @@ export default function ChatScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Session ended because the balance ran out — branded sheet, no silence. */}
+      <BottomSheet
+        visible={showEndSheet}
+        onClose={() => setEndSheetDismissed(true)}
+      >
+        <SheetTitle>Your reading has ended</SheetTitle>
+        <SheetBody>
+          You spoke with {title || "your reader"} for{" "}
+          {fmtTime(timer.elapsedSeconds)}. Your reading ended when your balance
+          ran out.
+        </SheetBody>
+        {!!sheetError && <SheetNote>{sheetError}</SheetNote>}
+        <SheetPrimaryButton
+          label="TOP UP & RECONNECT"
+          loading={reconnecting}
+          onPress={onTopUpReconnect}
+        />
+        <SheetQuietButton
+          label="Done"
+          onPress={() => setEndSheetDismissed(true)}
+        />
+      </BottomSheet>
     </ScreenBackground>
   );
 }
@@ -415,6 +603,68 @@ const styles = StyleSheet.create({
     width: 1,
     height: 28,
     backgroundColor: COLORS.border,
+  },
+  // "Running low" prompt attached under the session bar
+  lowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  lowText: {
+    flexShrink: 1,
+    fontSize: 14,
+    lineHeight: 19,
+    color: COLORS.accentGold,
+    fontFamily: FONTS.semiBold,
+  },
+  lowTopUpBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.accentGold, 0.5),
+    backgroundColor: alpha(COLORS.accentGold, 0.08),
+  },
+  lowTopUpText: {
+    fontSize: 14,
+    letterSpacing: 0.8,
+    color: COLORS.accentGold,
+    fontFamily: FONTS.bold,
+  },
+  // Out-of-balance (GRACE) pause banner with its own top-up action
+  graceBanner: {
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: alpha(COLORS.accentGold, 0.1),
+    borderBottomWidth: 1,
+    borderBottomColor: alpha(COLORS.accentGold, 0.25),
+  },
+  graceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+  },
+  graceTopUpBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.accentGold,
+    borderRadius: RADII.md,
+  },
+  graceTopUpText: {
+    fontSize: 14,
+    letterSpacing: 1,
+    color: COLORS.background,
+    fontFamily: FONTS.bold,
   },
   endedBanner: {
     paddingVertical: SPACING.sm,

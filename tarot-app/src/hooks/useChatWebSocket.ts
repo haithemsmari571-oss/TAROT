@@ -17,6 +17,8 @@ interface UseChatWebSocket {
   loadingHistory: boolean;
   error: string | null;
   sessionPaused: boolean; // true after a session_paused event, until resumed
+  /** True once the server ends the session because the balance ran out. */
+  endedNoBalance: boolean;
 }
 
 function normalize(m: ChatMessage): ChatMessage {
@@ -38,6 +40,7 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionPaused, setSessionPaused] = useState(false);
+  const [endedNoBalance, setEndedNoBalance] = useState(false);
   const socketRef = useRef<ChatSocket | null>(null);
 
   useEffect(() => {
@@ -45,10 +48,12 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
       setConnectionStatus("disconnected");
       setMessages([]);
       setSessionPaused(false);
+      setEndedNoBalance(false);
       return;
     }
 
     setSessionPaused(false);
+    setEndedNoBalance(false);
 
     let cancelled = false;
 
@@ -105,7 +110,14 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
       });
 
       socket.onSessionPaused(() => setSessionPaused(true));
-      socket.onSessionResumed(() => setSessionPaused(false));
+      socket.onSessionResumed(() => {
+        setSessionPaused(false);
+        setEndedNoBalance(false);
+      });
+      socket.onSessionEndedNoBalance(() => {
+        setEndedNoBalance(true);
+        setSessionPaused(false);
+      });
 
       socket.connect();
     })();
@@ -139,5 +151,6 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
     loadingHistory,
     error,
     sessionPaused,
+    endedNoBalance,
   };
 }
