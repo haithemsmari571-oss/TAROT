@@ -7,6 +7,24 @@ type MessageCb = (message: ChatMessage) => void;
 type VoidCb = () => void;
 type ErrorCb = (error: { message?: string; error?: string }) => void;
 
+/** Payload of session_* events (session_info/started/grace/minute_charged). */
+export interface SessionEventData {
+  chat_id?: number;
+  chat_status?: string;
+  session_status?: string; // AWAITING_JOIN | ACTIVE | GRACE
+  client_balance?: number;
+  grace_seconds?: number;
+  reader_name?: string;
+  reason?: string; // session_ended_confirmed termination reason
+}
+
+/** Sender-only billing events for out-of-session (1 ⭐) messages. */
+export interface MessageFeeData {
+  fee?: number;
+  client_balance?: number;
+  reason?: string; // message_rejected: "INSUFFICIENT_BALANCE"
+}
+
 /**
  * Real-time chat WebSocket client. Protocol mirrors the website:
  *   1. open  -> send { type: "auth", token }
@@ -27,6 +45,11 @@ export class ChatSocket {
   private onSessionEndedNoBalanceCb?: VoidCb;
   private onSessionPausedCb?: VoidCb;
   private onSessionResumedCb?: VoidCb;
+  private onSessionStateCb?: (data: SessionEventData) => void;
+  private onSessionGraceCb?: (data: SessionEventData) => void;
+  private onSessionEndedCb?: (data: SessionEventData) => void;
+  private onMessageFeeChargedCb?: (data: MessageFeeData) => void;
+  private onMessageRejectedCb?: (data: MessageFeeData) => void;
 
   constructor(chatId: number, token: string) {
     this.chatId = chatId;
@@ -71,9 +94,38 @@ export class ChatSocket {
       }
       if (data.event === "session_resumed" || data.event === "session_started") {
         this.onSessionResumedCb?.();
+        this.onSessionStateCb?.(data.data ?? {});
         return;
       }
-      // Ignore other session lifecycle events for now (session_info, etc.)
+      // Session snapshots that carry session_status (AWAITING_JOIN/ACTIVE/…):
+      // the initial session_info on connect and each minute-boundary charge.
+      if (
+        data.event === "session_info" ||
+        data.event === "session_minute_charged"
+      ) {
+        this.onSessionStateCb?.(data.data ?? {});
+        return;
+      }
+      // Out-of-balance GRACE hold: meter frozen, top-up countdown running.
+      if (data.event === "session_grace") {
+        this.onSessionGraceCb?.(data.data ?? {});
+        return;
+      }
+      // The server ended the session (NO_TOPUP, manual end, balance out…).
+      if (data.event === "session_ended_confirmed") {
+        this.onSessionEndedCb?.(data.data ?? {});
+        return;
+      }
+      // Sender-only billing events for out-of-session (1 ⭐) messages.
+      if (data.event === "message_fee_charged") {
+        this.onMessageFeeChargedCb?.(data.data ?? {});
+        return;
+      }
+      if (data.event === "message_rejected") {
+        this.onMessageRejectedCb?.(data.data ?? {});
+        return;
+      }
+      // Ignore other session lifecycle events (timer ticks, warnings, …).
       if (data.event) {
         return;
       }
@@ -118,6 +170,22 @@ export class ChatSocket {
   }
   onSessionResumed(cb: VoidCb) {
     this.onSessionResumedCb = cb;
+  }
+  /** session_info / session_started / session_minute_charged snapshots. */
+  onSessionState(cb: (data: SessionEventData) => void) {
+    this.onSessionStateCb = cb;
+  }
+  onSessionGrace(cb: (data: SessionEventData) => void) {
+    this.onSessionGraceCb = cb;
+  }
+  onSessionEnded(cb: (data: SessionEventData) => void) {
+    this.onSessionEndedCb = cb;
+  }
+  onMessageFeeCharged(cb: (data: MessageFeeData) => void) {
+    this.onMessageFeeChargedCb = cb;
+  }
+  onMessageRejected(cb: (data: MessageFeeData) => void) {
+    this.onMessageRejectedCb = cb;
   }
 
   disconnect() {

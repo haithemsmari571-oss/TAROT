@@ -158,25 +158,13 @@ export default function PsychicDetailScreen() {
         return;
       }
 
-      // Backend blocks a new request while another chat is active/paused.
+      // A chat is already live/paused — never a dead end: take her straight
+      // into it (the chat screen resolves its own state: join, grace, etc.).
       if (status === 400 && existingChatId) {
-        Alert.alert(
-          "You already have a chat",
-          typeof detail === "string"
-            ? detail
-            : "Finish your current chat before starting a new one.",
-          [
-            { text: "Dismiss", style: "cancel" },
-            {
-              text: "Open it",
-              onPress: () =>
-                router.push({
-                  pathname: "/sessions/[chatId]",
-                  params: { chatId: String(existingChatId) },
-                }),
-            },
-          ]
-        );
+        router.push({
+          pathname: "/sessions/[chatId]",
+          params: { chatId: String(existingChatId) },
+        });
       } else {
         Alert.alert(
           "Couldn't start reading",

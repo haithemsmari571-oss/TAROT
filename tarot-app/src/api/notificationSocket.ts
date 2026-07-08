@@ -95,6 +95,15 @@ export class NotificationSocket {
     return this.closedByUs;
   }
 
+  /** True while the underlying socket is open or still connecting. */
+  get isAlive(): boolean {
+    return (
+      this.ws != null &&
+      (this.ws.readyState === WebSocket.OPEN ||
+        this.ws.readyState === WebSocket.CONNECTING)
+    );
+  }
+
   disconnect() {
     this.closedByUs = true;
     this.stopPing();

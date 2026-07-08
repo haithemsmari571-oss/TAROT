@@ -18,12 +18,17 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADII,
+  alpha,
 } from "../../src/theme";
 import ScreenBackground, {
   BACKGROUNDS,
 } from "../../src/components/ScreenBackground";
 import { useAuth } from "../../src/context/AuthContext";
-import { getMyChats, type MyChat } from "../../src/api/chat";
+import {
+  getMyChats,
+  getSessionTime,
+  type MyChat,
+} from "../../src/api/chat";
 
 const STATUS_COLOR: Record<string, string> = {
   ACTIVE: COLORS.online,
@@ -57,11 +62,30 @@ export default function SessionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Chats accepted by the reader but not yet joined — "JOIN NOW" rows.
+  const [awaitingJoin, setAwaitingJoin] = useState<Record<number, boolean>>({});
 
   const load = useCallback(async () => {
     try {
-      setChats(await getMyChats());
+      const list = await getMyChats();
+      setChats(list);
       setError(null);
+      // An ACTIVE chat may still be waiting for the client to join (the
+      // session bills nothing until then). Probe each one so those rows can
+      // say "JOIN NOW" instead of the misleading "Active now".
+      const probes = await Promise.all(
+        list
+          .filter((c) => c.status === "ACTIVE")
+          .map(async (c) => {
+            try {
+              const s = await getSessionTime(c.id);
+              return [c.id, s.session_status === "AWAITING_JOIN"] as const;
+            } catch {
+              return [c.id, false] as const;
+            }
+          })
+      );
+      setAwaitingJoin(Object.fromEntries(probes));
     } catch {
       setError("Couldn't load your chats. Pull to retry.");
     }
@@ -164,10 +188,13 @@ export default function SessionsScreen() {
             const other =
               (iAmClient ? item.psychic_username : item.client_username) ||
               "Unknown";
-            const statusColor = STATUS_COLOR[item.status] || COLORS.textFaint;
+            const isReady = item.status === "ACTIVE" && awaitingJoin[item.id];
+            const statusColor = isReady
+              ? COLORS.accentGold
+              : STATUS_COLOR[item.status] || COLORS.textFaint;
             return (
               <TouchableOpacity
-                style={styles.row}
+                style={[styles.row, isReady && styles.rowReady]}
                 activeOpacity={0.85}
                 onPress={() =>
                   router.push({
@@ -180,8 +207,12 @@ export default function SessionsScreen() {
                   })
                 }
               >
-                <View style={styles.rowAvatar}>
-                  <Ionicons name="moon" size={20} color={COLORS.accent} />
+                <View style={[styles.rowAvatar, isReady && styles.rowAvatarReady]}>
+                  <Ionicons
+                    name={isReady ? "sparkles" : "moon"}
+                    size={20}
+                    color={isReady ? COLORS.accentGold : COLORS.accent}
+                  />
                 </View>
                 <View style={styles.rowBody}>
                   <Text style={styles.rowName}>{other}</Text>
@@ -193,14 +224,16 @@ export default function SessionsScreen() {
                       style={[styles.statusText, { color: statusColor }]}
                       numberOfLines={1}
                     >
-                      {statusLabel(item.status, other)}
+                      {isReady
+                        ? "Your reading is ready — JOIN NOW"
+                        : statusLabel(item.status, other)}
                     </Text>
                   </View>
                 </View>
                 <Ionicons
                   name="chevron-forward"
                   size={18}
-                  color={COLORS.textFaint}
+                  color={isReady ? COLORS.accentGold : COLORS.textFaint}
                 />
               </TouchableOpacity>
             );
@@ -248,6 +281,14 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
     padding: 14,
     marginBottom: SPACING.md,
+  },
+  // A reading waiting to be joined glows gold, gently.
+  rowReady: {
+    borderColor: alpha(COLORS.accentGold, 0.45),
+    backgroundColor: alpha(COLORS.accentGold, 0.06),
+  },
+  rowAvatarReady: {
+    backgroundColor: alpha(COLORS.accentGold, 0.1),
   },
   rowAvatar: {
     width: 48,

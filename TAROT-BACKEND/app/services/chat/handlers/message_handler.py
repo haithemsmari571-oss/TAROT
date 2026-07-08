@@ -10,6 +10,40 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Platform rule: messages ride free only while a live billed session covers
+# them. Outside one (no session, awaiting join, grace hold, ended chat) the
+# client pays per message. 1 Stardust = £1.
+OUT_OF_SESSION_MESSAGE_FEE = 1.0
+
+
+def _client_in_live_session(chat: Chat) -> bool:
+    """True when the chat has a session actively billing (not AWAITING_JOIN,
+    not GRACE) — the only state where client messages are covered by the
+    per-minute timer."""
+    from app.enums.chat_status import ChatStatus
+    from app.services.session_manager import get_session_manager
+
+    if chat.status != ChatStatus.ACTIVE:
+        return False
+    state = get_session_manager().active_sessions.get(chat.id)
+    return bool(state and not state.awaiting_join and not state.is_grace)
+
+
+def _chat_ever_accepted(db, chat: Chat) -> bool:
+    """Request-phase messages are free (owner decision): the fee applies only
+    once the chat has been accepted at least once. A ChatSession row is created
+    exactly at accept, so its existence is the accept marker — this also keeps
+    a rejected request (REQUESTED → ENDED, never accepted) fee-free."""
+    from app.enums.chat_status import ChatStatus
+    from app.models import ChatSession
+
+    if chat.status == ChatStatus.REQUESTED:
+        return False
+    return (
+        db.query(ChatSession.id).filter(ChatSession.chat_id == chat.id).first()
+        is not None
+    )
+
 
 class MessageHandler(BaseEventHandler):
     """Handles message sending/receiving"""
@@ -50,6 +84,71 @@ class MessageHandler(BaseEventHandler):
             )
             await self.send_error("Invalid user or chat")
             return
+
+        # ── Out-of-session message fee ──────────────────────────────────────
+        # Only the chat's client pays (psychics are salaried; admins drive the
+        # cockpit). Charged BEFORE saving: an unaffordable message is rejected,
+        # never stored or broadcast — no free paths.
+        from app.enums.role import Role
+
+        fee_charged = None  # set when this message was individually billed
+        client_balance_after = None
+        sender_is_paying_client = (
+            user.id == chat.user_id
+            and user.role not in (Role.ADMIN, Role.SUPERADMIN)
+        )
+        if (
+            sender_is_paying_client
+            and not _client_in_live_session(chat)
+            and _chat_ever_accepted(self.db, chat)
+        ):
+            from app.exceptions.transactions import InsufficientBalanceError
+            from app.services.stardust_rewards import get_spendable_stardust
+            from app.services.transactions import create_debit_transaction
+
+            psychic_name = chat.psychic.username if chat.psychic else "your reader"
+            try:
+                create_debit_transaction(
+                    db=self.db,
+                    user_id=user.id,
+                    amount=OUT_OF_SESSION_MESSAGE_FEE,
+                    description=f"Message to {psychic_name} (between sessions)",
+                    related_chat_id=chat.id,
+                    metadata={
+                        "message_fee": OUT_OF_SESSION_MESSAGE_FEE,
+                        "psychic_id": chat.psychic_id,
+                        "psychic_username": psychic_name,
+                    },
+                )
+            except InsufficientBalanceError:
+                balance = get_spendable_stardust(self.db, user)
+                logger.info(
+                    "message_fee_insufficient_balance",
+                    chat_id=self.chat_id,
+                    user_id=user.id,
+                    balance=balance,
+                    fee=OUT_OF_SESSION_MESSAGE_FEE,
+                )
+                await self.send_event(
+                    "message_rejected",
+                    {
+                        "data": {
+                            "reason": "INSUFFICIENT_BALANCE",
+                            "fee": OUT_OF_SESSION_MESSAGE_FEE,
+                            "client_balance": round(balance, 2),
+                        }
+                    },
+                )
+                return
+            fee_charged = OUT_OF_SESSION_MESSAGE_FEE
+            client_balance_after = round(get_spendable_stardust(self.db, user), 2)
+            logger.info(
+                "message_fee_charged",
+                chat_id=self.chat_id,
+                user_id=user.id,
+                fee=fee_charged,
+                balance_after=client_balance_after,
+            )
 
         # Prepare message data
         message_data = {
@@ -100,6 +199,20 @@ class MessageHandler(BaseEventHandler):
 
         # Broadcast to all chat participants (manager expects string chat_id)
         await manager.send_to_chat(message=message_data, chat_id=str(self.chat_id))
+
+        # Tell the paying sender their balance moved (sender-only, so the
+        # composer can show the 1-⭐ fee visibly decreasing the balance).
+        if fee_charged is not None:
+            await self.send_event(
+                "message_fee_charged",
+                {
+                    "data": {
+                        "message_id": db_message.id,
+                        "fee": fee_charged,
+                        "client_balance": client_balance_after,
+                    }
+                },
+            )
 
         # Push when the CLIENT is unreachable live: status == SENT means the
         # recipient has no socket anywhere (app closed/backgrounded). Clients

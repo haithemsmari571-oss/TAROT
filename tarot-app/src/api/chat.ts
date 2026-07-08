@@ -81,13 +81,22 @@ export async function endChat(chatId: number): Promise<void> {
   await api.post(`/api/chat/${chatId}/status`, { status: "ENDED" });
 }
 
+export interface JoinChatResult {
+  chat_id?: number;
+  session_status?: string; // ACTIVE, or GRACE when minute 1 wasn't affordable
+  client_balance?: number;
+  remaining_seconds?: number;
+}
+
 /**
  * Join an accepted chat. Anchors the session timer to this moment on the
- * backend (the timer does not run between accept and join). Idempotent, so it's
- * safe to call every time the chat screen mounts.
+ * backend (the timer does not run between accept and join) and charges the
+ * first minute upfront. Idempotent — but ONLY ever call it from an explicit
+ * user action (the JOIN button): joining is the moment billing starts.
  */
-export async function joinChat(chatId: number): Promise<void> {
-  await api.post(`/api/chat/${chatId}/join`);
+export async function joinChat(chatId: number): Promise<JoinChatResult> {
+  const res = await api.post(`/api/chat/${chatId}/join`);
+  return res.data ?? {};
 }
 
 /**

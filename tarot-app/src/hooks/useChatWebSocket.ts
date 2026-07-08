@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChatMessages, type ChatMessage } from "../api/chat";
-import { ChatSocket } from "../api/chatSocket";
+import {
+  ChatSocket,
+  type MessageFeeData,
+  type SessionEventData,
+} from "../api/chatSocket";
 import { getValidAccessToken } from "../lib/refresh";
 
 export type ConnectionStatus =
@@ -19,6 +23,19 @@ interface UseChatWebSocket {
   sessionPaused: boolean; // true after a session_paused event, until resumed
   /** True once the server ends the session because the balance ran out. */
   endedNoBalance: boolean;
+  /**
+   * Live session state from server events: AWAITING_JOIN | ACTIVE | GRACE |
+   * ENDED, or null before the first session event arrives.
+   */
+  sessionStatus: string | null;
+  /** Client's live spendable balance (£) from the latest server event. */
+  liveBalance: number | null;
+  /**
+   * Set when the server rejected an out-of-session message for insufficient
+   * balance — the screen shows the top-up sheet. Clear with clearRejection().
+   */
+  feeRejection: MessageFeeData | null;
+  clearRejection: () => void;
 }
 
 function normalize(m: ChatMessage): ChatMessage {
@@ -41,6 +58,9 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
   const [error, setError] = useState<string | null>(null);
   const [sessionPaused, setSessionPaused] = useState(false);
   const [endedNoBalance, setEndedNoBalance] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const [feeRejection, setFeeRejection] = useState<MessageFeeData | null>(null);
   const socketRef = useRef<ChatSocket | null>(null);
 
   useEffect(() => {
@@ -54,6 +74,9 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
 
     setSessionPaused(false);
     setEndedNoBalance(false);
+    setSessionStatus(null);
+    setLiveBalance(null);
+    setFeeRejection(null);
 
     let cancelled = false;
 
@@ -119,6 +142,41 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
         setSessionPaused(false);
       });
 
+      // Session snapshots (session_info on connect, session_started on join,
+      // session_minute_charged at each boundary) carry the authoritative
+      // session_status + live balance.
+      const applySnapshot = (data: SessionEventData) => {
+        if (data.session_status) setSessionStatus(data.session_status);
+        if (typeof data.client_balance === "number") {
+          setLiveBalance(data.client_balance);
+        }
+      };
+      socket.onSessionState(applySnapshot);
+      socket.onSessionGrace((data) => {
+        setSessionStatus("GRACE");
+        applySnapshot({ ...data, session_status: undefined });
+      });
+      socket.onSessionEnded((data) => {
+        setSessionStatus("ENDED");
+        setSessionPaused(false);
+        // NO_TOPUP = the grace countdown lapsed — same "balance ran out"
+        // ending the dedicated event signals.
+        if (data.reason === "NO_TOPUP" || data.reason === "INSUFFICIENT_BALANCE") {
+          setEndedNoBalance(true);
+        }
+      });
+      socket.onMessageFeeCharged((data) => {
+        if (typeof data.client_balance === "number") {
+          setLiveBalance(data.client_balance);
+        }
+      });
+      socket.onMessageRejected((data) => {
+        setFeeRejection(data);
+        if (typeof data.client_balance === "number") {
+          setLiveBalance(data.client_balance);
+        }
+      });
+
       socket.connect();
     })();
 
@@ -143,6 +201,8 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
     [isConnected]
   );
 
+  const clearRejection = useCallback(() => setFeeRejection(null), []);
+
   return {
     messages,
     sendMessage,
@@ -152,5 +212,9 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
     error,
     sessionPaused,
     endedNoBalance,
+    sessionStatus,
+    liveBalance,
+    feeRejection,
+    clearRejection,
   };
 }

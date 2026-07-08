@@ -38,6 +38,7 @@ import {
   requestChat,
   type ChatMessage,
 } from "../../src/api/chat";
+import { getMyBalance } from "../../src/api/payment";
 import { openBillingPage } from "../../src/lib/billing";
 import BottomSheet, {
   SheetTitle,
@@ -84,10 +85,14 @@ export default function ChatScreen() {
     chatId: chatIdParam,
     title,
     status,
+    intent,
   } = useLocalSearchParams<{
     chatId: string;
     title?: string;
     status?: string;
+    // "join" = she already tapped an explicit JOIN affordance (the INCOMING
+    // READING modal) — join on arrival instead of showing the overlay again.
+    intent?: string;
   }>();
   const router = useRouter();
   const { user } = useAuth();
@@ -102,6 +107,10 @@ export default function ChatScreen() {
     error,
     sessionPaused,
     endedNoBalance,
+    sessionStatus: wsSessionStatus,
+    liveBalance,
+    feeRejection,
+    clearRejection,
   } = useChatWebSocket(Number.isFinite(chatId) ? chatId : null);
 
   const [draft, setDraft] = useState("");
@@ -116,35 +125,153 @@ export default function ChatScreen() {
   const [sheetError, setSheetError] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  // Announce that the client has joined so the backend anchors the session
-  // timer to now (it doesn't run between accept and join). Idempotent server-side.
-  useEffect(() => {
-    if (Number.isFinite(chatId) && status === "ACTIVE") {
-      joinChat(chatId).catch(() => {
-        // Non-fatal: the WebSocket/timer still work; a retry happens on remount.
-      });
-    }
-  }, [chatId, status]);
+  // ── Chat + session state (authoritative, never trusted from params) ──────
+  // chatStatus: the Chat row's status (REQUESTED/ACTIVE/PAUSED/ENDED…), seeded
+  // from the route param and confirmed from the server on mount.
+  // sessionStatus: the live session's state (AWAITING_JOIN/ACTIVE/GRACE/ENDED)
+  // — WS events win once they arrive; the REST fetch covers the gap.
+  const [chatStatus, setChatStatus] = useState<string>(status ?? "");
+  const [restSessionStatus, setRestSessionStatus] = useState<string | null>(
+    null
+  );
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  // Opened as a between-sessions chat (accepted before, no live session):
+  // messages cost 1 ⭐. Request-phase (REQUESTED) messages stay free.
+  const [feeMode, setFeeMode] = useState(
+    status === "ENDED" || status === "ARCHIVED"
+  );
+  const [outBalance, setOutBalance] = useState<number | null>(null);
 
-  // Session timer runs only while active, not ended, and not paused.
+  useEffect(() => {
+    if (!Number.isFinite(chatId)) return;
+    let cancelled = false;
+    (async () => {
+      let confirmed = status ?? "";
+      try {
+        const mine = (await getMyChats()).find((c) => c.id === chatId);
+        if (mine) confirmed = mine.status;
+      } catch {
+        // keep the param-seeded status
+      }
+      if (cancelled) return;
+      setChatStatus(confirmed);
+      setFeeMode(confirmed === "ENDED" || confirmed === "ARCHIVED");
+      // PAUSED included: a chat opened mid-GRACE must land in the locked
+      // top-up state, not a plain composer.
+      if (confirmed === "ACTIVE" || confirmed === "PAUSED") {
+        try {
+          const s = await getSessionTime(chatId);
+          if (!cancelled && s.session_status) {
+            setRestSessionStatus(s.session_status);
+          }
+        } catch {
+          // Unknown session state on an ACTIVE chat: assume not joined — the
+          // JOIN button is the safe, explicit way forward (idempotent if
+          // already joined).
+          if (!cancelled && confirmed === "ACTIVE") {
+            setRestSessionStatus("AWAITING_JOIN");
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // WS events are the live truth; the REST snapshot fills in before they land.
+  const sessionStatus = wsSessionStatus ?? restSessionStatus;
+
+  // Session timer runs only while the session is genuinely billing.
   const sessionActive =
-    status === "ACTIVE" && !ended && !sessionPaused && !endedNoBalance;
+    chatStatus === "ACTIVE" &&
+    sessionStatus === "ACTIVE" &&
+    !ended &&
+    !sessionPaused &&
+    !endedNoBalance;
   const timer = useSessionTimer(
     Number.isFinite(chatId) ? chatId : null,
     sessionActive
   );
+
+  // Explicit join — the ONLY place the app ever calls /join. Charges minute 1
+  // upfront server-side; a client who can't afford it lands in GRACE.
+  const onJoin = useCallback(async () => {
+    if (!Number.isFinite(chatId) || joining) return;
+    setJoining(true);
+    setJoinError(null);
+    try {
+      const result = await joinChat(chatId);
+      setRestSessionStatus(result.session_status ?? "ACTIVE");
+      await timer.refresh();
+    } catch {
+      setJoinError("Couldn't join — check your connection and try again.");
+    } finally {
+      setJoining(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, joining]);
+
+  // She already tapped JOIN READING on the incoming-call modal — that was the
+  // explicit act, so don't make her confirm twice.
+  const autoJoinDone = useRef(false);
+  useEffect(() => {
+    if (
+      intent === "join" &&
+      !autoJoinDone.current &&
+      sessionStatus === "AWAITING_JOIN"
+    ) {
+      autoJoinDone.current = true;
+      void onJoin();
+    }
+  }, [intent, sessionStatus, onJoin]);
+
+  const awaitingJoin =
+    chatStatus === "ACTIVE" && sessionStatus === "AWAITING_JOIN" && !ended;
+
   // Ended because the money ran out: the server said so, or the local
   // countdown hit zero while the server isn't holding a top-up (GRACE) pause.
   const balanceEnded =
-    status === "ACTIVE" &&
+    (chatStatus === "ACTIVE" || chatStatus === "PAUSED") &&
     !ended &&
     (endedNoBalance || (timer.depleted && !sessionPaused));
-  const sessionEnded = ended || balanceEnded;
-  const showSession =
-    status === "ACTIVE" && timer.ready && !sessionEnded && !sessionPaused;
+  const sessionEnded = ended || balanceEnded || sessionStatus === "ENDED";
+  const showSession = sessionActive && timer.ready && !sessionEnded;
   const paused =
-    status === "ACTIVE" && sessionPaused && !ended && !endedNoBalance;
+    (sessionPaused || sessionStatus === "GRACE") &&
+    !ended &&
+    !endedNoBalance &&
+    (chatStatus === "ACTIVE" || chatStatus === "PAUSED");
   const showEndSheet = balanceEnded && !endSheetDismissed;
+
+  // Balance shown on the between-sessions fee pill: live WS value when the
+  // server has spoken, otherwise the fetched profile balance.
+  useEffect(() => {
+    if (!feeMode) return;
+    let cancelled = false;
+    getMyBalance()
+      .then((bal) => {
+        if (cancelled) return;
+        setOutBalance(
+          bal.stardust_total ?? (bal.balance ?? 0) + (bal.earned_balance ?? 0)
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [feeMode]);
+  const feeBalance = liveBalance ?? outBalance;
+
+  // GRACE from the live event stream is definitive; the poll below only
+  // classifies pauses the events didn't already explain (reader's manual pause).
+  const effectivePauseKind: "reader" | "balance" | null = !paused
+    ? null
+    : sessionStatus === "GRACE"
+    ? "balance"
+    : pauseKind;
 
   // Classify a pause by asking the server: session_status === "GRACE" (or a
   // top-up in flight) means her balance ran out; anything else is the reader's
@@ -287,7 +414,7 @@ export default function ChatScreen() {
               </Text>
             </View>
           </View>
-          {status === "ACTIVE" && !sessionEnded ? (
+          {chatStatus === "ACTIVE" && !sessionEnded ? (
             <TouchableOpacity
               onPress={onEndSession}
               disabled={ending}
@@ -355,14 +482,14 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
         )}
-        {sessionEnded && status === "ACTIVE" && (
+        {sessionEnded && (chatStatus === "ACTIVE" || chatStatus === "PAUSED") && (
           <View style={styles.endedBanner}>
             <Text style={styles.endedText}>Session ended</Text>
           </View>
         )}
         {/* Two distinct pauses: out-of-balance (top up to continue) vs the
             reader's own pause. */}
-        {paused && pauseKind === "balance" ? (
+        {paused && effectivePauseKind === "balance" ? (
           <View style={styles.graceBanner}>
             <View style={styles.graceRow}>
               <Ionicons
@@ -466,15 +593,65 @@ export default function ChatScreen() {
             <Text style={styles.errorBar}>{error}</Text>
           )}
 
+          {/* Your reading is ready — the one explicit moment billing begins. */}
+          {awaitingJoin && (
+            <View style={styles.joinCard}>
+              <View style={styles.joinHalo}>
+                <Ionicons name="sparkles" size={22} color={COLORS.accent} />
+              </View>
+              <Text style={styles.joinTitle}>
+                {title || "Your reader"} is ready for you
+              </Text>
+              <Text style={styles.joinSub}>
+                Your time together begins when you join.
+              </Text>
+              {!!joinError && <Text style={styles.joinError}>{joinError}</Text>}
+              <TouchableOpacity
+                style={styles.joinNowBtn}
+                activeOpacity={0.85}
+                onPress={onJoin}
+                disabled={joining}
+              >
+                {joining ? (
+                  <ActivityIndicator size="small" color={COLORS.ctaText} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="chatbubbles"
+                      size={16}
+                      color={COLORS.ctaText}
+                    />
+                    <Text style={styles.joinNowText}>JOIN NOW</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Between sessions: each message carries a small fee. */}
+          {feeMode && !sessionEnded && (
+            <View style={styles.feeRow}>
+              <Ionicons name="star" size={12} color={COLORS.accentGold} />
+              <Text style={styles.feeText}>
+                Between sessions — 1 ⭐ per message
+                {feeBalance != null
+                  ? ` · Balance ${fmtMoney(feeBalance)}`
+                  : ""}
+              </Text>
+            </View>
+          )}
+
           {/* Composer */}
           <View style={styles.composer}>
             <TextInput
               style={styles.input}
               placeholder={
-                sessionEnded
+                awaitingJoin
+                  ? "Join to start your reading"
+                  : sessionEnded && !feeMode
                   ? "Session ended"
                   : paused
-                  ? pauseKind === "balance"
+                  ? effectivePauseKind === "balance"
                     ? "Top up to continue"
                     : "Reading paused"
                   : "Type a message…"
@@ -484,16 +661,31 @@ export default function ChatScreen() {
               onChangeText={setDraft}
               multiline
               onSubmitEditing={onSend}
-              editable={isConnected && !sessionEnded && !paused}
+              editable={
+                isConnected &&
+                !awaitingJoin &&
+                !paused &&
+                (!sessionEnded || feeMode)
+              }
             />
             <TouchableOpacity
               style={[
                 styles.sendBtn,
-                (!isConnected || !draft.trim() || sessionEnded || paused) &&
+                (!isConnected ||
+                  !draft.trim() ||
+                  awaitingJoin ||
+                  paused ||
+                  (sessionEnded && !feeMode)) &&
                   styles.sendBtnDisabled,
               ]}
               onPress={onSend}
-              disabled={!isConnected || !draft.trim() || sessionEnded || paused}
+              disabled={
+                !isConnected ||
+                !draft.trim() ||
+                awaitingJoin ||
+                paused ||
+                (sessionEnded && !feeMode)
+              }
               activeOpacity={0.85}
             >
               <Ionicons name="arrow-up" size={20} color={COLORS.ctaText} />
@@ -501,6 +693,38 @@ export default function ChatScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Out of Stardust for a between-sessions message — branded, recoverable. */}
+      <BottomSheet visible={!!feeRejection} onClose={clearRejection}>
+        <SheetTitle>A little more Stardust needed</SheetTitle>
+        <SheetBody>
+          Messages between sessions cost 1 ⭐ each
+          {feeRejection?.client_balance != null
+            ? ` — your balance is ${fmtMoney(feeRejection.client_balance)}`
+            : ""}
+          . Top up and your message will be on its way.
+        </SheetBody>
+        <SheetPrimaryButton
+          label="+ TOP UP"
+          loading={toppingUp}
+          onPress={async () => {
+            setToppingUp(true);
+            await openBillingPage();
+            try {
+              const bal = await getMyBalance();
+              setOutBalance(
+                bal.stardust_total ??
+                  (bal.balance ?? 0) + (bal.earned_balance ?? 0)
+              );
+            } catch {
+              // balance refresh is best-effort
+            }
+            setToppingUp(false);
+            clearRejection();
+          }}
+        />
+        <SheetQuietButton label="Not now" onPress={clearRejection} />
+      </BottomSheet>
 
       {/* Session ended because the balance ran out — branded sheet, no silence. */}
       <BottomSheet
@@ -751,6 +975,91 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 6,
     fontFamily: FONTS.regular,
+  },
+  // "Your reading is ready" join card — pinned above the composer.
+  joinCard: {
+    alignItems: "center",
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADII.xl,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.accent, 0.3),
+  },
+  joinHalo: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: alpha(COLORS.accent, 0.08),
+    borderWidth: 1,
+    borderColor: alpha(COLORS.accent, 0.35),
+    marginBottom: SPACING.md,
+  },
+  joinTitle: {
+    fontSize: 19,
+    lineHeight: 25,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.heading,
+    textAlign: "center",
+  },
+  joinSub: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.regular,
+    textAlign: "center",
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
+  },
+  joinError: {
+    fontSize: 13,
+    color: COLORS.error,
+    fontFamily: FONTS.regular,
+    textAlign: "center",
+    marginBottom: SPACING.sm,
+  },
+  joinNowBtn: {
+    minHeight: TOUCH_TARGET,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    alignSelf: "stretch",
+    backgroundColor: COLORS.cta,
+    borderRadius: RADII.lg,
+    paddingVertical: SPACING.md,
+    shadowColor: COLORS.cta,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  joinNowText: {
+    color: COLORS.ctaText,
+    fontSize: 15,
+    letterSpacing: 1.2,
+    fontFamily: FONTS.bold,
+  },
+  // Between-sessions fee notice above the composer.
+  feeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: alpha(COLORS.accentGold, 0.07),
+    borderTopWidth: 1,
+    borderTopColor: alpha(COLORS.accentGold, 0.2),
+  },
+  feeText: {
+    fontSize: 13,
+    color: COLORS.accentGold,
+    fontFamily: FONTS.semiBold,
   },
   composer: {
     flexDirection: "row",
