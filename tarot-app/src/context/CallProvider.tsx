@@ -7,9 +7,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
+import {
+  AppState,
+  Image,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { pushSupported } from "../lib/notifications";
 import {
   COLORS,
   FONTS,
@@ -21,6 +31,8 @@ import {
 import { useAuth } from "./AuthContext";
 import { useRingtone } from "../hooks/useRingtone";
 import { getValidAccessToken } from "../lib/refresh";
+import { api } from "../api/client";
+import { getMyChats } from "../api/chat";
 import {
   NotificationSocket,
   type AppNotification,
@@ -29,6 +41,7 @@ import {
 interface IncomingCall {
   chatId: number;
   psychicName: string;
+  psychicPhoto: string | null;
 }
 
 interface CallState {
@@ -42,6 +55,10 @@ const CallContext = createContext<CallState>({ incomingCall: null });
  * accepts (CHAT_ACCEPTED), the client is "called": a looping ringtone plays and
  * a full-screen prompt appears over any screen. Joining opens the chat (which
  * anchors the session timer); dismissing just silences the ring.
+ *
+ * The same overlay is raised by all three feeds of the accept moment — the
+ * WebSocket event, a foreground push, and a TAP on the system notification
+ * (backgrounded/killed app) — deduped by chat id so only the first presents.
  */
 export function CallProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -56,39 +73,111 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const ringRef = useRef(ringtone);
   ringRef.current = ringtone;
 
+  // The current call's chat id, for deduping the two feeds (WS + push): the
+  // accept moment can arrive over both; only the first one rings.
+  const currentCallChatId = useRef<number | null>(null);
+
   const clearCall = useCallback(() => {
     ringRef.current.stop();
+    currentCallChatId.current = null;
     setIncomingCall(null);
   }, []);
 
-  const handleNotification = useCallback((n: AppNotification) => {
-    const chatId = Number(n.data?.chat_id);
-    if (!Number.isFinite(chatId)) return;
+  const presentCall = useCallback(
+    (chatId: number, psychicName: string, opts?: { ring?: boolean }) => {
+      if (currentCallChatId.current === chatId) return; // already ringing
+      currentCallChatId.current = chatId;
+      setIncomingCall({ chatId, psychicName, psychicPhoto: null });
+      // No ring when she TAPPED the notification to get here — the push
+      // already sounded, and she's actively looking at the screen.
+      if (opts?.ring !== false) ringRef.current.play();
+    },
+    []
+  );
 
-    switch (n.notification_type) {
-      case "CHAT_ACCEPTED": {
-        const psychicName =
-          (n.data?.psychic_name as string) || "Your psychic";
-        setIncomingCall({ chatId, psychicName });
-        ringRef.current.play();
-        break;
+  // Dismiss only if the overlay currently shows this chat.
+  const dismissCall = useCallback((chatId: number) => {
+    setIncomingCall((cur) => {
+      if (cur && cur.chatId === chatId) {
+        ringRef.current.stop();
+        currentCallChatId.current = null;
+        return null;
       }
-      // If the request is cancelled or the chat ends, stop ringing.
-      case "CHAT_ENDED":
-      case "CHAT_REQUEST_CANCELLED": {
-        setIncomingCall((cur) => {
-          if (cur && cur.chatId === chatId) {
-            ringRef.current.stop();
-            return null;
-          }
-          return cur;
-        });
-        break;
-      }
-      default:
-        break;
-    }
+      return cur;
+    });
   }, []);
+
+  const setCallPhoto = useCallback((chatId: number, photo: string | null) => {
+    setIncomingCall((cur) =>
+      cur && cur.chatId === chatId ? { ...cur, psychicPhoto: photo } : cur
+    );
+  }, []);
+
+  // Fill in the avatar once the psychic id is known. Photo is decoration —
+  // any failure just leaves the fallback icon.
+  const hydrateFromPsychicId = useCallback(
+    async (chatId: number, psychicId: number) => {
+      try {
+        const res = await api.get(`/api/psychic/${psychicId}`);
+        setCallPhoto(chatId, res.data?.profile_picture_url ?? null);
+      } catch {
+        // keep fallback icon
+      }
+    },
+    [setCallPhoto]
+  );
+
+  // Push payloads only carry chat_id + name: resolve the psychic via my-chats.
+  // Doubles as the stale-tap guard — a tap on an old notification for a chat
+  // that already ended must not present a dead "incoming reading".
+  const hydrateFromChatId = useCallback(
+    async (chatId: number) => {
+      try {
+        const chats = await getMyChats();
+        const chat = chats.find((c) => c.id === chatId);
+        if (!chat) return;
+        if (chat.status === "ENDED") {
+          dismissCall(chatId);
+          return;
+        }
+        await hydrateFromPsychicId(chatId, chat.psychic_id);
+      } catch {
+        // keep fallback icon
+      }
+    },
+    [dismissCall, hydrateFromPsychicId]
+  );
+
+  const handleNotification = useCallback(
+    (n: AppNotification) => {
+      const chatId = Number(n.data?.chat_id);
+      if (!Number.isFinite(chatId)) return;
+
+      switch (n.notification_type) {
+        case "CHAT_ACCEPTED": {
+          const psychicName =
+            (n.data?.psychic_name as string) || "Your psychic";
+          presentCall(chatId, psychicName);
+          const psychicId = Number(n.data?.psychic_id);
+          if (Number.isFinite(psychicId)) {
+            void hydrateFromPsychicId(chatId, psychicId);
+          } else {
+            void hydrateFromChatId(chatId);
+          }
+          break;
+        }
+        // If the request is cancelled or the chat ends, stop ringing.
+        case "CHAT_ENDED":
+        case "CHAT_REQUEST_CANCELLED": {
+          dismissCall(chatId);
+          break;
+        }
+        default:
+          break;
+      }
+    },
+    [presentCall, dismissCall, hydrateFromPsychicId, hydrateFromChatId]
+  );
 
   // Connect while signed in; reconnect on unexpected drops.
   useEffect(() => {
@@ -102,16 +191,33 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
+    const scheduleReconnect = (delayMs: number) => {
+      if (cancelled) return;
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      reconnectRef.current = setTimeout(connect, delayMs);
+    };
+
     const connect = async () => {
-      const token = await getValidAccessToken();
-      if (cancelled || !token) return;
+      if (cancelled) return;
+      let token: string | null = null;
+      try {
+        token = await getValidAccessToken();
+      } catch {
+        token = null;
+      }
+      // A transient failure (offline moment, refresh hiccup) must never kill
+      // the chain — this socket is what makes the phone "ring".
+      if (!token) {
+        scheduleReconnect(5000);
+        return;
+      }
+      if (cancelled) return;
 
       const socket = new NotificationSocket(token);
       socket.onNotification(handleNotification);
       socket.onDisconnect(() => {
-        if (cancelled) return;
         // Reconnect after a short delay while still signed in.
-        reconnectRef.current = setTimeout(connect, 3000);
+        scheduleReconnect(3000);
       });
       socket.connect();
       socketRef.current = socket;
@@ -119,21 +225,98 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
     connect();
 
+    // Coming back to the foreground: Android freely kills idle sockets in the
+    // background, and a timer-based retry may have fired while the network was
+    // suspended. If the socket isn't alive, reconnect right now.
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && !cancelled && !socketRef.current?.isAlive) {
+        connect();
+      }
+    });
+
     return () => {
       cancelled = true;
+      appStateSub.remove();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
   }, [user, handleNotification, clearCall]);
 
+  // Second feed for the same moment: if the accept arrives as a foreground
+  // push (notification WS down, or suppression raced), raise the same modal.
+  // presentCall dedupes when both feeds deliver.
+  useEffect(() => {
+    if (!pushSupported || !user) return;
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data as Record<string, unknown>;
+      if (data?.type !== "chat_accepted") return;
+      const chatId = Number(data.chat_id);
+      if (!Number.isFinite(chatId)) return;
+      presentCall(
+        chatId,
+        (data.psychic_name as string) || "Your psychic"
+      );
+      void hydrateFromChatId(chatId);
+    });
+    return () => sub.remove();
+  }, [user, presentCall, hydrateFromChatId]);
+
+  // Third feed: the TAP on the system notification — app backgrounded or
+  // killed. Raises the same global overlay instead of navigating, so there is
+  // no race with auth restore or navigator mount (the old router.push from
+  // PushManager silently lost that race and dumped her on the default tab).
+  // Each response is handled once: the effect re-runs when `user` resolves,
+  // and getLastNotificationResponseAsync re-returns the launching tap.
+  const handledTapIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!pushSupported || !user) return;
+    let cancelled = false;
+
+    const handleTap = (response: Notifications.NotificationResponse) => {
+      const data = response.notification.request.content.data as Record<
+        string,
+        unknown
+      >;
+      if (data?.type !== "chat_accepted") return;
+      const chatId = Number(data.chat_id);
+      if (!Number.isFinite(chatId)) return;
+      const tapId = response.notification.request.identifier;
+      if (handledTapIds.current.has(tapId)) return;
+      handledTapIds.current.add(tapId);
+      presentCall(chatId, (data.psychic_name as string) || "Your psychic", {
+        ring: false,
+      });
+      void hydrateFromChatId(chatId);
+    };
+
+    // Cold start: the tap that launched the app (fires here only after auth
+    // restores, so the overlay mounts over whatever screen loads).
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response && !cancelled) handleTap(response);
+    });
+    // Warm taps while merely backgrounded.
+    const sub = Notifications.addNotificationResponseReceivedListener(handleTap);
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
+  }, [user, presentCall, hydrateFromChatId]);
+
   const onAccept = useCallback(() => {
     if (!incomingCall) return;
     const { chatId, psychicName } = incomingCall;
     clearCall();
+    // intent:"join" — tapping JOIN READING here IS the explicit join; the chat
+    // screen joins on arrival instead of asking again.
     router.push({
       pathname: "/sessions/[chatId]",
-      params: { chatId: String(chatId), title: psychicName, status: "ACTIVE" },
+      params: {
+        chatId: String(chatId),
+        title: psychicName,
+        status: "ACTIVE",
+        intent: "join",
+      },
     });
   }, [incomingCall, clearCall, router]);
 
@@ -150,7 +333,14 @@ export function CallProvider({ children }: { children: ReactNode }) {
         <View style={styles.overlay}>
           <View style={styles.card}>
             <View style={styles.avatar}>
-              <Ionicons name="sparkles" size={40} color={COLORS.accent} />
+              {incomingCall?.psychicPhoto ? (
+                <Image
+                  source={{ uri: incomingCall.psychicPhoto }}
+                  style={styles.avatarPhoto}
+                />
+              ) : (
+                <Ionicons name="sparkles" size={40} color={COLORS.accent} />
+              )}
             </View>
             <Text style={styles.calling}>INCOMING READING</Text>
             <Text style={styles.name}>{incomingCall?.psychicName}</Text>
@@ -162,7 +352,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
               onPress={onAccept}
             >
               <Ionicons name="chatbubbles" size={18} color={COLORS.ctaText} />
-              <Text style={styles.joinText}>JOIN READING</Text>
+              <Text style={styles.joinText}>
+                JOIN {(incomingCall?.psychicName || "READING").toUpperCase()}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -213,6 +405,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 22,
+    overflow: "hidden",
+  },
+  avatarPhoto: {
+    width: "100%",
+    height: "100%",
   },
   calling: {
     fontSize: 12,

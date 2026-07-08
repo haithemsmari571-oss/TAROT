@@ -12,15 +12,19 @@ import {
 //  • suppresses system banners while the app is open (the UI handles those
 //    moments live),
 //  • re-registers the device token on every sign-in,
-//  • routes notification taps into the right chat (cold start included).
+//  • routes MESSAGE notification taps into the right chat (cold start
+//    included). Accepted-reading taps are NOT routed here: CallProvider
+//    raises the global INCOMING READING overlay for those — navigation from
+//    this component raced auth/navigator mount and could silently no-op.
 // Entirely inert in Expo Go (remote push needs a development build).
 
 function chatParamsFromPayload(data: unknown): {
   chatId: string;
   title?: string;
-  status?: string;
 } | null {
   const d = (data ?? {}) as Record<string, unknown>;
+  // CallProvider owns the accept moment (global overlay, explicit JOIN).
+  if (d.type === "chat_accepted") return null;
   const chatId = Number(d.chat_id);
   if (!Number.isFinite(chatId)) return null;
   return {
@@ -28,8 +32,6 @@ function chatParamsFromPayload(data: unknown): {
     ...(typeof d.psychic_name === "string" && d.psychic_name
       ? { title: d.psychic_name }
       : {}),
-    // An accepted reading is live — arm the session UI on arrival.
-    ...(d.type === "chat_accepted" ? { status: "ACTIVE" } : {}),
   };
 }
 
