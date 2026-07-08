@@ -96,6 +96,8 @@ export default function RootLayout() {
       <Tabs.Screen name="signup" options={{ href: null }} />
       {/* Reachable via router.push("/stardust"); hidden from the tab bar. */}
       <Tabs.Screen name="stardust" options={{ href: null }} />
+      {/* SANCTUARY games stack (oracle/compatibility/moon); hidden from the tab bar. */}
+      <Tabs.Screen name="games" options={{ href: null }} />
       </Tabs>
       {/* One-time "£15 is waiting" moment for accounts with unspent credit. */}
       <WelcomeCelebration />

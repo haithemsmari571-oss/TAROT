@@ -5,6 +5,8 @@ export interface CurrentUser {
   id: number;
   username: string;
   email: string;
+  /** ISO "YYYY-MM-DD"; null for accounts created before DOB capture. */
+  date_of_birth?: string | null;
 }
 
 // Re-exported for existing callers (AuthContext, chat hook).

@@ -27,6 +27,7 @@ import SignHeader from "../src/components/sanctuary/SignHeader";
 import CosmicWeather from "../src/components/sanctuary/CosmicWeather";
 import ConstellationPull from "../src/components/sanctuary/ConstellationPull";
 import YourDayCard from "../src/components/sanctuary/YourDayCard";
+import GamesSection from "../src/components/sanctuary/GamesSection";
 import CelebrationHost from "../src/components/sanctuary/CelebrationHost";
 import { useAuth } from "../src/context/AuthContext";
 import {
@@ -144,7 +145,10 @@ export default function SanctuaryScreen() {
                 revealed={revealed}
               />
 
-              {/* 5. Close of the page */}
+              {/* 5. Small rituals — each game keeps its bridge inside itself */}
+              <GamesSection />
+
+              {/* 6. Close of the page */}
               <TouchableOpacity
                 style={styles.psychicsCta}
                 activeOpacity={0.85}
