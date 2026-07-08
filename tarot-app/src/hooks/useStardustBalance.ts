@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { getMyBalance } from "../api/payment";
 
 interface StardustBalanceState {
@@ -46,11 +47,21 @@ export function useStardustBalance(): StardustBalanceState {
 
   useEffect(() => {
     mounted.current = true;
-    refetch();
     return () => {
       mounted.current = false;
     };
-  }, [refetch]);
+  }, []);
+
+  // Refetch on every screen FOCUS, not just mount: the tab navigator keeps
+  // screens mounted, and the balance changes behind their back (message fees,
+  // session charges, website top-ups). Focus includes the initial mount, so
+  // this also does the first load. The spinner only shows while balance is
+  // still null, so a focus refetch never flashes over a displayed number.
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   return { balance, creditBalance, loading, error, refetch };
 }
