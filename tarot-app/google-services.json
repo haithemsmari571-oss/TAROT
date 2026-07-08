@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "421060532854",
+    "project_id": "ask-valentina",
+    "storage_bucket": "ask-valentina.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:421060532854:android:43e925acaf45638cf85d57",
+        "android_client_info": {
+          "package_name": "co.uk.askvalentina.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzsZtATlDypvAs-Mk7nza44-nF58JiuSc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
