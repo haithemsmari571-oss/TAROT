@@ -45,16 +45,32 @@ export function configureForegroundHandling(): void {
   });
 }
 
+/**
+ * Channel id the backend push payload targets (push.py sends `channelId`).
+ * Android permanently caches a channel's importance from its FIRST creation —
+ * the old "default" channel was born low-importance (no heads-up, no lock
+ * screen), so we retire it and use a fresh id. Bump the suffix if channel
+ * settings ever need to change again.
+ */
+export const ANDROID_CHANNEL_ID = "readings-v2";
+
 /** Android needs a channel before anything can display (API 26+). */
 async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync("default", {
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
     name: "Readings & messages",
     importance: Notifications.AndroidImportance.MAX,
     sound: "default",
     vibrationPattern: [0, 250, 250, 250],
     lightColor: "#D2B9FF",
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    enableVibrate: true,
+    enableLights: true,
+    showBadge: true,
   });
+  // Remove the stale cached channel so it can't be targeted again and doesn't
+  // clutter the system notification settings.
+  await Notifications.deleteNotificationChannelAsync("default");
 }
 
 export async function getPushPermission(): Promise<PushPermission> {

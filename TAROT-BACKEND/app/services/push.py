@@ -47,6 +47,11 @@ async def _send_push(
                 "body": body,
                 "data": data or {},
                 "priority": "high",
+                # Must match ANDROID_CHANNEL_ID in the app (src/lib/notifications.ts).
+                # Android picks the channel from the payload; without this the push
+                # lands on a cached low-importance fallback channel (no heads-up
+                # banner, hidden on the lock screen).
+                "channelId": "readings-v2",
             }
             for t in tokens
         ]
