@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -77,6 +76,9 @@ export default function PsychicDetailScreen() {
   const [requesting, setRequesting] = useState(false);
   // Insufficient-balance sheet: set with her spendable £ when a reading can't start.
   const [shortfall, setShortfall] = useState<{ spendable: number } | null>(null);
+  // Branded replacements for the old raw alerts.
+  const [signInSheet, setSignInSheet] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const [sheetBusy, setSheetBusy] = useState(false);
   const [sheetNote, setSheetNote] = useState<string | null>(null);
   // Branded pre-permission sheet, shown once right after her first request —
@@ -106,14 +108,7 @@ export default function PsychicDetailScreen() {
 
     // Requesting a chat needs a signed-in client.
     if (!user) {
-      Alert.alert(
-        "Sign in to start a reading",
-        "Sign in from the Profile tab, then tap Start Reading again.",
-        [
-          { text: "Not now", style: "cancel" },
-          { text: "Go to Profile", onPress: () => router.push("/profile") },
-        ]
-      );
+      setSignInSheet(true);
       return;
     }
 
@@ -168,8 +163,7 @@ export default function PsychicDetailScreen() {
           params: { chatId: String(existingChatId) },
         });
       } else {
-        Alert.alert(
-          "Couldn't start reading",
+        setRequestError(
           typeof detail === "string" && detail
             ? detail
             : "Please check your connection and try again."
@@ -490,6 +484,33 @@ export default function PsychicDetailScreen() {
           onPress={onEnablePush}
         />
         <SheetQuietButton label="Not now" onPress={onDeclinePush} />
+      </BottomSheet>
+
+      {/* Signed-out tap on START READING — warm nudge to the Profile tab. */}
+      <BottomSheet visible={signInSheet} onClose={() => setSignInSheet(false)}>
+        <SheetTitle>Sign in to start a reading</SheetTitle>
+        <SheetBody>
+          Sign in from the Profile tab, then tap START READING again —{" "}
+          {psychic.username} will be waiting.
+        </SheetBody>
+        <SheetPrimaryButton
+          label="GO TO PROFILE"
+          onPress={() => {
+            setSignInSheet(false);
+            router.push("/profile");
+          }}
+        />
+        <SheetQuietButton label="Not now" onPress={() => setSignInSheet(false)} />
+      </BottomSheet>
+
+      {/* Request failed for a non-recoverable reason — branded, not raw. */}
+      <BottomSheet
+        visible={!!requestError}
+        onClose={() => setRequestError(null)}
+      >
+        <SheetTitle>Couldn&apos;t start your reading</SheetTitle>
+        <SheetBody>{requestError}</SheetBody>
+        <SheetPrimaryButton label="OK" onPress={() => setRequestError(null)} />
       </BottomSheet>
     </ScreenBackground>
   );

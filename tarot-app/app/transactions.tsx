@@ -21,6 +21,7 @@ import {
   alpha,
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
+import Skeleton from "../src/components/Skeleton";
 import {
   getMyTransactions,
   type Transaction,
@@ -125,8 +126,17 @@ export default function TransactionsScreen() {
         </View>
 
         {rows === null ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={COLORS.accent} />
+          <View style={styles.list}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <View key={i} style={styles.skelRow}>
+                <Skeleton style={styles.skelIcon} />
+                <View style={styles.skelBody}>
+                  <Skeleton style={styles.skelTitle} />
+                  <Skeleton style={styles.skelMeta} />
+                </View>
+                <Skeleton style={styles.skelAmount} />
+              </View>
+            ))}
           </View>
         ) : rows.length === 0 ? (
           <View style={styles.center}>
@@ -331,4 +341,21 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     fontFamily: FONTS.bold,
   },
+  // Loading skeletons (mirror the transaction-row silhouette)
+  skelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: RADII.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.sm,
+  },
+  skelIcon: { width: 36, height: 36, borderRadius: 18, marginRight: SPACING.md },
+  skelBody: { flex: 1, gap: 7, marginRight: SPACING.sm },
+  skelTitle: { width: "70%", height: 13 },
+  skelMeta: { width: "45%", height: 10 },
+  skelAmount: { width: 64, height: 14 },
 });

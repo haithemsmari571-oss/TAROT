@@ -23,6 +23,7 @@ import {
 import ScreenBackground, {
   BACKGROUNDS,
 } from "../../src/components/ScreenBackground";
+import Skeleton from "../../src/components/Skeleton";
 import { useAuth } from "../../src/context/AuthContext";
 import {
   getMyChats,
@@ -149,11 +150,24 @@ export default function SessionsScreen() {
   }
 
   if (loading) {
+    // Skeleton rows mirroring the session-row silhouette.
     return (
       <ScreenBackground source={BACKGROUNDS.moonlitBalcony} scrimOpacity={0.7}>
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.accent} />
-        </View>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <StatusBar style="light" />
+          <View style={styles.list}>
+            <Text style={styles.header}>SESSIONS</Text>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skelRow}>
+                <Skeleton style={styles.skelAvatar} />
+                <View style={styles.skelBody}>
+                  <Skeleton style={styles.skelName} />
+                  <Skeleton style={styles.skelStatus} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </SafeAreaView>
       </ScreenBackground>
     );
   }
@@ -313,4 +327,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     fontFamily: FONTS.semiBold,
   },
+  // Loading skeletons (mirror the session-row silhouette)
+  skelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADII.lg,
+    padding: 14,
+    marginBottom: SPACING.md,
+  },
+  skelAvatar: { width: 48, height: 48, borderRadius: 24 },
+  skelBody: { flex: 1, gap: 8 },
+  skelName: { width: "40%", height: 16 },
+  skelStatus: { width: "65%", height: 11 },
 });

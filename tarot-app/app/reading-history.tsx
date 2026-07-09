@@ -22,6 +22,7 @@ import {
   alpha,
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
+import Skeleton from "../src/components/Skeleton";
 import { api } from "../src/api/client";
 import { getMyChats } from "../src/api/chat";
 import { getMyTransactions } from "../src/api/transactions";
@@ -148,8 +149,17 @@ export default function ReadingHistoryScreen() {
         </View>
 
         {entries === null ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={COLORS.accent} />
+          <View style={styles.list}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skelCard}>
+                <Skeleton style={styles.skelAvatar} />
+                <View style={styles.skelBody}>
+                  <Skeleton style={styles.skelName} />
+                  <Skeleton style={styles.skelMeta} />
+                </View>
+                <Skeleton style={styles.skelBtn} />
+              </View>
+            ))}
           </View>
         ) : entries.length === 0 ? (
           <View style={styles.center}>
@@ -336,4 +346,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontFamily: FONTS.bold,
   },
+  // Loading skeletons (mirror the reading-card silhouette)
+  skelCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  skelAvatar: { width: 52, height: 52, borderRadius: 26 },
+  skelBody: { flex: 1, gap: 8, marginHorizontal: SPACING.md },
+  skelName: { width: "50%", height: 15 },
+  skelMeta: { width: "80%", height: 11 },
+  skelBtn: { width: 88, height: 34, borderRadius: RADII.md },
 });

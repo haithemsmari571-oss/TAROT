@@ -27,6 +27,7 @@ import ScreenBackground, {
   BACKGROUNDS,
 } from "../../src/components/ScreenBackground";
 import { PsychicCard } from "../../src/components/PsychicCard";
+import Skeleton from "../../src/components/Skeleton";
 import { useCredit } from "../../src/context/CreditContext";
 import { useFavorites } from "../../src/context/FavoritesContext";
 import { useAuth } from "../../src/context/AuthContext";
@@ -79,11 +80,26 @@ export default function PsychicsScreen() {
   }, [load]);
 
   if (loading) {
+    // Skeleton cards instead of a bare spinner — the browse list is the
+    // app's front door.
     return (
       <ScreenBackground source={BACKGROUNDS.moonlitBalcony} scrimOpacity={0.7}>
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.accent} />
-        </View>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <StatusBar style="light" />
+          <View style={styles.list}>
+            <Text style={styles.header}>OUR PSYCHICS</Text>
+            {[0, 1].map((i) => (
+              <View key={i} style={styles.skelCard}>
+                <Skeleton style={styles.skelPhoto} />
+                <View style={styles.skelBody}>
+                  <Skeleton style={styles.skelName} />
+                  <Skeleton style={styles.skelLine} />
+                  <Skeleton style={styles.skelLineShort} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </SafeAreaView>
       </ScreenBackground>
     );
   }
@@ -272,6 +288,24 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     paddingHorizontal: SPACING.xl,
   },
+  // Loading skeletons (mirror the PsychicCard silhouette)
+  skelCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    overflow: "hidden",
+    marginBottom: SPACING.lg,
+  },
+  skelPhoto: {
+    width: "100%",
+    height: 230,
+    borderRadius: 0,
+  },
+  skelBody: { padding: SPACING.lg, gap: 10 },
+  skelName: { width: "45%", height: 20 },
+  skelLine: { width: "90%", height: 12 },
+  skelLineShort: { width: "60%", height: 12 },
   error: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,

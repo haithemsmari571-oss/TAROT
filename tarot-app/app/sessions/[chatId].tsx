@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -116,6 +115,9 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [ended, setEnded] = useState(false);
   const [ending, setEnding] = useState(false);
+  // Branded end-session confirm sheet (replaces the old raw Alert).
+  const [endConfirm, setEndConfirm] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
   // Which kind of pause: the reader paused, or the balance ran out (GRACE).
   const [pauseKind, setPauseKind] = useState<"reader" | "balance" | null>(null);
   const [toppingUp, setToppingUp] = useState(false);
@@ -358,28 +360,22 @@ export default function ChatScreen() {
   };
 
   const onEndSession = useCallback(() => {
-    Alert.alert(
-      "End session?",
-      "This ends the reading for you and the psychic.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "End session",
-          style: "destructive",
-          onPress: async () => {
-            setEnding(true);
-            try {
-              await endChat(chatId);
-              setEnded(true);
-            } catch {
-              Alert.alert("Couldn't end session", "Please try again.");
-            } finally {
-              setEnding(false);
-            }
-          },
-        },
-      ]
-    );
+    setEndError(null);
+    setEndConfirm(true);
+  }, []);
+
+  const onConfirmEnd = useCallback(async () => {
+    setEnding(true);
+    setEndError(null);
+    try {
+      await endChat(chatId);
+      setEnded(true);
+      setEndConfirm(false);
+    } catch {
+      setEndError("Couldn't end the session. Please try again.");
+    } finally {
+      setEnding(false);
+    }
   }, [chatId]);
 
   const statusColor =
@@ -748,6 +744,34 @@ export default function ChatScreen() {
           onPress={() => setEndSheetDismissed(true)}
         />
       </BottomSheet>
+
+      {/* End-session confirm — branded and explicit, destruction in red. */}
+      <BottomSheet
+        visible={endConfirm}
+        onClose={() => {
+          if (!ending) setEndConfirm(false);
+        }}
+      >
+        <SheetTitle>End session?</SheetTitle>
+        <SheetBody>This ends the reading for you and the psychic.</SheetBody>
+        {!!endError && <SheetNote>{endError}</SheetNote>}
+        <TouchableOpacity
+          style={[styles.endConfirmBtn, ending && styles.endConfirmBtnDisabled]}
+          activeOpacity={0.85}
+          onPress={onConfirmEnd}
+          disabled={ending}
+        >
+          {ending ? (
+            <ActivityIndicator color={COLORS.error} />
+          ) : (
+            <Text style={styles.endConfirmText}>END SESSION</Text>
+          )}
+        </TouchableOpacity>
+        <SheetQuietButton
+          label="Cancel"
+          onPress={() => setEndConfirm(false)}
+        />
+      </BottomSheet>
     </ScreenBackground>
   );
 }
@@ -756,6 +780,24 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  endConfirmBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: RADII.md,
+    paddingVertical: SPACING.lg,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.error, 0.7),
+    backgroundColor: alpha(COLORS.error, 0.08),
+  },
+  endConfirmBtnDisabled: { opacity: 0.6 },
+  endConfirmText: {
+    color: COLORS.error,
+    fontSize: 15,
+    letterSpacing: 1.2,
+    fontFamily: FONTS.bold,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
