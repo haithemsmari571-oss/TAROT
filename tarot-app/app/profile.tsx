@@ -25,7 +25,15 @@ import {
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
-import { resendVerification } from "../src/lib/auth";
+import { deleteAccount, resendVerification } from "../src/lib/auth";
+import { getMyChats } from "../src/api/chat";
+import BottomSheet, {
+  SheetTitle,
+  SheetBody,
+  SheetNote,
+  SheetPrimaryButton,
+  SheetQuietButton,
+} from "../src/components/BottomSheet";
 import { formatPounds } from "../src/context/CreditContext";
 import { useStardustBalance } from "../src/hooks/useStardustBalance";
 import {
@@ -63,6 +71,70 @@ function Account() {
   // after a "Not now"). Hidden entirely in Expo Go ("unsupported").
   const [pushStatus, setPushStatus] = useState<PushPermission | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
+
+  // Delete-account flow, staged through one bottom sheet:
+  // blocked (reading in progress) → warn (Stardust forfeit, only if > 0)
+  // → confirm ("can't be undone") → the actual call.
+  const [deleteStage, setDeleteStage] = useState<
+    null | "blocked" | "warn" | "confirm"
+  >(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const closeDeleteSheet = useCallback(() => {
+    if (deleteBusy) return; // never dismissable mid-delete
+    setDeleteStage(null);
+    setDeleteError(null);
+  }, [deleteBusy]);
+
+  const onDeletePress = useCallback(async () => {
+    setDeleteError(null);
+    setDeleteBusy(true);
+    try {
+      // Pre-check for a live reading so she gets the clear "end it first"
+      // message up front (the server enforces the same rule regardless).
+      const chats = await getMyChats();
+      const live = chats.some(
+        (c) => c.status === "ACTIVE" || c.status === "PAUSED"
+      );
+      if (live) {
+        setDeleteStage("blocked");
+      } else if ((balance ?? 0) > 0) {
+        setDeleteStage("warn");
+      } else {
+        setDeleteStage("confirm");
+      }
+    } catch {
+      setDeleteStage("confirm"); // server still enforces the block
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [balance]);
+
+  const onConfirmDelete = useCallback(async () => {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      // Server side is done and all tokens are dead — leave locally too.
+      setDeleteStage(null);
+      await signOut();
+    } catch (err: any) {
+      const serverMsg =
+        err?.response?.data?.detail || err?.response?.data?.message;
+      if (err?.response?.status === 409) {
+        setDeleteStage("blocked");
+      } else {
+        setDeleteError(
+          typeof serverMsg === "string" && serverMsg
+            ? serverMsg
+            : "Couldn't delete your account. Check your connection and try again."
+        );
+      }
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [signOut]);
 
   useFocusEffect(
     useCallback(() => {
@@ -194,7 +266,83 @@ function Account() {
           >
             <Text style={styles.signOutText}>SIGN OUT</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteLink}
+            activeOpacity={0.7}
+            onPress={onDeletePress}
+            disabled={deleteBusy || deleteStage !== null}
+          >
+            {deleteBusy && deleteStage === null ? (
+              <ActivityIndicator size="small" color={COLORS.textFaint} />
+            ) : (
+              <Text style={styles.deleteLinkText}>Delete account</Text>
+            )}
+          </TouchableOpacity>
         </View>
+
+        <BottomSheet visible={deleteStage !== null} onClose={closeDeleteSheet}>
+          {deleteStage === "blocked" && (
+            <>
+              <SheetTitle>A reading is in progress</SheetTitle>
+              <SheetBody>
+                Your account can't be deleted while a reading is live. End the
+                session (or let it finish), then come back here.
+              </SheetBody>
+              <SheetPrimaryButton label="OK" onPress={closeDeleteSheet} />
+            </>
+          )}
+
+          {deleteStage === "warn" && (
+            <>
+              <SheetTitle>Your Stardust will be lost</SheetTitle>
+              <SheetBody>
+                You still have{" "}
+                {balance != null ? formatPounds(balance) : "a balance"} in
+                Stardust. Deleting your account forfeits it permanently — it
+                can't be refunded or restored later.
+              </SheetBody>
+              <SheetPrimaryButton
+                label="KEEP MY STARDUST"
+                onPress={closeDeleteSheet}
+              />
+              <SheetQuietButton
+                label="I understand — continue"
+                onPress={() => setDeleteStage("confirm")}
+              />
+            </>
+          )}
+
+          {deleteStage === "confirm" && (
+            <>
+              <SheetTitle>Delete your account?</SheetTitle>
+              <SheetBody>
+                This can't be undone. Your personal details are permanently
+                removed and you'll be signed out everywhere. Your email becomes
+                free to use for a new account.
+              </SheetBody>
+              {!!deleteError && <SheetNote>{deleteError}</SheetNote>}
+              <TouchableOpacity
+                style={[
+                  styles.deleteConfirmBtn,
+                  deleteBusy && styles.deleteConfirmBtnDisabled,
+                ]}
+                activeOpacity={0.85}
+                onPress={onConfirmDelete}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? (
+                  <ActivityIndicator color={COLORS.error} />
+                ) : (
+                  <Text style={styles.deleteConfirmText}>
+                    DELETE MY ACCOUNT
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <SheetQuietButton label="Cancel" onPress={closeDeleteSheet} />
+            </>
+          )}
+        </BottomSheet>
       </SafeAreaView>
     </ScreenBackground>
   );
@@ -475,6 +623,36 @@ const styles = StyleSheet.create({
   verifyBtnText: {
     color: COLORS.accentGold,
     fontSize: 14,
+    letterSpacing: 1.2,
+    fontFamily: FONTS.bold,
+  },
+  // Delete-account entry + destructive confirm button
+  deleteLink: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: SPACING.sm,
+  },
+  deleteLinkText: {
+    color: COLORS.textFaint,
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+  },
+  deleteConfirmBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: RADII.md,
+    paddingVertical: SPACING.lg,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.error, 0.7),
+    backgroundColor: alpha(COLORS.error, 0.08),
+  },
+  deleteConfirmBtnDisabled: { opacity: 0.6 },
+  deleteConfirmText: {
+    color: COLORS.error,
+    fontSize: 15,
     letterSpacing: 1.2,
     fontFamily: FONTS.bold,
   },

@@ -127,6 +127,19 @@ def get_current_user(
                 detail="User not found",
             )
 
+        # Suspended covers both admin suspension and self-deleted (anonymized)
+        # accounts: their previously-issued tokens must stop working — this is
+        # what "logs them out everywhere" after account deletion.
+        if user.status == UserStatus.SUSPENDED:
+            logger.warning(
+                "auth_failed_account_suspended",
+                user_id=user.id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This account has been deactivated",
+            )
+
         logger.debug(
             "auth_success",
             user_id=user.id,

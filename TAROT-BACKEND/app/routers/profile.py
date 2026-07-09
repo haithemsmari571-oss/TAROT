@@ -199,6 +199,55 @@ def change_user_password(
     )
 
 
+@router.delete("/me")
+def delete_my_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Self-service account deletion (soft delete + anonymize).
+
+    **Permissions:** Authenticated CLIENT accounts only — psychic/admin
+    accounts must go through support (deleting a reader would strand their
+    live marketplace presence).
+
+    **Blocked** while a reading is in progress (ACTIVE or PAUSED chat).
+
+    Anonymizes the user row (frees the email for reuse), removes push tokens,
+    forfeits any remaining Stardust, and suspends the account — which also
+    invalidates every existing access/refresh token via get_current_user.
+    Chat and transaction history are preserved under the anonymized identity.
+    """
+    from app.enums.chat_status import ChatStatus
+    from app.enums.role import Role
+    from app.models.chat import Chat
+    from app.services.users import soft_delete_own_account
+
+    if user.role != Role.USER:
+        raise HTTPException(
+            status_code=403,
+            detail="This account type can't be deleted from the app — please contact support.",
+        )
+
+    in_progress = (
+        db.query(Chat.id)
+        .filter(
+            Chat.user_id == user.id,
+            Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
+        )
+        .first()
+    )
+    if in_progress:
+        raise HTTPException(
+            status_code=409,
+            detail="You have a reading in progress. End it (or let it finish) before deleting your account.",
+        )
+
+    logger.info("account_delete_requested", user_id=user.id, email=user.email)
+    soft_delete_own_account(db, user)
+    return JSONResponse(content={"message": "Account deleted"}, status_code=200)
+
+
 @router.post("/me/push-token")
 def register_push_token(
     body: PushTokenReq,

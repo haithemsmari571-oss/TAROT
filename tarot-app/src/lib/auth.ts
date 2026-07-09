@@ -74,3 +74,13 @@ export async function forgotPassword(email: string): Promise<void> {
 export async function resendVerification(email: string): Promise<void> {
   await api.post("/api/auth/resend-verify-email", { email });
 }
+
+/**
+ * Permanently delete (soft-delete + anonymize) the signed-in account.
+ * Irreversible. The server blocks it with 409 while a reading is in progress
+ * and invalidates every token on success — callers must sign out locally
+ * right after. Remaining Stardust is forfeited (warn before calling).
+ */
+export async function deleteAccount(): Promise<void> {
+  await api.delete("/api/profile/me");
+}
