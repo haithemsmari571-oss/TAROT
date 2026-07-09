@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -9,6 +9,9 @@ class FavoritePsychic(Base):
     A client's favourited reader. One row per (user, psychic) pair — adding is
     idempotent (upsert), removing deletes the row. Kept as its own table (not a
     flag) so favourites survive independently of either profile's edits.
+
+    created_at/updated_at come from Base (which maps them onto EVERY model —
+    the table MUST have both columns or inserts fail with UndefinedColumn).
     """
 
     __tablename__ = "favorite_psychics"
@@ -21,9 +24,6 @@ class FavoritePsychic(Base):
         ForeignKey("users.id"), index=True, nullable=False
     )
     psychic_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[str] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     psychic: Mapped["User"] = relationship("User", foreign_keys=[psychic_id])

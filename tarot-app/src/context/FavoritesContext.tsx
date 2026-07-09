@@ -37,8 +37,14 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     try {
       setIds(new Set(await getFavorites()));
-    } catch {
-      // Keep the last known set on a transient failure.
+    } catch (err: any) {
+      // Keep the last known set on a transient failure — but never silently:
+      // an invisible catch here cost us a whole debugging round.
+      console.warn(
+        "[favorites] refresh failed:",
+        err?.response?.status ?? "(no response)",
+        JSON.stringify(err?.response?.data ?? err?.message ?? String(err))
+      );
     }
   }, [user]);
 
@@ -64,8 +70,15 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       try {
         if (wasFavorite) await removeFavorite(psychicId);
         else await addFavorite(psychicId);
-      } catch {
-        // Roll back quietly — the heart just returns to its previous state.
+      } catch (err: any) {
+        // Roll back — but log WHAT failed. "Network Error" with no status
+        // means the request never left the device; a status + body names the
+        // server's rejection.
+        console.warn(
+          `[favorites] toggle ${psychicId} failed:`,
+          err?.response?.status ?? "(no response)",
+          JSON.stringify(err?.response?.data ?? err?.message ?? String(err))
+        );
         setIds((cur) => {
           const next = new Set(cur);
           if (wasFavorite) next.add(psychicId);
