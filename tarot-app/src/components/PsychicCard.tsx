@@ -1,5 +1,6 @@
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import {
   COLORS,
   FONTS,
@@ -18,6 +19,8 @@ import {
   perMinute,
 } from "../utils/psychic";
 import { useCredit, formatPounds } from "../context/CreditContext";
+import { useFavorites } from "../context/FavoritesContext";
+import { useAuth } from "../context/AuthContext";
 
 export function PsychicCard({
   psychic,
@@ -40,6 +43,11 @@ export function PsychicCard({
       ? creditMinutes(creditBalance, psychic.price_per_second)
       : 0;
   const showFree = freeMinutes >= 1 && creditBalance != null;
+
+  // Heart only for signed-in users (favourites live on the account).
+  const { user } = useAuth();
+  const { isFavorite, toggle } = useFavorites();
+  const favorite = isFavorite(psychic.id);
 
   return (
     <TouchableOpacity
@@ -88,6 +96,22 @@ export function PsychicCard({
             <View style={styles.onlineDot} />
             <Text style={styles.onlineText}>ONLINE</Text>
           </View>
+        )}
+
+        {/* Favourite heart (bottom-right of the photo, above the fade) */}
+        {!!user && (
+          <TouchableOpacity
+            style={styles.heartBtn}
+            activeOpacity={0.7}
+            onPress={() => void toggle(psychic.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={favorite ? "heart" : "heart-outline"}
+              size={22}
+              color={favorite ? COLORS.accentGold : COLORS.textPrimary}
+            />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -234,6 +258,17 @@ const styles = StyleSheet.create({
     color: COLORS.online,
     fontWeight: "700",
     fontFamily: FONTS.semiBold,
+  },
+  heartBtn: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.photoScrim,
   },
   body: { padding: SPACING.lg },
   name: {

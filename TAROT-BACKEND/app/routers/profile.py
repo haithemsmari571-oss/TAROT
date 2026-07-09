@@ -199,6 +199,98 @@ def change_user_password(
     )
 
 
+@router.get("/me/favorites")
+def list_my_favorites(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    List the signed-in user's favourited psychics.
+
+    **Permissions:** Authenticated user
+
+    Returns just the ids — clients join them against the psychic list they
+    already load (photos, rates, online status come from there).
+    """
+    from app.models.favorite import FavoritePsychic
+
+    rows = (
+        db.query(FavoritePsychic.psychic_id)
+        .filter(FavoritePsychic.user_id == user.id)
+        .order_by(FavoritePsychic.created_at.desc())
+        .all()
+    )
+    return JSONResponse(
+        content={"psychic_ids": [r.psychic_id for r in rows]}, status_code=200
+    )
+
+
+@router.post("/me/favorites/{psychic_id}")
+def add_favorite(
+    psychic_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Favourite a psychic. Idempotent — re-adding an existing favourite is a
+    no-op success.
+
+    **Permissions:** Authenticated user
+    """
+    from app.enums.role import Role
+    from app.models.favorite import FavoritePsychic
+
+    psychic = (
+        db.query(User)
+        .filter(User.id == psychic_id, User.role == Role.PSYCHIC)
+        .first()
+    )
+    if not psychic:
+        raise HTTPException(status_code=404, detail="Psychic not found")
+
+    existing = (
+        db.query(FavoritePsychic)
+        .filter(
+            FavoritePsychic.user_id == user.id,
+            FavoritePsychic.psychic_id == psychic_id,
+        )
+        .first()
+    )
+    if not existing:
+        db.add(FavoritePsychic(user_id=user.id, psychic_id=psychic_id))
+        db.commit()
+        logger.info("favorite_added", user_id=user.id, psychic_id=psychic_id)
+    return JSONResponse(content={"message": "Favourited"}, status_code=200)
+
+
+@router.delete("/me/favorites/{psychic_id}")
+def remove_favorite(
+    psychic_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Unfavourite a psychic. Idempotent — removing a non-favourite is a no-op
+    success.
+
+    **Permissions:** Authenticated user
+    """
+    from app.models.favorite import FavoritePsychic
+
+    deleted = (
+        db.query(FavoritePsychic)
+        .filter(
+            FavoritePsychic.user_id == user.id,
+            FavoritePsychic.psychic_id == psychic_id,
+        )
+        .delete()
+    )
+    if deleted:
+        db.commit()
+        logger.info("favorite_removed", user_id=user.id, psychic_id=psychic_id)
+    return JSONResponse(content={"message": "Removed"}, status_code=200)
+
+
 @router.delete("/me")
 def delete_my_account(
     user: User = Depends(get_current_user),

@@ -25,6 +25,7 @@ from .daily_pull import DailyPull
 from .ai_prompt import AiPrompt, AiPromptVersion
 from .content_generation_run import ContentGenerationRun
 from .push_token import PushToken
+from .favorite import FavoritePsychic
 
 __all__ = [
     "User",
@@ -55,4 +56,5 @@ __all__ = [
     "AiPromptVersion",
     "ContentGenerationRun",
     "PushToken",
+    "FavoritePsychic",
 ]

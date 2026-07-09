@@ -37,6 +37,7 @@ import {
 } from "../../src/utils/psychic";
 import { useAuth } from "../../src/context/AuthContext";
 import { useCredit, formatPounds } from "../../src/context/CreditContext";
+import { useFavorites } from "../../src/context/FavoritesContext";
 import { requestChat } from "../../src/api/chat";
 import { getMyBalance } from "../../src/api/payment";
 import { openBillingPage } from "../../src/lib/billing";
@@ -69,6 +70,7 @@ export default function PsychicDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { hasCredit, creditBalance, refresh: refreshCredit } = useCredit();
+  const { isFavorite, toggle: toggleFavorite } = useFavorites();
   const [psychic, setPsychic] = useState<Psychic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -310,9 +312,27 @@ export default function PsychicDetailScreen() {
             pointerEvents="none"
           />
 
-          {/* Floating back button over the hero */}
+          {/* Floating back button + favourite heart over the hero */}
           <SafeAreaView style={styles.heroTopBar} edges={["top"]}>
             {BackButton}
+            {!!user && (
+              <TouchableOpacity
+                style={styles.heartBtn}
+                activeOpacity={0.7}
+                onPress={() => void toggleFavorite(psychic.id)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons
+                  name={isFavorite(psychic.id) ? "heart" : "heart-outline"}
+                  size={22}
+                  color={
+                    isFavorite(psychic.id)
+                      ? COLORS.accentGold
+                      : COLORS.textPrimary
+                  }
+                />
+              </TouchableOpacity>
+            )}
           </SafeAreaView>
 
           {/* Tier badge */}
@@ -518,8 +538,20 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.xs,
+  },
+  heartBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.photoScrim,
   },
   tierBadge: {
     position: "absolute",

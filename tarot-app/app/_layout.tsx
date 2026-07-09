@@ -14,6 +14,7 @@ import {
 import { COLORS, FONTS } from "../src/theme";
 import { AuthProvider } from "../src/context/AuthContext";
 import { CreditProvider } from "../src/context/CreditContext";
+import { FavoritesProvider } from "../src/context/FavoritesContext";
 import { CallProvider } from "../src/context/CallProvider";
 import WelcomeCelebration from "../src/components/WelcomeCelebration";
 import PushManager from "../src/components/PushManager";
@@ -56,6 +57,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <CreditProvider>
+      <FavoritesProvider>
       <CallProvider>
       <Tabs
         screenOptions={{
@@ -112,6 +114,7 @@ export default function RootLayout() {
           tap-to-open-chat routing. Inert in Expo Go. */}
       <PushManager />
       </CallProvider>
+      </FavoritesProvider>
       </CreditProvider>
     </AuthProvider>
   );

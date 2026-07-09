@@ -4,6 +4,7 @@ import {
   FlatList,
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
@@ -11,22 +12,38 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/api/client";
-import { COLORS, TYPOGRAPHY, SPACING } from "../../src/theme";
+import {
+  COLORS,
+  FONTS,
+  TYPOGRAPHY,
+  SPACING,
+  RADII,
+  TOUCH_TARGET,
+  alpha,
+} from "../../src/theme";
 import ScreenBackground, {
   BACKGROUNDS,
 } from "../../src/components/ScreenBackground";
 import { PsychicCard } from "../../src/components/PsychicCard";
 import { useCredit } from "../../src/context/CreditContext";
+import { useFavorites } from "../../src/context/FavoritesContext";
+import { useAuth } from "../../src/context/AuthContext";
 import type { Psychic } from "../../src/types";
 
 export default function PsychicsScreen() {
   const router = useRouter();
   const { refresh: refreshCredit } = useCredit();
+  const { user } = useAuth();
+  const { ids: favoriteIds, refresh: refreshFavorites } = useFavorites();
   const [psychics, setPsychics] = useState<Psychic[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "all" | "favorites" — favourites is a filter over the same list, so the
+  // online badge, tiers and free-credit CTAs all come along for free.
+  const [filter, setFilter] = useState<"all" | "favorites">("all");
 
   const load = useCallback(async () => {
     try {
@@ -51,7 +68,8 @@ export default function PsychicsScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshCredit();
-    }, [refreshCredit])
+      refreshFavorites();
+    }, [refreshCredit, refreshFavorites])
   );
 
   // Pull-to-refresh handler — also the "retry" path from the error state.
@@ -100,12 +118,17 @@ export default function PsychicsScreen() {
     );
   }
 
+  const showFavoritesOnly = filter === "favorites";
+  const shownPsychics = showFavoritesOnly
+    ? psychics.filter((p) => favoriteIds.has(p.id))
+    : psychics;
+
   return (
     <ScreenBackground source={BACKGROUNDS.moonlitBalcony} scrimOpacity={0.7}>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <StatusBar style="light" />
         <FlatList
-          data={psychics}
+          data={shownPsychics}
           keyExtractor={(p) => String(p.id)}
           contentContainerStyle={styles.list}
           refreshControl={refreshControl}
@@ -115,9 +138,77 @@ export default function PsychicsScreen() {
               onPress={() => router.push(`/psychics/${item.id}`)}
             />
           )}
-          ListHeaderComponent={<Text style={styles.header}>OUR PSYCHICS</Text>}
+          ListHeaderComponent={
+            <>
+              <Text style={styles.header}>OUR PSYCHICS</Text>
+              {/* Favourites filter — signed-in only (hearts live on the account) */}
+              {!!user && (
+                <View style={styles.filterRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      !showFavoritesOnly && styles.filterChipActive,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => setFilter("all")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterText,
+                        !showFavoritesOnly && styles.filterTextActive,
+                      ]}
+                    >
+                      ALL
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      showFavoritesOnly && styles.filterChipActive,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => setFilter("favorites")}
+                  >
+                    <Ionicons
+                      name="heart"
+                      size={13}
+                      color={
+                        showFavoritesOnly
+                          ? COLORS.accentGold
+                          : COLORS.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.filterText,
+                        showFavoritesOnly && styles.filterTextActive,
+                      ]}
+                    >
+                      FAVOURITES
+                      {favoriteIds.size > 0 ? ` (${favoriteIds.size})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          }
           ListEmptyComponent={
-            <Text style={styles.error}>No psychics available right now.</Text>
+            showFavoritesOnly ? (
+              <View style={styles.emptyFavs}>
+                <Ionicons
+                  name="heart-outline"
+                  size={36}
+                  color={COLORS.textFaint}
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <Text style={styles.error}>
+                  No favourites yet. Tap the heart on any reader to keep her
+                  close.
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.error}>No psychics available right now.</Text>
+            )
           }
         />
       </SafeAreaView>
@@ -144,8 +235,42 @@ const styles = StyleSheet.create({
   header: {
     ...TYPOGRAPHY.display,
     letterSpacing: 1,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     marginTop: SPACING.xs,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  filterChip: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+  },
+  filterChipActive: {
+    borderColor: alpha(COLORS.accentGold, 0.6),
+    backgroundColor: alpha(COLORS.accentGold, 0.08),
+  },
+  filterText: {
+    fontSize: 12,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.bold,
+  },
+  filterTextActive: {
+    color: COLORS.accentGold,
+  },
+  emptyFavs: {
+    alignItems: "center",
+    paddingVertical: 40,
+    paddingHorizontal: SPACING.xl,
   },
   error: {
     ...TYPOGRAPHY.body,
