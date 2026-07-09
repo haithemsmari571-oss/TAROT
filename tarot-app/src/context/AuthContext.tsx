@@ -35,6 +35,8 @@ interface AuthState {
     dateOfBirth: string // ISO "YYYY-MM-DD"
   ) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
+  /** Re-fetch the profile so edits (name, DOB) show up app-wide immediately. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -103,8 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      setUser(await fetchCurrentUser());
+    } catch {
+      // Keep the current user on a transient failure — never sign out here.
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, signIn, signUp, signOut, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

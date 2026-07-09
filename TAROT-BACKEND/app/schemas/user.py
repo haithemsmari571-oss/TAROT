@@ -31,8 +31,21 @@ class UserUpdate(BaseModel):
 class UserProfileUpdate(BaseModel):
     """Schema for users updating their own profile"""
 
+    username: Optional[str] = None
     bio: Optional[str] = None
     date_of_birth: Optional[date] = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Name must be at least 3 characters")
+        if len(v) > 50:
+            raise ValueError("Name must not exceed 50 characters")
+        return v
 
     @field_validator("bio")
     @classmethod

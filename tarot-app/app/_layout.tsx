@@ -96,6 +96,11 @@ export default function RootLayout() {
       <Tabs.Screen name="signup" options={{ href: null }} />
       {/* Reachable from the sign-in form; hidden from the tab bar. */}
       <Tabs.Screen name="forgot-password" options={{ href: null }} />
+      {/* Profile hub sub-screens; hidden from the tab bar. */}
+      <Tabs.Screen name="change-password" options={{ href: null }} />
+      <Tabs.Screen name="edit-details" options={{ href: null }} />
+      <Tabs.Screen name="reading-history" options={{ href: null }} />
+      <Tabs.Screen name="transactions" options={{ href: null }} />
       {/* Reachable via router.push("/stardust"); hidden from the tab bar. */}
       <Tabs.Screen name="stardust" options={{ href: null }} />
       {/* SANCTUARY games stack (oracle/compatibility/moon); hidden from the tab bar. */}

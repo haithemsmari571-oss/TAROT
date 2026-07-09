@@ -76,6 +76,33 @@ export async function resendVerification(email: string): Promise<void> {
 }
 
 /**
+ * Change the signed-in user's password. Wrong current password -> 400 with
+ * {message: "Current password is incorrect"}.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  await api.post("/api/profile/me/change-password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
+/**
+ * Update own profile fields (only username / bio / date_of_birth are accepted
+ * by the backend schema). date_of_birth is ISO "YYYY-MM-DD". Duplicate
+ * username -> 400/409 with a UserAlreadyExists message.
+ */
+export async function updateProfile(fields: {
+  username?: string;
+  date_of_birth?: string;
+  bio?: string;
+}): Promise<void> {
+  await api.patch("/api/profile/me", fields);
+}
+
+/**
  * Permanently delete (soft-delete + anonymize) the signed-in account.
  * Irreversible. The server blocks it with 409 while a reading is in progress
  * and invalidates every token on success — callers must sign out locally

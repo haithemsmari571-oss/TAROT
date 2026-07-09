@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -171,7 +172,11 @@ function Account() {
     <ScreenBackground scrimOpacity={0.6}>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <StatusBar style="light" />
-        <View style={styles.accountContent}>
+        <ScrollView
+          style={styles.safe}
+          contentContainerStyle={styles.accountContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.avatar}>
             <Ionicons name="person" size={40} color={COLORS.accent} />
           </View>
@@ -213,6 +218,53 @@ function Account() {
               color={COLORS.textSecondary}
             />
           </TouchableOpacity>
+
+          {/* Account hub menu — details, security, history, activity */}
+          <View style={styles.menu}>
+            {(
+              [
+                {
+                  icon: "person-outline",
+                  label: "Edit details",
+                  route: "/edit-details",
+                },
+                {
+                  icon: "lock-closed-outline",
+                  label: "Change password",
+                  route: "/change-password",
+                },
+                {
+                  icon: "moon-outline",
+                  label: "Your readings",
+                  route: "/reading-history",
+                },
+                {
+                  icon: "receipt-outline",
+                  label: "Stardust activity",
+                  route: "/transactions",
+                },
+              ] as const
+            ).map((row, i, all) => (
+              <TouchableOpacity
+                key={row.route}
+                style={[styles.menuRow, i < all.length - 1 && styles.menuRowDivider]}
+                activeOpacity={0.7}
+                onPress={() => router.push(row.route)}
+              >
+                <Ionicons
+                  name={row.icon}
+                  size={18}
+                  color={COLORS.textSecondary}
+                />
+                <Text style={styles.menuLabel}>{row.label}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={COLORS.textFaint}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
 
           {/* Notifications — quiet status/re-entry row (hidden in Expo Go) */}
           {pushStatus != null && pushStatus !== "unsupported" && (
@@ -279,7 +331,7 @@ function Account() {
               <Text style={styles.deleteLinkText}>Delete account</Text>
             )}
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         <BottomSheet visible={deleteStage !== null} onClose={closeDeleteSheet}>
           {deleteStage === "blocked" && (
@@ -626,6 +678,33 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     fontFamily: FONTS.bold,
   },
+  // Account hub menu
+  menu: {
+    width: "100%",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: RADII.lg,
+    marginBottom: SPACING.md,
+  },
+  menuRow: {
+    minHeight: TOUCH_TARGET,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  menuRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderStrong,
+  },
+  menuLabel: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.regular,
+  },
   // Delete-account entry + destructive confirm button
   deleteLink: {
     minHeight: TOUCH_TARGET,
@@ -687,12 +766,13 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontFamily: FONTS.semiBold,
   },
-  // Account view
+  // Account view (ScrollView content: the hub can outgrow small screens)
   accountContent: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
+    paddingVertical: SPACING.xl,
   },
   avatar: {
     width: 88,
