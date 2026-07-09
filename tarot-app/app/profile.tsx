@@ -25,6 +25,7 @@ import {
 } from "../src/theme";
 import ScreenBackground from "../src/components/ScreenBackground";
 import { useAuth } from "../src/context/AuthContext";
+import { resendVerification } from "../src/lib/auth";
 import { formatPounds } from "../src/context/CreditContext";
 import { useStardustBalance } from "../src/hooks/useStardustBalance";
 import {
@@ -206,6 +207,12 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Unverified-account state: sign-in succeeded credential-wise but the email
+  // was never verified. Shows the branded resend card instead of a raw error.
+  const [unverified, setUnverified] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">(
+    "idle"
+  );
 
   const onSubmit = async () => {
     if (!email.trim() || !password) {
@@ -214,17 +221,48 @@ function SignInForm() {
     }
     setSubmitting(true);
     setError(null);
+    setUnverified(false);
+    setResendState("idle");
     try {
       await signIn(email.trim(), password);
     } catch (err: any) {
-      const detail =
-        err?.response?.data?.detail ||
-        (err?.response?.status === 401 || err?.response?.status === 400
-          ? "Incorrect email or password."
-          : "Couldn't sign in. Check your connection and try again.");
-      setError(typeof detail === "string" ? detail : "Sign in failed.");
+      // DomainErrors arrive as {message}, plain HTTP errors as {detail}.
+      const serverMsg =
+        err?.response?.data?.message || err?.response?.data?.detail || "";
+      if (
+        typeof serverMsg === "string" &&
+        serverMsg.toLowerCase().includes("not verified")
+      ) {
+        setUnverified(true);
+      } else {
+        const fallback =
+          err?.response?.status === 401 || err?.response?.status === 400
+            ? "Incorrect email or password."
+            : "Couldn't sign in. Check your connection and try again.";
+        setError(
+          typeof serverMsg === "string" && serverMsg ? serverMsg : fallback
+        );
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onResend = async () => {
+    setResendState("sending");
+    setError(null);
+    try {
+      await resendVerification(email.trim());
+      setResendState("sent");
+    } catch (err: any) {
+      setResendState("idle");
+      const serverMsg =
+        err?.response?.data?.message || err?.response?.data?.detail;
+      setError(
+        typeof serverMsg === "string" && serverMsg
+          ? serverMsg
+          : "Couldn't send the email. Try again in a moment."
+      );
     }
   };
 
@@ -266,7 +304,56 @@ function SignInForm() {
               returnKeyType="go"
             />
 
+            <TouchableOpacity
+              style={styles.forgotLink}
+              activeOpacity={0.7}
+              onPress={() => router.push("/forgot-password")}
+              disabled={submitting}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+
             {!!error && <Text style={styles.error}>{error}</Text>}
+
+            {unverified && (
+              <View style={styles.verifyCard}>
+                <Text style={styles.verifyLabel}>VERIFY YOUR EMAIL</Text>
+                {resendState === "sent" ? (
+                  <Text style={styles.verifyText}>
+                    Sent ✦ Check your inbox at{" "}
+                    <Text style={styles.verifyEmphasis}>{email.trim()}</Text>{" "}
+                    (and the spam folder), then sign in again.
+                  </Text>
+                ) : (
+                  <>
+                    <Text style={styles.verifyText}>
+                      Your account isn't verified yet. Tap the link we emailed
+                      you when you signed up — or get a fresh one below.
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.verifyBtn,
+                        resendState === "sending" && styles.submitBtnDisabled,
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={onResend}
+                      disabled={resendState === "sending"}
+                    >
+                      {resendState === "sending" ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.accentGold}
+                        />
+                      ) : (
+                        <Text style={styles.verifyBtnText}>
+                          RESEND VERIFICATION EMAIL
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
@@ -336,6 +423,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.regular,
     marginBottom: SPACING.md,
+  },
+  forgotLink: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignSelf: "flex-end",
+    paddingHorizontal: SPACING.xs,
+    marginTop: -6,
+    marginBottom: SPACING.xs,
+  },
+  forgotText: {
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    fontFamily: FONTS.semiBold,
+  },
+  // Unverified-account resend card
+  verifyCard: {
+    backgroundColor: alpha(COLORS.accentGold, 0.07),
+    borderWidth: 1,
+    borderColor: alpha(COLORS.accentGold, 0.35),
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  verifyLabel: {
+    fontSize: 12,
+    letterSpacing: 2,
+    color: COLORS.accentGold,
+    fontFamily: FONTS.bold,
+    marginBottom: SPACING.xs,
+  },
+  verifyText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.regular,
+  },
+  verifyEmphasis: {
+    fontFamily: FONTS.semiBold,
+    color: COLORS.accentGold,
+  },
+  verifyBtn: {
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: SPACING.md,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: alpha(COLORS.accentGold, 0.6),
+  },
+  verifyBtnText: {
+    color: COLORS.accentGold,
+    fontSize: 14,
+    letterSpacing: 1.2,
+    fontFamily: FONTS.bold,
   },
   submitBtn: {
     minHeight: TOUCH_TARGET,

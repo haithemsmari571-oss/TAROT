@@ -56,3 +56,21 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
   const res = await api.get("/api/profile/me");
   return res.data;
 }
+
+/**
+ * Request a password-reset email. The backend answers with the same generic
+ * message whether or not the email exists (never leaks registered addresses),
+ * and the emailed link expires after 5 minutes.
+ */
+export async function forgotPassword(email: string): Promise<void> {
+  await api.post("/api/auth/forgot-password", { email });
+}
+
+/**
+ * Re-send the account verification email. Unlike forgot-password this DOES
+ * error for unknown emails (404) and already-verified accounts (400) — the
+ * error body carries `message`, not `detail`.
+ */
+export async function resendVerification(email: string): Promise<void> {
+  await api.post("/api/auth/resend-verify-email", { email });
+}
