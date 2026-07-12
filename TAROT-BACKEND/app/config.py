@@ -76,6 +76,20 @@ class AppSettings(BaseSettings):
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512
 
+    # ── Delivery execution (typing simulation + pacing between messages) ──
+    # Typing-indicator duration: ~ms per character, with ±randomness, clamped so
+    # a long line never produces an absurd wait.
+    READING_TYPING_MS_PER_CHAR: int = 35
+    READING_TYPING_MIN_MS: int = 1500
+    READING_TYPING_MAX_MS: int = 12000
+    # Gap between consecutive sends, by the item's pacing flag (min/max ms; a
+    # value is drawn uniformly in range). send_now is a single minimal gap.
+    READING_SEND_NOW_GAP_MS: int = 400
+    READING_PAUSE_SHORT_MIN_MS: int = 2000
+    READING_PAUSE_SHORT_MAX_MS: int = 5000
+    READING_PAUSE_LONG_MIN_MS: int = 6000
+    READING_PAUSE_LONG_MAX_MS: int = 15000
+
     BILLING_TASK_MAX_RETRIES: int = 3
     BILLING_TASK_RETRY_DELAY_SECONDS: int = 5
 

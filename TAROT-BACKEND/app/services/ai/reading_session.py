@@ -32,6 +32,9 @@ class ReadingSessionState:
     client_response_lengths: List[int] = field(default_factory=list)  # chars per client msg
     client_response_times: List[float] = field(default_factory=list)  # reply latency, seconds
     sabri_correction_count: int = 0
+    # True while delivery is parked at a wait_for_response barrier — a reconnect
+    # must NOT cross it; only a new client message (which re-plans) may.
+    waiting_for_response: bool = False
 
 
 def create_session_state(

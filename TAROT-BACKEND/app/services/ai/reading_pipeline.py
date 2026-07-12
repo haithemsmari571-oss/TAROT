@@ -187,7 +187,7 @@ async def run_reading_pipeline(
         return None
 
     from app.database.client import SessionLocal
-    from app.services.ai import reading_assistant, sabri_check
+    from app.services.ai import reading_assistant, reading_executor, sabri_check
 
     db = SessionLocal()
     try:
@@ -198,9 +198,11 @@ async def run_reading_pipeline(
             return None
 
         session_id = f"chat:{chat_id}"
-        # Serialize per chat so two overlapping client messages don't corrupt the
-        # shared session state (they process in arrival order).
+        # Cancel any in-flight delivery, re-plan, and relaunch atomically under the
+        # per-chat lock, so no delivery ever runs against a queue being reset (and
+        # overlapping client messages process in arrival order).
         async with _session_lock(session_id):
+            await reading_executor.cancel_delivery(chat_id)
             store = reading_session.get_session_store()
             client_file = reading_assistant.build_client_file(db, chat.user_id)
             state = store.get(session_id)
@@ -235,7 +237,11 @@ async def run_reading_pipeline(
                 valentina_call=valentina_call,
                 max_corrections=settings.SABRI_MAX_ATTEMPTS,
             )
+            # A new plan means the client responded — leave any wait barrier.
+            state.waiting_for_response = False
             store.put(state)
+            # Play the new plan out in real time (background task).
+            reading_executor.start_delivery(chat_id, state)
             logger.info(
                 "reading_pipeline_plan_stored", chat_id=chat_id, queue=len(plan.queue)
             )

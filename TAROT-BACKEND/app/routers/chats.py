@@ -1538,6 +1538,16 @@ async def websocket_endpoint(
                 "mark_read_on_open_failed", chat_id=chat_id, error=str(_e)
             )
 
+        # 4.6. Resume an AI delivery left unfinished by a prior disconnect. Client
+        # only (the client is the one who needs to catch up); best-effort.
+        if user.id == chat.user_id:
+            try:
+                from app.services.ai.reading_executor import resume_delivery
+
+                await resume_delivery(int(chat_id))
+            except Exception as _re:  # noqa: BLE001
+                logger.warning("delivery_resume_failed", chat_id=chat_id, error=str(_re))
+
         # 5. Initialize event dispatcher
         from app.services.chat.event_dispatcher import EventDispatcher
 
@@ -1618,6 +1628,19 @@ async def websocket_endpoint(
         await websocket.close(code=4001, reason="Auth timeout")
     except WebSocketDisconnect:
         manager.disconnect(websocket, chat_id)
+        # Freeze any in-flight AI delivery only when the CLIENT has no remaining
+        # connection (multi-tab safe), so their place is preserved for reconnect.
+        # A psychic/admin drop never stops delivery. disconnect() already ran, so
+        # users_in_chat reflects the post-removal state.
+        try:
+            if user.id == chat.user_id and chat.user_id not in manager.users_in_chat(
+                str(chat_id)
+            ):
+                from app.services.ai.reading_executor import cancel_delivery
+
+                await cancel_delivery(int(chat_id))
+        except Exception:  # noqa: BLE001
+            pass
     except jwt.PyJWTError:
         await websocket.close(code=4001, reason="Invalid token")
     except ValueError as e:
