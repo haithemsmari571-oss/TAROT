@@ -1,151 +1,181 @@
-"""The AI reading pipeline — wires Valentina (draft) + Sabri (check) + delivery.
+"""Reading pipeline orchestrator — runs the Sabri↔Valentina loop and produces a
+delivery plan.
 
-Called (fire-and-forget) when a client message arrives on an ACTIVE chat. The
-per-conversation `response_mode` decides what happens:
+``process_client_message`` is pure and synchronous with injectable sabri/valentina
+call functions, so it is unit-tested with stubbed models. The async entry wires
+the real agents, session state and client-file load around it.
 
-- HUMAN  → nothing automated.
-- HYBRID → Valentina drafts, Sabri checks, but the result ALWAYS goes to the
-           admin panel for review/edit/send (never auto-sent), pass or fail.
-- SABRI  → the full loop: Valentina drafts, Sabri checks; on a clean pass the
-           reply is auto-sent as the reader. If Sabri still fails after
-           SABRI_MAX_ATTEMPTS, the draft falls back to the admin panel.
-
-The core loop (`run_pipeline_core`) is pure and synchronous so it can be unit
-tested with fake draft/check functions; the async wrapper adds the model calls,
-DB session and WebSocket delivery around it.
+Scope note: this phase PRODUCES and stores the delivery plan (queue + held-back
+buffer). Delivering it to the client with typing simulation and human pacing is
+the next (real-time execution) phase.
 """
 
 import asyncio
-import json
-from typing import Callable, Optional
-
-from sqlalchemy.orm import Session
+from datetime import datetime
+from typing import Callable, Dict, Optional
 
 from app.config import get_app_settings
-from app.enums.ai_draft_status import AiDraftStatus
 from app.enums.chat_status import ChatStatus
 from app.enums.response_mode import ResponseMode
 from app.logging_config import get_logger
-from app.models.ai_draft import AiDraft
 from app.models.chat import Chat
+from app.services.ai import reading_session
+from app.services.ai.reading_contracts import (
+    DeliveryItem,
+    DeliveryPlan,
+    ValentinaRequest,
+)
+from app.services.ai.reading_llm import FALLBACK_MESSAGE, LLMCallError
+from app.services.ai.reading_session import compute_metadata, record_client_message
 
 logger = get_logger(__name__)
 
+# Serialize pipeline runs per session so overlapping client messages for the same
+# chat mutate the shared session state one at a time (in arrival order).
+_session_locks: Dict[str, asyncio.Lock] = {}
 
-def _create_ai_draft(
-    db: Session,
-    chat: Chat,
-    client_message_id: Optional[int],
-    draft: str,
-    flags: list,
-    passed: bool,
-    attempts: int,
-    mode: ResponseMode,
-) -> AiDraft:
-    row = AiDraft(
-        chat_id=chat.id,
-        client_message_id=client_message_id,
-        mode=mode,
-        draft_text=draft,
-        sabri_flags=json.dumps(flags or []),
-        sabri_passed=passed,
-        attempts=attempts,
-        status=AiDraftStatus.PENDING,
+
+def _session_lock(session_id: str) -> asyncio.Lock:
+    lock = _session_locks.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _session_locks[session_id] = lock
+    return lock
+
+
+# ── fallbacks (always yield a deliverable plan, never raw model output) ───────
+def _fallback_plan(message: str = FALLBACK_MESSAGE) -> DeliveryPlan:
+    return DeliveryPlan(
+        queue=[DeliveryItem(message=message, pacing="send_now", tier="grounding")]
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
 
 
-def run_pipeline_core(
-    db: Session,
-    chat: Chat,
-    client_message_id: Optional[int],
+def _fallback_from_valentina(valentina_output: Optional[str]) -> DeliveryPlan:
+    """Last resort when Sabri won't deliver even after the correction cap: build a
+    plain, paced delivery from Valentina's raw output (first few non-empty lines)."""
+    text = (valentina_output or "").strip()
+    if not text:
+        return _fallback_plan()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    items = [DeliveryItem(message=ln, pacing="pause_short", tier="depth") for ln in lines[:8]]
+    return DeliveryPlan(queue=items) if items else _fallback_plan()
+
+
+# ── held-back buffer management ──────────────────────────────────────────────
+def _merge_buffer(existing: list, plan: DeliveryPlan) -> list:
+    """New buffer = existing items NOT just delivered, plus the plan's new
+    hold_back items (deduped by text). Deploying a buffered line (it appears in
+    the queue) removes it from the buffer, per spec."""
+    delivered = {i.message.strip() for i in plan.queue}
+    kept = [h for h in existing if h.text.strip() and h.text.strip() not in delivered]
+    seen = {h.text.strip() for h in kept}
+    for h in plan.hold_back:
+        key = h.text.strip()
+        if key and key not in seen:
+            kept.append(h)
+            seen.add(key)
+    return kept
+
+
+def _apply_delivery_to_state(state, plan: DeliveryPlan) -> None:
+    state.held_back_buffer = _merge_buffer(state.held_back_buffer, plan)
+    state.delivery_queue = list(plan.queue)
+    state.queue_position = 0
+
+
+# ── the orchestration loop (pure, testable) ──────────────────────────────────
+def process_client_message(
+    state,
     client_message: str,
     *,
-    mode: ResponseMode,
-    draft_fn: Callable[[Optional[dict]], str],
-    check_fn: Callable[[str], dict],
-    max_attempts: int,
-) -> dict:
-    """Run the draft→check→redraft loop and decide the outcome.
+    sabri_call: Callable[[dict], object],
+    valentina_call: Callable[[ValentinaRequest], str],
+    max_corrections: int = 3,
+    now: Optional[datetime] = None,
+    build_sabri_input: Optional[Callable] = None,
+) -> DeliveryPlan:
+    """Run the Sabri↔Valentina loop and return a delivery plan; update the
+    session (records the client message, refreshes buffer + queue).
 
-    draft_fn(feedback) -> draft text (feedback is None on the first attempt, else
-    {"previous_draft", "flags", "reason"}).
-    check_fn(draft) -> {"passed": bool, "flags": [str], "reason": str}.
+    sabri_call(input_dict) -> DeliveryPlan | ValentinaRequest
+    valentina_call(ValentinaRequest) -> raw reading text
 
-    Returns one of:
-      {"outcome": "skipped"}                      (HUMAN mode)
-      {"outcome": "auto_send", "content", ...}    (SABRI clean pass — caller sends)
-      {"outcome": "pending_review", "draft_id", "content", ...}
-    """
-    if mode == ResponseMode.HUMAN:
-        return {"outcome": "skipped", "attempts": 0}
+    Valentina is regenerated at most ``max_corrections`` times. When the cap is
+    reached, Sabri is asked to deliver from the best available output; if it still
+    refuses, an app-side fallback guarantees a deliverable plan."""
+    from app.services.ai.sabri_check import build_sabri_input as _default_build_input
 
-    attempts = 0
-    feedback: Optional[dict] = None
-    last_draft = ""
-    last_flags: list = []
-    passed = False
+    build_input = build_sabri_input or _default_build_input
+    now = now or datetime.now()
+    record_client_message(state, client_message, now)
 
-    while attempts < max_attempts:
-        attempts += 1
-        last_draft = draft_fn(feedback)
-        verdict = check_fn(last_draft)
-        last_flags = verdict.get("flags") or []
-        if verdict.get("passed"):
-            passed = True
-            break
-        feedback = {
-            "previous_draft": last_draft,
-            "flags": last_flags,
-            "reason": verdict.get("reason", ""),
-        }
+    corrections = 0
+    valentina_output: Optional[str] = None
+    decision = None
+    try:
+        while True:
+            sabri_input = build_input(
+                client_message=client_message,
+                chat_transcript=state.chat_transcript,
+                held_back_buffer=state.held_back_buffer,
+                client_file=state.client_file,
+                valentina_output=valentina_output,
+                session_metadata=compute_metadata(state, now),
+                force_deliver=(corrections >= max_corrections),
+            )
+            decision = sabri_call(sabri_input)
 
-    # HYBRID: always to the admin panel (never auto-send), pass or fail.
-    if mode == ResponseMode.HYBRID:
-        row = _create_ai_draft(
-            db, chat, client_message_id, last_draft, last_flags, passed, attempts, mode
+            if isinstance(decision, DeliveryPlan):
+                break
+
+            # decision is a ValentinaRequest.
+            if corrections >= max_corrections:
+                # Sabri still refuses to deliver even when forced → app fallback.
+                decision = _fallback_from_valentina(valentina_output)
+                break
+
+            valentina_output = valentina_call(decision)
+            corrections += 1
+    except LLMCallError as e:
+        logger.error("reading_pipeline_llm_failed", error=str(e))
+        decision = _fallback_plan()
+
+    # A delivered plan with nothing to send now (e.g. Sabri held everything back)
+    # still needs a line for the client — add a fallback while keeping the buffer.
+    if isinstance(decision, DeliveryPlan) and not decision.queue:
+        fb = _fallback_from_valentina(valentina_output)
+        decision = DeliveryPlan(
+            queue=fb.queue,
+            hold_back=decision.hold_back,
+            session_notes=decision.session_notes,
         )
-        return {
-            "outcome": "pending_review",
-            "draft_id": row.id,
-            "content": last_draft,
-            "attempts": attempts,
-            "passed": passed,
-            "flags": last_flags,
-        }
 
-    # SABRI: auto-send on a clean pass.
-    if passed:
-        return {
-            "outcome": "auto_send",
-            "content": last_draft,
-            "attempts": attempts,
-            "passed": True,
-            "flags": [],
-        }
-
-    # SABRI but still failing after the cap → fall back to manual review.
-    row = _create_ai_draft(
-        db, chat, client_message_id, last_draft, last_flags, passed, attempts, mode
+    state.sabri_correction_count += corrections
+    _apply_delivery_to_state(state, decision)
+    logger.info(
+        "delivery_plan_ready",
+        session_id=state.session_id,
+        queue=len(decision.queue),
+        held_back=len(state.held_back_buffer),
+        corrections=corrections,
     )
-    return {
-        "outcome": "pending_review",
-        "draft_id": row.id,
-        "content": last_draft,
-        "attempts": attempts,
-        "passed": False,
-        "flags": last_flags,
-    }
+    return decision
+
+
+# ── live entry (async) ───────────────────────────────────────────────────────
+def _sabri_instructions(req: ValentinaRequest) -> str:
+    parts = [req.instructions, req.correction_notes]
+    if req.flags:
+        parts.append("Flags: " + ", ".join(req.flags))
+    return "\n".join(p for p in parts if p)
 
 
 async def run_reading_pipeline(
     chat_id: int, client_message_id: Optional[int], client_message: str
-) -> Optional[dict]:
-    """Async entry point (background task). Loads the chat, runs the core loop
-    (model calls off the event loop), and auto-sends on a clean SABRI pass."""
+) -> Optional[DeliveryPlan]:
+    """Load the chat + client file + session, run the loop off the event loop, and
+    store the produced delivery plan on the session. (Timed delivery to the client
+    is the next real-time phase.)"""
     settings = get_app_settings()
     if not settings.AI_DRAFTING_ENABLED:
         return None
@@ -162,49 +192,54 @@ async def run_reading_pipeline(
     db = SessionLocal()
     try:
         chat = db.query(Chat).filter(Chat.id == chat_id).first()
-        if not chat:
+        if not chat or chat.status != ChatStatus.ACTIVE:
             return None
-        if chat.status != ChatStatus.ACTIVE:
-            logger.info(
-                "reading_pipeline_skipped_not_active", chat_id=chat_id, status=chat.status.value
+        if chat.response_mode == ResponseMode.HUMAN:
+            return None
+
+        session_id = f"chat:{chat_id}"
+        # Serialize per chat so two overlapping client messages don't corrupt the
+        # shared session state (they process in arrival order).
+        async with _session_lock(session_id):
+            store = reading_session.get_session_store()
+            client_file = reading_assistant.build_client_file(db, chat.user_id)
+            state = store.get(session_id)
+            if state is None:
+                state = reading_session.create_session_state(
+                    session_id,
+                    client_id=chat.user_id,
+                    chat_id=chat_id,
+                    client_file=client_file,
+                    is_first_session=(client_file is None),
+                )
+                store.put(state)
+            else:
+                state.client_file = client_file
+
+            def sabri_call(inp: dict):
+                return sabri_check.call_sabri(inp)
+
+            def valentina_call(req: ValentinaRequest) -> str:
+                return reading_assistant.call_valentina(
+                    client_message=client_message,
+                    client_file=state.client_file,
+                    sabri_instructions=_sabri_instructions(req),
+                    chat_transcript=state.chat_transcript,
+                )
+
+            plan = await asyncio.to_thread(
+                process_client_message,
+                state,
+                client_message,
+                sabri_call=sabri_call,
+                valentina_call=valentina_call,
+                max_corrections=settings.SABRI_MAX_ATTEMPTS,
             )
-            return None
-        mode = chat.response_mode
-        if mode == ResponseMode.HUMAN:
-            return None
-
-        def draft_fn(feedback: Optional[dict]) -> str:
-            return reading_assistant.generate_draft(db, chat, client_message, feedback)
-
-        def check_fn(draft: str) -> dict:
-            return sabri_check.check_draft(db, chat, draft, client_message)
-
-        result = await asyncio.to_thread(
-            run_pipeline_core,
-            db,
-            chat,
-            client_message_id,
-            client_message,
-            mode=mode,
-            draft_fn=draft_fn,
-            check_fn=check_fn,
-            max_attempts=settings.SABRI_MAX_ATTEMPTS,
-        )
-
-        logger.info(
-            "reading_pipeline_result",
-            chat_id=chat_id,
-            mode=mode.value,
-            outcome=result.get("outcome"),
-            attempts=result.get("attempts"),
-            passed=result.get("passed"),
-        )
-
-        if result.get("outcome") == "auto_send":
-            from app.services.chats import broadcast_ai_message
-
-            await broadcast_ai_message(db, chat, result["content"])
-        return result
+            store.put(state)
+            logger.info(
+                "reading_pipeline_plan_stored", chat_id=chat_id, queue=len(plan.queue)
+            )
+            return plan
     except Exception as e:  # noqa: BLE001 — a pipeline error must never crash the chat
         logger.error("reading_pipeline_error", chat_id=chat_id, error=str(e), exc_info=True)
         return None
@@ -224,6 +259,4 @@ def maybe_launch_pipeline(
             run_reading_pipeline(chat_id, client_message_id, client_message)
         )
     except RuntimeError:
-        # No running loop (shouldn't happen inside the WS handler). Skip rather
-        # than block; the reply just stays manual for this message.
         logger.warning("reading_pipeline_no_event_loop", chat_id=chat_id)

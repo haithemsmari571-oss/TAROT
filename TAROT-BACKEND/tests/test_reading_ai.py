@@ -1,59 +1,280 @@
-"""End-to-end tests for the AI reading pipeline (Valentina / Sabri / Atlas).
+"""Backend-core tests for the Valentina/Sabri delivery pipeline.
 
-The model calls are stubbed, so these exercise the real pipeline LOGIC — mode
-routing, the Sabri redraft loop (pass / fail / fallback), auto-send tagging,
-Atlas summarisation, and the master switch — deterministically and offline.
+Model calls are stubbed, so these exercise the real orchestration LOGIC —
+Sabri-output parsing (both JSON shapes), the correction loop (cap = 3), the
+held-back buffer, session metadata, client-file load, retries, and the Atlas
+session-end summary — deterministically and offline.
 """
 
-import asyncio
+from datetime import datetime, timedelta
 
 import pytest
 
-from app.enums.ai_draft_status import AiDraftStatus
 from app.enums.author_type import AuthorType
 from app.enums.chat_status import ChatStatus
 from app.enums.note_source import NoteSource
 from app.enums.response_mode import ResponseMode
 from app.enums.role import Role
-from app.models import AiDraft, Chat, ClientNote, Message, User
-from app.services.ai.reading_pipeline import run_pipeline_core
+from app.models import Chat, ClientNote, Message, User
+from app.services.ai.reading_contracts import (
+    DeliveryItem,
+    DeliveryPlan,
+    HeldItem,
+    SabriParseError,
+    ValentinaRequest,
+    parse_sabri_output,
+)
+from app.services.ai.reading_llm import FALLBACK_MESSAGE, LLMCallError, run_with_retries
+from app.services.ai.reading_pipeline import process_client_message
+from app.services.ai.reading_session import (
+    _length_bucket,
+    _speed_bucket,
+    compute_metadata,
+    create_session_state,
+    record_client_message,
+    record_sent_message,
+)
 from app.services.chats import persist_ai_message
 
+T0 = datetime(2026, 7, 12, 12, 0, 0)
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-def _make_chat(db, make_user, mode=ResponseMode.SABRI, status=ChatStatus.ACTIVE):
-    client = make_user(balance=100, role=Role.USER)
-    psychic = make_user(role=Role.PSYCHIC)
-    chat = Chat(
-        user_id=client.id,
-        psychic_id=psychic.id,
-        status=status,
-        response_mode=mode,
+
+# ── Sabri output parsing (consumes the new delivery-queue / valentina_request) ─
+def test_parse_valentina_request():
+    d = parse_sabri_output(
+        '{"action":"valentina_request","type":"full_reading",'
+        '"instructions":"run pre-read","flags":["CORE","HIM-DEEP"],'
+        '"client_message":"hi"}'
     )
+    assert isinstance(d, ValentinaRequest)
+    assert d.type == "full_reading"
+    assert d.instructions == "run pre-read"
+    assert d.flags == ["CORE", "HIM-DEEP"]
+
+
+def test_parse_delivery_flat_array_splits_hold_back():
+    d = parse_sabri_output(
+        '[{"message":"line one","action":"send_now","tier":"provocation"},'
+        '{"text":"held line","action":"hold_back","hold_trigger":"if she mentions X"}]'
+    )
+    assert isinstance(d, DeliveryPlan)
+    assert [i.message for i in d.queue] == ["line one"]
+    assert d.queue[0].pacing == "send_now"
+    assert len(d.hold_back) == 1
+    assert d.hold_back[0].text == "held line"
+    assert d.hold_back[0].hold_trigger == "if she mentions X"
+
+
+def test_parse_delivery_object_wrapper():
+    d = parse_sabri_output(
+        '{"action":"deliver","queue":[{"message":"a","pacing":"pause_long"}],'
+        '"hold_back":[{"text":"b","hold_trigger":"if Y"}],"session_notes":"noted"}'
+    )
+    assert isinstance(d, DeliveryPlan)
+    assert d.queue[0].message == "a" and d.queue[0].pacing == "pause_long"
+    assert d.hold_back[0].text == "b"
+    assert d.session_notes == "noted"
+
+
+def test_parse_tolerates_code_fences_and_single_item():
+    d = parse_sabri_output('```json\n{"action":"valentina_request","instructions":"x"}\n```')
+    assert isinstance(d, ValentinaRequest)
+    d2 = parse_sabri_output('{"message":"just one","action":"send_now"}')
+    assert isinstance(d2, DeliveryPlan) and d2.queue[0].message == "just one"
+
+
+def test_parse_invalid_pacing_defaults_and_bad_output_raises():
+    d = parse_sabri_output('[{"message":"m","action":"WEIRD"}]')
+    assert d.queue[0].pacing == "send_now"
+    with pytest.raises(SabriParseError):
+        parse_sabri_output("this is not json at all")
+
+
+# ── session state + metadata ─────────────────────────────────────────────────
+def test_record_and_metadata_buckets():
+    s = create_session_state("sess1", client_id=1, chat_id=1, is_first_session=True, now=T0)
+    # client replies 10s after session start -> fast; 12 chars -> short
+    record_client_message(s, "hey there!!!", now=T0 + timedelta(seconds=10))
+    record_sent_message(s, "a reader reply", now=T0 + timedelta(seconds=12))
+    meta = compute_metadata(s, now=T0 + timedelta(seconds=60))
+    assert meta["is_first_session"] is True
+    assert meta["messages_sent_count"] == 1
+    assert meta["client_avg_response_length"] == "short"
+    assert meta["client_response_speed"] == "fast"
+    assert s.chat_transcript[0]["role"] == "client"
+    assert s.chat_transcript[1]["role"] == "logan"
+
+
+def test_metadata_bucket_boundaries():
+    assert _length_bucket(19) == "short"
+    assert _length_bucket(20) == "medium"
+    assert _length_bucket(100) == "medium"
+    assert _length_bucket(101) == "long"
+    assert _speed_bucket(29) == "fast"
+    assert _speed_bucket(120) == "normal"
+    assert _speed_bucket(300) == "slow"
+    assert _speed_bucket(301) == "silent"
+    assert _speed_bucket(None) == "silent"
+
+
+# ── LLM retries ──────────────────────────────────────────────────────────────
+def test_retries_succeed_then_give_up():
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise ValueError("boom")
+        return "ok"
+
+    assert run_with_retries(flaky, delays=(0, 0, 0), sleep=lambda _s: None) == "ok"
+    assert calls["n"] == 3
+
+    with pytest.raises(LLMCallError):
+        run_with_retries(lambda: (_ for _ in ()).throw(ValueError("x")),
+                         delays=(0, 0), sleep=lambda _s: None)
+
+
+# ── orchestrator: the Sabri<->Valentina loop ─────────────────────────────────
+class _Sabri:
+    """Returns scripted decisions in order; records the inputs it received."""
+
+    def __init__(self, decisions):
+        self.decisions = list(decisions)
+        self.inputs = []
+
+    def __call__(self, inp):
+        self.inputs.append(inp)
+        return self.decisions[min(len(self.inputs) - 1, len(self.decisions) - 1)]
+
+
+def _new_state(**kw):
+    return create_session_state("s", client_id=1, chat_id=1, client_file="FILE", now=T0, **kw)
+
+
+def test_sabri_delivers_immediately_no_valentina():
+    plan = DeliveryPlan(queue=[DeliveryItem(message="from buffer", pacing="send_now")])
+    sabri = _Sabri([plan])
+    vcalls = {"n": 0}
+
+    def valentina(_req):
+        vcalls["n"] += 1
+        return "unused"
+
+    state = _new_state()
+    out = process_client_message(state, "hi", sabri_call=sabri, valentina_call=valentina,
+                                 max_corrections=3, now=T0)
+    assert out is plan
+    assert vcalls["n"] == 0
+    assert state.sabri_correction_count == 0
+    assert state.chat_transcript[-1]["content"] == "hi"  # client msg recorded
+
+
+def test_request_then_approve_calls_valentina_once():
+    delivery = DeliveryPlan(queue=[DeliveryItem(message="approved reply", pacing="send_now")])
+    sabri = _Sabri([ValentinaRequest(instructions="generate"), delivery])
+    vcalls = []
+
+    def valentina(req):
+        vcalls.append(req)
+        return "reading text"
+
+    state = _new_state()
+    out = process_client_message(state, "will he come back?", sabri_call=sabri,
+                                 valentina_call=valentina, max_corrections=3, now=T0)
+    assert out is delivery
+    assert len(vcalls) == 1
+    assert state.sabri_correction_count == 1
+
+
+def test_correction_loop_caps_at_three_then_falls_back():
+    # Sabri always asks for another Valentina round (never delivers).
+    sabri = _Sabri([ValentinaRequest(instructions="again")] * 6)
+    vcalls = {"n": 0}
+
+    def valentina(_req):
+        vcalls["n"] += 1
+        return f"reading {vcalls['n']}"
+
+    state = _new_state()
+    out = process_client_message(state, "msg", sabri_call=sabri, valentina_call=valentina,
+                                 max_corrections=3, now=T0)
+    # Valentina regenerated at most 3 times; Sabri called 4 times (3 + the forced round).
+    assert vcalls["n"] == 3
+    assert len(sabri.inputs) == 4
+    assert sabri.inputs[-1].get("max_corrections_reached") is True
+    # app-side fallback delivery from the last reading -> deliverable plan exists
+    assert isinstance(out, DeliveryPlan) and len(out.queue) >= 1
+    assert state.sabri_correction_count == 3
+
+
+def test_forced_round_can_still_deliver():
+    delivery = DeliveryPlan(queue=[DeliveryItem(message="final", pacing="send_now")])
+    # request x3, then on the forced 4th call Sabri delivers
+    sabri = _Sabri([ValentinaRequest()] * 3 + [delivery])
+    state = _new_state()
+    out = process_client_message(state, "m", sabri_call=sabri,
+                                 valentina_call=lambda _r: "x", max_corrections=3, now=T0)
+    assert out is delivery
+    assert sabri.inputs[-1].get("max_corrections_reached") is True
+
+
+def test_llm_failure_yields_fallback_message():
+    def sabri(_inp):
+        raise LLMCallError("down")
+
+    state = _new_state()
+    out = process_client_message(state, "m", sabri_call=sabri,
+                                 valentina_call=lambda _r: "x", max_corrections=3, now=T0)
+    assert isinstance(out, DeliveryPlan)
+    assert out.queue[0].message == FALLBACK_MESSAGE
+
+
+def test_held_back_buffer_merge_deploys_and_adds():
+    delivery = DeliveryPlan(
+        queue=[DeliveryItem(message="old line", pacing="send_now")],  # deploys the buffered line
+        hold_back=[HeldItem(text="new held", hold_trigger="if Z")],
+    )
+    sabri = _Sabri([delivery])
+    state = _new_state()
+    state.held_back_buffer = [HeldItem(text="old line"), HeldItem(text="still held")]
+    process_client_message(state, "m", sabri_call=sabri, valentina_call=lambda _r: "x",
+                           max_corrections=3, now=T0)
+    texts = {h.text for h in state.held_back_buffer}
+    assert "old line" not in texts        # deployed -> removed
+    assert "still held" in texts          # untouched -> kept
+    assert "new held" in texts            # newly held -> added
+    assert state.delivery_queue and state.delivery_queue[0].message == "old line"
+
+
+# ── client-file (dossier) load ───────────────────────────────────────────────
+def test_client_file_none_for_new_client_and_text_for_returning(db, make_user):
+    from app.services.ai.reading_assistant import build_client_file
+
+    client = make_user(role=Role.USER)
+    assert build_client_file(db, client.id) is None  # no history -> no file
+
+    db.add(ClientNote(client_id=client.id, note="cares about her ex", source=NoteSource.HUMAN))
+    db.commit()
+    text = build_client_file(db, client.id)
+    assert text is not None and "ex" in text
+
+
+# ── schema defaults (unchanged, still valid) ─────────────────────────────────
+def test_schema_defaults(db, make_user):
+    client = make_user(role=Role.USER)
+    psychic = make_user(role=Role.PSYCHIC)
+    chat = Chat(user_id=client.id, psychic_id=psychic.id, status=ChatStatus.ACTIVE)
     db.add(chat)
     db.commit()
     db.refresh(chat)
-    return chat, client, psychic
-
-
-def _add_message(db, chat, sender_id, content, is_system=False):
-    m = Message(chat_id=chat.id, sender_id=sender_id, content=content, is_system=is_system)
+    assert chat.response_mode == ResponseMode.SABRI
+    m = Message(chat_id=chat.id, sender_id=client.id, content="hi")
     db.add(m)
     db.commit()
     db.refresh(m)
-    return m
-
-
-# ── schema defaults / backfill semantics ─────────────────────────────────────
-def test_schema_defaults(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user)
-    # response_mode defaults to SABRI
-    assert chat.response_mode == ResponseMode.SABRI
-    # a plain message defaults to HUMAN_PSYCHIC (the backfill value)
-    m = _add_message(db, chat, client.id, "hello")
     assert m.author_type == AuthorType.HUMAN_PSYCHIC
-    # a dossier note defaults to HUMAN
-    note = ClientNote(client_id=client.id, note="human note")
+    note = ClientNote(client_id=client.id, note="n")
     db.add(note)
     db.commit()
     db.refresh(note)
@@ -61,319 +282,111 @@ def test_schema_defaults(db, make_user):
 
 
 def test_persist_ai_message_tags_ai_drafted(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user)
-    msg = persist_ai_message(db, chat, "a drafted reply")
+    client = make_user(role=Role.USER)
+    psychic = make_user(role=Role.PSYCHIC)
+    chat = Chat(user_id=client.id, psychic_id=psychic.id, status=ChatStatus.ACTIVE)
+    db.add(chat)
+    db.commit()
+    db.refresh(chat)
+    msg = persist_ai_message(db, chat, "a delivered line")
     assert msg.author_type == AuthorType.AI_DRAFTED
-    assert msg.sender_id == psychic.id  # delivered as the reader
-    assert msg.content == "a drafted reply"
+    assert msg.sender_id == psychic.id
 
 
-# ── the core loop: SABRI mode ────────────────────────────────────────────────
-def test_sabri_clean_pass_auto_sends(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user, mode=ResponseMode.SABRI)
-    result = run_pipeline_core(
-        db, chat, None, "will he call?",
-        mode=ResponseMode.SABRI,
-        draft_fn=lambda feedback: "warm reflective reply",
-        check_fn=lambda draft: {"passed": True, "flags": [], "reason": "ok"},
-        max_attempts=3,
-    )
-    assert result["outcome"] == "auto_send"
-    assert result["content"] == "warm reflective reply"
-    assert result["attempts"] == 1
-    # no draft persisted for review on a clean auto-send
-    assert db.query(AiDraft).count() == 0
+# ── Atlas session-end summary (unchanged, still valid) ───────────────────────
+def _chat_with_msgs(db, make_user):
+    client = make_user(role=Role.USER)
+    psychic = make_user(role=Role.PSYCHIC)
+    chat = Chat(user_id=client.id, psychic_id=psychic.id, status=ChatStatus.ACTIVE)
+    db.add(chat)
+    db.commit()
+    db.refresh(chat)
+    db.add(Message(chat_id=chat.id, sender_id=client.id, content="will my ex come back?"))
+    db.add(Message(chat_id=chat.id, sender_id=psychic.id, content="let's see what the cards reflect"))
+    db.commit()
+    return chat, client, psychic
 
 
-def test_sabri_fail_then_pass_redrafts_and_sends(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user, mode=ResponseMode.SABRI)
-    calls = []
-    verdicts = iter([
-        {"passed": False, "flags": ["overreaching claim"], "reason": "bad"},
-        {"passed": True, "flags": [], "reason": "ok"},
-    ])
-
-    def draft_fn(feedback):
-        calls.append(feedback)
-        return f"draft attempt {len(calls)}"
-
-    result = run_pipeline_core(
-        db, chat, None, "message",
-        mode=ResponseMode.SABRI,
-        draft_fn=draft_fn,
-        check_fn=lambda draft: next(verdicts),
-        max_attempts=3,
-    )
-    assert result["outcome"] == "auto_send"
-    assert result["attempts"] == 2
-    # first attempt had no feedback, the redraft received Sabri's flags
-    assert calls[0] is None
-    assert calls[1]["flags"] == ["overreaching claim"]
-    assert calls[1]["previous_draft"] == "draft attempt 1"
-    assert db.query(AiDraft).count() == 0
-
-
-def test_sabri_all_fail_falls_back_to_review(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user, mode=ResponseMode.SABRI)
-    n = {"i": 0}
-
-    def draft_fn(feedback):
-        n["i"] += 1
-        return f"draft {n['i']}"
-
-    result = run_pipeline_core(
-        db, chat, None, "message",
-        mode=ResponseMode.SABRI,
-        draft_fn=draft_fn,
-        check_fn=lambda draft: {"passed": False, "flags": ["still bad"], "reason": "no"},
-        max_attempts=3,
-    )
-    assert result["outcome"] == "pending_review"
-    assert result["attempts"] == 3  # exhausted the cap
-    assert result["passed"] is False
-    # a pending draft is created for manual review, never auto-sent
-    drafts = db.query(AiDraft).all()
-    assert len(drafts) == 1
-    d = drafts[0]
-    assert d.status == AiDraftStatus.PENDING
-    assert d.sabri_passed is False
-    assert d.attempts == 3
-    assert d.draft_text == "draft 3"
-    assert d.mode == ResponseMode.SABRI
-    # no reader message was sent
-    assert db.query(Message).filter(Message.author_type == AuthorType.AI_DRAFTED).count() == 0
-
-
-# ── the core loop: HYBRID mode ───────────────────────────────────────────────
-def test_hybrid_pass_still_goes_to_review(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user, mode=ResponseMode.HYBRID)
-    result = run_pipeline_core(
-        db, chat, None, "message",
-        mode=ResponseMode.HYBRID,
-        draft_fn=lambda feedback: "clean draft",
-        check_fn=lambda draft: {"passed": True, "flags": [], "reason": "ok"},
-        max_attempts=3,
-    )
-    # hybrid NEVER auto-sends, even on a clean pass
-    assert result["outcome"] == "pending_review"
-    assert result["attempts"] == 1
-    d = db.query(AiDraft).one()
-    assert d.status == AiDraftStatus.PENDING
-    assert d.sabri_passed is True
-    assert d.mode == ResponseMode.HYBRID
-    assert db.query(Message).filter(Message.author_type == AuthorType.AI_DRAFTED).count() == 0
-
-
-def test_hybrid_fail_goes_to_review_with_flags(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user, mode=ResponseMode.HYBRID)
-    result = run_pipeline_core(
-        db, chat, None, "message",
-        mode=ResponseMode.HYBRID,
-        draft_fn=lambda feedback: "flagged draft",
-        check_fn=lambda draft: {"passed": False, "flags": ["tone off"], "reason": "no"},
-        max_attempts=2,
-    )
-    assert result["outcome"] == "pending_review"
-    assert result["attempts"] == 2
-    assert result["flags"] == ["tone off"]
-
-
-# ── the core loop: HUMAN mode ────────────────────────────────────────────────
-def test_human_mode_is_skipped(db, make_user):
-    chat, client, psychic = _make_chat(db, make_user, mode=ResponseMode.HUMAN)
-    called = {"draft": 0}
-
-    def draft_fn(feedback):
-        called["draft"] += 1
-        return "should not be called"
-
-    result = run_pipeline_core(
-        db, chat, None, "message",
-        mode=ResponseMode.HUMAN,
-        draft_fn=draft_fn,
-        check_fn=lambda draft: {"passed": True, "flags": []},
-        max_attempts=3,
-    )
-    assert result["outcome"] == "skipped"
-    assert called["draft"] == 0
-    assert db.query(AiDraft).count() == 0
-
-
-# ── Atlas: dossier auto-summary at session end ───────────────────────────────
-def test_atlas_summarises_and_appends_ai_note(db, make_user, monkeypatch):
+def test_atlas_appends_ai_note_without_touching_human_notes(db, make_user, monkeypatch):
     from app.services import client_dossier
     from app.services.ai import client as ai_client
 
-    chat, client, psychic = _make_chat(db, make_user)
-    # a pre-existing HUMAN note must be untouched by Atlas
-    human = ClientNote(
-        client_id=client.id, note="client is a Cancer, cares about her ex",
-        source=NoteSource.HUMAN,
-    )
+    chat, client, psychic = _chat_with_msgs(db, make_user)
+    human = ClientNote(client_id=client.id, note="she is a Cancer", source=NoteSource.HUMAN)
     db.add(human)
     db.commit()
-
-    _add_message(db, chat, client.id, "Will my ex come back?")
-    _add_message(db, chat, psychic.id, "Let's look at what the cards reflect for you.")
-    _add_message(db, chat, None, "System: session ended", is_system=True)
 
     monkeypatch.setattr(ai_client, "is_configured", lambda: True)
     monkeypatch.setattr(
         ai_client, "run_chat",
         lambda system, user_content, model, max_tokens=512: {
-            "text": "She asked about her ex; explored her feelings. Hopeful tone.",
-            "input_tokens": 10, "output_tokens": 10, "cost_usd": 0.0,
+            "text": "She asked about her ex; hopeful tone.", "cost_usd": 0.0,
         },
     )
-
     note = client_dossier.run_atlas_summary(db, chat.id)
     assert note is not None
-    assert note.source == NoteSource.AI_ATLAS
-    assert note.author_psychic_id is None
-    assert "ex" in note.note
-
-    # the human note is still there and unchanged (Atlas appends, never overwrites)
-    notes = db.query(ClientNote).filter(ClientNote.client_id == client.id).all()
-    sources = {n.source for n in notes}
-    assert NoteSource.HUMAN in sources and NoteSource.AI_ATLAS in sources
-    assert human.note == "client is a Cancer, cares about her ex"
-
-    # the AI note is tagged in the dossier payload the UI reads
+    assert note.source == NoteSource.AI_ATLAS and note.author_psychic_id is None
+    assert human.note == "she is a Cancer"  # untouched
     dossier = client_dossier.get_client_dossier(db, client.id)
     ai_notes = [n for n in dossier["notes"] if n["source"] == "AI_ATLAS"]
     assert ai_notes and ai_notes[0]["author_name"] == "Atlas (AI)"
 
 
-def test_atlas_skips_short_sessions(db, make_user, monkeypatch):
+def test_atlas_master_switch_off(db, make_user, monkeypatch):
     from app.services import client_dossier
-    from app.services.ai import client as ai_client
 
-    chat, client, psychic = _make_chat(db, make_user)
-    _add_message(db, chat, client.id, "hi")  # only one message → too short
-    monkeypatch.setattr(ai_client, "is_configured", lambda: True)
-    monkeypatch.setattr(ai_client, "run_chat", lambda **k: {"text": "x"})
+    chat, client, psychic = _chat_with_msgs(db, make_user)
 
+    class _S:
+        AI_DRAFTING_ENABLED = False
+
+    monkeypatch.setattr("app.config.get_app_settings", lambda: _S())
     assert client_dossier.run_atlas_summary(db, chat.id) is None
     assert db.query(ClientNote).count() == 0
 
 
-# ── master switch ────────────────────────────────────────────────────────────
-def test_master_switch_disables_atlas(db, make_user, monkeypatch):
-    from app.services import client_dossier
-
-    chat, client, psychic = _make_chat(db, make_user)
-    _add_message(db, chat, client.id, "one")
-    _add_message(db, chat, psychic.id, "two")
-
-    class _Settings:
-        AI_DRAFTING_ENABLED = False
-
-    monkeypatch.setattr("app.config.get_app_settings", lambda: _Settings())
-    assert client_dossier.run_atlas_summary(db, chat.id) is None
-    assert db.query(ClientNote).count() == 0
+# ── parsing hardening (review regressions) ───────────────────────────────────
+def test_malformed_object_with_inner_array_raises_not_empty_plan():
+    # Missing comma between fields — the well-formed inner ["CORE"] array must NOT
+    # be mistaken for the payload; it must raise so the caller retries/falls back.
+    with pytest.raises(SabriParseError):
+        parse_sabri_output('{"action":"valentina_request","instructions":"go" "flags":["CORE"]}')
 
 
-def test_master_switch_disables_launcher(monkeypatch):
-    from app.services.ai import reading_pipeline
-
-    class _Settings:
-        AI_DRAFTING_ENABLED = False
-
-    monkeypatch.setattr(reading_pipeline, "get_app_settings", lambda: _Settings())
-    created = {"task": False}
-    monkeypatch.setattr(
-        reading_pipeline.asyncio, "create_task",
-        lambda coro: created.__setitem__("task", True),
-    )
-    reading_pipeline.maybe_launch_pipeline(1, 1, "hello")
-    assert created["task"] is False
+def test_empty_or_junk_arrays_raise():
+    for bad in ('[]', '["foo","bar"]', '{"queue":[]}', '{"action":"deliver","queue":[]}'):
+        with pytest.raises(SabriParseError):
+            parse_sabri_output(bad)
 
 
-# ── async wrapper integration (SessionLocal + delivery glue) ─────────────────
-def _seed_engine():
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.pool import StaticPool
-
-    import app.models  # noqa: F401 — register models on Base.metadata
-    from app.models.base import Base
-
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-    Base.metadata.create_all(engine)
-    Local = sessionmaker(bind=engine, expire_on_commit=False)
-    s = Local()
-    client = User(email="c@t.co", username="c", password_hash="h", role=Role.USER, balance=100, credit_balance=0)
-    psychic = User(email="p@t.co", username="p", password_hash="h", role=Role.PSYCHIC)
-    s.add_all([client, psychic])
-    s.commit()
-    chat = Chat(user_id=client.id, psychic_id=psychic.id, status=ChatStatus.ACTIVE)
-    s.add(chat)
-    s.commit()
-    ids = (chat.id, psychic.id, client.id)
-    s.close()
-    return Local, ids
+def test_hold_back_only_object_parses():
+    d = parse_sabri_output('{"hold_back":[{"text":"held line","hold_trigger":"if X"}]}')
+    assert isinstance(d, DeliveryPlan)
+    assert d.queue == []
+    assert len(d.hold_back) == 1 and d.hold_back[0].text == "held line"
 
 
-def _patch_ai(monkeypatch, Local, *, passed, draft="AI reply"):
-    import app.database.client as dbclient
-    from app.services.ai import client as ai_client
-    from app.services.ai import reading_assistant, sabri_check
-
-    monkeypatch.setattr(dbclient, "SessionLocal", Local)
-    monkeypatch.setattr(ai_client, "is_configured", lambda: True)
-    monkeypatch.setattr(
-        reading_assistant, "generate_draft",
-        lambda db, chat, text, feedback=None: draft,
-    )
-    monkeypatch.setattr(
-        sabri_check, "check_draft",
-        lambda db, chat, drafttext, text: {"passed": passed, "flags": [] if passed else ["bad"], "reason": ""},
-    )
-
-    sent = {}
-
-    async def fake_broadcast(db, chat, content):
-        sent["content"] = content
-        return persist_ai_message(db, chat, content)
-
-    monkeypatch.setattr("app.services.chats.broadcast_ai_message", fake_broadcast)
-    return sent
+def test_all_hold_back_plan_gets_a_fallback_line():
+    # Sabri holds everything back (empty queue): the orchestrator must still
+    # produce a deliverable line while preserving the held ammo.
+    plan = DeliveryPlan(queue=[], hold_back=[HeldItem(text="held", hold_trigger="if X")])
+    sabri = _Sabri([plan])
+    state = _new_state()
+    out = process_client_message(state, "m", sabri_call=sabri,
+                                 valentina_call=lambda _r: "x", max_corrections=3, now=T0)
+    assert len(out.queue) >= 1                      # a line was added
+    assert out.queue[0].message == FALLBACK_MESSAGE
+    assert any(h.text == "held" for h in state.held_back_buffer)  # ammo preserved
 
 
-def test_async_pipeline_sabri_autosend(monkeypatch):
-    from app.services.ai.reading_pipeline import run_reading_pipeline
-
-    Local, (chat_id, psychic_id, client_id) = _seed_engine()
-    # default mode is SABRI
-    sent = _patch_ai(monkeypatch, Local, passed=True, draft="AI reply text")
-
-    result = asyncio.run(run_reading_pipeline(chat_id, None, "will he text me?"))
-    assert result["outcome"] == "auto_send"
-    assert sent["content"] == "AI reply text"
-
-    s = Local()
-    msgs = s.query(Message).filter(Message.author_type == AuthorType.AI_DRAFTED).all()
-    assert len(msgs) == 1 and msgs[0].sender_id == psychic_id
-    s.close()
-
-
-def test_async_pipeline_hybrid_never_sends(monkeypatch):
-    from app.services.ai.reading_pipeline import run_reading_pipeline
-
-    Local, (chat_id, psychic_id, client_id) = _seed_engine()
-    s = Local()
-    s.query(Chat).filter(Chat.id == chat_id).update({"response_mode": ResponseMode.HYBRID})
-    s.commit()
-    s.close()
-
-    sent = _patch_ai(monkeypatch, Local, passed=True, draft="hybrid draft")
-    result = asyncio.run(run_reading_pipeline(chat_id, None, "hello"))
-    assert result["outcome"] == "pending_review"
-    assert "content" not in sent  # broadcast never called
-
-    s = Local()
-    assert s.query(AiDraft).filter(AiDraft.status == AiDraftStatus.PENDING).count() == 1
-    assert s.query(Message).filter(Message.author_type == AuthorType.AI_DRAFTED).count() == 0
-    s.close()
+# ── reply-latency + average-length semantics ─────────────────────────────────
+def test_reply_latency_and_avg_length():
+    s = create_session_state("lat", now=T0)
+    record_client_message(s, "first msg", now=T0 + timedelta(seconds=10))   # 9 chars
+    record_sent_message(s, "reader replies now", now=T0 + timedelta(seconds=15))
+    # client replies 45s AFTER the reader's message -> latency measured from the send
+    record_client_message(s, "x" * 60, now=T0 + timedelta(seconds=60))
+    assert s.client_response_times[-1] == 45.0
+    meta = compute_metadata(s, now=T0 + timedelta(seconds=90))
+    assert meta["client_response_speed"] == "normal"       # 45s in [30,120]
+    assert meta["client_avg_response_length"] == "medium"  # (9 + 60) / 2 = 34.5

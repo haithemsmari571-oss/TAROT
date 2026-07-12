@@ -55,19 +55,22 @@ class AppSettings(BaseSettings):
     # Hour (UTC) the nightly job runs to prepare the NEXT day's content.
     CONTENT_JOB_HOUR_UTC: int = 3
 
-    # ── AI reading pipeline (Valentina drafts, Sabri checks, Atlas remembers) ──
+    # ── AI reading pipeline (Valentina generates, Sabri directs delivery, Atlas remembers) ──
     # Master switch. Default ON — there is no live traffic to protect yet. Flip
-    # to false to fully disable drafting, checking and the Atlas auto-summary.
+    # to false to fully disable the reading pipeline and the Atlas auto-summary.
     AI_DRAFTING_ENABLED: bool = True
-    # Valentina (draft generator) — Sonnet-tier, env-configurable. Same pattern
-    # as CAMPAIGN_DRAFT_MODEL in the secondbrain CRM project.
+    # Valentina (psychic reading engine) — Sonnet-tier, env-configurable. Same
+    # pattern as CAMPAIGN_DRAFT_MODEL in the secondbrain CRM project. Full 4-part
+    # readings are long, so the token ceiling is generous.
     READING_DRAFT_MODEL: str = "claude-sonnet-4-6"
-    READING_DRAFT_MAX_TOKENS: int = 1024
-    # Sabri (check + rubric) — Haiku-tier, fast/cheap.
+    READING_DRAFT_MAX_TOKENS: int = 4096
+    # Sabri (delivery director) — fast model, env-configurable. Emits a full
+    # delivery queue that reproduces AND fragments Valentina's whole reading into
+    # many JSON messages, so it needs at least as much room as Valentina's output.
     SABRI_CHECK_MODEL: str = "claude-haiku-4-5-20251001"
-    SABRI_CHECK_MAX_TOKENS: int = 512
-    # Cap on Valentina→Sabri redraft attempts before falling back to the admin
-    # panel for manual review.
+    SABRI_CHECK_MAX_TOKENS: int = 6144
+    # Cap on Valentina↔Sabri correction rounds; after this Sabri delivers from
+    # the best available output rather than requesting another regeneration.
     SABRI_MAX_ATTEMPTS: int = 3
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"

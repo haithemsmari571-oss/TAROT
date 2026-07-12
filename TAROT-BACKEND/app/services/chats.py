@@ -352,10 +352,11 @@ def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
 
 
 async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message:
-    """Deliver an AI-drafted reply to the client as the reader: persist it
+    """Deliver a single AI message to the client as the reader: persist it
     (tagged AI_DRAFTED), set the read-receipt status from live presence, broadcast
     over the chat WebSocket, and push if the client is offline. Mirrors the human
-    message path. Used by both the auto-send loop and the admin draft-review Send.
+    message path. (Timed delivery of a full DeliveryPlan is the later real-time
+    execution phase; today the only caller is the admin draft-review send.)
     """
     from app.enums.message_status import MessageStatus
     from app.manager import manager
