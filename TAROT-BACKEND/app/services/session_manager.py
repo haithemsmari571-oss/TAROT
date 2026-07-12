@@ -709,6 +709,17 @@ class SessionManager:
                 msg = "Session ended due to insufficient points."
                 await broadcast_system_message(db, chat_id, msg)
 
+            # Atlas: auto-summarise the finished reading into the client's dossier
+            # (fire-and-forget; respects the master switch, never blocks/fails end).
+            try:
+                from app.services.client_dossier import schedule_atlas_summary
+
+                schedule_atlas_summary(chat_id)
+            except Exception as atlas_e:  # noqa: BLE001
+                logger.warning(
+                    "atlas_schedule_failed", chat_id=chat_id, error=str(atlas_e)
+                )
+
         except Exception as e:
             logger.error(
                 "error_ending_session", chat_id=chat_id, error=str(e), exc_info=True

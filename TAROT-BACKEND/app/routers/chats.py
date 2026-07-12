@@ -294,6 +294,8 @@ def get_chat_details_endpoint(
     chat_details = {
         "id": chat.id,
         "status": chat.status.value,
+        # Who answers the client: HUMAN | HYBRID | SABRI (drives the mode switch).
+        "response_mode": chat.response_mode.value,
         "user_id": chat.user_id,
         "psychic_id": chat.psychic_id,
         "created_at": chat.created_at.isoformat() if chat.created_at else None,

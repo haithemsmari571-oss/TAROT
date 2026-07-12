@@ -67,6 +67,37 @@ def run_prompt(prompt_text: str, model: str, max_tokens: int = DEFAULT_MAX_TOKEN
     }
 
 
+def run_chat(
+    system: str,
+    user_content: str,
+    model: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> dict:
+    """Run a single-turn chat with an optional system prompt. Same return shape
+    as run_prompt (text + token usage + cost). Blocking — call from a thread if
+    you are on the event loop. Raises AiNotConfigured if no key; propagates SDK
+    errors for the caller to handle (retry/fallback)."""
+    client = _client()
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": user_content}],
+    }
+    if system:
+        kwargs["system"] = system
+    msg = client.messages.create(**kwargs)
+    text = "".join(
+        getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text"
+    )
+    usage = msg.usage
+    return {
+        "text": text,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cost_usd": estimate_cost(usage.input_tokens, usage.output_tokens),
+    }
+
+
 def parse_json_object(text: str) -> dict:
     """Best-effort parse of a JSON object from model output — tolerates ```json
     fences and leading/trailing prose. Raises ValueError if none found/valid."""

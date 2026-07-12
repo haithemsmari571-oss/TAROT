@@ -23,6 +23,7 @@ from .admin_tasks import router as admin_tasks_router
 from .constellation import router as constellation_router
 from .admin_ai_prompts import router as admin_ai_prompts_router
 from .admin_content import router as admin_content_router
+from .reading_ai import router as reading_ai_router
 
 __all__ = [
     "auth_router",
@@ -50,4 +51,5 @@ __all__ = [
     "constellation_router",
     "admin_ai_prompts_router",
     "admin_content_router",
+    "reading_ai_router",
 ]

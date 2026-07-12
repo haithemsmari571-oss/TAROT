@@ -55,6 +55,24 @@ class AppSettings(BaseSettings):
     # Hour (UTC) the nightly job runs to prepare the NEXT day's content.
     CONTENT_JOB_HOUR_UTC: int = 3
 
+    # ── AI reading pipeline (Valentina drafts, Sabri checks, Atlas remembers) ──
+    # Master switch. Default ON — there is no live traffic to protect yet. Flip
+    # to false to fully disable drafting, checking and the Atlas auto-summary.
+    AI_DRAFTING_ENABLED: bool = True
+    # Valentina (draft generator) — Sonnet-tier, env-configurable. Same pattern
+    # as CAMPAIGN_DRAFT_MODEL in the secondbrain CRM project.
+    READING_DRAFT_MODEL: str = "claude-sonnet-4-6"
+    READING_DRAFT_MAX_TOKENS: int = 1024
+    # Sabri (check + rubric) — Haiku-tier, fast/cheap.
+    SABRI_CHECK_MODEL: str = "claude-haiku-4-5-20251001"
+    SABRI_CHECK_MAX_TOKENS: int = 512
+    # Cap on Valentina→Sabri redraft attempts before falling back to the admin
+    # panel for manual review.
+    SABRI_MAX_ATTEMPTS: int = 3
+    # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
+    ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
+    ATLAS_SUMMARY_MAX_TOKENS: int = 512
+
     BILLING_TASK_MAX_RETRIES: int = 3
     BILLING_TASK_RETRY_DELAY_SECONDS: int = 5
 

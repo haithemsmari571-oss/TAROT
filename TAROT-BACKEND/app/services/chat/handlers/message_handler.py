@@ -239,3 +239,15 @@ class MessageHandler(BaseEventHandler):
             chat_id=self.chat_id,
             message_id=db_message.id,
         )
+
+        # ── AI reading pipeline (Valentina drafts, Sabri checks) ───────────────
+        # Only a CLIENT message on an ACTIVE reading triggers a reader reply. The
+        # conversation's response_mode (human/hybrid/sabri) and the master switch
+        # are enforced inside the launcher; this is fire-and-forget and never
+        # blocks or affects the client's own message.
+        from app.enums.chat_status import ChatStatus
+
+        if sender_is_paying_client and chat.status == ChatStatus.ACTIVE:
+            from app.services.ai.reading_pipeline import maybe_launch_pipeline
+
+            maybe_launch_pipeline(self.chat_id, db_message.id, content)

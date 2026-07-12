@@ -344,7 +344,13 @@ def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
             "note": n.note,
             "chat_id": n.chat_id,
             "author_psychic_id": n.author_psychic_id,
-            "author_name": authors.get(n.author_psychic_id) or "A reader",
+            # "HUMAN" (a reader/admin wrote it) or "AI_ATLAS" (auto-summary).
+            "source": n.source.value if n.source else "HUMAN",
+            "author_name": (
+                "Atlas (AI)"
+                if (n.source and n.source.value == "AI_ATLAS")
+                else authors.get(n.author_psychic_id) or "A reader"
+            ),
             "created_at": n.created_at.isoformat() if n.created_at else None,
         }
         for n in notes
@@ -366,3 +372,127 @@ def get_client_dossier(db: Session, client_id: int) -> Optional[dict]:
         "notes": notes_out,
         "gifts": get_client_gifts(db, client_id),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATLAS — auto-summarise a finished reading into the client's dossier.
+#
+# Runs when a session ends: sends the transcript to a cheap model, writes a short
+# summary, and appends it to the client's dossier as a clearly-tagged AI note
+# (source = AI_ATLAS, no human author). It only ever CREATES a note — it never
+# edits or overwrites human-written notes.
+# ─────────────────────────────────────────────────────────────────────────────
+ATLAS_SUMMARY_SYSTEM = """You are Atlas, the memory-keeper for a tarot / psychic love-reading service. You are given the full transcript of ONE reading between a client and their reader. Write a short dossier note (3-5 sentences) that a DIFFERENT reader could skim before this client's next reading.
+
+Capture: what the client came for and what was discussed, the client's emotional tone/state, and anything notable to remember (names, situations, recurring themes, what was explored). Do NOT invent facts that are not in the transcript. Do NOT include guarantees, predictions, or medical / legal / financial advice. Write in plain, factual third person about the client (e.g. "She asked about...", "He seemed...").
+
+Return ONLY the note text — no preamble, no labels, no quotation marks."""
+
+# Minimum client+reader messages before a session is worth summarising.
+_ATLAS_MIN_MESSAGES = 2
+
+
+def build_session_transcript(db: Session, chat_id: int) -> str:
+    """Client/Reader labelled transcript of a chat (system messages omitted)."""
+    from app.models.message import Message
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return ""
+    rows = (
+        db.query(Message)
+        .filter(Message.chat_id == chat_id, Message.is_system == False)  # noqa: E712
+        .order_by(Message.id.asc())
+        .all()
+    )
+    lines = []
+    for m in rows:
+        who = "Client" if m.sender_id == chat.user_id else "Reader"
+        lines.append(f"{who}: {m.content}")
+    return "\n".join(lines)
+
+
+def save_atlas_note(db: Session, client_id: int, chat_id: int, summary: str):
+    """Append an AI-tagged summary note to the client's dossier (never overwrites)."""
+    from app.enums.note_source import NoteSource
+
+    entry = ClientNote(
+        client_id=client_id,
+        author_psychic_id=None,  # AI-authored; no human author
+        chat_id=chat_id,
+        title="Reading summary (Atlas)",
+        note=summary.strip(),
+        source=NoteSource.AI_ATLAS,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    logger.info("atlas_note_saved", note_id=entry.id, client_id=client_id, chat_id=chat_id)
+    return entry
+
+
+def run_atlas_summary(db: Session, chat_id: int):
+    """Summarise a finished reading and store it as an AI dossier note.
+
+    Blocking (calls the model) — run in a thread. Guarded by the master switch
+    and the AI key. Returns the created ClientNote, or None if skipped/failed.
+    """
+    from app.config import get_app_settings
+    from app.services.ai import client as ai_client
+
+    settings = get_app_settings()
+    if not settings.AI_DRAFTING_ENABLED or not ai_client.is_configured():
+        return None
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return None
+
+    transcript = build_session_transcript(db, chat_id)
+    if len([ln for ln in transcript.splitlines() if ln.strip()]) < _ATLAS_MIN_MESSAGES:
+        logger.info("atlas_skipped_too_short", chat_id=chat_id)
+        return None
+
+    try:
+        result = ai_client.run_chat(
+            system=ATLAS_SUMMARY_SYSTEM,
+            user_content="TRANSCRIPT:\n" + transcript,
+            model=settings.ATLAS_SUMMARY_MODEL,
+            max_tokens=settings.ATLAS_SUMMARY_MAX_TOKENS,
+        )
+    except Exception as e:  # noqa: BLE001 — summarisation must never crash end-of-session
+        logger.warning("atlas_summary_model_failed", chat_id=chat_id, error=str(e))
+        return None
+
+    summary = (result.get("text") or "").strip()
+    if not summary:
+        return None
+    return save_atlas_note(db, chat.user_id, chat_id, summary)
+
+
+async def _run_atlas_async(chat_id: int) -> None:
+    """Open a fresh DB session and run Atlas off the event loop."""
+    from app.database.client import SessionLocal
+
+    db = SessionLocal()
+    try:
+        await __import__("asyncio").to_thread(run_atlas_summary, db, chat_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("atlas_async_failed", chat_id=chat_id, error=str(e))
+    finally:
+        db.close()
+
+
+def schedule_atlas_summary(chat_id: int) -> None:
+    """Fire-and-forget Atlas summary (called at session end). Respects the master
+    switch and never blocks or fails the session-end flow."""
+    from app.config import get_app_settings
+
+    if not get_app_settings().AI_DRAFTING_ENABLED:
+        return
+    import asyncio
+
+    try:
+        asyncio.create_task(_run_atlas_async(chat_id))
+    except RuntimeError:
+        logger.warning("atlas_no_event_loop", chat_id=chat_id)

@@ -1,6 +1,7 @@
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.enums.note_source import NoteSource
 from app.models.base import Base
 
 
@@ -31,6 +32,12 @@ class ClientNote(Base):
     # the first words of the body on the client).
     title: Mapped[str] = mapped_column(String(200), nullable=True)
     note: Mapped[str] = mapped_column(Text, nullable=False)
+    # Where the note came from. Existing notes backfill to HUMAN. AI_ATLAS marks
+    # an auto-generated session summary — clearly tagged, kept separate from and
+    # never overwriting human-written notes.
+    source: Mapped[NoteSource] = mapped_column(
+        Enum(NoteSource), default=NoteSource.HUMAN, nullable=False
+    )
 
     client: Mapped["User"] = relationship("User", foreign_keys=[client_id])
     author: Mapped["User"] = relationship("User", foreign_keys=[author_psychic_id])

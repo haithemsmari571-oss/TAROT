@@ -87,9 +87,14 @@ export const requestChat = async (data: ChatStartRequest): Promise<void> => {
 /**
  * Get chat details including psychic token for admin access
  */
+/** Who answers the client in a conversation. */
+export type ResponseMode = "HUMAN" | "HYBRID" | "SABRI";
+
 export interface ChatDetails {
   id: number;
   status: string;
+  /** HUMAN | HYBRID | SABRI — drives the per-conversation mode switch. */
+  response_mode?: ResponseMode;
   user_id: number;
   psychic_id: number;
   created_at: string;
@@ -218,6 +223,55 @@ export const resumeChat = async (chatId: number) => {
 export const getPsychicDetails = async (psychicId: number): Promise<PsychicDetails> => {
   const response = await axiosClient.get(`/psychic/${psychicId}`);
   return response.data;
+};
+
+// ── AI reading pipeline (Valentina / Sabri) ──────────────────────────────────
+
+/** A Valentina draft awaiting an admin decision in the panel. */
+export interface AiDraft {
+  id: number;
+  chat_id: number;
+  client_message_id: number | null;
+  mode: ResponseMode;
+  draft_text: string;
+  sabri_flags: string[];
+  sabri_passed: boolean;
+  attempts: number;
+  status: "PENDING" | "SENT" | "DISCARDED";
+  created_at: string | null;
+}
+
+/** Set who answers the client in this conversation (Human / Hybrid / Sabri). */
+export const setResponseMode = async (
+  chatId: number,
+  mode: ResponseMode
+): Promise<void> => {
+  await axiosClient.put(`/chat/${chatId}/response-mode`, { mode });
+};
+
+/** Pending AI drafts for a chat (hybrid review, or a sabri-mode fallback). */
+export const getPendingDrafts = async (chatId: number): Promise<AiDraft[]> => {
+  const response = await axiosClient.get(`/chat/${chatId}/drafts`, {
+    params: { status: "PENDING" },
+  });
+  return response.data;
+};
+
+/** Send a draft as the reader (optionally edited). Tagged author_type=AI_DRAFTED. */
+export const sendDraft = async (
+  chatId: number,
+  draftId: number,
+  content?: string
+): Promise<void> => {
+  await axiosClient.post(`/chat/${chatId}/drafts/${draftId}/send`, { content });
+};
+
+/** Dismiss a draft without sending. */
+export const discardDraft = async (
+  chatId: number,
+  draftId: number
+): Promise<void> => {
+  await axiosClient.post(`/chat/${chatId}/drafts/${draftId}/discard`);
 };
 
 /**

@@ -32,6 +32,7 @@ from app.routers import (
     constellation_router,
     admin_ai_prompts_router,
     admin_content_router,
+    reading_ai_router,
 )
 import app.models
 
@@ -257,6 +258,12 @@ app.include_router(
     admin_content_router,
     prefix="/api/admin",
     tags=["Admin - Content Engine & Settings"],
+)
+
+app.include_router(
+    reading_ai_router,
+    prefix="/api/chat",
+    tags=["AI Reading Pipeline"],
 )
 
 
