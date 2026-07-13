@@ -136,6 +136,7 @@ This is how it reads on the page — apply it to every bubble, not as a separate
 * Conversational lead-ins and filler, used naturally and sparingly — a real person eases in sometimes instead of jumping straight into the read every single time. Draw on patterns like: "ok real talk..." · "not gonna lie" · "ngl" · "honestly?" · "ok so here's the thing" · "im not gonna sugarcoat this" · "hear me out" · "can i be real with u for a sec" · "ok wait" · "lemme just say it". Deploy one when it softens a hard truth, signals you're about to go deeper, or warms a cold open — never as a tic on every bubble, and never in place of an actual perception.
 * Message length variation is critical: short punches (3-8 words), medium (1-2 sentences), rare longer builds (3-4 sentences max), occasional single word/phrase for weight ("darling.").
 * Never formatting: no bullets, numbering, bold, headers, markdown — this is a chat window.
+* No emoji, ever. Not one — no hearts, sparkles, crystal balls, moons, none. You are a psychic texting a real client, not an influencer posting. Carry warmth and mysticism in the words and punctuation, never in emoji.
 * No hedging (maybe, possibly, I think). "I sense/I feel" allowed as confident texture, never as a hedge.
 * No repeating an idea in new words. Spiritual texture (energy, karmic, soul bonds, manifestation) 2-4 times per reading, woven in, not decorative.
 Fragment by emotional beat (setup/build/pivot/punch), not by fixed rule — sometimes one clean bubble hits harder than four fragments. Judgment call each time.
@@ -189,7 +190,7 @@ First session / thin file: she's testing — front-load bold assumptions and mys
 19. Gossipy angle: the 1am-on-her-bed version, not the corporate-retreat version. Find the petty truth, the pride wound, one floor up from the diplomatic read.
 20. Psychic voice: name first, explain second. ("He's sitting in shame tonight" not "based on the pattern, shame seems present.")
 15. BANNED
-Theatrical ("finally awake," "everything changes," "the veil is lifting") · staged tableaus (2am, staring at phone, edge of the bed) · extreme mystic clichés ("divine timing," "highest self") · therapy jargon ("inner child," "hold space") · hedges (maybe, possibly, I think) · character-label verdicts (narcissist, toxic, gaslighter) · clichés ("everything happens for a reason") · closeouts (goodbye, take care, blessings) · "not X, it's Y" more than twice per reading · cinema description of her future · reciting her CV as proof of value · superlative ego boosts · analyst-voice openers ("based on what you've shared") · describing card imagery instead of translating it.
+Theatrical ("finally awake," "everything changes," "the veil is lifting") · staged tableaus (2am, staring at phone, edge of the bed) · extreme mystic clichés ("divine timing," "highest self") · therapy jargon ("inner child," "hold space") · hedges (maybe, possibly, I think) · character-label verdicts (narcissist, toxic, gaslighter) · clichés ("everything happens for a reason") · closeouts (goodbye, take care, blessings) · "not X, it's Y" more than twice per reading · cinema description of her future · reciting her CV as proof of value · superlative ego boosts · analyst-voice openers ("based on what you've shared") · describing card imagery instead of translating it · emoji of any kind (hearts, sparkles, crystal balls, moons — none).
 Return-acknowledgment (the entire category, not just these examples): "since we last sat together," "last time you were here," "you came back louder than you left," "welcome back," "you're back," "it's been a while," "good to see you again," or any phrase naming or implying the fact of a previous session. A code-side filter also catches this after you write — but don't rely on it. Write as if this category doesn't exist in your vocabulary.
 16. CLIENT FILE USAGE
 Load silently. Use it to pick technique, avoid repeating logged corrections, keep characterization consistent, and know what not to say. Never cite it, never repackage stored details as insight, never surface sensitive content she hasn't raised this session. The file is the map you pocket before she sees you.
@@ -303,38 +304,74 @@ def parse_reader_output(text: str):
     return bubbles, holds
 
 
-def stream_reader(reader_input: str, *, model=None, max_tokens=None):
+# ── extended-thinking gate (Option B) ────────────────────────────────────────
+# Deep, emotionally loaded turns get adaptive thinking at high effort so the read is
+# visibly more considered; greetings / quick replies skip thinking so they stay fast
+# (speed matters there). The Reader decides length internally, so the gate is a cheap
+# pre-call heuristic on the client message: a real question, or more than a few words,
+# is substantive; a bare greeting / acknowledgment is not. Only text deltas are
+# consumed, so thinking never leaks into bubbles (see client.run_chat_stream).
+_SHORT_TURN_MAX_WORDS = 5
+
+
+def is_short_turn(client_message) -> bool:
+    """True for a greeting / acknowledgment / quick reply (thinking stays OFF); False
+    for a substantive turn worth deeper thinking. A question mark, or more than
+    _SHORT_TURN_MAX_WORDS words, counts as substantive. Empty/None → short."""
+    msg = (client_message or "").strip()
+    if not msg:
+        return True
+    if "?" in msg:
+        return False
+    return len(msg.split()) <= _SHORT_TURN_MAX_WORDS
+
+
+def thinking_for_turn(client_message) -> dict:
+    """Extended-thinking kwargs for stream_reader/run_chat_stream, gated on the client
+    message. Substantive turn → adaptive thinking at high effort; short turn → none."""
+    if is_short_turn(client_message):
+        return {"thinking": None, "effort": None}
+    return {"thinking": {"type": "adaptive"}, "effort": "high"}
+
+
+def stream_reader(reader_input: str, *, model=None, max_tokens=None, client_message=None):
     """Stream one Reader call (Anthropic SSE), yielding text deltas as they generate.
     Phase 4's executor consumes this to emit bubbles live; run_reader_turn accumulates
-    it to full text for parse + filter + the retry cap."""
+    it to full text for parse + filter + the retry cap. Extended thinking is gated on
+    ``client_message`` (deep turns think, short turns don't) — see thinking_for_turn."""
     s = get_app_settings()
+    tp = thinking_for_turn(client_message)
     return ai_client.run_chat_stream(
         system=READER_SYSTEM_PROMPT,
         user_content=reader_input,
         model=model or s.READER_MODEL,
         max_tokens=max_tokens or s.READER_MAX_TOKENS,
+        thinking=tp["thinking"],
+        effort=tp["effort"],
     )
 
 
-def _read_full(reader_input: str, *, model=None, max_tokens=None) -> str:
-    return "".join(stream_reader(reader_input, model=model, max_tokens=max_tokens))
+def _read_full(reader_input: str, *, model=None, max_tokens=None, client_message=None) -> str:
+    return "".join(
+        stream_reader(reader_input, model=model, max_tokens=max_tokens, client_message=client_message)
+    )
 
 
-def run_reader_turn(reader_input: str, *, reader_call=None, max_attempts=None,
-                    fallback_message: str = FALLBACK_MESSAGE):
+def run_reader_turn(reader_input: str, *, client_message=None, reader_call=None,
+                    max_attempts=None, fallback_message: str = FALLBACK_MESSAGE):
     """One Reader turn → the FINAL (bubbles, holds) for the client.
 
     call → parse → strip return-acks (reusing the deterministic filter) → bounded retry
     if the turn is empty after filtering → guaranteed non-empty result. The retry cap is
     the single-agent analog of the two-agent correction-loop cap: never spin, always
     deliver something. ``reader_call(input) -> full text`` is injectable for tests; it
-    defaults to a real streamed Opus call."""
+    defaults to a real streamed Opus call gated on ``client_message`` for thinking."""
     # Lazy import so reading_pipeline can later import reading_reader without a cycle.
     from app.services.ai.reading_pipeline import is_return_acknowledgment
 
     settings = get_app_settings()
     attempts = max_attempts or settings.READER_MAX_ATTEMPTS
-    call = reader_call or _read_full
+    call = reader_call or (lambda ri: _read_full(ri, client_message=client_message))
 
     for attempt in range(1, attempts + 1):
         try:

@@ -422,9 +422,11 @@ def _merge_reader_holds(state, sent_bubbles, new_holds, *, cap: int = 10) -> Non
     state.held_back_buffer = merged[-cap:]
 
 
-async def _run_reader_delivery(chat_id: int, state, reader_input: str) -> None:
+async def _run_reader_delivery(chat_id: int, state, reader_input: str,
+                               client_message: str = None) -> None:
     """Live single-agent delivery: stream the Reader, send bubbles with the floor,
-    fall back (never silent) if nothing survives, and store the turn's holds."""
+    fall back (never silent) if nothing survives, and store the turn's holds.
+    ``client_message`` gates extended thinking (deep turns think, greetings don't)."""
     import time as _time
 
     from app.config import get_app_settings
@@ -465,7 +467,7 @@ async def _run_reader_delivery(chat_id: int, state, reader_input: str) -> None:
             return
 
     def gen_factory():
-        return stream_reader_bubbles(stream_reader(reader_input))
+        return stream_reader_bubbles(stream_reader(reader_input, client_message=client_message))
 
     try:
         sent, holds = await execute_reader_stream(
@@ -497,15 +499,19 @@ async def _run_reader_delivery(chat_id: int, state, reader_input: str) -> None:
             _delivery_tasks.pop(chat_id, None)
 
 
-def start_reader_delivery(chat_id: int, state, reader_input: str) -> Optional[asyncio.Task]:
+def start_reader_delivery(chat_id: int, state, reader_input: str,
+                          client_message: str = None) -> Optional[asyncio.Task]:
     """Launch the streaming Reader delivery as a background task (mirrors start_delivery;
-    shares _delivery_tasks so cancel_delivery / disconnect / post-end cancellation apply)."""
+    shares _delivery_tasks so cancel_delivery / disconnect / post-end cancellation apply).
+    ``client_message`` is forwarded to gate extended thinking."""
     existing = _delivery_tasks.get(chat_id)
     if existing and not existing.done():
         logger.warning("reader_delivery_already_running", chat_id=chat_id)
         return existing
     try:
-        task = asyncio.create_task(_run_reader_delivery(chat_id, state, reader_input))
+        task = asyncio.create_task(
+            _run_reader_delivery(chat_id, state, reader_input, client_message)
+        )
     except RuntimeError:
         logger.warning("reader_delivery_no_event_loop", chat_id=chat_id)
         return None

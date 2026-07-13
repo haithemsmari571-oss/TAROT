@@ -444,7 +444,9 @@ async def run_reading_pipeline(
                     store.put(state)
                     # The streaming delivery shows typing immediately and streams the
                     # first bubble as soon as it generates, so no hold-message is needed.
-                    reading_executor.start_reader_delivery(chat_id, state, reader_input)
+                    reading_executor.start_reader_delivery(
+                        chat_id, state, reader_input, client_message
+                    )
                     logger.info("reader_pipeline_started", chat_id=chat_id)
                     return None
 

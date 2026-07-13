@@ -87,7 +87,11 @@ class AppSettings(BaseSettings):
     # the A/B — we want to see the quality ceiling before considering a cheaper tier.
     # Verified callable on this key before switching (2026-07-13).
     READER_MODEL: str = "claude-opus-4-6"
-    READER_MAX_TOKENS: int = 4096
+    # Ceiling for the streamed Reader turn. Generous because extended thinking
+    # (gated on to substantive turns) shares this output budget with the reading —
+    # a tight cap would truncate a full reading after the model spent tokens
+    # thinking. Streaming, so a large ceiling carries no HTTP-timeout risk.
+    READER_MAX_TOKENS: int = 16000
     # Bounded retry if the Reader returns empty/malformed output (the single-agent
     # analog of the correction-loop cap: never spin, always deliver something).
     READER_MAX_ATTEMPTS: int = 2

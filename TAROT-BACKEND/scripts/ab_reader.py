@@ -60,7 +60,9 @@ def run_single(msg, dossier, meta, dob=None):
                              session_metadata=meta, held_back_buffer=[],
                              date_of_birth=dob, current_year=CURRENT_YEAR)
     t0 = time.time()
-    bubbles, holds = run_reader_turn(inp)  # one streamed Opus call + strip + retry cap
+    # Pass the client message so extended thinking is gated correctly (deep turns
+    # think at high effort; greetings/short turns skip it and stay fast).
+    bubbles, holds = run_reader_turn(inp, client_message=msg)
     dt = time.time() - t0
     leaks = sum(1 for b in bubbles if is_return_acknowledgment(b))
     return bubbles, holds, dt, leaks

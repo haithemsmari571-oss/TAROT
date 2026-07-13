@@ -4,6 +4,7 @@ anywhere near frontend/response code that would leak the key."""
 
 import json
 import re
+from typing import Optional
 
 from app.config import get_app_settings
 from app.logging_config import get_logger
@@ -103,12 +104,19 @@ def run_chat_stream(
     user_content: str,
     model: str,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    thinking: Optional[dict] = None,
+    effort: Optional[str] = None,
 ):
     """Stream a single-turn chat, yielding text deltas as the model generates them.
     Blocking generator — drive it from a thread if you are on the event loop. The
     single-agent Reader consumes this: accumulate deltas, split into bubbles on the
     blank-line delimiter, filter each, and emit. Raises AiNotConfigured if no key;
-    propagates SDK errors for the caller to handle (retry/fallback)."""
+    propagates SDK errors for the caller to handle (retry/fallback).
+
+    ``thinking`` (e.g. {"type": "adaptive"}) and ``effort`` ("low".."max", set inside
+    output_config) enable extended thinking on the 4.6+ models. Only text deltas are
+    yielded — thinking happens server-side and never reaches the caller — so bubble
+    parsing is unaffected."""
     client = _client()
     kwargs: dict = {
         "model": model,
@@ -117,6 +125,10 @@ def run_chat_stream(
     }
     if system:
         kwargs["system"] = system
+    if thinking:
+        kwargs["thinking"] = thinking
+    if effort:
+        kwargs["output_config"] = {"effort": effort}
     with client.messages.stream(**kwargs) as stream:
         for delta in stream.text_stream:
             yield delta

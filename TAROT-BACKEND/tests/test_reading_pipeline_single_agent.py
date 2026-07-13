@@ -61,10 +61,11 @@ def _run_single_agent_turn(monkeypatch, *, chat_id, client_message):
 
     captured = {}
 
-    def _capture(cid, state, reader_input):
+    def _capture(cid, state, reader_input, client_message=None):
         captured["chat_id"] = cid
         captured["state"] = state
         captured["reader_input"] = reader_input
+        captured["client_message"] = client_message
         return None
 
     monkeypatch.setattr(reading_executor, "cancel_delivery", _noop_cancel)
@@ -101,3 +102,5 @@ def test_single_agent_does_not_duplicate_current_message_into_transcript(monkeyp
     assert "RECENT CONVERSATION:" not in ri
     # State recorded the message exactly once.
     assert [m["content"] for m in cap["state"].chat_transcript] == [opener]
+    # The client message is forwarded to the executor so the thinking gate can fire.
+    assert cap["client_message"] == opener

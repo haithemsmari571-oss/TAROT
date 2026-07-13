@@ -6,9 +6,11 @@ from app.services.ai.reading_contracts import HeldItem
 from app.services.ai.reading_llm import FALLBACK_MESSAGE
 from app.services.ai.reading_reader import (
     build_reader_input,
+    is_short_turn,
     parse_reader_output,
     run_reader_turn,
     stream_reader_bubbles,
+    thinking_for_turn,
 )
 
 
@@ -183,3 +185,34 @@ def test_turn_retries_on_call_exception_then_falls_back():
 
     bubbles, _ = run_reader_turn("input", reader_call=boom, max_attempts=2)
     assert bubbles == [FALLBACK_MESSAGE]
+
+
+# ── extended-thinking gate (Option B) ─────────────────────────────────────────
+def test_short_turn_greetings_and_acks():
+    assert is_short_turn("hi") is True
+    assert is_short_turn("hey") is True
+    assert is_short_turn("omg thats so true") is True   # 4 words, no ?
+    assert is_short_turn("hey how are you") is True      # 4 words, no ?
+    assert is_short_turn("") is True
+    assert is_short_turn(None) is True
+
+
+def test_substantive_turns_are_not_short():
+    # A real question -> substantive even if brief.
+    assert is_short_turn("will he come back?") is False
+    # A short but emotionally loaded statement -> substantive (6 words, no ?).
+    assert is_short_turn("im honestly done waiting for him") is False
+    # A long opener with a DOB/story -> substantive.
+    assert is_short_turn(
+        "my ex daniel keeps going hot and cold, born march 3 1990, will he come back"
+    ) is False
+
+
+def test_thinking_off_for_short_turns():
+    assert thinking_for_turn("hi") == {"thinking": None, "effort": None}
+
+
+def test_thinking_adaptive_high_for_substantive_turns():
+    tp = thinking_for_turn("im honestly done waiting for him")
+    assert tp == {"thinking": {"type": "adaptive"}, "effort": "high"}
+    assert thinking_for_turn("will he come back?")["thinking"] == {"type": "adaptive"}
