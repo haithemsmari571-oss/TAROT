@@ -98,6 +98,30 @@ def run_chat(
     }
 
 
+def run_chat_stream(
+    system: str,
+    user_content: str,
+    model: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+):
+    """Stream a single-turn chat, yielding text deltas as the model generates them.
+    Blocking generator — drive it from a thread if you are on the event loop. The
+    single-agent Reader consumes this: accumulate deltas, split into bubbles on the
+    blank-line delimiter, filter each, and emit. Raises AiNotConfigured if no key;
+    propagates SDK errors for the caller to handle (retry/fallback)."""
+    client = _client()
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": user_content}],
+    }
+    if system:
+        kwargs["system"] = system
+    with client.messages.stream(**kwargs) as stream:
+        for delta in stream.text_stream:
+            yield delta
+
+
 def parse_json_object(text: str) -> dict:
     """Best-effort parse of a JSON object from model output — tolerates ```json
     fences and leading/trailing prose. Raises ValueError if none found/valid."""
