@@ -287,6 +287,24 @@ def test_full_reading_unaffected_by_micro_cap():
     assert isinstance(out, DeliveryPlan) and len(out.queue) >= 1
 
 
+@pytest.mark.parametrize("micro_type", ["micro_read", "micro-read", "MICRO_READ", "micro", "micro_reading"])
+def test_micro_cap_matches_loose_type_variants(micro_type):
+    # Sabri's type vocabulary varies; a micro-read with a non-canonical type string
+    # must still hit the tighter cap (same loose match _reading_format_directive uses
+    # to give Valentina a micro-read length) — else it escapes the cap and spins 3x.
+    sabri = _Sabri([ValentinaRequest(type=micro_type, instructions="x")] * 6)
+    vcalls = {"n": 0}
+
+    def valentina(_req):
+        vcalls["n"] += 1
+        return f"draft {vcalls['n']}"
+
+    state = _new_state()
+    process_client_message(state, "hi", sabri_call=sabri, valentina_call=valentina,
+                           max_corrections=3, micro_max_corrections=2, now=T0)
+    assert vcalls["n"] == 2   # capped at 2 regardless of the exact type spelling
+
+
 def test_llm_failure_yields_fallback_message():
     def sabri(_inp):
         raise LLMCallError("down")

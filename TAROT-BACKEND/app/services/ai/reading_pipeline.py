@@ -161,7 +161,9 @@ def process_client_message(
 
             # decision is a ValentinaRequest. A micro_read request tightens the cap
             # for the rest of the loop (deterministic — not left to Sabri's gate).
-            if getattr(decision, "type", None) == "micro_read":
+            # Loose match, identical to _reading_format_directive, so a non-canonical
+            # type string ("micro-read"/"MICRO_READ"/…) can't escape the cap.
+            if _is_micro_read_type(getattr(decision, "type", None)):
                 is_micro = True
             cap = micro_max_corrections if is_micro else max_corrections
             if corrections >= cap:
@@ -199,13 +201,23 @@ def process_client_message(
 
 
 # ── live entry (async) ───────────────────────────────────────────────────────
+def _is_micro_read_type(reading_type) -> bool:
+    """Loose micro-read detection. Sabri (Haiku) emits varied type vocabulary
+    (micro_read / micro-read / MICRO_READ / …), so match by substring — the SAME
+    way _reading_format_directive decides Valentina's length. The two MUST agree:
+    if a request is treated as a micro-read for length, it must also be capped as
+    one, else a micro-read with a non-canonical type string escapes the cap and
+    spins the full correction loop."""
+    return "micro" in (reading_type or "").lower()
+
+
 def _reading_format_directive(reading_type: str) -> str:
     """Translate Sabri's request type into an explicit length/format directive for
     Valentina. Sabri's actual vocabulary varies (micro_read / full_read /
     opening_read / correction / …), so normalise loosely rather than by exact enum.
     Without this the type was silently dropped and Valentina always went full."""
     t = (reading_type or "").lower()
-    if "micro" in t:
+    if _is_micro_read_type(reading_type):
         return (
             "FORMAT: MICRO-READ. Reply with 3-8 short, standalone lines only. "
             "Do NOT produce a full 4-part reading."
