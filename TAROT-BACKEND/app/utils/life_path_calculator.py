@@ -26,6 +26,21 @@ def reduce_to_single_digit(number: int, allow_master_numbers: bool = True) -> in
     return number
 
 
+def _coerce_date(birth_date: date | str) -> date:
+    """Accept a date/datetime or a 'YYYY-MM-DD' (dossier ISO) / 'DD/MM/YYYY'
+    string and return a plain date. The dossier stores DOB as an ISO string
+    (date.isoformat()), while the /oracle utils historically pass 'DD/MM/YYYY'."""
+    if isinstance(birth_date, datetime):
+        return birth_date.date()
+    if isinstance(birth_date, date):
+        return birth_date
+    s = str(birth_date).strip()
+    try:
+        return date.fromisoformat(s[:10])  # 'YYYY-MM-DD' (also strips a time suffix)
+    except ValueError:
+        return datetime.strptime(s, "%d/%m/%Y").date()
+
+
 def calculate_life_path_number(birth_date: date | str) -> int:
     """
     Calculate life path number from birth date.
@@ -34,13 +49,12 @@ def calculate_life_path_number(birth_date: date | str) -> int:
     Example: 15/05/1990 -> 1+5+0+5+1+9+9+0 = 30 -> 3+0 = 3
 
     Args:
-        birth_date: Date object or string in format 'DD/MM/YYYY'
+        birth_date: Date object, or 'YYYY-MM-DD' / 'DD/MM/YYYY' string
 
     Returns:
         Life path number (1-9, 11, 22, or 33)
     """
-    if isinstance(birth_date, str):
-        birth_date = datetime.strptime(birth_date, "%d/%m/%Y").date()
+    birth_date = _coerce_date(birth_date)
 
     # Convert date to string without separators: YYYYMMDD
     date_string = birth_date.strftime("%Y%m%d")
@@ -50,6 +64,33 @@ def calculate_life_path_number(birth_date: date | str) -> int:
 
     # Reduce to single digit or master number
     return reduce_to_single_digit(total)
+
+
+def calculate_personal_year(birth_date: date | str, current_year: int) -> int:
+    """Personal Year number: sum the digits of (birth month + birth day + the
+    current calendar year), reduced the same way as the Life Path (11/22/33 kept).
+
+    Example: 22 July 1992 in 2026 -> digits of 7 + 22 + 2026
+             = 7 + (2+2) + (2+0+2+6) = 21 -> 3.
+
+    Uses the concatenation of month, day and year, so summing its digits equals
+    summing month-digits + day-digits + year-digits (leading zeros contribute 0);
+    the single final reduction (keeping master numbers) matches the Life Path rule.
+    """
+    d = _coerce_date(birth_date)
+    total = sum(int(ch) for ch in f"{d.month}{d.day}{current_year}")
+    return reduce_to_single_digit(total)
+
+
+def numerology_facts(birth_date: date | str, current_year: int) -> dict:
+    """Both authoritative numerology numbers for a DOB, computed deterministically
+    so the reading model is handed the correct values instead of computing them
+    live (which it gets wrong). Returns {"life_path", "personal_year"}."""
+    d = _coerce_date(birth_date)
+    return {
+        "life_path": calculate_life_path_number(d),
+        "personal_year": calculate_personal_year(d, current_year),
+    }
 
 
 def get_life_path_compatibility_score(number1: int, number2: int) -> int:

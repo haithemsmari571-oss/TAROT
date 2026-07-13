@@ -95,6 +95,56 @@ def test_build_input_formats_transcript_and_held_buffer():
     assert "Name: aaa" in out
 
 
+def test_build_input_injects_authoritative_numerology_when_dob_given():
+    from datetime import date
+
+    out = build_reader_input(
+        client_message="im sarah, july 22 1992", chat_transcript=[], client_file="Name: sarah",
+        session_metadata={}, held_back_buffer=[],
+        date_of_birth=date(1992, 7, 22), current_year=2026,
+    )
+    assert "KNOWN NUMEROLOGY (authoritative" in out
+    assert "Life Path: 5" in out            # NOT 6 (the smoke-test bug)
+    assert "Personal Year (2026): 3" in out
+
+
+def test_build_input_accepts_iso_dob_string_from_dossier():
+    out = build_reader_input(
+        client_message="hi", chat_transcript=[], client_file=None,
+        session_metadata={}, held_back_buffer=[],
+        date_of_birth="1992-07-22", current_year=2026,
+    )
+    assert "Life Path: 5" in out
+    assert "Personal Year (2026): 3" in out
+
+
+def test_build_input_omits_numerology_when_no_dob():
+    out = build_reader_input(
+        client_message="hi", chat_transcript=[], client_file=None,
+        session_metadata={"first_session": True}, held_back_buffer=[],
+    )
+    assert "KNOWN NUMEROLOGY" not in out       # thin/first-session file: nothing injected
+
+
+def test_build_input_numerology_life_path_only_without_year():
+    from datetime import date
+
+    out = build_reader_input(
+        client_message="hi", chat_transcript=[], client_file=None,
+        session_metadata={}, held_back_buffer=[], date_of_birth=date(1992, 7, 22),
+    )
+    assert "Life Path: 5" in out
+    assert "Personal Year" not in out          # no current_year -> life path only
+
+
+def test_build_input_bad_dob_does_not_raise():
+    out = build_reader_input(
+        client_message="hi", chat_transcript=[], client_file=None,
+        session_metadata={}, held_back_buffer=[], date_of_birth="not-a-date", current_year=2026,
+    )
+    assert "KNOWN NUMEROLOGY" not in out       # unparseable DOB is skipped, never crashes
+
+
 # ── run_reader_turn (injected model call) ────────────────────────────────────
 def test_turn_returns_filtered_bubbles_and_holds():
     text = "hey love\n\nsomething cracked open\n\n@@HOLD@@\nif X :: held line\n"

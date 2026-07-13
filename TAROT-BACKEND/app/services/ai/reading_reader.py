@@ -204,6 +204,34 @@ She's smarter, more honest, and has lived more than you. She's not paying for in
 # call is injectable into run_reader_turn. Wired into the live path (Phase 5) behind
 # READING_ENGINE=single_agent via reading_pipeline → reading_executor.
 # ─────────────────────────────────────────────────────────────────────────────
+def _numerology_block(date_of_birth, current_year) -> str:
+    """Deterministic Life Path + Personal Year for the client's DOB, rendered as
+    authoritative given facts. The model computes numerology WRONG when left to do
+    it live (a smoke test read Life Path 6 for 22 Jul 1992, correct is 5), so the
+    numbers are handed to it here and it is told not to recompute. Returns "" when
+    there is no DOB on file (a first-session/thin dossier) — nothing is injected."""
+    if not date_of_birth:
+        return ""
+    try:
+        from app.utils.life_path_calculator import (
+            calculate_life_path_number,
+            calculate_personal_year,
+        )
+
+        life_path = calculate_life_path_number(date_of_birth)
+        lines = [
+            "KNOWN NUMEROLOGY (authoritative — these are correct, use them, do NOT recompute):",
+            f"Life Path: {life_path}",
+        ]
+        if current_year:
+            py = calculate_personal_year(date_of_birth, current_year)
+            lines.append(f"Personal Year ({current_year}): {py}")
+        return "\n".join(lines)
+    except Exception as e:  # noqa: BLE001 — a bad DOB must never break the turn
+        logger.warning("reader_numerology_skipped", error=str(e))
+        return ""
+
+
 def build_reader_input(
     *,
     client_message: str,
@@ -211,10 +239,16 @@ def build_reader_input(
     client_file,
     session_metadata,
     held_back_buffer,
+    date_of_birth=None,
+    current_year=None,
 ) -> str:
     """Assemble the single user-content payload for one Reader turn: recent transcript,
     the client's message, the dossier (loaded silently), session metadata, and the
-    current held-back buffer (lines the Reader may deploy now)."""
+    current held-back buffer (lines the Reader may deploy now).
+
+    ``date_of_birth`` (a date or 'YYYY-MM-DD'/'DD/MM/YYYY' string) + ``current_year``
+    inject the client's Life Path and Personal Year as authoritative given facts, so
+    the model is never left to compute numerology live (which it gets wrong)."""
     parts = []
     tx = chat_transcript or []
     if tx:
@@ -228,6 +262,9 @@ def build_reader_input(
         "CLIENT FILE (load silently, never cite):\n"
         + (client_file or "(none — first session)")
     )
+    numerology = _numerology_block(date_of_birth, current_year)
+    if numerology:
+        parts.append(numerology)
     parts.append("SESSION METADATA:\n" + json.dumps(session_metadata or {}, ensure_ascii=False))
     held = [
         f"{getattr(h, 'hold_trigger', None) or 'if it fits'} {HOLD_SEP} {getattr(h, 'text', '')}"

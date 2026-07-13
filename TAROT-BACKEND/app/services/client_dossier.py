@@ -274,6 +274,16 @@ def get_client_astro(client: User) -> dict:
     }
 
 
+def get_client_dob(db: Session, client_id: int):
+    """The client's raw date_of_birth (a date), or None if unknown / on any error.
+    Used by the single-agent Reader to compute authoritative numerology facts for
+    injection — optional enrichment, so it must never raise and abort the turn."""
+    try:
+        return db.query(User.date_of_birth).filter(User.id == client_id).scalar()
+    except Exception:  # noqa: BLE001 — DOB is optional; never break a reading over it
+        return None
+
+
 def get_client_gifts(db: Session, client_id: int, limit: int = 20) -> list:
     """Recent personal Stardust gifts sent to this client (newest first) — a
     simple log for the dossier. Reads GIFT ledger rows."""

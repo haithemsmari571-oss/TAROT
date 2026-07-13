@@ -29,19 +29,27 @@ from app.services.ai.reading_reader import build_reader_input, run_reader_turn
 _DOSSIER_PATH = os.environ.get("AB_DOSSIER_FILE")
 DOSSIER = io.open(_DOSSIER_PATH, encoding="utf-8").read() if _DOSSIER_PATH else None
 
-# (label, client message, dossier?, session metadata)
+# Sarah's DOB (in the REAL QUESTION and RETURNING cases) — 22 July 1992. The
+# single-agent path injects her authoritative numerology (Life Path 5, Personal
+# Year 3 in 2026) as given facts; the two-agent path lets Valentina compute it
+# live (the case that read Life Path 6). The A/B surfaces that difference.
+SARAH_DOB = "1992-07-22"
+CURRENT_YEAR = 2026
+
+# (label, client message, dossier?, session metadata, dob?)
 CASES = [
-    ("GREETING (micro)", "hi", None, {"first_session": True}),
+    ("GREETING (micro)", "hi", None, {"first_session": True}, None),
     ("REAL QUESTION (full)",
      "my ex daniel keeps going hot and cold, born march 3 1990. im sarah, july 22 1992. "
-     "will he actually come back to me?", DOSSIER, {"first_session": DOSSIER is None}),
-    ("RETURNING + HEATED", "im honestly done waiting for him", DOSSIER, {"first_session": False}),
+     "will he actually come back to me?", DOSSIER, {"first_session": DOSSIER is None}, SARAH_DOB),
+    ("RETURNING + HEATED", "im honestly done waiting for him", DOSSIER, {"first_session": False}, SARAH_DOB),
 ]
 
 
-def run_single(msg, dossier, meta):
+def run_single(msg, dossier, meta, dob=None):
     inp = build_reader_input(client_message=msg, chat_transcript=[], client_file=dossier,
-                             session_metadata=meta, held_back_buffer=[])
+                             session_metadata=meta, held_back_buffer=[],
+                             date_of_birth=dob, current_year=CURRENT_YEAR)
     t0 = time.time()
     bubbles, holds = run_reader_turn(inp)  # one streamed Opus call + strip + retry cap
     dt = time.time() - t0
@@ -71,12 +79,12 @@ def run_two(msg, dossier, meta):
 
 def main():
     summary = []
-    for label, msg, dossier, meta in CASES:
+    for label, msg, dossier, meta, dob in CASES:
         print("=" * 82)
         print(f"{label}   client: {msg!r}")
         print("=" * 82)
 
-        b, bh, bdt, bl = run_single(msg, dossier, meta)
+        b, bh, bdt, bl = run_single(msg, dossier, meta, dob)
         print(f"\n--- SINGLE-AGENT  (Opus, 1 call · {bdt:.1f}s · {len(b)} bubbles · "
               f"{len(bh)} holds · leaks={bl}) ---")
         for x in b:
