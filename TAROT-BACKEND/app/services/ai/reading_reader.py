@@ -331,7 +331,7 @@ def thinking_for_turn(client_message) -> dict:
     message. Substantive turn → adaptive thinking at high effort; short turn → none."""
     if is_short_turn(client_message):
         return {"thinking": None, "effort": None}
-    return {"thinking": {"type": "adaptive"}, "effort": "high"}
+    return {"thinking": {"type": "adaptive"}, "effort": "medium"}
 
 
 def stream_reader(reader_input: str, *, model=None, max_tokens=None, client_message=None):

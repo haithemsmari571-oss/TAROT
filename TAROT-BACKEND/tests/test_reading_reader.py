@@ -212,7 +212,7 @@ def test_thinking_off_for_short_turns():
     assert thinking_for_turn("hi") == {"thinking": None, "effort": None}
 
 
-def test_thinking_adaptive_high_for_substantive_turns():
+def test_thinking_adaptive_for_substantive_turns():
     tp = thinking_for_turn("im honestly done waiting for him")
-    assert tp == {"thinking": {"type": "adaptive"}, "effort": "high"}
+    assert tp == {"thinking": {"type": "adaptive"}, "effort": "medium"}
     assert thinking_for_turn("will he come back?")["thinking"] == {"type": "adaptive"}
