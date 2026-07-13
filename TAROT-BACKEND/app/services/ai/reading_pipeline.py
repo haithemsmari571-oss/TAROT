@@ -410,6 +410,29 @@ async def run_reading_pipeline(
                 else:
                     state.client_file = client_file
 
+                # ── single-agent Reader path (READING_ENGINE=single_agent) ──
+                # One streamed Opus call writes final bubbles directly; the held
+                # buffer is fed in and refreshed each turn. Skips the two-agent loop.
+                if settings.READING_ENGINE == "single_agent":
+                    from app.services.ai import reading_reader
+
+                    now = datetime.now()
+                    reader_input = reading_reader.build_reader_input(
+                        client_message=client_message,
+                        chat_transcript=state.chat_transcript,
+                        client_file=state.client_file,
+                        session_metadata=compute_metadata(state, now),
+                        held_back_buffer=state.held_back_buffer,
+                    )
+                    record_client_message(state, client_message, now)
+                    state.waiting_for_response = False
+                    store.put(state)
+                    # The streaming delivery shows typing immediately and streams the
+                    # first bubble as soon as it generates, so no hold-message is needed.
+                    reading_executor.start_reader_delivery(chat_id, state, reader_input)
+                    logger.info("reader_pipeline_started", chat_id=chat_id)
+                    return None
+
                 def sabri_call(inp: dict):
                     return sabri_check.call_sabri(inp)
 

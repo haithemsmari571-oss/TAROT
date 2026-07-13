@@ -236,3 +236,66 @@ def test_start_and_cancel_lifecycle(monkeypatch):
         assert flag["cancelled"] is True
 
     asyncio.run(_scenario())
+
+
+# ── single-agent Reader streaming delivery (Phase 4) ─────────────────────────
+async def _aiter(items):
+    for i in items:
+        yield i
+
+
+def test_execute_reader_stream_sends_bubbles_typing_and_holds():
+    from app.services.ai.reading_executor import execute_reader_stream
+
+    events = [("bubble", "a"), ("bubble", "b"), ("hold", ("t", "h")), ("bubble", "c")]
+    sent, typing, sleeps = [], [], []
+    clock_vals = iter([0, 10, 20, 30, 40, 50])  # big jumps -> gap always > floor -> no sleeps
+
+    async def send(t): sent.append(t)
+    async def typ(on): typing.append(on)
+    async def slp(s): sleeps.append(s)
+
+    out_sent, out_holds = asyncio.run(execute_reader_stream(
+        _aiter(events), send_bubble=send, typing_fn=typ, sleep_fn=slp,
+        min_typing_sec=0.8, clock=lambda: next(clock_vals),
+    ))
+    assert out_sent == ["a", "b", "c"]
+    assert out_holds == [("t", "h")]
+    assert typing == [True, False]          # typing on for the turn, off at the end
+    assert sleeps == []                     # fast-arriving? no — big gaps, floor never fires
+
+
+def test_execute_reader_stream_floor_sleeps_when_bubbles_arrive_fast():
+    from app.services.ai.reading_executor import execute_reader_stream
+
+    sleeps = []
+    clock_vals = iter([0.0, 0.1, 0.1, 0.2, 0.2])  # 2nd bubble arrives 0.1s after 1st
+
+    async def send(_t): pass
+    async def typ(_on): pass
+    async def slp(s): sleeps.append(round(s, 3))
+
+    asyncio.run(execute_reader_stream(
+        _aiter([("bubble", "a"), ("bubble", "b")]), send_bubble=send, typing_fn=typ,
+        sleep_fn=slp, min_typing_sec=0.8, clock=lambda: next(clock_vals),
+    ))
+    assert sleeps == [0.7]                   # floor: 0.8 - 0.1 elapsed = 0.7s of typing
+
+
+def test_merge_reader_holds_keeps_undeployed_drops_deployed_adds_new():
+    from app.services.ai.reading_contracts import HeldItem
+    from app.services.ai.reading_executor import _merge_reader_holds
+
+    class _S:
+        held_back_buffer = [
+            HeldItem(text="old kept line", hold_trigger="if A"),
+            HeldItem(text="deployed line", hold_trigger="if B"),
+        ]
+
+    state = _S()
+    sent = ["hey", "so here is the deployed line woven in as a live read"]
+    _merge_reader_holds(state, sent, [("if C", "brand new hold")])
+    texts = [h.text for h in state.held_back_buffer]
+    assert "old kept line" in texts        # not deployed -> kept
+    assert "deployed line" not in texts    # its text appeared in a sent bubble -> dropped
+    assert "brand new hold" in texts       # new @@HOLD@@ line added

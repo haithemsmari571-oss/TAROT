@@ -300,3 +300,174 @@ async def resume_delivery(
             return existing
         logger.info("delivery_resume", chat_id=chat_id, position=state.queue_position)
         return start_delivery(chat_id, state, config=config)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Single-agent Reader streaming delivery (Phase 4). Used when READING_ENGINE=
+# single_agent. Bubbles are sent AS THE MODEL WRITES THEM — the real gap between
+# them is the generation time, with only a light READER_MIN_TYPING_MS floor. No
+# artificial pause_short/pause_long. Reuses the send-guard + _delivery_tasks
+# lifecycle so cancellation / disconnect / post-end handling covers it too. The
+# two-agent pacing (compute_typing_duration/gap_after/execute_delivery) stays until
+# cutover, since the A/B needs both engines.
+# ═════════════════════════════════════════════════════════════════════════════
+async def execute_reader_stream(event_aiter, *, send_bubble, typing_fn, sleep_fn,
+                                min_typing_sec, clock):
+    """Play one Reader turn from an async iterator of ("bubble", text) / ("hold",
+    (trigger, line)) events. Typing indicator on throughout; each bubble is sent at
+    least ``min_typing_sec`` after the previous (the light floor). Pure over its
+    injected deps — unit-tested with fakes. Returns (sent_bubbles, holds)."""
+    sent, holds = [], []
+    await typing_fn(True)
+    try:
+        last = None
+        async for kind, payload in event_aiter:
+            if kind == "hold":
+                holds.append(payload)
+                continue
+            if last is not None:
+                gap = min_typing_sec - (clock() - last)
+                if gap > 0:
+                    await sleep_fn(gap)
+            await send_bubble(payload)
+            sent.append(payload)
+            last = clock()
+    finally:
+        await typing_fn(False)
+    return sent, holds
+
+
+async def _reader_events_async(gen_factory):
+    """Bridge a BLOCKING event generator (stream_reader_bubbles over the live SDK
+    stream) into an async iterator: run it in a worker thread, push events onto an
+    asyncio.Queue so the async delivery loop can send between them."""
+    loop = asyncio.get_running_loop()
+    q: asyncio.Queue = asyncio.Queue()
+    _DONE = object()
+
+    def producer():
+        try:
+            for ev in gen_factory():
+                loop.call_soon_threadsafe(q.put_nowait, ("ev", ev))
+        except Exception as e:  # noqa: BLE001 — surfaced to the consumer below
+            loop.call_soon_threadsafe(q.put_nowait, ("err", e))
+        finally:
+            loop.call_soon_threadsafe(q.put_nowait, ("done", _DONE))
+
+    task = asyncio.create_task(asyncio.to_thread(producer))
+    try:
+        while True:
+            tag, val = await q.get()
+            if tag == "done":
+                break
+            if tag == "err":
+                raise val
+            yield val
+    finally:
+        await task
+
+
+def _merge_reader_holds(state, sent_bubbles, new_holds, *, cap: int = 10) -> None:
+    """Update the held-back buffer after a Reader turn: keep prior holds NOT deployed
+    this turn (their text isn't in a sent bubble), add the turn's new @@HOLD@@ holds,
+    dedupe by text, cap. The buffer is handed back to the Reader next turn."""
+    from app.services.ai.reading_contracts import HeldItem
+
+    delivered = "\n".join(sent_bubbles).lower()
+    merged, seen = [], set()
+    for h in state.held_back_buffer:
+        key = (h.text or "").strip().lower()
+        if key and key not in seen and key not in delivered:  # drop deployed / dupes
+            merged.append(h)
+            seen.add(key)
+    for trigger, line in new_holds:
+        key = (line or "").strip().lower()
+        if key and key not in seen:
+            merged.append(HeldItem(text=line, hold_trigger=trigger))
+            seen.add(key)
+    state.held_back_buffer = merged[-cap:]
+
+
+async def _run_reader_delivery(chat_id: int, state, reader_input: str) -> None:
+    """Live single-agent delivery: stream the Reader, send bubbles with the floor,
+    fall back (never silent) if nothing survives, and store the turn's holds."""
+    import time as _time
+
+    from app.config import get_app_settings
+    from app.database.client import SessionLocal
+    from app.models.chat import Chat as _Chat
+    from app.services.ai.reading_llm import FALLBACK_MESSAGE
+    from app.services.ai.reading_reader import stream_reader, stream_reader_bubbles
+    from app.services.ai.reading_session import record_sent_message
+    from app.services.chats import broadcast_ai_message
+
+    s = get_app_settings()
+    with SessionLocal() as _db:
+        chat0 = _db.query(_Chat).filter(_Chat.id == chat_id).first()
+        psychic_id = chat0.psychic_id if chat0 else None
+
+    async def typing_fn(on: bool) -> None:
+        await broadcast_typing(chat_id, on, psychic_id)
+
+    async def send_bubble(text: str) -> None:
+        with SessionLocal() as db:
+            chat = db.query(_Chat).filter(_Chat.id == chat_id).first()
+            if not _chat_is_deliverable(chat):
+                raise _DeliveryAborted(f"chat {chat_id} not deliverable (status={getattr(chat,'status',None)})")
+            await broadcast_ai_message(db, chat, text)
+        record_sent_message(state, text)
+
+    with SessionLocal() as _db2:
+        if not _chat_is_deliverable(_db2.query(_Chat).filter(_Chat.id == chat_id).first()):
+            logger.info("reader_delivery_skipped_chat_not_active", chat_id=chat_id)
+            if _delivery_tasks.get(chat_id) is asyncio.current_task():
+                _delivery_tasks.pop(chat_id, None)
+            return
+
+    def gen_factory():
+        return stream_reader_bubbles(stream_reader(reader_input))
+
+    try:
+        sent, holds = await execute_reader_stream(
+            _reader_events_async(gen_factory),
+            send_bubble=send_bubble,
+            typing_fn=typing_fn,
+            sleep_fn=asyncio.sleep,
+            min_typing_sec=s.READER_MIN_TYPING_MS / 1000.0,
+            clock=_time.monotonic,
+        )
+        if not sent:  # every bubble filtered/empty → never leave silence
+            logger.warning("reader_delivery_empty_fallback", chat_id=chat_id)
+            try:
+                await send_bubble(FALLBACK_MESSAGE)
+            except _DeliveryAborted:
+                pass
+        else:
+            logger.info("reader_delivery_finished", chat_id=chat_id, bubbles=len(sent), holds=len(holds))
+        _merge_reader_holds(state, sent, holds)
+    except asyncio.CancelledError:
+        logger.info("reader_delivery_cancelled", chat_id=chat_id)
+        raise
+    except _DeliveryAborted as e:
+        logger.info("reader_delivery_aborted", chat_id=chat_id, reason=str(e))
+    except Exception as e:  # noqa: BLE001 — a delivery error must never crash the chat
+        logger.error("reader_delivery_error", chat_id=chat_id, error=str(e), exc_info=True)
+    finally:
+        if _delivery_tasks.get(chat_id) is asyncio.current_task():
+            _delivery_tasks.pop(chat_id, None)
+
+
+def start_reader_delivery(chat_id: int, state, reader_input: str) -> Optional[asyncio.Task]:
+    """Launch the streaming Reader delivery as a background task (mirrors start_delivery;
+    shares _delivery_tasks so cancel_delivery / disconnect / post-end cancellation apply)."""
+    existing = _delivery_tasks.get(chat_id)
+    if existing and not existing.done():
+        logger.warning("reader_delivery_already_running", chat_id=chat_id)
+        return existing
+    try:
+        task = asyncio.create_task(_run_reader_delivery(chat_id, state, reader_input))
+    except RuntimeError:
+        logger.warning("reader_delivery_no_event_loop", chat_id=chat_id)
+        return None
+    _delivery_tasks[chat_id] = task
+    return task

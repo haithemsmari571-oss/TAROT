@@ -8,7 +8,30 @@ from app.services.ai.reading_reader import (
     build_reader_input,
     parse_reader_output,
     run_reader_turn,
+    stream_reader_bubbles,
 )
+
+
+# ── stream_reader_bubbles (incremental, pure over a delta source) ─────────────
+def test_stream_bubbles_incremental_split_and_holds():
+    deltas = ["hey", " love", "\n\n", "the cards", " are loud", "\n\n",
+              "@@HOLD@@\nif she asks timing :: mid-nov\n"]
+    events = list(stream_reader_bubbles(deltas))
+    assert events == [
+        ("bubble", "hey love"),
+        ("bubble", "the cards are loud"),
+        ("hold", ("if she asks timing", "mid-nov")),
+    ]
+
+
+def test_stream_bubbles_skips_return_ack_bubble():
+    events = list(stream_reader_bubbles(["welcome back", "\n\n", "the deck is moving"]))
+    assert events == [("bubble", "the deck is moving")]
+
+
+def test_stream_bubbles_skips_return_ack_hold():
+    events = list(stream_reader_bubbles(["real\n\n@@HOLD@@\nif X :: welcome back love\nif Y :: hes scared\n"]))
+    assert events == [("bubble", "real"), ("hold", ("if Y", "hes scared"))]
 
 
 # ── parse_reader_output ──────────────────────────────────────────────────────
