@@ -20,6 +20,10 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
 
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 # Valid pacing flags (per the Sabri prompt's OUTPUT FORMAT).
 PACINGS = {"send_now", "pause_short", "pause_long", "wait_for_response", "hold_back"}
@@ -187,16 +191,40 @@ def _valentina_request(obj: dict) -> ValentinaRequest:
 
 
 def _plan_from_items(items: list) -> DeliveryPlan:
-    """Flat-list form: split items into queue vs hold_back by their pacing/action."""
+    """Flat-list form: split items into queue vs hold_back by their pacing/action.
+
+    Items with no usable text are DROPPED, never delivered. Sabri/Haiku sometimes
+    slips a stray non-message object into a delivery array (e.g. a valentina_request
+    with no ``message`` key) or an item whose message is blank — turning those into
+    an empty item would send a blank bubble to the client. Dropping them lets an
+    all-garbage array collapse to an empty plan, which _finalize_plan rejects so the
+    caller retries / falls back rather than delivering nothing (or nothing-looking)."""
     queue: List[DeliveryItem] = []
     held: List[HeldItem] = []
+    dropped = 0
     for it in items:
         if not isinstance(it, dict):
+            dropped += 1
             continue
         if _norm_pacing(it) == "hold_back":
-            held.append(_held_item(it))
+            h = _held_item(it)
+            if h.text:
+                held.append(h)
+            else:
+                dropped += 1
         else:
-            queue.append(_delivery_item(it))
+            d = _delivery_item(it)
+            if d.message:
+                queue.append(d)
+            else:
+                dropped += 1
+    if dropped:
+        logger.warning(
+            "sabri_dropped_empty_items",
+            dropped=dropped,
+            kept_queue=len(queue),
+            kept_held=len(held),
+        )
     return DeliveryPlan(queue=queue, hold_back=held)
 
 
@@ -225,9 +253,12 @@ def parse_sabri_output(text: str) -> SabriDecision:
     if "queue" in data or "hold_back" in data or action == "deliver":
         plan = _plan_from_items(_as_list(data.get("queue")))
         # Any explicit hold_back array, plus any hold_back-actioned queue items already split.
+        # Skip empty-text held items for the same reason _plan_from_items drops them.
         for it in _as_list(data.get("hold_back")):
             if isinstance(it, dict):
-                plan.hold_back.append(_held_item(it))
+                h = _held_item(it)
+                if h.text:
+                    plan.hold_back.append(h)
         plan.session_notes = data.get("session_notes") or data.get("notes")
         return _finalize_plan(plan)
 

@@ -372,6 +372,48 @@ def test_empty_or_junk_arrays_raise():
             parse_sabri_output(bad)
 
 
+def test_delivery_array_drops_stray_nonmessage_item():
+    # The real Haiku failure: a delivery array whose first element is a stray
+    # valentina_request object (no "message" key). It must be DROPPED, never
+    # delivered as an empty message; the real messages after it still deliver.
+    d = parse_sabri_output(
+        '[{"action":"valentina_request","type":"full_reading","instructions":"..."},'
+        ' {"message":"hey love","action":"send_now"},'
+        ' {"message":"the cards are loud today","action":"pause_short"}]'
+    )
+    assert isinstance(d, DeliveryPlan)
+    assert [i.message for i in d.queue] == ["hey love", "the cards are loud today"]
+    assert all(i.message.strip() for i in d.queue)  # no empty bubbles
+
+
+def test_delivery_drops_blank_message_items():
+    d = parse_sabri_output(
+        '[{"message":"real one","action":"send_now"},'
+        ' {"message":"   ","action":"send_now"},'
+        ' {"message":"","action":"pause_short"}]'
+    )
+    assert [i.message for i in d.queue] == ["real one"]
+
+
+def test_all_empty_items_collapse_to_error_not_empty_bubble():
+    # An all-garbage delivery array must raise (caller retries/falls back), never
+    # yield a plan full of blank messages.
+    for bad in (
+        '[{"message":""},{"message":"   "}]',
+        '[{"action":"valentina_request","instructions":"x"}]',
+    ):
+        with pytest.raises(SabriParseError):
+            parse_sabri_output(bad)
+
+
+def test_hold_back_drops_empty_text():
+    d = parse_sabri_output(
+        '{"queue":[{"message":"m","action":"send_now"}],'
+        ' "hold_back":[{"text":"keep this","hold_trigger":"if X"},{"text":""}]}'
+    )
+    assert [h.text for h in d.hold_back] == ["keep this"]
+
+
 def test_hold_back_only_object_parses():
     d = parse_sabri_output('{"hold_back":[{"text":"held line","hold_trigger":"if X"}]}')
     assert isinstance(d, DeliveryPlan)
