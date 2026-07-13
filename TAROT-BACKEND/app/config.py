@@ -85,7 +85,8 @@ class AppSettings(BaseSettings):
     READING_ENGINE: str = "two_agent"
     # The single-agent Reader (only used when READING_ENGINE=single_agent). Opus for
     # the A/B — we want to see the quality ceiling before considering a cheaper tier.
-    READER_MODEL: str = "claude-opus-4-8"
+    # Verified callable on this key before switching (2026-07-13).
+    READER_MODEL: str = "claude-opus-4-6"
     READER_MAX_TOKENS: int = 4096
     # Bounded retry if the Reader returns empty/malformed output (the single-agent
     # analog of the correction-loop cap: never spin, always deliver something).

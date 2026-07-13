@@ -14,9 +14,18 @@ Without AB_DOSSIER_FILE the returning cases fall back to a thin (first-session) 
 import io
 import logging
 import os
+import sys
 import time
 
 logging.disable(logging.CRITICAL)
+
+# Model output can contain emoji/other non-cp1252 chars; force UTF-8 stdout so a
+# Windows console (or redirected file) never crashes the harness mid-run.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 from app.services.ai import reading_assistant, reading_session, sabri_check
 from app.services.ai.reading_pipeline import (
