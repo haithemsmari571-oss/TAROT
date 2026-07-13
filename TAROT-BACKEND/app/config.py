@@ -77,6 +77,23 @@ class AppSettings(BaseSettings):
     # micro-read is force-delivered after this many Valentina drafts (1 original +
     # 1 correction) regardless of the gate. Prompt wording can't fix this reliably.
     SABRI_MICRO_MAX_ATTEMPTS: int = 2
+    # ── Reading engine selector ──────────────────────────────────────────────
+    # "two_agent" = the current Valentina(draft)↔Sabri(direct) pipeline.
+    # "single_agent" = the new streaming Reader (one Opus call in final voice; the
+    # deterministic return-ack strip + delivery guarantee run on its output).
+    # Defaults to two_agent so main/prod are unchanged until the A/B says otherwise.
+    READING_ENGINE: str = "two_agent"
+    # The single-agent Reader (only used when READING_ENGINE=single_agent). Opus for
+    # the A/B — we want to see the quality ceiling before considering a cheaper tier.
+    READER_MODEL: str = "claude-opus-4-8"
+    READER_MAX_TOKENS: int = 4096
+    # Bounded retry if the Reader returns empty/malformed output (the single-agent
+    # analog of the correction-loop cap: never spin, always deliver something).
+    READER_MAX_ATTEMPTS: int = 2
+    # Minimum visible "typing" per bubble (ms). Generation is often faster than a
+    # human types, so a light floor keeps it reading as typed — NOT the old
+    # pause_short/pause_long artificial delays, just a floor.
+    READER_MIN_TYPING_MS: int = 800
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512
