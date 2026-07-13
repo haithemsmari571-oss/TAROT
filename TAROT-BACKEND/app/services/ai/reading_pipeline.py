@@ -11,6 +11,7 @@ the next (real-time execution) phase.
 """
 
 import asyncio
+import re
 from datetime import datetime
 from typing import Callable, Dict, Optional
 
@@ -80,6 +81,85 @@ def _fallback_from_valentina(valentina_output: Optional[str]) -> DeliveryPlan:
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     items = [DeliveryItem(message=ln, pacing="pause_short", tier="depth") for ln in lines[:8]]
     return DeliveryPlan(queue=items) if items else _fallback_plan()
+
+
+# ── deterministic return-acknowledgment filter ───────────────────────────────
+# Valentina's PROMPT ban on marking a prior session leaks the category ~20% of the
+# time (measured), so the client-facing queue is filtered in CODE — same pattern as
+# the empty-item guard and the micro-read cap. Each pattern targets HER return / a
+# prior-session reference; references to the man ("he came back") or her life ("the
+# last time he called") deliberately do NOT match and are kept.
+#
+# Precision matters as much as recall: Valentina is a RELATIONSHIP reader, so lines
+# like "he came back louder", "you keep coming back to him", "you came back to
+# yourself", "you're back under his spell" are core content and must NOT be stripped.
+# The ambiguous "back / came back / coming back" patterns therefore never match when
+# they continue with "to <someone/thing>" (relationship/life); only HER return to the
+# reader — standalone or "…to me/us" — is a return-acknowledgment. Adversarially
+# reviewed; some rare phrasings still leak by design (this is a backstop, not a wall).
+_BACK_IDIOM = r"(?!\s+(?:to|at|in|on|with|around|from|into|under|beneath|inside))"
+_RETURN_ACK_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        # ── unambiguous session-return greetings/markers ──
+        r"\bwelcome back\b",
+        r"\byou'?re (?:finally |now |really )?back\b" + _BACK_IDIOM,
+        r"\byou are (?:finally |now )?back\b" + _BACK_IDIOM,
+        r"\bback so soon\b",
+        r"\byou'?re here again\b",
+        # ── explicit prior-session references ──
+        r"\bsince we (?:last |first )?(?:spoke|sat|met|talked|connected|were)\b",
+        r"\bwe last (?:spoke|sat|met|talked|connected)\b",
+        r"\bwhen we last\b",
+        r"\blast time you (?:were|came|sat|left|walked|reached|visited|showed)\b",
+        r"\blast time we (?:spoke|sat|met|talked|connected|were)\b",
+        r"\bthan (?:the )?last time you\b",
+        r"\bsince last time\b",
+        r"\bsince (?:the )?last time (?:you|we)\b",
+        # ── time since the last session ──
+        r"\b(?:it'?s|it has|its) been (?:a (?:while|minute|moment|long while)|so long|too long|ages|some time)\b",
+        r"\bbeen a while since\b",
+        r"\byou'?ve been (?:gone|away) (?:a while|a minute|so long|too long|for a while|for so long|for ages)\b",
+        r"\byou were (?:gone|away) (?:a while|so long|too long|for a while|for so long)\b",
+        # ── return greetings ──
+        r"\b(?:good|nice|great|so good|so nice|lovely|so lovely|wonderful|glad) to (?:see|have) you (?:again|back)\b",
+        # ── HER return to the reader — conservative: never strip "…to <someone/thing>"
+        #    (relationship/life, e.g. "came back to yourself / to him"). ──
+        r"\byou came back\b(?!\s+to\s+\w)",
+        r"\byou'?ve come back\b(?!\s+to\s+\w)",
+        r"\byou have come back\b(?!\s+to\s+\w)",
+        r"\b(?:came|come) back to (?:me|us)\b",
+        r"\bthan you (?:were )?left\b",
+        r"\byou'?ve returned\b(?!\s+to\s+(?:him|her|his|your|it|them))",
+        r"\byou returned\b(?!\s+to\s+(?:him|her|his|your|it|them))",
+        r"\byou keep (?:coming back|returning)\b(?!\s+(?:to|for|into)\b)",
+    )
+]
+
+
+def is_return_acknowledgment(text: str) -> bool:
+    """True if a client-facing line marks a prior session (welcome back, since we
+    last spoke, last time you were here, it's been a while, …). Deterministic
+    backstop for Valentina's prompt ban, which leaks the category ~20% of the time."""
+    t = text or ""
+    return any(p.search(t) for p in _RETURN_ACK_PATTERNS)
+
+
+def _strip_return_acks(plan: DeliveryPlan):
+    """Drop every queue/held line that is a return-acknowledgment. Returns the
+    filtered plan and the list of dropped messages (empty if nothing matched, in
+    which case the original plan is returned unchanged)."""
+    dropped = [i.message for i in plan.queue if is_return_acknowledgment(i.message)]
+    dropped += [
+        h.text for h in plan.hold_back if is_return_acknowledgment(getattr(h, "text", "") or "")
+    ]
+    if not dropped:
+        return plan, []
+    queue = [i for i in plan.queue if not is_return_acknowledgment(i.message)]
+    held = [
+        h for h in plan.hold_back if not is_return_acknowledgment(getattr(h, "text", "") or "")
+    ]
+    return DeliveryPlan(queue=queue, hold_back=held, session_notes=plan.session_notes), dropped
 
 
 # ── held-back buffer management ──────────────────────────────────────────────
@@ -178,10 +258,27 @@ def process_client_message(
         logger.error("reading_pipeline_llm_failed", error=str(e))
         decision = _fallback_plan()
 
-    # A delivered plan with nothing to send now (e.g. Sabri held everything back)
-    # still needs a line for the client — add a fallback while keeping the buffer.
+    # Deterministic return-acknowledgment strip — Valentina's prompt ban leaks the
+    # category ~20% of the time, so drop any client-facing line that marks a prior
+    # session (welcome back, since we last spoke, …) here, in code, before delivery.
+    if isinstance(decision, DeliveryPlan):
+        decision, dropped_acks = _strip_return_acks(decision)
+        if dropped_acks:
+            logger.warning(
+                "reading_dropped_return_acks",
+                count=len(dropped_acks),
+                dropped=dropped_acks,
+                session_id=state.session_id,
+            )
+
+    # Nothing left to send now — Sabri held everything back, OR the strip above
+    # removed every queued line — still needs a line for the client. Rebuild from
+    # Valentina's raw draft (also stripped, since it may carry the same phrasing);
+    # if even that comes back empty, deliver a safe generic line. Never send silence.
     if isinstance(decision, DeliveryPlan) and not decision.queue:
-        fb = _fallback_from_valentina(valentina_output)
+        fb, _ = _strip_return_acks(_fallback_from_valentina(valentina_output))
+        if not fb.queue:
+            fb = _fallback_plan()
         decision = DeliveryPlan(
             queue=fb.queue,
             hold_back=decision.hold_back,

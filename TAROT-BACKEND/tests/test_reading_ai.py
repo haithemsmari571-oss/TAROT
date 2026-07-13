@@ -25,7 +25,11 @@ from app.services.ai.reading_contracts import (
     parse_sabri_output,
 )
 from app.services.ai.reading_llm import FALLBACK_MESSAGE, LLMCallError, run_with_retries
-from app.services.ai.reading_pipeline import process_client_message
+from app.services.ai.reading_pipeline import (
+    _strip_return_acks,
+    is_return_acknowledgment,
+    process_client_message,
+)
 from app.services.ai.reading_session import (
     _length_bucket,
     _speed_bucket,
@@ -303,6 +307,108 @@ def test_micro_cap_matches_loose_type_variants(micro_type):
     process_client_message(state, "hi", sabri_call=sabri, valentina_call=valentina,
                            max_corrections=3, micro_max_corrections=2, now=T0)
     assert vcalls["n"] == 2   # capped at 2 regardless of the exact type spelling
+
+
+# ── return-acknowledgment filter (deterministic backstop for Valentina's ban) ─
+@pytest.mark.parametrize("line", [
+    "hey hey, welcome back",
+    "you're back",
+    "you're back again",
+    "you arrived louder than the last time you were quiet",
+    "it's been a while",
+    "since we last spoke there's been a shift",
+    "good to see you again",
+    "you came back louder than you left",
+    "last time you were here you barely held the thread",
+    "when we last spoke you were unsure",
+    # broadened after adversarial review (previously leaked)
+    "it's been a minute",
+    "it has been a while",
+    "so lovely to see you again",
+    "wonderful to see you back",
+    "you've come back to me",
+    "you came back with a different frequency",
+    "you've been gone a while",
+    "last time you reached out you were unsure",
+    "good to see you back",
+    "something shifted in you since last time",
+    "since the last time you sat with me",
+])
+def test_is_return_acknowledgment_positive(line):
+    assert is_return_acknowledgment(line) is True
+
+
+@pytest.mark.parametrize("line", [
+    "he came back to you last week",              # about HIM, not her session
+    "the last time he called was a tuesday",      # about him
+    "you're back to square one with him",         # idiom, not a session return
+    "you're back in his orbit and you know it",   # idiom
+    "you're worth more than you let yourself feel",
+    "hey love, what's sitting on your chest tonight",
+    "the cards are loud for you right now",
+    # false positives fixed after adversarial review — relationship/life, must KEEP
+    "he came back louder than he left",           # the man, not her session
+    "he came back again and you let him",
+    "you keep coming back to him even when it hurts",
+    "you keep coming back to the same fight",
+    "you came back to yourself after the breakup",
+    "you came back to life once he left",
+    "you're back under his spell",
+    "you are back in his orbit",
+    "you returned to him too soon",
+    "since the last time he called you've been quieter",  # about him, keep
+])
+def test_is_return_acknowledgment_negative(line):
+    assert is_return_acknowledgment(line) is False
+
+
+def test_strip_return_acks_drops_only_matching_queue_and_held():
+    plan = DeliveryPlan(
+        queue=[
+            DeliveryItem("hey hey, welcome back", "send_now"),
+            DeliveryItem("something cracked open in you", "send_now"),
+            DeliveryItem("what brought you here tonight", "send_now"),
+        ],
+        hold_back=[HeldItem(text="since we last spoke", hold_trigger="x"),
+                   HeldItem(text="he's carrying shame", hold_trigger="y")],
+    )
+    out, dropped = _strip_return_acks(plan)
+    assert [i.message for i in out.queue] == [
+        "something cracked open in you", "what brought you here tonight",
+    ]
+    assert [h.text for h in out.hold_back] == ["he's carrying shame"]
+    assert "hey hey, welcome back" in dropped and "since we last spoke" in dropped
+
+
+def test_process_client_message_strips_return_ack_from_delivery():
+    plan = DeliveryPlan(queue=[
+        DeliveryItem("hey hey, welcome back", "send_now"),
+        DeliveryItem("the cards are loud tonight", "send_now"),
+    ])
+    sabri = _Sabri([ValentinaRequest(type="micro_read"), plan])
+    state = _new_state()
+    out = process_client_message(state, "hi", sabri_call=sabri,
+                                 valentina_call=lambda _r: "draft", now=T0)
+    msgs = [i.message for i in out.queue]
+    assert "hey hey, welcome back" not in msgs
+    assert "the cards are loud tonight" in msgs
+
+
+def test_process_client_message_all_acks_falls_back_never_silent():
+    # Sabri delivers a plan whose EVERY line is a return-ack; the raw Valentina
+    # draft carries a clean line -> fall back to it, never an empty/silent delivery.
+    plan = DeliveryPlan(queue=[
+        DeliveryItem("welcome back love", "send_now"),
+        DeliveryItem("it's been a while", "send_now"),
+    ])
+    sabri = _Sabri([ValentinaRequest(type="micro_read"), plan])
+    state = _new_state()
+    raw = "welcome back\nthe deck is already moving for you\nyou're back again"
+    out = process_client_message(state, "hi", sabri_call=sabri,
+                                 valentina_call=lambda _r: raw, now=T0)
+    assert len(out.queue) >= 1                                    # never silent
+    assert all(not is_return_acknowledgment(i.message) for i in out.queue)
+    assert "the deck is already moving for you" in [i.message for i in out.queue]
 
 
 def test_llm_failure_yields_fallback_message():
