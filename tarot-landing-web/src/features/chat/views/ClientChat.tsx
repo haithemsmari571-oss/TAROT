@@ -15,6 +15,7 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
 import { MessageBubble } from "../components/MessageBubble";
+import { TypingIndicator } from "../components/TypingIndicator";
 import { SessionBar } from "../components/SessionBar";
 import { PsychicProfileCard } from "../components/PsychicProfileCard";
 import { useChatFacade } from "../hooks/useChatFacade";
@@ -200,6 +201,8 @@ const ClientChat = () => {
   // State for messages
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  // Reader "typing…" indicator, driven by backend typing_start/typing_stop events.
+  const [isReaderTyping, setIsReaderTyping] = useState(false);
 
   // ChatFacade for WebSocket connection
   const { facade, isConnected, error: wsError } = useChatFacade({
@@ -244,6 +247,8 @@ const ClientChat = () => {
   // Stable event handlers using useCallback
   const handleMessageReceived = useCallback(({ message }: { message: ChatMessage }) => {
     console.log('[ClientChat] Message received handler called:', message);
+    // A message arrived → stop showing the reader typing indicator.
+    setIsReaderTyping(false);
     setMessages(prev => {
       // Avoid duplicates
       if (prev.some(m => m.id === message.id)) {
@@ -254,6 +259,14 @@ const ClientChat = () => {
       return [...prev, message];
     });
   }, []);
+
+  // Reader (Logan) typing indicator, from the backend typing_start/typing_stop
+  // events broadcast during delivery. We don't send our own typing to the server.
+  const handleTypingStart = useCallback(({ userId }: { userId: number }) => {
+    if (user && userId === user.id) return; // ignore our own id (defensive)
+    setIsReaderTyping(true);
+  }, [user]);
+  const handleTypingStop = useCallback(() => setIsReaderTyping(false), []);
 
   // The other party opened the conversation → flip our sent messages to "seen".
   const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
@@ -539,6 +552,8 @@ const ClientChat = () => {
     enabled: !!selectedChat,
     events: {
       [ChatEventType.MESSAGE_RECEIVED]: handleMessageReceived,
+      [ChatEventType.TYPING_START]: handleTypingStart,
+      [ChatEventType.TYPING_STOP]: handleTypingStop,
       [ChatEventType.MESSAGES_READ]: handleMessagesRead,
       [ChatEventType.SESSION_INFO]: handleSessionInfo,
       [ChatEventType.SESSION_STARTED]: handleSessionStarted,
@@ -559,6 +574,7 @@ const ClientChat = () => {
   useEffect(() => {
     console.log('[ClientChat] selectedChat changed to:', selectedChat);
     setMessages([]);
+    setIsReaderTyping(false);
   }, [selectedChat]);
 
   // NOTE: billing is anchored ONLY by an explicit click on the global
@@ -768,10 +784,10 @@ const ClientChat = () => {
 
   // Note: Session state management (timer, notifications) now handled by useChatSessionState hook
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or the typing indicator toggles
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isReaderTyping]);
 
   const formatTime = (s: number | null | undefined) => {
     const seconds = s || 0;
@@ -1564,6 +1580,14 @@ const ClientChat = () => {
                       </p>
                     </div>
                   </div>
+                )}
+
+                {/* Reader "typing…" indicator while a message is being delivered */}
+                {isReaderTyping && currentChatStatus === 'ACTIVE' && (
+                  <TypingIndicator
+                    avatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
+                    name={psychicName}
+                  />
                 )}
 
                 <div ref={scrollRef} />

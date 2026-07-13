@@ -250,6 +250,17 @@ export class ChatFacade {
         break;
       }
       
+      case 'typing_start':
+      case 'typing_stop':
+        // Reader (Logan) typing indicator, broadcast during message delivery.
+        this.eventBus.emit(
+          eventType === 'typing_start'
+            ? ChatEventType.TYPING_START
+            : ChatEventType.TYPING_STOP,
+          { userId: Number(data.sender_id) }
+        );
+        break;
+
       // Let adapter handle role-specific events
       default:
         console.log('[ChatFacade] Delegating to adapter:', eventType);
