@@ -201,7 +201,8 @@ She's smarter, more honest, and has lived more than you. She's not paying for in
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 3 — the Reader turn: build input → stream call → parse → strip → retry cap.
 # Pure/testable seams: build_reader_input and parse_reader_output are pure; the model
-# call is injectable into run_reader_turn. Not wired into the live path yet.
+# call is injectable into run_reader_turn. Wired into the live path (Phase 5) behind
+# READING_ENGINE=single_agent via reading_pipeline → reading_executor.
 # ─────────────────────────────────────────────────────────────────────────────
 def build_reader_input(
     *,

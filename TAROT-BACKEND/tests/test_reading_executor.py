@@ -282,6 +282,87 @@ def test_execute_reader_stream_floor_sleeps_when_bubbles_arrive_fast():
     assert sleeps == [0.7]                   # floor: 0.8 - 0.1 elapsed = 0.7s of typing
 
 
+def test_reader_events_async_cancel_does_not_block_on_slow_producer():
+    """The HIGH review finding: cancelling a Reader stream must NOT wait for the
+    uninterruptible worker to drain the rest of the generation. Closing the async
+    iterator returns immediately even while the producer is blocked mid-stream."""
+    import threading
+    import time
+
+    from app.services.ai.reading_executor import _reader_events_async
+
+    released = threading.Event()
+
+    def blocking_gen():
+        yield ("bubble", "first")
+        released.wait(5)          # simulate a long in-flight generation
+        yield ("bubble", "second")
+
+    async def scenario():
+        agen = _reader_events_async(lambda: blocking_gen())
+        first = await agen.__anext__()
+        assert first == ("bubble", "first")
+        t0 = time.monotonic()
+        await agen.aclose()       # cancel while the producer is blocked
+        dt = time.monotonic() - t0
+        released.set()            # let the detached thread wind down
+        return dt
+
+    dt = asyncio.run(scenario())
+    assert dt < 1.0               # returned at once — did NOT block ~5s on the producer
+
+
+def test_reader_events_async_surfaces_producer_error():
+    from app.services.ai.reading_executor import _reader_events_async
+
+    def boom_gen():
+        yield ("bubble", "a")
+        raise RuntimeError("stream died")
+
+    async def scenario():
+        out = []
+        agen = _reader_events_async(lambda: boom_gen())
+        with pytest.raises(RuntimeError, match="stream died"):
+            async for ev in agen:
+                out.append(ev)
+        return out
+
+    assert asyncio.run(scenario()) == [("bubble", "a")]
+
+
+def test_run_reader_delivery_clears_typing_when_chat_not_deliverable(monkeypatch):
+    """Finding #4: the pre-flight not-deliverable early return must clear the typing
+    dots the pipeline turned on (it never reaches execute_reader_stream's finally)."""
+    from app.enums.chat_status import ChatStatus
+
+    typing_calls = []
+
+    # Chat comes back ENDED -> _chat_is_deliverable False -> pre-flight early return.
+    class _FakeQuery:
+        def filter(self, *a, **k): return self
+        def first(self): return type("C", (), {"status": ChatStatus.ENDED, "psychic_id": 7})()
+
+    class _FakeDB:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def query(self, *a, **k): return _FakeQuery()
+
+    monkeypatch.setattr("app.database.client.SessionLocal", _FakeDB)
+
+    async def fake_broadcast_typing(chat_id, on, sender_id):
+        typing_calls.append(on)
+
+    monkeypatch.setattr(ex, "broadcast_typing", fake_broadcast_typing)
+
+    async def scenario():
+        ex._delivery_tasks[555] = asyncio.current_task()
+        await ex._run_reader_delivery(555, create_session_state("chat:555", chat_id=555), "input")
+
+    asyncio.run(scenario())
+    assert typing_calls == [False]        # typing cleared on the not-deliverable exit
+    assert 555 not in ex._delivery_tasks
+
+
 def test_merge_reader_holds_keeps_undeployed_drops_deployed_adds_new():
     from app.services.ai.reading_contracts import HeldItem
     from app.services.ai.reading_executor import _merge_reader_holds

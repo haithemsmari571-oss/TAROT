@@ -13,7 +13,9 @@ it is tested with a fake clock and a recording send — never real timing.
 """
 
 import asyncio
+import contextlib
 import random
+import threading
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Optional
 
@@ -145,6 +147,9 @@ async def execute_delivery(
 
 # ── live task lifecycle (per chat) ───────────────────────────────────────────
 _delivery_tasks: Dict[int, asyncio.Task] = {}
+# Producer threads we've detached on cancel: kept referenced so asyncio doesn't GC
+# them mid-flight; each removes itself on completion.
+_detached_producers: set = set()
 
 
 class _DeliveryAborted(Exception):
@@ -340,18 +345,33 @@ async def execute_reader_stream(event_aiter, *, send_bubble, typing_fn, sleep_fn
 async def _reader_events_async(gen_factory):
     """Bridge a BLOCKING event generator (stream_reader_bubbles over the live SDK
     stream) into an async iterator: run it in a worker thread, push events onto an
-    asyncio.Queue so the async delivery loop can send between them."""
+    asyncio.Queue so the async delivery loop can send between them.
+
+    Cancellable: a threading.Event lets the consumer signal the worker to stop at the
+    next event boundary, where it closes the generator — tearing down the SDK stream
+    so billing stops. On cancel the consumer sets the flag and DETACHES rather than
+    awaiting the worker, so cancel_delivery returns at once instead of blocking under
+    the session lock for the rest of an uninterruptible generation. (An
+    already-in-flight network read can only be observed at the next delta; a fully
+    stalled stream is left to close itself in the background rather than pin the
+    caller.) The detached task is parked in a module set so asyncio can't GC it."""
     loop = asyncio.get_running_loop()
     q: asyncio.Queue = asyncio.Queue()
+    stop = threading.Event()
     _DONE = object()
 
     def producer():
+        gen = gen_factory()
         try:
-            for ev in gen_factory():
+            for ev in gen:
+                if stop.is_set():
+                    break
                 loop.call_soon_threadsafe(q.put_nowait, ("ev", ev))
         except Exception as e:  # noqa: BLE001 — surfaced to the consumer below
             loop.call_soon_threadsafe(q.put_nowait, ("err", e))
         finally:
+            with contextlib.suppress(Exception):
+                gen.close()  # tear down the SDK stream context manager (stops billing)
             loop.call_soon_threadsafe(q.put_nowait, ("done", _DONE))
 
     task = asyncio.create_task(asyncio.to_thread(producer))
@@ -364,13 +384,27 @@ async def _reader_events_async(gen_factory):
                 raise val
             yield val
     finally:
-        await task
+        # Signal stop and detach — never block cancellation on an uninterruptible
+        # worker thread. It observes `stop` (or the stream ends) and closes the SDK
+        # stream on its own; its exceptions are already funnelled through the queue.
+        stop.set()
+        if not task.done():
+            _detached_producers.add(task)
+            task.add_done_callback(_detached_producers.discard)
 
 
 def _merge_reader_holds(state, sent_bubbles, new_holds, *, cap: int = 10) -> None:
     """Update the held-back buffer after a Reader turn: keep prior holds NOT deployed
     this turn (their text isn't in a sent bubble), add the turn's new @@HOLD@@ holds,
-    dedupe by text, cap. The buffer is handed back to the Reader next turn."""
+    dedupe by text, cap. The buffer is handed back to the Reader next turn.
+
+    Deployment is detected by a verbatim substring test, which is deliberately loose:
+    if the Reader paraphrases a held line rather than pasting it, the match misses and
+    the line is re-offered next turn (mild repetition risk); a short held line that is
+    an incidental substring of an unrelated bubble is dropped. This is accepted — the
+    buffer is advisory shaping input only (never emitted as client text), is deduped
+    and capped, and a reliable paraphrase-aware match would need the very second model
+    call the single-agent design exists to remove."""
     from app.services.ai.reading_contracts import HeldItem
 
     delivered = "\n".join(sent_bubbles).lower()
@@ -420,6 +454,12 @@ async def _run_reader_delivery(chat_id: int, state, reader_input: str) -> None:
     with SessionLocal() as _db2:
         if not _chat_is_deliverable(_db2.query(_Chat).filter(_Chat.id == chat_id).first()):
             logger.info("reader_delivery_skipped_chat_not_active", chat_id=chat_id)
+            # The pipeline turned the typing dots on before launching us; clear them
+            # so an ended/paused chat isn't left with a hanging indicator (this path
+            # never reaches execute_reader_stream's finally, which is the only other
+            # place that clears typing for the single-agent turn).
+            with contextlib.suppress(Exception):
+                await typing_fn(False)
             if _delivery_tasks.get(chat_id) is asyncio.current_task():
                 _delivery_tasks.pop(chat_id, None)
             return
