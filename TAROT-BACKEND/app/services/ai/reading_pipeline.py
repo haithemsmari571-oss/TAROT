@@ -25,7 +25,11 @@ from app.services.ai.reading_contracts import (
     DeliveryPlan,
     ValentinaRequest,
 )
-from app.services.ai.reading_llm import FALLBACK_MESSAGE, LLMCallError
+from app.services.ai.reading_llm import (
+    FALLBACK_MESSAGE,
+    LLMCallError,
+    OPENING_HOLD_MESSAGE,
+)
 from app.services.ai.reading_session import compute_metadata, record_client_message
 
 logger = get_logger(__name__)
@@ -163,11 +167,48 @@ def process_client_message(
 
 
 # ── live entry (async) ───────────────────────────────────────────────────────
+def _reading_format_directive(reading_type: str) -> str:
+    """Translate Sabri's request type into an explicit length/format directive for
+    Valentina. Sabri's actual vocabulary varies (micro_read / full_read /
+    opening_read / correction / …), so normalise loosely rather than by exact enum.
+    Without this the type was silently dropped and Valentina always went full."""
+    t = (reading_type or "").lower()
+    if "micro" in t:
+        return (
+            "FORMAT: MICRO-READ. Reply with 3-8 short, standalone lines only. "
+            "Do NOT produce a full 4-part reading."
+        )
+    if "correction" in t or "rejection" in t:
+        return "This is a CORRECTION pass: regenerate the flagged sections from the new angle."
+    return "FORMAT: FULL READING. Use the complete 4-part structure (15-20 insights)."
+
+
 def _sabri_instructions(req: ValentinaRequest) -> str:
-    parts = [req.instructions, req.correction_notes]
+    parts = [_reading_format_directive(req.type), req.instructions, req.correction_notes]
     if req.flags:
         parts.append("Flags: " + ", ".join(req.flags))
     return "\n".join(p for p in parts if p)
+
+
+async def _send_hold_message_after(chat_id: int, sender_id, delay_sec: float) -> None:
+    """After `delay_sec`, if this task hasn't been cancelled (the plan isn't ready
+    yet), send a short holding line so the client isn't left in silence while the
+    reading generates, then re-show the typing indicator."""
+    await asyncio.sleep(delay_sec)  # CancelledError propagates if the plan arrived first
+    try:
+        from app.database.client import SessionLocal
+        from app.services.ai import reading_executor
+        from app.services.chats import broadcast_ai_message
+
+        with SessionLocal() as db:
+            chat = db.query(Chat).filter(Chat.id == chat_id).first()
+            if chat and chat.status == ChatStatus.ACTIVE:
+                await broadcast_ai_message(db, chat, OPENING_HOLD_MESSAGE)
+                logger.info("hold_message_sent", chat_id=chat_id)
+        # The reading is still generating — re-show typing after the holding line.
+        await reading_executor.broadcast_typing(chat_id, True, sender_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("hold_message_failed", chat_id=chat_id, error=str(e))
 
 
 async def run_reading_pipeline(
@@ -203,44 +244,57 @@ async def run_reading_pipeline(
         # overlapping client messages process in arrival order).
         async with _session_lock(session_id):
             await reading_executor.cancel_delivery(chat_id)
-            store = reading_session.get_session_store()
-            client_file = reading_assistant.build_client_file(db, chat.user_id)
-            state = store.get(session_id)
-            if state is None:
-                state = reading_session.create_session_state(
-                    session_id,
-                    client_id=chat.user_id,
-                    chat_id=chat_id,
-                    client_file=client_file,
-                    is_first_session=(client_file is None),
+            # Immediate feedback: show the reader "typing" the moment we begin (before
+            # Sabri/Valentina are called), and fire a holding line if generation runs
+            # long. After cancel_delivery so the prior run's typing_stop can't clear it.
+            await reading_executor.broadcast_typing(chat_id, True, chat.psychic_id)
+            hold_task = asyncio.create_task(
+                _send_hold_message_after(
+                    chat_id, chat.psychic_id, settings.READING_HOLD_MESSAGE_DELAY_SEC
                 )
-                store.put(state)
-            else:
-                state.client_file = client_file
-
-            def sabri_call(inp: dict):
-                return sabri_check.call_sabri(inp)
-
-            def valentina_call(req: ValentinaRequest) -> str:
-                return reading_assistant.call_valentina(
-                    client_message=client_message,
-                    client_file=state.client_file,
-                    sabri_instructions=_sabri_instructions(req),
-                    chat_transcript=state.chat_transcript,
-                )
-
-            plan = await asyncio.to_thread(
-                process_client_message,
-                state,
-                client_message,
-                sabri_call=sabri_call,
-                valentina_call=valentina_call,
-                max_corrections=settings.SABRI_MAX_ATTEMPTS,
             )
+            try:
+                store = reading_session.get_session_store()
+                client_file = reading_assistant.build_client_file(db, chat.user_id)
+                state = store.get(session_id)
+                if state is None:
+                    state = reading_session.create_session_state(
+                        session_id,
+                        client_id=chat.user_id,
+                        chat_id=chat_id,
+                        client_file=client_file,
+                        is_first_session=(client_file is None),
+                    )
+                    store.put(state)
+                else:
+                    state.client_file = client_file
+
+                def sabri_call(inp: dict):
+                    return sabri_check.call_sabri(inp)
+
+                def valentina_call(req: ValentinaRequest) -> str:
+                    return reading_assistant.call_valentina(
+                        client_message=client_message,
+                        client_file=state.client_file,
+                        sabri_instructions=_sabri_instructions(req),
+                        chat_transcript=state.chat_transcript,
+                    )
+
+                plan = await asyncio.to_thread(
+                    process_client_message,
+                    state,
+                    client_message,
+                    sabri_call=sabri_call,
+                    valentina_call=valentina_call,
+                    max_corrections=settings.SABRI_MAX_ATTEMPTS,
+                )
+            finally:
+                hold_task.cancel()  # plan ready (or failed) → stop any pending hold
             # A new plan means the client responded — leave any wait barrier.
             state.waiting_for_response = False
             store.put(state)
-            # Play the new plan out in real time (background task).
+            # Play the new plan out in real time (the executor takes over the typing
+            # indicator from here — typing_start/stop per message).
             reading_executor.start_delivery(chat_id, state)
             logger.info(
                 "reading_pipeline_plan_stored", chat_id=chat_id, queue=len(plan.queue)
@@ -248,6 +302,11 @@ async def run_reading_pipeline(
             return plan
     except Exception as e:  # noqa: BLE001 — a pipeline error must never crash the chat
         logger.error("reading_pipeline_error", chat_id=chat_id, error=str(e), exc_info=True)
+        # Clear the typing indicator if we errored before the executor took over.
+        try:
+            await reading_executor.broadcast_typing(chat_id, False, None)
+        except Exception:  # noqa: BLE001
+            pass
         return None
     finally:
         db.close()

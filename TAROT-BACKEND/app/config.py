@@ -89,6 +89,9 @@ class AppSettings(BaseSettings):
     READING_PAUSE_SHORT_MAX_MS: int = 5000
     READING_PAUSE_LONG_MIN_MS: int = 6000
     READING_PAUSE_LONG_MAX_MS: int = 15000
+    # If the pre-plan phase (Sabri+Valentina) runs longer than this, send a short
+    # holding line so the client isn't left in silence while the reading generates.
+    READING_HOLD_MESSAGE_DELAY_SEC: float = 6.0
 
     BILLING_TASK_MAX_RETRIES: int = 3
     BILLING_TASK_RETRY_DELAY_SECONDS: int = 5

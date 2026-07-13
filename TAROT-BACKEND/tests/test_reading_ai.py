@@ -40,6 +40,19 @@ T0 = datetime(2026, 7, 12, 12, 0, 0)
 
 
 # ── Sabri output parsing (consumes the new delivery-queue / valentina_request) ─
+def test_reading_format_directive_maps_type_to_length():
+    from app.services.ai.reading_pipeline import _reading_format_directive, _sabri_instructions
+
+    assert "MICRO-READ" in _reading_format_directive("micro_read")
+    assert "FULL READING" in _reading_format_directive("full_read")      # Sabri's real output
+    assert "FULL READING" in _reading_format_directive("opening_read")   # Sabri's real output
+    assert "FULL READING" in _reading_format_directive("full_reading")
+    assert "CORRECTION" in _reading_format_directive("correction")
+    # the directive is actually forwarded into the instructions Valentina receives
+    req = ValentinaRequest(type="micro_read", instructions="be warm")
+    assert "MICRO-READ" in _sabri_instructions(req)
+
+
 def test_parse_valentina_request():
     d = parse_sabri_output(
         '{"action":"valentina_request","type":"full_reading",'

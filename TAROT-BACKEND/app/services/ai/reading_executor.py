@@ -147,10 +147,28 @@ async def execute_delivery(
 _delivery_tasks: Dict[int, asyncio.Task] = {}
 
 
+async def broadcast_typing(chat_id: int, is_typing: bool, sender_id) -> None:
+    """Emit a server→client typing_start/typing_stop over the chat room. Used by
+    the executor between messages AND by the pipeline the instant a client message
+    arrives (so the reader is 'typing' before Sabri/Valentina are even called)."""
+    from app.manager import manager
+
+    try:
+        await manager.send_to_chat(
+            {
+                "event": "typing_start" if is_typing else "typing_stop",
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+            },
+            str(chat_id),
+        )
+    except Exception:  # noqa: BLE001 — a typing-indicator hiccup never breaks anything
+        pass
+
+
 async def _run_delivery(chat_id: int, state, config: Optional[PacingConfig]) -> None:
     """Build live deps and play the plan; clean up the task registry when done."""
     from app.database.client import SessionLocal
-    from app.manager import manager
     from app.models.chat import Chat as _Chat
     from app.services.ai.reading_session import record_sent_message
     from app.services.chats import broadcast_ai_message
@@ -160,17 +178,7 @@ async def _run_delivery(chat_id: int, state, config: Optional[PacingConfig]) -> 
         psychic_id = chat0.psychic_id if chat0 else None
 
     async def typing_fn(is_typing: bool) -> None:
-        try:
-            await manager.send_to_chat(
-                {
-                    "event": "typing_start" if is_typing else "typing_stop",
-                    "chat_id": chat_id,
-                    "sender_id": psychic_id,
-                },
-                str(chat_id),
-            )
-        except Exception:  # noqa: BLE001 — a typing-indicator hiccup never breaks delivery
-            pass
+        await broadcast_typing(chat_id, is_typing, psychic_id)
 
     async def send_fn(item) -> None:
         with SessionLocal() as db:
