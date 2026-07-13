@@ -232,6 +232,61 @@ def test_forced_round_can_still_deliver():
     assert sabri.inputs[-1].get("max_corrections_reached") is True
 
 
+def test_micro_read_caps_at_two_generations_then_force_delivers():
+    # Sabri keeps requesting a micro_read (never delivers). The loop must stop at
+    # micro_max_corrections (2) Valentina drafts — NOT the full cap of 3 — and
+    # force-deliver the 2nd draft, deterministically, regardless of Sabri's gate.
+    sabri = _Sabri([ValentinaRequest(type="micro_read", instructions="warm opener")] * 6)
+    vcalls = {"n": 0}
+
+    def valentina(_req):
+        vcalls["n"] += 1
+        return f"draft {vcalls['n']}"
+
+    state = _new_state()
+    out = process_client_message(state, "hi", sabri_call=sabri, valentina_call=valentina,
+                                 max_corrections=3, micro_max_corrections=2, now=T0)
+    assert vcalls["n"] == 2                       # capped at 2, not 3
+    assert len(sabri.inputs) == 3                 # 2 requests + the forced 3rd
+    assert sabri.inputs[-1].get("max_corrections_reached") is True
+    assert isinstance(out, DeliveryPlan) and len(out.queue) >= 1
+    assert "draft 2" in " ".join(m.message for m in out.queue)   # 2nd draft delivered
+    assert state.sabri_correction_count == 2
+
+
+def test_micro_read_accepted_round_one_no_extra_generation():
+    delivery = DeliveryPlan(queue=[DeliveryItem(message="hey love", pacing="send_now")])
+    sabri = _Sabri([ValentinaRequest(type="micro_read", instructions="x"), delivery])
+    vcalls = {"n": 0}
+
+    def valentina(_req):
+        vcalls["n"] += 1
+        return "draft 1"
+
+    state = _new_state()
+    out = process_client_message(state, "hi", sabri_call=sabri, valentina_call=valentina,
+                                 max_corrections=3, micro_max_corrections=2, now=T0)
+    assert out is delivery
+    assert vcalls["n"] == 1                       # accepted after a single generation
+
+
+def test_full_reading_unaffected_by_micro_cap():
+    # A full_reading must still use the full cap (3), never the tighter micro cap.
+    sabri = _Sabri([ValentinaRequest(type="full_reading", instructions="again")] * 6)
+    vcalls = {"n": 0}
+
+    def valentina(_req):
+        vcalls["n"] += 1
+        return f"reading {vcalls['n']}"
+
+    state = _new_state()
+    out = process_client_message(state, "will he come back? im sarah, 1990", sabri_call=sabri,
+                                 valentina_call=valentina, max_corrections=3,
+                                 micro_max_corrections=2, now=T0)
+    assert vcalls["n"] == 3                        # full cap, unaffected by micro cap
+    assert isinstance(out, DeliveryPlan) and len(out.queue) >= 1
+
+
 def test_llm_failure_yields_fallback_message():
     def sabri(_inp):
         raise LLMCallError("down")

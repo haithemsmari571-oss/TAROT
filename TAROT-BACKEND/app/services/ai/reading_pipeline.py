@@ -112,6 +112,7 @@ def process_client_message(
     sabri_call: Callable[[dict], object],
     valentina_call: Callable[[ValentinaRequest], str],
     max_corrections: int = 3,
+    micro_max_corrections: int = 2,
     now: Optional[datetime] = None,
     build_sabri_input: Optional[Callable] = None,
 ) -> DeliveryPlan:
@@ -121,9 +122,14 @@ def process_client_message(
     sabri_call(input_dict) -> DeliveryPlan | ValentinaRequest
     valentina_call(ValentinaRequest) -> raw reading text
 
-    Valentina is regenerated at most ``max_corrections`` times. When the cap is
-    reached, Sabri is asked to deliver from the best available output; if it still
-    refuses, an app-side fallback guarantees a deliverable plan."""
+    A full reading regenerates Valentina at most ``max_corrections`` times. A
+    micro-read (Sabri's request ``type == "micro_read"`` — a greeting/short reply)
+    is capped tighter at ``micro_max_corrections`` generations (default 2 = 1
+    original + 1 correction): Sabri's quality gate reliably spins on a two-word
+    greeting where there is nothing to correct, and no prompt wording fixes it, so
+    this cap is enforced deterministically in code. When a cap is reached, Sabri is
+    asked to deliver from the best available output; if it still refuses, an
+    app-side fallback guarantees a deliverable plan."""
     from app.services.ai.sabri_check import build_sabri_input as _default_build_input
 
     build_input = build_sabri_input or _default_build_input
@@ -133,8 +139,12 @@ def process_client_message(
     corrections = 0
     valentina_output: Optional[str] = None
     decision = None
+    is_micro = False  # set once Sabri asks for a micro_read; caps the loop tighter
     try:
         while True:
+            # Micro-reads cap at micro_max_corrections, full readings at
+            # max_corrections. is_micro becomes known after Sabri's first request.
+            cap = micro_max_corrections if is_micro else max_corrections
             sabri_input = build_input(
                 client_message=client_message,
                 chat_transcript=state.chat_transcript,
@@ -142,16 +152,21 @@ def process_client_message(
                 client_file=state.client_file,
                 valentina_output=valentina_output,
                 session_metadata=compute_metadata(state, now),
-                force_deliver=(corrections >= max_corrections),
+                force_deliver=(corrections >= cap),
             )
             decision = sabri_call(sabri_input)
 
             if isinstance(decision, DeliveryPlan):
                 break
 
-            # decision is a ValentinaRequest.
-            if corrections >= max_corrections:
-                # Sabri still refuses to deliver even when forced → app fallback.
+            # decision is a ValentinaRequest. A micro_read request tightens the cap
+            # for the rest of the loop (deterministic — not left to Sabri's gate).
+            if getattr(decision, "type", None) == "micro_read":
+                is_micro = True
+            cap = micro_max_corrections if is_micro else max_corrections
+            if corrections >= cap:
+                # Cap reached and Sabri still refuses to deliver even when forced →
+                # force-deliver the best draft via app fallback.
                 decision = _fallback_from_valentina(valentina_output)
                 break
 
@@ -304,6 +319,7 @@ async def run_reading_pipeline(
                     sabri_call=sabri_call,
                     valentina_call=valentina_call,
                     max_corrections=settings.SABRI_MAX_ATTEMPTS,
+                    micro_max_corrections=settings.SABRI_MICRO_MAX_ATTEMPTS,
                 )
             finally:
                 hold_task.cancel()  # plan ready (or failed) → stop any pending hold

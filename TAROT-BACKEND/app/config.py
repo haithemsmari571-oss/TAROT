@@ -72,6 +72,11 @@ class AppSettings(BaseSettings):
     # Cap on Valentina↔Sabri correction rounds; after this Sabri delivers from
     # the best available output rather than requesting another regeneration.
     SABRI_MAX_ATTEMPTS: int = 3
+    # Tighter cap for micro-reads (greetings/short replies). Sabri's quality gate
+    # tends to spin on a two-word greeting where there is nothing to correct, so a
+    # micro-read is force-delivered after this many Valentina drafts (1 original +
+    # 1 correction) regardless of the gate. Prompt wording can't fix this reliably.
+    SABRI_MICRO_MAX_ATTEMPTS: int = 2
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512
