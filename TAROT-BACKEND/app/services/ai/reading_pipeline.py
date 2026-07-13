@@ -38,6 +38,10 @@ logger = get_logger(__name__)
 # chat mutate the shared session state one at a time (in arrival order).
 _session_locks: Dict[str, asyncio.Lock] = {}
 
+# The in-flight pipeline task per chat (Sabri/Valentina generation). Tracked so a
+# session end can cancel it before it produces a plan / starts a delivery.
+_pipeline_tasks: Dict[int, asyncio.Task] = {}
+
 
 def _session_lock(session_id: str) -> asyncio.Lock:
     lock = _session_locks.get(session_id)
@@ -45,6 +49,19 @@ def _session_lock(session_id: str) -> asyncio.Lock:
         lock = asyncio.Lock()
         _session_locks[session_id] = lock
     return lock
+
+
+async def cancel_pipeline(chat_id: int) -> None:
+    """Cancel an in-flight reading pipeline (Sabri/Valentina generation) for a
+    chat — e.g. the moment the session ends — so it never finishes generating or
+    starts a delivery into an already-ended chat. Safe to call when nothing runs."""
+    task = _pipeline_tasks.pop(chat_id, None)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
 
 
 # ── fallbacks (always yield a deliverable plan, never raw model output) ───────
@@ -293,6 +310,20 @@ async def run_reading_pipeline(
             # A new plan means the client responded — leave any wait barrier.
             state.waiting_for_response = False
             store.put(state)
+            # Generation can take a while; if the session ended in the meantime,
+            # don't start a delivery into it — just clear the typing indicator.
+            # (The executor also re-checks per message, but this avoids spinning up
+            # a delivery task and leaving the typing dots hanging on an ended chat.)
+            db.expire_all()
+            current_status = db.query(Chat.status).filter(Chat.id == chat_id).scalar()
+            if current_status != ChatStatus.ACTIVE:
+                logger.info(
+                    "reading_pipeline_chat_not_active_skipping_delivery",
+                    chat_id=chat_id,
+                    status=current_status,
+                )
+                await reading_executor.broadcast_typing(chat_id, False, None)
+                return plan
             # Play the new plan out in real time (the executor takes over the typing
             # indicator from here — typing_start/stop per message).
             reading_executor.start_delivery(chat_id, state)
@@ -320,8 +351,18 @@ def maybe_launch_pipeline(
     if not get_app_settings().AI_DRAFTING_ENABLED:
         return
     try:
-        asyncio.create_task(
+        task = asyncio.create_task(
             run_reading_pipeline(chat_id, client_message_id, client_message)
         )
     except RuntimeError:
         logger.warning("reading_pipeline_no_event_loop", chat_id=chat_id)
+        return
+    # Track it so a session end can cancel in-flight generation. Only clear the
+    # slot if it still points at this task (a newer message may have replaced it).
+    _pipeline_tasks[chat_id] = task
+
+    def _clear(t: asyncio.Task, cid: int = chat_id) -> None:
+        if _pipeline_tasks.get(cid) is t:
+            _pipeline_tasks.pop(cid, None)
+
+    task.add_done_callback(_clear)

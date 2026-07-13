@@ -617,6 +617,20 @@ class SessionManager:
             session_id=session_state.session_id,
         )
 
+        # Post-end cancellation: stop any in-flight AI reading work immediately so
+        # a Sabri/Valentina reply is never generated or delivered into a chat that
+        # is now ending (see reading_executor's send-guard for the hard guarantee).
+        try:
+            from app.services.ai import reading_executor
+            from app.services.ai.reading_pipeline import cancel_pipeline
+
+            await cancel_pipeline(chat_id)
+            await reading_executor.cancel_delivery(chat_id)
+        except Exception as cancel_e:  # noqa: BLE001
+            logger.warning(
+                "reading_cancel_on_end_failed", chat_id=chat_id, error=str(cancel_e)
+            )
+
         # Remove from cache first (it's in paused_sessions if paused, not active_sessions)
         if chat_id in self.active_sessions:
             del self.active_sessions[chat_id]
@@ -704,10 +718,18 @@ class SessionManager:
 
             if reason in (
                 ChatTerminationReason.INSUFFICIENT_FUNDS,
-                ChatTerminationReason.CLIENT_DISCONNECTED,
+                ChatTerminationReason.NO_TOPUP,
             ):
-                msg = "Session ended due to insufficient points."
-                await broadcast_system_message(db, chat_id, msg)
+                await broadcast_system_message(
+                    db, chat_id, "Session ended due to insufficient points."
+                )
+            elif reason == ChatTerminationReason.CLIENT_DISCONNECTED:
+                # A dropped connection is not an out-of-funds end — say so plainly.
+                await broadcast_system_message(
+                    db,
+                    chat_id,
+                    "The session ended because the connection was lost. You can start a new reading anytime.",
+                )
 
             # Atlas: auto-summarise the finished reading into the client's dossier
             # (fire-and-forget; respects the master switch, never blocks/fails end).

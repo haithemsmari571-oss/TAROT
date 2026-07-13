@@ -98,7 +98,10 @@ class AppSettings(BaseSettings):
 
     # Session Manager Settings
     SESSION_MINIMUM_BALANCE_SECONDS: int = 60  # Require 60 seconds worth of balance
-    SESSION_CLIENT_DISCONNECT_TIMEOUT: int = 30  # Wait 30s for client reconnect
+    # Wait this long for a dropped client to reconnect before auto-ending. Must
+    # exceed the AI reading latency (~140s to first delivery) so a mobile client
+    # whose socket blips while waiting for a reply isn't killed mid-reading.
+    SESSION_CLIENT_DISCONNECT_TIMEOUT: int = 180
     SESSION_CHECK_INTERVAL_NORMAL: int = 5  # Check every 5s normally
     SESSION_CHECK_INTERVAL_CRITICAL: int = 1  # Check every 1s when < 30s remaining
     SESSION_CRITICAL_THRESHOLD: int = 30  # Switch to critical mode at 30s remaining

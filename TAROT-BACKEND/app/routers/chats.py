@@ -1463,6 +1463,11 @@ def get_termination_message(
         ChatTerminationReason.MANUAL_EXIT: "The psychic has ended the conversation.",
         ChatTerminationReason.SOCKET_LOST: "The connection was lost.",
         ChatTerminationReason.TIMEOUT: "The session has ended due to inactivity.",
+        # These were previously unmapped and fell through to the misleading
+        # "psychic has ended" default even though the psychic did no such thing.
+        ChatTerminationReason.CLIENT_DISCONNECTED: "The session ended because the connection was lost. You can start a new reading anytime.",
+        ChatTerminationReason.NO_TOPUP: "The session has ended due to insufficient points.",
+        ChatTerminationReason.PAUSE_TIMEOUT: "The session ended after being paused too long.",
     }
 
     return reason_messages.get(

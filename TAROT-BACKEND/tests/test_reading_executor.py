@@ -178,6 +178,44 @@ def test_resume_launches_unfinished_non_barrier(monkeypatch):
     assert launched == [77777]
 
 
+# ── post-end cancellation (Fix 2) ────────────────────────────────────────────
+def test_chat_is_deliverable_only_active():
+    from app.enums.chat_status import ChatStatus
+
+    def chat(status):
+        return type("C", (), {"status": status})()
+
+    assert ex._chat_is_deliverable(chat(ChatStatus.ACTIVE)) is True
+    # Every non-active state (including a missing chat) blocks delivery.
+    for st in (ChatStatus.ENDED, ChatStatus.PAUSED, ChatStatus.ARCHIVED, ChatStatus.BLOCKED):
+        assert ex._chat_is_deliverable(chat(st)) is False
+    assert ex._chat_is_deliverable(None) is False
+
+
+def test_cancel_pipeline_cancels_and_clears():
+    from app.services.ai import reading_pipeline as rp
+
+    async def _scenario():
+        cancelled = {"v": False}
+
+        async def long_pipeline():
+            try:
+                await asyncio.sleep(100)
+            except asyncio.CancelledError:
+                cancelled["v"] = True
+                raise
+
+        rp._pipeline_tasks[4242] = asyncio.create_task(long_pipeline())
+        await asyncio.sleep(0)  # let it start
+        await rp.cancel_pipeline(4242)
+        assert cancelled["v"] is True
+        assert 4242 not in rp._pipeline_tasks
+        # calling again with nothing registered is a safe no-op
+        await rp.cancel_pipeline(4242)
+
+    asyncio.run(_scenario())
+
+
 def test_start_and_cancel_lifecycle(monkeypatch):
     async def _scenario():
         flag = {"cancelled": False}

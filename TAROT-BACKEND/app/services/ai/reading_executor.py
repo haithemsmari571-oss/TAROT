@@ -147,6 +147,19 @@ async def execute_delivery(
 _delivery_tasks: Dict[int, asyncio.Task] = {}
 
 
+class _DeliveryAborted(Exception):
+    """Raised to stop delivery cleanly (not an error) when the chat is no longer
+    deliverable — e.g. it ended while the plan was in flight."""
+
+
+def _chat_is_deliverable(chat) -> bool:
+    """A reading line may only be sent while the chat is actually ACTIVE. Never
+    deliver into an ended/archived/blocked chat (post-end-cancellation safety)."""
+    from app.enums.chat_status import ChatStatus
+
+    return chat is not None and chat.status == ChatStatus.ACTIVE
+
+
 async def broadcast_typing(chat_id: int, is_typing: bool, sender_id) -> None:
     """Emit a server→client typing_start/typing_stop over the chat room. Used by
     the executor between messages AND by the pipeline the instant a client message
@@ -183,12 +196,29 @@ async def _run_delivery(chat_id: int, state, config: Optional[PacingConfig]) -> 
     async def send_fn(item) -> None:
         with SessionLocal() as db:
             chat = db.query(_Chat).filter(_Chat.id == chat_id).first()
-            if chat is None:
-                # Abort without advancing position so the item isn't lost — resume
-                # can retry once the chat is available again.
-                raise RuntimeError(f"chat {chat_id} not found; aborting delivery")
+            if not _chat_is_deliverable(chat):
+                # The chat ended (or paused) while this delivery was in flight.
+                # Abort WITHOUT advancing position so the item isn't lost — a
+                # resume can replay it if the chat becomes active again. An ended
+                # chat simply never resumes. This is the hard guarantee that a
+                # reading line is never delivered into an already-ended chat.
+                status = getattr(chat, "status", None)
+                raise _DeliveryAborted(f"chat {chat_id} not deliverable (status={status})")
             await broadcast_ai_message(db, chat, item.message)
         record_sent_message(state, item.message)
+
+    # Pre-flight: don't even start a delivery into a chat that already ended.
+    with SessionLocal() as _db2:
+        _chat2 = _db2.query(_Chat).filter(_Chat.id == chat_id).first()
+        if not _chat_is_deliverable(_chat2):
+            logger.info(
+                "delivery_skipped_chat_not_active",
+                chat_id=chat_id,
+                status=getattr(_chat2, "status", None),
+            )
+            if _delivery_tasks.get(chat_id) is asyncio.current_task():
+                _delivery_tasks.pop(chat_id, None)
+            return
 
     try:
         result = await execute_delivery(
@@ -204,6 +234,9 @@ async def _run_delivery(chat_id: int, state, config: Optional[PacingConfig]) -> 
     except asyncio.CancelledError:
         logger.info("delivery_cancelled", chat_id=chat_id, position=state.queue_position)
         raise
+    except _DeliveryAborted as e:
+        # Clean stop (chat no longer deliverable) — not an error.
+        logger.info("delivery_aborted", chat_id=chat_id, reason=str(e))
     except Exception as e:  # noqa: BLE001
         logger.error("delivery_error", chat_id=chat_id, error=str(e), exc_info=True)
     finally:
