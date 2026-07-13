@@ -6,6 +6,7 @@ import { COLORS, TYPOGRAPHY } from '../theme';
 import { useAuth } from '../features/auth/hooks';
 import { UserRole } from '../features/auth/types/auth.types';
 import axiosClient from '../lib/axiosClient';
+import { getMyChatsWithDetails } from '../features/chat/api/chatApi';
 import { NotificationBell } from '../features/notifications/components/NotificationBell';
 import { startNotificationSound, stopNotificationSound } from '../lib/notificationSound';
 import { SoundToggle } from '../components/SoundToggle';
@@ -31,8 +32,9 @@ const Sidebar = () => {
     const fetchPendingChats = async () => {
       if (user?.role === UserRole.PSYCHIC) {
         try {
-          const response = await axiosClient.get('/chat/my-chats');
-          const chats = response.data || [];
+          // Coalesced/cached (see chatApi.getMyChatsWithDetails) so this poll can
+          // never contribute to a /chat/my-chats request storm.
+          const chats = (await getMyChatsWithDetails()) || [];
           // Count chats with status REQUESTED (pending)
           const pendingCount = chats.filter((chat: any) => chat.status === 'REQUESTED').length;
 

@@ -70,11 +70,38 @@ export const getChats = async (): Promise<Chat[]> => {
 
 
 /**
- * Get chats with full user details (for admin/psychic views)
+ * Get chats with full user details (for admin/psychic views).
+ *
+ * Request-coalesced + short-cached. `/chat/my-chats` has only two callers in the
+ * app (the global IncomingReadingModal mount check and the psychic Sidebar's 30s
+ * pending-count poll), yet production was observed hammering this endpoint
+ * ~68x/second — saturating the browser's ~6-connections-per-host limit and
+ * starving every other request (daily card, end chat, chat list) behind it.
+ * This bounds the endpoint at its only entry points: concurrent callers share one
+ * in-flight request, and a result younger than MY_CHATS_MIN_INTERVAL_MS is served
+ * from cache instead of re-hitting the network. Both callers tolerate that much
+ * staleness, so their behaviour is unchanged while any accidental refetch storm is
+ * capped at ~1 network call / 2s. (Route every /chat/my-chats caller through here.)
  */
+const MY_CHATS_MIN_INTERVAL_MS = 2000;
+let _myChatsInFlight: Promise<any[]> | null = null;
+let _myChatsCache: { at: number; data: any[] } | null = null;
+
 export const getMyChatsWithDetails = async (): Promise<any[]> => {
-  const response = await axiosClient.get("/chat/my-chats");
-  return response.data;
+  if (_myChatsInFlight) return _myChatsInFlight;
+  if (_myChatsCache && Date.now() - _myChatsCache.at < MY_CHATS_MIN_INTERVAL_MS) {
+    return _myChatsCache.data;
+  }
+  _myChatsInFlight = axiosClient
+    .get("/chat/my-chats")
+    .then((response) => {
+      _myChatsCache = { at: Date.now(), data: response.data };
+      return response.data as any[];
+    })
+    .finally(() => {
+      _myChatsInFlight = null;
+    });
+  return _myChatsInFlight;
 };
 
 /**
