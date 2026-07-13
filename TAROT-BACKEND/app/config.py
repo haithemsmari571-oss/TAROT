@@ -81,8 +81,10 @@ class AppSettings(BaseSettings):
     # "two_agent" = the current Valentina(draft)↔Sabri(direct) pipeline.
     # "single_agent" = the new streaming Reader (one Opus call in final voice; the
     # deterministic return-ack strip + delivery guarantee run on its output).
-    # Defaults to two_agent so main/prod are unchanged until the A/B says otherwise.
-    READING_ENGINE: str = "two_agent"
+    # Cutover 2026-07-13: A/B cleared single_agent (quality + latency + 0 leaks),
+    # so the default is now single_agent. Rollback: set READING_ENGINE=two_agent in
+    # the prod .env and restart (instant), or revert this line and redeploy.
+    READING_ENGINE: str = "single_agent"
     # The single-agent Reader (only used when READING_ENGINE=single_agent). Opus for
     # the A/B — we want to see the quality ceiling before considering a cheaper tier.
     # Verified callable on this key before switching (2026-07-13).
