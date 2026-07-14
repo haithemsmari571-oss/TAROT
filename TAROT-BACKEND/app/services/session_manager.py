@@ -621,11 +621,12 @@ class SessionManager:
         # a Sabri/Valentina reply is never generated or delivered into a chat that
         # is now ending (see reading_executor's send-guard for the hard guarantee).
         try:
-            from app.services.ai import reading_executor
+            from app.services.ai import reading_executor, reading_reveal
             from app.services.ai.reading_pipeline import cancel_pipeline
 
             await cancel_pipeline(chat_id)
             await reading_executor.cancel_delivery(chat_id)
+            await reading_reveal.cancel_reveal(chat_id)  # single-agent paced reveal
         except Exception as cancel_e:  # noqa: BLE001
             logger.warning(
                 "reading_cancel_on_end_failed", chat_id=chat_id, error=str(cancel_e)

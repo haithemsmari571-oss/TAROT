@@ -13,9 +13,7 @@ it is tested with a fake clock and a recording send — never real timing.
 """
 
 import asyncio
-import contextlib
 import random
-import threading
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Optional
 
@@ -147,9 +145,6 @@ async def execute_delivery(
 
 # ── live task lifecycle (per chat) ───────────────────────────────────────────
 _delivery_tasks: Dict[int, asyncio.Task] = {}
-# Producer threads we've detached on cancel: kept referenced so asyncio doesn't GC
-# them mid-flight; each removes itself on completion.
-_detached_producers: set = set()
 
 
 class _DeliveryAborted(Exception):
@@ -308,89 +303,69 @@ async def resume_delivery(
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Single-agent Reader streaming delivery (Phase 4). Used when READING_ENGINE=
-# single_agent. Bubbles are sent AS THE MODEL WRITES THEM — the real gap between
-# them is the generation time, with only a light READER_MIN_TYPING_MS floor. No
-# artificial pause_short/pause_long. Reuses the send-guard + _delivery_tasks
-# lifecycle so cancellation / disconnect / post-end handling covers it too. The
-# two-agent pacing (compute_typing_duration/gap_after/execute_delivery) stays until
-# cutover, since the A/B needs both engines.
+# Single-agent Reader — BUFFERED PACED REVEAL (READING_ENGINE=single_agent).
+# The Reader's FULL reply is generated invisibly first (the Opus call + thinking);
+# only then does this paced reveal play out, one already-parsed bubble at a time, so
+# it reads like a real person texting — NOT raw live token streaming. Timing is
+# landingpage2's proven rhythm: a "reading her message" beat (typing HIDDEN) before
+# the first bubble, then per-bubble typing (~ms/word, clamped) with a short gap
+# between bubbles. The reveal coordinator (reading_reveal.py) drives this and also
+# classifies client messages that arrive mid-reveal (continue vs redirect).
 # ═════════════════════════════════════════════════════════════════════════════
-async def execute_reader_stream(event_aiter, *, send_bubble, typing_fn, sleep_fn,
-                                min_typing_sec, clock):
-    """Play one Reader turn from an async iterator of ("bubble", text) / ("hold",
-    (trigger, line)) events. Typing indicator on throughout; each bubble is sent at
-    least ``min_typing_sec`` after the previous (the light floor). Pure over its
-    injected deps — unit-tested with fakes. Returns (sent_bubbles, holds)."""
-    sent, holds = [], []
-    await typing_fn(True)
+@dataclass
+class RevealConfig:
+    reading_pause_ms: int = 2000       # "reading her message" beat, typing HIDDEN
+    per_word_ms: int = 1500
+    min_typing_ms: int = 900
+    max_typing_ms: int = 4500
+    between_bubbles_ms: int = 500
+
+
+def reveal_config_from_settings() -> RevealConfig:
+    from app.config import get_app_settings
+
+    s = get_app_settings()
+    return RevealConfig(
+        reading_pause_ms=s.REVEAL_READING_PAUSE_MS,
+        per_word_ms=s.REVEAL_PER_WORD_MS,
+        min_typing_ms=s.REVEAL_MIN_TYPING_MS,
+        max_typing_ms=s.REVEAL_MAX_TYPING_MS,
+        between_bubbles_ms=s.REVEAL_BETWEEN_BUBBLES_MS,
+    )
+
+
+def compute_reveal_typing_ms(bubble: str, config: RevealConfig) -> int:
+    """Typing-indicator duration before a bubble: ~per_word_ms × words, clamped to
+    [min_typing_ms, max_typing_ms]. Pure."""
+    words = len((bubble or "").split())
+    return _clamp(words * config.per_word_ms, config.min_typing_ms, config.max_typing_ms)
+
+
+async def play_reveal(bubbles, *, send_bubble, typing_fn, sleep_fn, config: RevealConfig):
+    """Reveal already-generated bubbles at landingpage2's rhythm. Pure over its
+    injected deps (send_bubble / typing_fn / sleep_fn) — unit-tested with a fake clock:
+
+      typing OFF → reading_pause → for each bubble: [gap before all but the first] →
+      typing ON → per-bubble typing delay → send → typing OFF.
+
+    The reading_pause simulates her reading the client's message with the typing dots
+    HIDDEN (distinct from the "typing" beat). Returns the sent bubbles; never leaves
+    the typing indicator hanging (finally-clears it on any exit)."""
+    sent = []
+    await typing_fn(False)  # "reading her message" beat shows NO typing dots
     try:
-        last = None
-        async for kind, payload in event_aiter:
-            if kind == "hold":
-                holds.append(payload)
-                continue
-            if last is not None:
-                gap = min_typing_sec - (clock() - last)
-                if gap > 0:
-                    await sleep_fn(gap)
-            await send_bubble(payload)
-            sent.append(payload)
-            last = clock()
+        await sleep_fn(config.reading_pause_ms / 1000.0)
+        for i, bubble in enumerate(bubbles):
+            if i > 0:
+                await sleep_fn(config.between_bubbles_ms / 1000.0)
+            await typing_fn(True)
+            await sleep_fn(compute_reveal_typing_ms(bubble, config) / 1000.0)
+            await send_bubble(bubble)
+            sent.append(bubble)
+            await typing_fn(False)
     finally:
         await typing_fn(False)
-    return sent, holds
-
-
-async def _reader_events_async(gen_factory):
-    """Bridge a BLOCKING event generator (stream_reader_bubbles over the live SDK
-    stream) into an async iterator: run it in a worker thread, push events onto an
-    asyncio.Queue so the async delivery loop can send between them.
-
-    Cancellable: a threading.Event lets the consumer signal the worker to stop at the
-    next event boundary, where it closes the generator — tearing down the SDK stream
-    so billing stops. On cancel the consumer sets the flag and DETACHES rather than
-    awaiting the worker, so cancel_delivery returns at once instead of blocking under
-    the session lock for the rest of an uninterruptible generation. (An
-    already-in-flight network read can only be observed at the next delta; a fully
-    stalled stream is left to close itself in the background rather than pin the
-    caller.) The detached task is parked in a module set so asyncio can't GC it."""
-    loop = asyncio.get_running_loop()
-    q: asyncio.Queue = asyncio.Queue()
-    stop = threading.Event()
-    _DONE = object()
-
-    def producer():
-        gen = gen_factory()
-        try:
-            for ev in gen:
-                if stop.is_set():
-                    break
-                loop.call_soon_threadsafe(q.put_nowait, ("ev", ev))
-        except Exception as e:  # noqa: BLE001 — surfaced to the consumer below
-            loop.call_soon_threadsafe(q.put_nowait, ("err", e))
-        finally:
-            with contextlib.suppress(Exception):
-                gen.close()  # tear down the SDK stream context manager (stops billing)
-            loop.call_soon_threadsafe(q.put_nowait, ("done", _DONE))
-
-    task = asyncio.create_task(asyncio.to_thread(producer))
-    try:
-        while True:
-            tag, val = await q.get()
-            if tag == "done":
-                break
-            if tag == "err":
-                raise val
-            yield val
-    finally:
-        # Signal stop and detach — never block cancellation on an uninterruptible
-        # worker thread. It observes `stop` (or the stream ends) and closes the SDK
-        # stream on its own; its exceptions are already funnelled through the queue.
-        stop.set()
-        if not task.done():
-            _detached_producers.add(task)
-            task.add_done_callback(_detached_producers.discard)
+    return sent
 
 
 def _merge_reader_holds(state, sent_bubbles, new_holds, *, cap: int = 10) -> None:
@@ -422,98 +397,7 @@ def _merge_reader_holds(state, sent_bubbles, new_holds, *, cap: int = 10) -> Non
     state.held_back_buffer = merged[-cap:]
 
 
-async def _run_reader_delivery(chat_id: int, state, reader_input: str,
-                               client_message: str = None) -> None:
-    """Live single-agent delivery: stream the Reader, send bubbles with the floor,
-    fall back (never silent) if nothing survives, and store the turn's holds.
-    ``client_message`` gates extended thinking (deep turns think, greetings don't)."""
-    import time as _time
-
-    from app.config import get_app_settings
-    from app.database.client import SessionLocal
-    from app.models.chat import Chat as _Chat
-    from app.services.ai.reading_llm import FALLBACK_MESSAGE
-    from app.services.ai.reading_reader import stream_reader, stream_reader_bubbles
-    from app.services.ai.reading_session import record_sent_message
-    from app.services.chats import broadcast_ai_message
-
-    s = get_app_settings()
-    with SessionLocal() as _db:
-        chat0 = _db.query(_Chat).filter(_Chat.id == chat_id).first()
-        psychic_id = chat0.psychic_id if chat0 else None
-
-    async def typing_fn(on: bool) -> None:
-        await broadcast_typing(chat_id, on, psychic_id)
-
-    async def send_bubble(text: str) -> None:
-        with SessionLocal() as db:
-            chat = db.query(_Chat).filter(_Chat.id == chat_id).first()
-            if not _chat_is_deliverable(chat):
-                raise _DeliveryAborted(f"chat {chat_id} not deliverable (status={getattr(chat,'status',None)})")
-            await broadcast_ai_message(db, chat, text)
-        record_sent_message(state, text)
-
-    with SessionLocal() as _db2:
-        if not _chat_is_deliverable(_db2.query(_Chat).filter(_Chat.id == chat_id).first()):
-            logger.info("reader_delivery_skipped_chat_not_active", chat_id=chat_id)
-            # The pipeline turned the typing dots on before launching us; clear them
-            # so an ended/paused chat isn't left with a hanging indicator (this path
-            # never reaches execute_reader_stream's finally, which is the only other
-            # place that clears typing for the single-agent turn).
-            with contextlib.suppress(Exception):
-                await typing_fn(False)
-            if _delivery_tasks.get(chat_id) is asyncio.current_task():
-                _delivery_tasks.pop(chat_id, None)
-            return
-
-    def gen_factory():
-        return stream_reader_bubbles(stream_reader(reader_input, client_message=client_message))
-
-    try:
-        sent, holds = await execute_reader_stream(
-            _reader_events_async(gen_factory),
-            send_bubble=send_bubble,
-            typing_fn=typing_fn,
-            sleep_fn=asyncio.sleep,
-            min_typing_sec=s.READER_MIN_TYPING_MS / 1000.0,
-            clock=_time.monotonic,
-        )
-        if not sent:  # every bubble filtered/empty → never leave silence
-            logger.warning("reader_delivery_empty_fallback", chat_id=chat_id)
-            try:
-                await send_bubble(FALLBACK_MESSAGE)
-            except _DeliveryAborted:
-                pass
-        else:
-            logger.info("reader_delivery_finished", chat_id=chat_id, bubbles=len(sent), holds=len(holds))
-        _merge_reader_holds(state, sent, holds)
-    except asyncio.CancelledError:
-        logger.info("reader_delivery_cancelled", chat_id=chat_id)
-        raise
-    except _DeliveryAborted as e:
-        logger.info("reader_delivery_aborted", chat_id=chat_id, reason=str(e))
-    except Exception as e:  # noqa: BLE001 — a delivery error must never crash the chat
-        logger.error("reader_delivery_error", chat_id=chat_id, error=str(e), exc_info=True)
-    finally:
-        if _delivery_tasks.get(chat_id) is asyncio.current_task():
-            _delivery_tasks.pop(chat_id, None)
-
-
-def start_reader_delivery(chat_id: int, state, reader_input: str,
-                          client_message: str = None) -> Optional[asyncio.Task]:
-    """Launch the streaming Reader delivery as a background task (mirrors start_delivery;
-    shares _delivery_tasks so cancel_delivery / disconnect / post-end cancellation apply).
-    ``client_message`` is forwarded to gate extended thinking."""
-    existing = _delivery_tasks.get(chat_id)
-    if existing and not existing.done():
-        logger.warning("reader_delivery_already_running", chat_id=chat_id)
-        return existing
-    try:
-        task = asyncio.create_task(
-            _run_reader_delivery(chat_id, state, reader_input, client_message)
-        )
-    except RuntimeError:
-        logger.warning("reader_delivery_no_event_loop", chat_id=chat_id)
-        return None
-    _delivery_tasks[chat_id] = task
-    return task
+# The live single-agent delivery (_run_reader_delivery / start_reader_delivery /
+# execute_reader_stream / the blocking→async bridge) was removed here: the reveal is
+# now buffered and paced by reading_reveal.py using play_reveal above. Generation is
+# invisible; nothing is streamed to the client live.

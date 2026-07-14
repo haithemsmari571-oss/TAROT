@@ -238,129 +238,65 @@ def test_start_and_cancel_lifecycle(monkeypatch):
     asyncio.run(_scenario())
 
 
-# ── single-agent Reader streaming delivery (Phase 4) ─────────────────────────
-async def _aiter(items):
-    for i in items:
-        yield i
+# ── single-agent Reader BUFFERED PACED REVEAL ────────────────────────────────
+def test_compute_reveal_typing_ms_clamps():
+    from app.services.ai.reading_executor import RevealConfig, compute_reveal_typing_ms
+
+    cfg = RevealConfig(per_word_ms=1500, min_typing_ms=900, max_typing_ms=4500)
+    assert compute_reveal_typing_ms("", cfg) == 900               # 0 words -> floor
+    assert compute_reveal_typing_ms("hey", cfg) == 1500           # 1 word
+    assert compute_reveal_typing_ms("hey love", cfg) == 3000      # 2 words
+    assert compute_reveal_typing_ms("a b c", cfg) == 4500         # 3 words -> exactly cap
+    assert compute_reveal_typing_ms("the cards are loud tonight", cfg) == 4500  # 5 -> capped
 
 
-def test_execute_reader_stream_sends_bubbles_typing_and_holds():
-    from app.services.ai.reading_executor import execute_reader_stream
+def test_play_reveal_landingpage2_rhythm():
+    """Full reveal timeline (fake clock): 2s reading beat with typing HIDDEN, then per
+    bubble [typing on → ~1.5s/word clamped → send → typing off] with a 500ms gap between."""
+    from app.services.ai.reading_executor import RevealConfig, play_reveal
 
-    events = [("bubble", "a"), ("bubble", "b"), ("hold", ("t", "h")), ("bubble", "c")]
-    sent, typing, sleeps = [], [], []
-    clock_vals = iter([0, 10, 20, 30, 40, 50])  # big jumps -> gap always > floor -> no sleeps
+    cfg = RevealConfig(reading_pause_ms=2000, per_word_ms=1500, min_typing_ms=900,
+                       max_typing_ms=4500, between_bubbles_ms=500)
+    events = []
 
-    async def send(t): sent.append(t)
-    async def typ(on): typing.append(on)
-    async def slp(s): sleeps.append(s)
+    async def send(t): events.append(("send", t))
+    async def typ(on): events.append(("typing", on))
+    async def slp(s): events.append(("sleep", round(s, 3)))
 
-    out_sent, out_holds = asyncio.run(execute_reader_stream(
-        _aiter(events), send_bubble=send, typing_fn=typ, sleep_fn=slp,
-        min_typing_sec=0.8, clock=lambda: next(clock_vals),
-    ))
-    assert out_sent == ["a", "b", "c"]
-    assert out_holds == [("t", "h")]
-    assert typing == [True, False]          # typing on for the turn, off at the end
-    assert sleeps == []                     # fast-arriving? no — big gaps, floor never fires
+    bubbles = ["hey love", "the cards are loud tonight"]  # 2 words, 5 words (capped)
+    sent = asyncio.run(play_reveal(
+        bubbles, send_bubble=send, typing_fn=typ, sleep_fn=slp, config=cfg))
+
+    assert sent == bubbles
+    assert events == [
+        ("typing", False),          # "reading her message" beat — dots HIDDEN
+        ("sleep", 2.0),             # 2000ms reading pause
+        ("typing", True),           # bubble 1: dots on
+        ("sleep", 3.0),             # 2 words × 1.5s
+        ("send", "hey love"),
+        ("typing", False),          # dots off once the bubble lands
+        ("sleep", 0.5),             # 500ms gap between bubbles (dots hidden)
+        ("typing", True),           # bubble 2: dots on
+        ("sleep", 4.5),             # 5 words × 1.5s = 7.5 -> capped 4.5
+        ("send", "the cards are loud tonight"),
+        ("typing", False),
+        ("typing", False),          # finally-clear (never leave dots hanging)
+    ]
 
 
-def test_execute_reader_stream_floor_sleeps_when_bubbles_arrive_fast():
-    from app.services.ai.reading_executor import execute_reader_stream
+def test_play_reveal_single_bubble_no_between_gap():
+    from app.services.ai.reading_executor import RevealConfig, play_reveal
 
+    cfg = RevealConfig(reading_pause_ms=2000, per_word_ms=1500, min_typing_ms=900,
+                       max_typing_ms=4500, between_bubbles_ms=500)
     sleeps = []
-    clock_vals = iter([0.0, 0.1, 0.1, 0.2, 0.2])  # 2nd bubble arrives 0.1s after 1st
 
     async def send(_t): pass
     async def typ(_on): pass
     async def slp(s): sleeps.append(round(s, 3))
 
-    asyncio.run(execute_reader_stream(
-        _aiter([("bubble", "a"), ("bubble", "b")]), send_bubble=send, typing_fn=typ,
-        sleep_fn=slp, min_typing_sec=0.8, clock=lambda: next(clock_vals),
-    ))
-    assert sleeps == [0.7]                   # floor: 0.8 - 0.1 elapsed = 0.7s of typing
-
-
-def test_reader_events_async_cancel_does_not_block_on_slow_producer():
-    """The HIGH review finding: cancelling a Reader stream must NOT wait for the
-    uninterruptible worker to drain the rest of the generation. Closing the async
-    iterator returns immediately even while the producer is blocked mid-stream."""
-    import threading
-    import time
-
-    from app.services.ai.reading_executor import _reader_events_async
-
-    released = threading.Event()
-
-    def blocking_gen():
-        yield ("bubble", "first")
-        released.wait(5)          # simulate a long in-flight generation
-        yield ("bubble", "second")
-
-    async def scenario():
-        agen = _reader_events_async(lambda: blocking_gen())
-        first = await agen.__anext__()
-        assert first == ("bubble", "first")
-        t0 = time.monotonic()
-        await agen.aclose()       # cancel while the producer is blocked
-        dt = time.monotonic() - t0
-        released.set()            # let the detached thread wind down
-        return dt
-
-    dt = asyncio.run(scenario())
-    assert dt < 1.0               # returned at once — did NOT block ~5s on the producer
-
-
-def test_reader_events_async_surfaces_producer_error():
-    from app.services.ai.reading_executor import _reader_events_async
-
-    def boom_gen():
-        yield ("bubble", "a")
-        raise RuntimeError("stream died")
-
-    async def scenario():
-        out = []
-        agen = _reader_events_async(lambda: boom_gen())
-        with pytest.raises(RuntimeError, match="stream died"):
-            async for ev in agen:
-                out.append(ev)
-        return out
-
-    assert asyncio.run(scenario()) == [("bubble", "a")]
-
-
-def test_run_reader_delivery_clears_typing_when_chat_not_deliverable(monkeypatch):
-    """Finding #4: the pre-flight not-deliverable early return must clear the typing
-    dots the pipeline turned on (it never reaches execute_reader_stream's finally)."""
-    from app.enums.chat_status import ChatStatus
-
-    typing_calls = []
-
-    # Chat comes back ENDED -> _chat_is_deliverable False -> pre-flight early return.
-    class _FakeQuery:
-        def filter(self, *a, **k): return self
-        def first(self): return type("C", (), {"status": ChatStatus.ENDED, "psychic_id": 7})()
-
-    class _FakeDB:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def query(self, *a, **k): return _FakeQuery()
-
-    monkeypatch.setattr("app.database.client.SessionLocal", _FakeDB)
-
-    async def fake_broadcast_typing(chat_id, on, sender_id):
-        typing_calls.append(on)
-
-    monkeypatch.setattr(ex, "broadcast_typing", fake_broadcast_typing)
-
-    async def scenario():
-        ex._delivery_tasks[555] = asyncio.current_task()
-        await ex._run_reader_delivery(555, create_session_state("chat:555", chat_id=555), "input")
-
-    asyncio.run(scenario())
-    assert typing_calls == [False]        # typing cleared on the not-deliverable exit
-    assert 555 not in ex._delivery_tasks
+    asyncio.run(play_reveal(["hi"], send_bubble=send, typing_fn=typ, sleep_fn=slp, config=cfg))
+    assert sleeps == [2.0, 1.5]     # reading pause + one bubble's typing; no 0.5 gap
 
 
 def test_merge_reader_holds_keeps_undeployed_drops_deployed_adds_new():

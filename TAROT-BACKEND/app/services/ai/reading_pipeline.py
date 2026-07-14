@@ -379,6 +379,22 @@ async def run_reading_pipeline(
         if chat.response_mode == ResponseMode.HUMAN:
             return None
 
+        # ── single-agent Reader → the reveal coordinator ─────────────────────
+        # It owns a per-chat state machine (invisible generation → buffered paced
+        # reveal + continue/redirect classification of messages that arrive mid-reveal),
+        # so it must NOT go through the two-agent cancel_delivery/typing setup below
+        # (which would cut off an in-flight reveal). Generation is invisible; the
+        # coordinator drives the typing indicator during the reveal. Returns fast — the
+        # turn plays out in a background task.
+        if settings.READING_ENGINE == "single_agent":
+            from app.services.ai import reading_reveal
+
+            await reading_reveal.handle_client_message(
+                chat_id, client_message, psychic_id=chat.psychic_id, user_id=chat.user_id
+            )
+            logger.info("reader_reveal_dispatched", chat_id=chat_id)
+            return None
+
         session_id = f"chat:{chat_id}"
         # Cancel any in-flight delivery, re-plan, and relaunch atomically under the
         # per-chat lock, so no delivery ever runs against a queue being reset (and
@@ -409,46 +425,6 @@ async def run_reading_pipeline(
                     store.put(state)
                 else:
                     state.client_file = client_file
-
-                # ── single-agent Reader path (READING_ENGINE=single_agent) ──
-                # One streamed Opus call writes final bubbles directly; the held
-                # buffer is fed in and refreshed each turn. Skips the two-agent loop.
-                if settings.READING_ENGINE == "single_agent":
-                    from app.services.ai import reading_reader
-                    from app.services.client_dossier import get_client_dob
-
-                    now = datetime.now()
-                    # Record the inbound message BEFORE computing metadata so the
-                    # length/speed buckets fed to the Reader reflect this turn (a long
-                    # opener reads as a "talker", not the empty-state short/silent
-                    # default) — matching the two-agent path's record-then-compute
-                    # order. Pass the transcript WITHOUT this message (chat_transcript
-                    # now ends with it) so it isn't duplicated into RECENT CONVERSATION
-                    # on top of the CLIENT MESSAGE section.
-                    record_client_message(state, client_message, now)
-                    # Deterministic numerology (Life Path + Personal Year) computed
-                    # from the client's DOB and handed to the Reader as given facts —
-                    # the model computes these WRONG live (smoke test: Life Path 6 for
-                    # 22 Jul 1992, correct is 5). None DOB → nothing injected.
-                    dob = get_client_dob(db, chat.user_id)
-                    reader_input = reading_reader.build_reader_input(
-                        client_message=client_message,
-                        chat_transcript=state.chat_transcript[:-1],
-                        client_file=state.client_file,
-                        session_metadata=compute_metadata(state, now),
-                        held_back_buffer=state.held_back_buffer,
-                        date_of_birth=dob,
-                        current_year=now.year,
-                    )
-                    state.waiting_for_response = False
-                    store.put(state)
-                    # The streaming delivery shows typing immediately and streams the
-                    # first bubble as soon as it generates, so no hold-message is needed.
-                    reading_executor.start_reader_delivery(
-                        chat_id, state, reader_input, client_message
-                    )
-                    logger.info("reader_pipeline_started", chat_id=chat_id)
-                    return None
 
                 def sabri_call(inp: dict):
                     return sabri_check.call_sabri(inp)

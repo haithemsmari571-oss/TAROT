@@ -113,3 +113,28 @@ State moves out of the model into `ReadingSessionState.held_back_buffer` (alread
   the A/B gate; do not cut over until single-agent matches or beats two-agent on a blind read.
 - **Prompt fusion:** Valentina's golden rules and Sabri's "rules that never bend" overlap and must
   merge without contradiction; both carry banned-phrase lists that need de-duping.
+
+## Delivery v2 — buffered paced reveal (post-cutover, 2026-07-14)
+
+The v1 delivery streamed bubbles to the client as the model wrote them (real gap = generation
+time). It generated correct, well-paced-in-content readings but didn't *feel* human. v2 changes
+**how** replies are delivered — content generation is untouched (Opus 4.6, gated adaptive thinking,
+numerology injection, return-ack filter, emoji ban, voice, hold-back buffer all identical).
+
+- **Generation is invisible.** The full reply (bubbles + `@@HOLD@@` holds) is generated and parsed
+  *before* anything reaches the client. The client sees nothing until Valentina is done. (The live
+  stream bridge — `execute_reader_stream` / `_reader_events_async` / `stream_reader_bubbles` — is
+  gone; `run_reader_turn` accumulates the stream and parses once.)
+- **Paced reveal** (`reading_executor.play_reveal`, landingpage2's rhythm, all env-tunable):
+  a 2000ms "reading her message" beat with the typing dots **hidden**, then per bubble
+  [dots on → ~1500ms/word clamped to 900–4500ms → send → dots off] with a 500ms gap between bubbles.
+- **Mid-reveal messages** (`reading_reveal.py` coordinator): the client is never locked out. A
+  message arriving during a reveal is classified — **continuer** (short reaction/ack) is ignored and
+  the current reveal plays on; **redirect** (question / new topic / new info) is queued and a fresh
+  turn runs it *after* the current reveal finishes (a bubble is never cut off). Classification is a
+  cheap heuristic first (`classify_reply`), a Haiku tie-break only for genuinely ambiguous messages
+  (`READER_CLASSIFIER_MODEL`) — it only decides continue-vs-redirect, never reviews the writing.
+  Because mid-reveal messages are classified/queued in arrival order rather than racing the reveal,
+  bubbles from different turns can't interleave — the message-ordering bug is designed out.
+- Two-agent path unchanged; reveal cancellation hooks into the existing session-end / disconnect
+  teardown (`cancel_reveal` beside `cancel_delivery`).

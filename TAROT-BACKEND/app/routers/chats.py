@@ -1642,8 +1642,10 @@ async def websocket_endpoint(
                 str(chat_id)
             ):
                 from app.services.ai.reading_executor import cancel_delivery
+                from app.services.ai.reading_reveal import cancel_reveal
 
                 await cancel_delivery(int(chat_id))
+                await cancel_reveal(int(chat_id))  # single-agent paced reveal
         except Exception:  # noqa: BLE001
             pass
     except jwt.PyJWTError:

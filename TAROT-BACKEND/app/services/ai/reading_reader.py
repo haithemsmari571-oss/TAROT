@@ -393,56 +393,7 @@ def run_reader_turn(reader_input: str, *, client_message=None, reader_call=None,
     logger.warning("reader_turn_fallback")
     return [fallback_message], []
 
-
-def _clean_bubble(block: str):
-    """Strip a bubble block: drop stray fence lines, trim. Returns None if empty."""
-    b = "\n".join(ln for ln in block.splitlines() if ln.strip() not in _FENCE_LINES).strip()
-    return b or None
-
-
-def stream_reader_bubbles(delta_source):
-    """Incrementally consume a source of text deltas (a live stream_reader(...) or, in
-    tests, any iterable of str), yielding client-facing events THE MOMENT each completes:
-      ("bubble", text)          — one kept bubble (return-acks + fence lines skipped)
-      ("hold", (trigger, line)) — one parsed hold after the @@HOLD@@ sentinel
-    A bubble is 'complete' once a blank-line boundary follows it, so the executor can send
-    it while the model is still writing the next one — this is the real-time pacing that
-    replaces the artificial pause_short/pause_long delays."""
-    from app.services.ai.reading_pipeline import is_return_acknowledgment  # lazy: no cycle
-
-    buf = ""
-    hold_buf = ""
-    in_hold = False
-    for delta in delta_source:
-        if in_hold:
-            hold_buf += delta
-            continue
-        buf += delta
-        if HOLD_SENTINEL in buf:
-            body, _, rest = buf.partition(HOLD_SENTINEL)
-            for block in re.split(r"\n[ \t]*\n", body):  # body is now fully complete
-                b = _clean_bubble(block)
-                if b and not is_return_acknowledgment(b):
-                    yield ("bubble", b)
-            in_hold, hold_buf, buf = True, rest, ""
-            continue
-        parts = re.split(r"\n[ \t]*\n", buf)
-        buf = parts[-1]  # keep the last (possibly still-generating) block buffered
-        for block in parts[:-1]:
-            b = _clean_bubble(block)
-            if b and not is_return_acknowledgment(b):
-                yield ("bubble", b)
-    # stream ended — flush the tail
-    if not in_hold:
-        for block in re.split(r"\n[ \t]*\n", buf):
-            b = _clean_bubble(block)
-            if b and not is_return_acknowledgment(b):
-                yield ("bubble", b)
-    else:
-        for ln in hold_buf.splitlines():
-            s = ln.strip()
-            if not s or HOLD_SEP not in s:
-                continue
-            trigger, _, line = s.partition(HOLD_SEP)
-            if line.strip() and not is_return_acknowledgment(line.strip()):
-                yield ("hold", (trigger.strip(), line.strip()))
+# NOTE: the incremental live-bubble parser (stream_reader_bubbles / _clean_bubble) was
+# removed with the switch to buffered delivery — the reveal no longer sends bubbles as
+# they generate. Generation now accumulates the full stream (_read_full) and parses it
+# once (parse_reader_output); reading_reveal.py paces the reveal from the parsed bubbles.

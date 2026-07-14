@@ -97,10 +97,22 @@ class AppSettings(BaseSettings):
     # Bounded retry if the Reader returns empty/malformed output (the single-agent
     # analog of the correction-loop cap: never spin, always deliver something).
     READER_MAX_ATTEMPTS: int = 2
-    # Minimum visible "typing" per bubble (ms). Generation is often faster than a
-    # human types, so a light floor keeps it reading as typed — NOT the old
-    # pause_short/pause_long artificial delays, just a floor.
-    READER_MIN_TYPING_MS: int = 800
+    # ── Buffered paced reveal (landingpage2 rhythm) ──────────────────────────
+    # The Reader's FULL reply is generated invisibly first, then revealed one bubble
+    # at a time with these delays (real generation time is NOT part of the pacing):
+    #   * "reading her message" beat before the first bubble, typing indicator HIDDEN
+    #     (distinct from the "typing" beat) — simulates her reading what was sent.
+    #   * per-bubble typing delay ≈ REVEAL_PER_WORD_MS × words, clamped [min, max].
+    #   * a short gap between consecutive bubbles.
+    REVEAL_READING_PAUSE_MS: int = 2000
+    REVEAL_PER_WORD_MS: int = 1500
+    REVEAL_MIN_TYPING_MS: int = 900
+    REVEAL_MAX_TYPING_MS: int = 4500
+    REVEAL_BETWEEN_BUBBLES_MS: int = 500
+    # Cheap model for the continue-vs-redirect tie-break on the genuinely ambiguous
+    # mid-reveal client messages the heuristic can't classify. Only ever decides
+    # continue-vs-redirect — it NEVER reviews or corrects the Reader's writing.
+    READER_CLASSIFIER_MODEL: str = "claude-haiku-4-5-20251001"
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512
