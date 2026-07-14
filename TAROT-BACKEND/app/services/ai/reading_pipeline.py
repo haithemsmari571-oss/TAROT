@@ -395,6 +395,21 @@ async def run_reading_pipeline(
             logger.info("reader_reveal_dispatched", chat_id=chat_id)
             return None
 
+        # ── two-role engine (Valentina writes / Sabri delivers) → its coordinator ──
+        # Same per-chat state-machine model as single_agent (invisible generation →
+        # proportional paced reveal + continue/redirect classification mid-reveal), so it
+        # likewise bypasses the two-agent cancel_delivery/typing setup below. A NEW turn is
+        # two real model calls (Valentina + Sabri); the coordinator drives the typing dots
+        # from arrival through generation into the reveal. Returns fast (background task).
+        if settings.READING_ENGINE == "two_role":
+            from app.services.ai import reading_duo
+
+            await reading_duo.handle_client_message(
+                chat_id, client_message, psychic_id=chat.psychic_id, user_id=chat.user_id
+            )
+            logger.info("duo_dispatched", chat_id=chat_id)
+            return None
+
         session_id = f"chat:{chat_id}"
         # Cancel any in-flight delivery, re-plan, and relaunch atomically under the
         # per-chat lock, so no delivery ever runs against a queue being reset (and

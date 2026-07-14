@@ -386,6 +386,68 @@ async def play_reveal(bubbles, *, send_bubble, typing_fn, sleep_fn, config: Reve
     return sent
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Two-role engine — PROPORTIONAL PACED REVEAL (READING_ENGINE=two_role).
+# Sabri has already chunked his turn into short texting messages. Reveal them at real
+# human typing speed: per_word_ms × words, scaling DIRECTLY and PROPORTIONALLY with each
+# message's length — NO upper cap (a short reaction reads fast, a longer message genuinely
+# takes longer). A tiny floor avoids a zero wait; a small gap sits between messages. Dots
+# are assumed already ON from generation (seamless into bubble 1). Contrast with the
+# single-agent play_reveal above, which caps + compresses long readings — the two-role
+# design intentionally drops that cap because Sabri fragments into short messages.
+# ═════════════════════════════════════════════════════════════════════════════
+@dataclass
+class ProportionalRevealConfig:
+    per_word_ms: int = 1200
+    min_typing_ms: int = 300
+    between_bubbles_ms: int = 500
+
+
+def proportional_reveal_config_from_settings() -> ProportionalRevealConfig:
+    from app.config import get_app_settings
+
+    s = get_app_settings()
+    return ProportionalRevealConfig(
+        per_word_ms=s.DUO_PER_WORD_MS,
+        min_typing_ms=s.DUO_MIN_TYPING_MS,
+        between_bubbles_ms=s.DUO_BETWEEN_BUBBLES_MS,
+    )
+
+
+def compute_proportional_typing_ms(message: str, config: ProportionalRevealConfig) -> int:
+    """Typing-indicator duration before a message: per_word_ms × words, floored at
+    min_typing_ms, with NO upper cap — directly proportional to length. Pure."""
+    words = len((message or "").split())
+    return max(config.min_typing_ms, words * config.per_word_ms)
+
+
+async def play_reveal_proportional(bubbles, *, send_bubble, typing_fn, sleep_fn,
+                                   config: ProportionalRevealConfig):
+    """Reveal Sabri's already-chunked messages at proportional typing speed. Pure over its
+    injected deps (unit-tested with a fake clock):
+
+      for each message: [gap before all but the first] → typing ON → per-word typing delay
+      (no cap) → send → typing OFF.
+
+    Dots are assumed already ON from generation, so message 1's typing_fn(True) is a seamless
+    continuation (no hidden pause / dead air). Returns the sent messages; finally-clears the
+    typing indicator so it never hangs."""
+    sent = []
+    gap = config.between_bubbles_ms / 1000.0
+    try:
+        for i, bubble in enumerate(bubbles):
+            if i > 0:
+                await sleep_fn(gap)
+            await typing_fn(True)
+            await sleep_fn(compute_proportional_typing_ms(bubble, config) / 1000.0)
+            await send_bubble(bubble)
+            sent.append(bubble)
+            await typing_fn(False)
+    finally:
+        await typing_fn(False)
+    return sent
+
+
 def _merge_reader_holds(state, sent_bubbles, new_holds, *, cap: int = 10) -> None:
     """Update the held-back buffer after a Reader turn: keep prior holds NOT deployed
     this turn (their text isn't in a sent bubble), add the turn's new @@HOLD@@ holds,

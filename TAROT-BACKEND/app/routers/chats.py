@@ -1641,11 +1641,13 @@ async def websocket_endpoint(
             if user.id == chat.user_id and chat.user_id not in manager.users_in_chat(
                 str(chat_id)
             ):
+                from app.services.ai.reading_duo import cancel_reveal as cancel_reveal_duo
                 from app.services.ai.reading_executor import cancel_delivery
                 from app.services.ai.reading_reveal import cancel_reveal
 
                 await cancel_delivery(int(chat_id))
-                await cancel_reveal(int(chat_id))  # single-agent paced reveal
+                await cancel_reveal(int(chat_id))       # single-agent paced reveal
+                await cancel_reveal_duo(int(chat_id))   # two-role paced reveal
         except Exception:  # noqa: BLE001
             pass
     except jwt.PyJWTError:

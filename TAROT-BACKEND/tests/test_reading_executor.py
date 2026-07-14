@@ -333,3 +333,38 @@ def test_merge_reader_holds_keeps_undeployed_drops_deployed_adds_new():
     assert "old kept line" in texts        # not deployed -> kept
     assert "deployed line" not in texts    # its text appeared in a sent bubble -> dropped
     assert "brand new hold" in texts       # new @@HOLD@@ line added
+
+
+# ── two-role PROPORTIONAL reveal pacing: direct proportion, NO cap ────────────
+def test_compute_proportional_typing_ms_scales_with_length_no_cap():
+    from app.services.ai.reading_executor import (
+        ProportionalRevealConfig, compute_proportional_typing_ms as c,
+    )
+
+    cfg = ProportionalRevealConfig(per_word_ms=1200, min_typing_ms=300, between_bubbles_ms=500)
+    assert c("darling", cfg) == 1200                       # 1 word
+    assert c("ok so here is the thing", cfg) == 7200       # 6 words × 1200
+    assert c(" ".join(["w"] * 10), cfg) == 12000           # 10 words
+    # NO artificial cap: a 40-word message genuinely takes 4× a 10-word one (not flattened)
+    assert c(" ".join(["w"] * 40), cfg) == 48000
+    assert c("", cfg) == 300                               # floor guards the zero-word edge
+
+
+def test_play_reveal_proportional_total_is_sum_of_proportions():
+    from app.services.ai.reading_executor import ProportionalRevealConfig, play_reveal_proportional
+
+    cfg = ProportionalRevealConfig(per_word_ms=1200, min_typing_ms=300, between_bubbles_ms=500)
+    total = {"t": 0.0}
+    order = []
+
+    async def send(t): order.append(("send", t))
+    async def typ(on): order.append(("typing", on))
+    async def slp(s): total["t"] += s
+
+    bubbles = ["hey", "ok so here is the thing"]           # 1 word (1.2s) + 6 words (7.2s)
+    asyncio.run(play_reveal_proportional(
+        bubbles, send_bubble=send, typing_fn=typ, sleep_fn=slp, config=cfg))
+    # 1.2s + 7.2s typing + 1 × 0.5s gap between them = 8.9s
+    assert round(total["t"], 2) == 8.9
+    assert order[0] == ("typing", True)                    # dots on into message 1 (seamless)
+    assert order[-1] == ("typing", False)

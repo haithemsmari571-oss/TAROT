@@ -26,6 +26,10 @@ class ReadingSessionState:
     last_activity_at: Optional[datetime] = None
     chat_transcript: List[dict] = field(default_factory=list)  # {role, content, timestamp}
     held_back_buffer: List[HeldItem] = field(default_factory=list)
+    # Two-role engine (READING_ENGINE=two_role): the Valentina content Sabri chose NOT to
+    # send this turn, held VERBATIM for later turns. Replaced on a fresh-content (NEW) turn,
+    # shrunk as Sabri releases from it on follow-up (CONTINUE) turns. Empty for other engines.
+    reserve: str = ""
     delivery_queue: List[DeliveryItem] = field(default_factory=list)
     queue_position: int = 0
     messages_sent_count: int = 0

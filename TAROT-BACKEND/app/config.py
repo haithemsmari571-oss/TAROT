@@ -78,9 +78,12 @@ class AppSettings(BaseSettings):
     # 1 correction) regardless of the gate. Prompt wording can't fix this reliably.
     SABRI_MICRO_MAX_ATTEMPTS: int = 2
     # ── Reading engine selector ──────────────────────────────────────────────
-    # "two_agent" = the current Valentina(draft)↔Sabri(direct) pipeline.
-    # "single_agent" = the new streaming Reader (one Opus call in final voice; the
-    # deterministic return-ack strip + delivery guarantee run on its output).
+    # "two_agent" = the retired Valentina(draft)↔Sabri(JSON quality-gate) pipeline.
+    # "single_agent" = the live Reader (one Opus call in final voice; the deterministic
+    # return-ack strip + delivery guarantee run on its output).
+    # "two_role" = Valentina writes complete content / Sabri delivers (curate + hold +
+    # voice-preserving-facts + pace) — the next iteration, opt-in, built on this branch.
+    # Default stays single_agent (live) until the two_role A/B clears; no deploy w/o sign-off.
     # Cutover 2026-07-13: A/B cleared single_agent (quality + latency + 0 leaks),
     # so the default is now single_agent. Rollback: set READING_ENGINE=two_agent in
     # the prod .env and restart (instant), or revert this line and redeploy.
@@ -118,6 +121,29 @@ class AppSettings(BaseSettings):
     # mid-reveal client messages the heuristic can't classify. Only ever decides
     # continue-vs-redirect — it NEVER reviews or corrects the Reader's writing.
     READER_CLASSIFIER_MODEL: str = "claude-haiku-4-5-20251001"
+    # ── Two-role engine (READING_ENGINE=two_role): Valentina writes / Sabri delivers ──
+    # Valentina (writer) reuses READER_MODEL (Opus 4.6) + the gated thinking gate — she
+    # writes ONE complete, rich reading/reply as prose per turn, no chunking/voice/pacing.
+    # Sabri (delivery director) is a SECOND real model call: he curates (select + hold in
+    # reserve), rewrites the selected parts into texting voice PRESERVING every fact/number/
+    # name verbatim, and chunks into ~a natural turn. Plain-text I/O (bubbles + @@RESERVE@@),
+    # never JSON; no correction/redo loop — this is NOT the retired two_agent quality-gate.
+    SABRI_DELIVERY_MODEL: str = "claude-sonnet-4-6"
+    SABRI_DELIVERY_MAX_TOKENS: int = 8000
+    # Bounded retry if Sabri returns empty/malformed output (never spin, always deliver).
+    SABRI_DELIVERY_MAX_ATTEMPTS: int = 2
+    # Guideline for how many messages constitute one natural conversational turn before
+    # Sabri pauses for a response (soft — Sabri reads the moment, not a hard cutoff).
+    SABRI_TURN_TARGET_MESSAGES: int = 10
+    # ── Two-role proportional reveal pacing ──────────────────────────────────────
+    # Sabri's chunked messages reveal at real human typing speed: DUO_PER_WORD_MS per word,
+    # scaling DIRECTLY + PROPORTIONALLY with each message's length — NO upper cap (a short
+    # reaction reads fast, a longer message genuinely takes longer). Sabri deliberately
+    # fragments into short texts, so proportional-with-no-cap stays sane. A tiny floor
+    # avoids a zero-length wait; a small gap sits between consecutive messages.
+    DUO_PER_WORD_MS: int = 1200
+    DUO_MIN_TYPING_MS: int = 300
+    DUO_BETWEEN_BUBBLES_MS: int = 500
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512
