@@ -98,17 +98,22 @@ class AppSettings(BaseSettings):
     # analog of the correction-loop cap: never spin, always deliver something).
     READER_MAX_ATTEMPTS: int = 2
     # ── Buffered paced reveal (landingpage2 rhythm) ──────────────────────────
-    # The Reader's FULL reply is generated invisibly first, then revealed one bubble
-    # at a time with these delays (real generation time is NOT part of the pacing):
-    #   * "reading her message" beat before the first bubble, typing indicator HIDDEN
-    #     (distinct from the "typing" beat) — simulates her reading what was sent.
+    # The Reader's FULL reply is generated invisibly first (the typing indicator is
+    # shown the whole time — she is "reading + composing", never dead silence), then
+    # revealed one bubble at a time with these delays (real generation time is NOT
+    # part of the reveal pacing):
     #   * per-bubble typing delay ≈ REVEAL_PER_WORD_MS × words, clamped [min, max].
     #   * a short gap between consecutive bubbles.
-    REVEAL_READING_PAUSE_MS: int = 2000
     REVEAL_PER_WORD_MS: int = 1500
     REVEAL_MIN_TYPING_MS: int = 900
     REVEAL_MAX_TYPING_MS: int = 4500
     REVEAL_BETWEEN_BUBBLES_MS: int = 500
+    # Long readings speed up: at or below REVEAL_FULL_PACE_BUBBLES the per-bubble delay
+    # + gap are unscaled; beyond it they shrink by REVEAL_FULL_PACE_BUBBLES / n (like a
+    # person quickening through a long explanation), floored at REVEAL_MIN_SPEED_FACTOR.
+    # This keeps a long reading's total reveal roughly bounded instead of ~5s × n.
+    REVEAL_FULL_PACE_BUBBLES: int = 8
+    REVEAL_MIN_SPEED_FACTOR: float = 0.35
     # Cheap model for the continue-vs-redirect tie-break on the genuinely ambiguous
     # mid-reveal client messages the heuristic can't classify. Only ever decides
     # continue-vs-redirect — it NEVER reviews or corrects the Reader's writing.

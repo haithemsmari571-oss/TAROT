@@ -248,15 +248,30 @@ def test_compute_reveal_typing_ms_clamps():
     assert compute_reveal_typing_ms("hey love", cfg) == 3000      # 2 words
     assert compute_reveal_typing_ms("a b c", cfg) == 4500         # 3 words -> exactly cap
     assert compute_reveal_typing_ms("the cards are loud tonight", cfg) == 4500  # 5 -> capped
+    # with a speed factor: per-word AND cap scale; the floor does not.
+    assert compute_reveal_typing_ms("the cards are loud tonight", cfg, 0.5) == 2250  # cap×0.5
+    assert compute_reveal_typing_ms("hey", cfg, 0.5) == 900        # 1w×0.5=750 -> floor 900
 
 
-def test_play_reveal_landingpage2_rhythm():
-    """Full reveal timeline (fake clock): 2s reading beat with typing HIDDEN, then per
-    bubble [typing on → ~1.5s/word clamped → send → typing off] with a 500ms gap between."""
+def test_reveal_speed_factor_scales_long_readings():
+    from app.services.ai.reading_executor import RevealConfig, reveal_speed_factor
+
+    cfg = RevealConfig(full_pace_bubbles=8, min_speed_factor=0.35)
+    assert reveal_speed_factor(1, cfg) == 1.0
+    assert reveal_speed_factor(8, cfg) == 1.0        # at threshold: full pace
+    assert reveal_speed_factor(16, cfg) == 0.5       # 8/16
+    assert round(reveal_speed_factor(19, cfg), 3) == round(8 / 19, 3)
+    assert reveal_speed_factor(40, cfg) == 0.35      # floored
+
+
+def test_play_reveal_rhythm_no_hidden_reading_beat():
+    """Reveal timeline (fake clock): dots stay ON into bubble 1 — there is NO leading
+    typing-off/reading pause (that dead-air is now the dots-on generation phase). Per
+    bubble [typing on → ~1.5s/word clamped → send → typing off], 500ms gap between."""
     from app.services.ai.reading_executor import RevealConfig, play_reveal
 
-    cfg = RevealConfig(reading_pause_ms=2000, per_word_ms=1500, min_typing_ms=900,
-                       max_typing_ms=4500, between_bubbles_ms=500)
+    cfg = RevealConfig(per_word_ms=1500, min_typing_ms=900, max_typing_ms=4500,
+                       between_bubbles_ms=500, full_pace_bubbles=8)  # 2 bubbles -> factor 1.0
     events = []
 
     async def send(t): events.append(("send", t))
@@ -269,14 +284,12 @@ def test_play_reveal_landingpage2_rhythm():
 
     assert sent == bubbles
     assert events == [
-        ("typing", False),          # "reading her message" beat — dots HIDDEN
-        ("sleep", 2.0),             # 2000ms reading pause
-        ("typing", True),           # bubble 1: dots on
+        ("typing", True),           # bubble 1 dots — seamless from generation (NO hidden pause first)
         ("sleep", 3.0),             # 2 words × 1.5s
         ("send", "hey love"),
         ("typing", False),          # dots off once the bubble lands
-        ("sleep", 0.5),             # 500ms gap between bubbles (dots hidden)
-        ("typing", True),           # bubble 2: dots on
+        ("sleep", 0.5),             # 500ms gap between bubbles
+        ("typing", True),           # bubble 2 dots
         ("sleep", 4.5),             # 5 words × 1.5s = 7.5 -> capped 4.5
         ("send", "the cards are loud tonight"),
         ("typing", False),
@@ -284,19 +297,23 @@ def test_play_reveal_landingpage2_rhythm():
     ]
 
 
-def test_play_reveal_single_bubble_no_between_gap():
+def test_play_reveal_long_reading_speeds_up():
+    """A 16-bubble reading reveals with each bubble scaled by 8/16 = 0.5: cap 2250ms,
+    gap 250ms — so the total is far below 16 × ~5s."""
     from app.services.ai.reading_executor import RevealConfig, play_reveal
 
-    cfg = RevealConfig(reading_pause_ms=2000, per_word_ms=1500, min_typing_ms=900,
-                       max_typing_ms=4500, between_bubbles_ms=500)
-    sleeps = []
+    cfg = RevealConfig(per_word_ms=1500, min_typing_ms=900, max_typing_ms=4500,
+                       between_bubbles_ms=500, full_pace_bubbles=8, min_speed_factor=0.35)
+    total = {"t": 0.0}
 
     async def send(_t): pass
     async def typ(_on): pass
-    async def slp(s): sleeps.append(round(s, 3))
+    async def slp(s): total["t"] += s
 
-    asyncio.run(play_reveal(["hi"], send_bubble=send, typing_fn=typ, sleep_fn=slp, config=cfg))
-    assert sleeps == [2.0, 1.5]     # reading pause + one bubble's typing; no 0.5 gap
+    bubbles = ["some line here about him"] * 16   # 5 words each -> capped at 2250ms×... = 2250
+    asyncio.run(play_reveal(bubbles, send_bubble=send, typing_fn=typ, sleep_fn=slp, config=cfg))
+    # 16 × 2.25s typing + 15 × 0.25s gaps = 36.0 + 3.75 = 39.75s (vs ~80s unscaled)
+    assert round(total["t"], 2) == 39.75
 
 
 def test_merge_reader_holds_keeps_undeployed_drops_deployed_adds_new():

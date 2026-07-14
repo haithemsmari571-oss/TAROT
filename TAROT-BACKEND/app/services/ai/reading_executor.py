@@ -306,19 +306,22 @@ async def resume_delivery(
 # Single-agent Reader — BUFFERED PACED REVEAL (READING_ENGINE=single_agent).
 # The Reader's FULL reply is generated invisibly first (the Opus call + thinking);
 # only then does this paced reveal play out, one already-parsed bubble at a time, so
-# it reads like a real person texting — NOT raw live token streaming. Timing is
-# landingpage2's proven rhythm: a "reading her message" beat (typing HIDDEN) before
-# the first bubble, then per-bubble typing (~ms/word, clamped) with a short gap
-# between bubbles. The reveal coordinator (reading_reveal.py) drives this and also
-# classifies client messages that arrive mid-reveal (continue vs redirect).
+# it reads like a real person texting — NOT raw live token streaming. The typing
+# indicator is shown continuously from the moment her message arrives, straight
+# through the (invisible) generation and into the reveal — she never sees dead
+# silence (the reveal coordinator turns the dots on before generation; play_reveal
+# keeps them on into the first bubble). Per-bubble typing is ~ms/word (clamped), and
+# LONG readings speed each bubble up (reveal_speed_factor). The coordinator
+# (reading_reveal.py) drives this + classifies mid-reveal messages (continue/redirect).
 # ═════════════════════════════════════════════════════════════════════════════
 @dataclass
 class RevealConfig:
-    reading_pause_ms: int = 2000       # "reading her message" beat, typing HIDDEN
     per_word_ms: int = 1500
     min_typing_ms: int = 900
     max_typing_ms: int = 4500
     between_bubbles_ms: int = 500
+    full_pace_bubbles: int = 8         # ≤ this many bubbles → unscaled (deliberate) pacing
+    min_speed_factor: float = 0.35     # floor on how fast a very long reading reveals
 
 
 def reveal_config_from_settings() -> RevealConfig:
@@ -326,40 +329,55 @@ def reveal_config_from_settings() -> RevealConfig:
 
     s = get_app_settings()
     return RevealConfig(
-        reading_pause_ms=s.REVEAL_READING_PAUSE_MS,
         per_word_ms=s.REVEAL_PER_WORD_MS,
         min_typing_ms=s.REVEAL_MIN_TYPING_MS,
         max_typing_ms=s.REVEAL_MAX_TYPING_MS,
         between_bubbles_ms=s.REVEAL_BETWEEN_BUBBLES_MS,
+        full_pace_bubbles=s.REVEAL_FULL_PACE_BUBBLES,
+        min_speed_factor=s.REVEAL_MIN_SPEED_FACTOR,
     )
 
 
-def compute_reveal_typing_ms(bubble: str, config: RevealConfig) -> int:
-    """Typing-indicator duration before a bubble: ~per_word_ms × words, clamped to
-    [min_typing_ms, max_typing_ms]. Pure."""
+def reveal_speed_factor(n_bubbles: int, config: RevealConfig) -> float:
+    """How much to compress per-bubble pacing for a reply of ``n_bubbles`` bubbles.
+    1.0 (full deliberate pacing) up to ``full_pace_bubbles``; beyond it the factor
+    shrinks as full_pace_bubbles / n (a person speeding up through a long explanation),
+    floored at ``min_speed_factor``. Pure. Keeps a long reading's total reveal roughly
+    bounded (~full_pace_bubbles × max_typing) instead of growing ~max_typing × n."""
+    if n_bubbles <= config.full_pace_bubbles:
+        return 1.0
+    return max(config.min_speed_factor, config.full_pace_bubbles / n_bubbles)
+
+
+def compute_reveal_typing_ms(bubble: str, config: RevealConfig, factor: float = 1.0) -> int:
+    """Typing-indicator duration before a bubble: ~per_word_ms × words × ``factor``,
+    clamped to [min_typing_ms, max_typing_ms × factor] (the floor never scales, so a
+    short bubble stays legible even in a fast long reading). Pure."""
     words = len((bubble or "").split())
-    return _clamp(words * config.per_word_ms, config.min_typing_ms, config.max_typing_ms)
+    cap = max(config.min_typing_ms, config.max_typing_ms * factor)
+    return _clamp(words * config.per_word_ms * factor, config.min_typing_ms, cap)
 
 
 async def play_reveal(bubbles, *, send_bubble, typing_fn, sleep_fn, config: RevealConfig):
-    """Reveal already-generated bubbles at landingpage2's rhythm. Pure over its
-    injected deps (send_bubble / typing_fn / sleep_fn) — unit-tested with a fake clock:
+    """Reveal already-generated bubbles at landingpage2's rhythm. Pure over its injected
+    deps (send_bubble / typing_fn / sleep_fn) — unit-tested with a fake clock:
 
-      typing OFF → reading_pause → for each bubble: [gap before all but the first] →
-      typing ON → per-bubble typing delay → send → typing OFF.
+      for each bubble: [gap before all but the first] → typing ON → per-bubble typing
+      delay (scaled by bubble count) → send → typing OFF.
 
-    The reading_pause simulates her reading the client's message with the typing dots
-    HIDDEN (distinct from the "typing" beat). Returns the sent bubbles; never leaves
-    the typing indicator hanging (finally-clears it on any exit)."""
+    Dots are assumed already ON from the generation phase, so bubble 1's ``typing_fn(True)``
+    is a seamless continuation — there is NO hidden pause that would show dead air. The
+    per-bubble delay and the between-bubble gap both shrink for long readings. Returns the
+    sent bubbles; never leaves the typing indicator hanging (finally-clears it)."""
     sent = []
-    await typing_fn(False)  # "reading her message" beat shows NO typing dots
+    factor = reveal_speed_factor(len(bubbles), config)
+    gap = (config.between_bubbles_ms / 1000.0) * factor
     try:
-        await sleep_fn(config.reading_pause_ms / 1000.0)
         for i, bubble in enumerate(bubbles):
             if i > 0:
-                await sleep_fn(config.between_bubbles_ms / 1000.0)
-            await typing_fn(True)
-            await sleep_fn(compute_reveal_typing_ms(bubble, config) / 1000.0)
+                await sleep_fn(gap)
+            await typing_fn(True)   # dots ON (already on from generation for i=0 — seamless)
+            await sleep_fn(compute_reveal_typing_ms(bubble, config, factor) / 1000.0)
             await send_bubble(bubble)
             sent.append(bubble)
             await typing_fn(False)

@@ -291,9 +291,12 @@ async def handle_client_message(chat_id, client_message, *, psychic_id=None, use
 
 
 async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> None:
-    """Drive one or more turns for a chat: generate INVISIBLY → paced reveal → merge holds
-    → if a redirect was queued during the reveal, loop for it; else go idle. One reveal
-    plays fully before the next begins, so bubbles never interleave across turns."""
+    """Drive one or more turns for a chat: show typing → generate INVISIBLY (dots stay
+    on the whole time, never dead silence) → paced reveal (keeps the dots on into the
+    first bubble) → merge holds → if a redirect was queued during the reveal, loop for
+    it; else go idle. One reveal plays fully before the next begins, so bubbles never
+    interleave across turns."""
+    from app.services.ai import reading_executor
     from app.services.ai.reading_executor import _DeliveryAborted, _merge_reader_holds
     from app.services.ai.reading_session import get_session_store
 
@@ -301,11 +304,14 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
     state = store.get(f"chat:{chat_id}")
     try:
         while message is not None:
+            # Typing dots ON the instant we begin this turn and held through the
+            # (invisible) generation — the client never sees silence while she composes.
+            await reading_executor.broadcast_typing(chat_id, True, psychic_id)
             if not await _chat_active(chat_id):
                 logger.info("reveal_skipped_chat_not_active", chat_id=chat_id)
                 break
             bubbles, holds = await _generate_turn(chat_id, message, trigger_entry, state, user_id)
-            sent = await _reveal_turn(chat_id, bubbles, psychic_id, state)
+            sent = await _reveal_turn(chat_id, bubbles, psychic_id, state)  # dots stay on into bubble 1
             _merge_reader_holds(state, sent, holds)
             store.put(state)
             async with _lock(chat_id):
@@ -326,6 +332,12 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
     finally:
         _active[chat_id] = False
         _pending.pop(chat_id, None)
+        # Clear the dots if we exited before/without a reveal finishing them (generation
+        # error, not-deliverable, cancel). play_reveal already clears them on success.
+        try:
+            await reading_executor.broadcast_typing(chat_id, False, psychic_id)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 async def cancel_reveal(chat_id) -> None:

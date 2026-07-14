@@ -166,3 +166,41 @@ def test_redirect_during_reveal_queues_new_turn_after_current(monkeypatch):
 
     # the redirect generated a fresh turn, AFTER the first reveal completed, in order
     assert asyncio.run(scenario()) == [MSG1, redirect]
+
+
+def test_typing_shown_before_and_through_generation(monkeypatch):
+    """No dead silence: the typing indicator is turned ON before generation starts
+    (and held through it), then cleared at the end."""
+    from app.services.ai import reading_executor
+
+    chat_id = 70003
+    _reset(chat_id)
+    order = []
+
+    async def rec_typing(cid, on, sid):
+        order.append(("typing", on))
+
+    async def fake_generate(cid, message, entry, state, user_id):
+        order.append(("generate", message))
+        return (["b1"], [])
+
+    async def fake_reveal(cid, bubbles, psychic_id, state):
+        order.append(("reveal", None))
+        return bubbles
+
+    async def fake_active(cid):
+        return True
+
+    monkeypatch.setattr(reading_executor, "broadcast_typing", rec_typing)
+    monkeypatch.setattr(reading_reveal, "_generate_turn", fake_generate)
+    monkeypatch.setattr(reading_reveal, "_reveal_turn", fake_reveal)
+    monkeypatch.setattr(reading_reveal, "_chat_active", fake_active)
+
+    async def scenario():
+        await reading_reveal.handle_client_message(chat_id, "will he come back?", psychic_id=1, user_id=2)
+        await asyncio.wait_for(reading_reveal._turn_tasks[chat_id], 3)
+
+    asyncio.run(scenario())
+    assert order[0] == ("typing", True)                 # dots ON before anything else
+    assert order[1] == ("generate", "will he come back?")  # ...and generation runs with dots on
+    assert order[-1] == ("typing", False)               # cleared at the end
