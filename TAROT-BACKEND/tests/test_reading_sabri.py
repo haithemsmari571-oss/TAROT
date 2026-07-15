@@ -202,7 +202,8 @@ def test_build_input_new_reading():
     assert "VALENTINA'S COMPLETE NEW READING" in inp
     assert "Here is the complete reading prose." in inp
     assert "will he come back?" in inp
-    assert "about 10 messages" in inp
+    assert "about 10 SHORT messages" in inp          # turn_target passed through
+    assert "hold the majority" in inp
 
 
 def test_build_input_from_reserve():

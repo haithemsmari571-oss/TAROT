@@ -132,9 +132,12 @@ class AppSettings(BaseSettings):
     SABRI_DELIVERY_MAX_TOKENS: int = 8000
     # Bounded retry if Sabri returns empty/malformed output (never spin, always deliver).
     SABRI_DELIVERY_MAX_ATTEMPTS: int = 2
-    # Guideline for how many messages constitute one natural conversational turn before
-    # Sabri pauses for a response (soft — Sabri reads the moment, not a hard cutoff).
-    SABRI_TURN_TARGET_MESSAGES: int = 10
+    # Guideline for how many SHORT messages constitute one natural conversational turn before
+    # Sabri pauses for a response (soft — he reads the moment, not a hard cutoff). Deliberately
+    # low: Sabri curates the strongest slice and holds the MAJORITY of Valentina's reading in
+    # reserve, so a turn is a few sharp beats then a pause, not most of the reading. Drives the
+    # total reveal time down (reveal = words sent × per-word ms).
+    SABRI_TURN_TARGET_MESSAGES: int = 8
     # DETERMINISTIC message-length backstop (landingpage2's approach). Prompt instructions to
     # "keep messages short" are unreliable without a code-side guarantee, so after Sabri
     # generates, each of his messages is re-chunked to at most this many words: split on
