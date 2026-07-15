@@ -152,9 +152,15 @@ class AppSettings(BaseSettings):
     # reaction reads fast, a longer message genuinely takes longer). Sabri deliberately
     # fragments into short texts, so proportional-with-no-cap stays sane. A tiny floor
     # avoids a zero-length wait; a small gap sits between consecutive messages.
-    DUO_PER_WORD_MS: int = 1200
+    # 857ms/word ≈ 70 words/min (60000/70).
+    DUO_PER_WORD_MS: int = 857
     DUO_MIN_TYPING_MS: int = 300
     DUO_BETWEEN_BUBBLES_MS: int = 500
+    # A brief "reading the message" beat the moment a client message arrives: the typing indicator
+    # is HIDDEN for this long BEFORE the dots turn on (a real person reads a message before they
+    # start typing). After it, the dots stay on continuously through generation and the reveal —
+    # this is the ONLY intentional silence; there is no dead air during the actual thinking/typing.
+    DUO_READING_PAUSE_MS: int = 2000
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512

@@ -186,6 +186,15 @@ async def _chat_active(chat_id) -> bool:
 # ═════════════════════════════════════════════════════════════════════════════
 # Coordinator: entry + turn loop + cancellation (mirrors reading_reveal).
 # ═════════════════════════════════════════════════════════════════════════════
+def _reading_pause_s() -> float:
+    """Seconds to hold the typing indicator HIDDEN when a message first arrives — a brief
+    'reading the message' beat before the dots turn on. Reads DUO_READING_PAUSE_MS; monkeypatched
+    to 0 in tests so the turn loop never really sleeps."""
+    from app.config import get_app_settings
+
+    return get_app_settings().DUO_READING_PAUSE_MS / 1000.0
+
+
 def _clear_task(chat_id, task) -> None:
     if _turn_tasks.get(chat_id) is task:
         _turn_tasks.pop(chat_id, None)
@@ -255,7 +264,12 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
     forced_route = None                        # first (idle-start) message: classify fresh
     try:
         while message is not None:
-            # Dots ON before generation and held through it — never dead silence.
+            # A brief "reading the message" beat FIRST: the typing indicator is HIDDEN for a short
+            # pause, the way a real person reads a message before they start typing. THEN the dots
+            # turn on and stay on continuously through the (invisible) generation and into the
+            # reveal — no dead silence during the actual thinking/typing, just this one reading gap.
+            await reading_executor.broadcast_typing(chat_id, False, psychic_id)
+            await asyncio.sleep(_reading_pause_s())
             await reading_executor.broadcast_typing(chat_id, True, psychic_id)
             if not await _chat_active(chat_id):
                 logger.info("duo_skipped_chat_not_active", chat_id=chat_id)

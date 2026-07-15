@@ -141,6 +141,7 @@ def _install_fakes(monkeypatch, routes, sabri_returns, sabri_seen):
     monkeypatch.setattr(reading_duo, "_duo_generate", fake_generate)
     monkeypatch.setattr(reading_duo, "_reveal_turn_duo", fake_reveal)
     monkeypatch.setattr(reading_duo, "_chat_active", fake_active)
+    monkeypatch.setattr(reading_duo, "_reading_pause_s", lambda: 0.0)   # no real 2s sleep in tests
 
 
 def test_reserve_set_on_new_then_released_on_continue(monkeypatch):
@@ -243,6 +244,7 @@ def test_redirect_midreveal_runs_after_current(monkeypatch):
         monkeypatch.setattr(reading_duo, "_duo_generate", g)
         monkeypatch.setattr(reading_duo, "_reveal_turn_duo", r)
         monkeypatch.setattr(reading_duo, "_chat_active", a)
+        monkeypatch.setattr(reading_duo, "_reading_pause_s", lambda: 0.0)
 
         await reading_duo.handle_client_message(chat_id, MSG1, psychic_id=1, user_id=2)
         task = reading_duo._turn_tasks[chat_id]
@@ -271,6 +273,7 @@ def test_continuer_midreveal_no_new_generation(monkeypatch):
         monkeypatch.setattr(reading_duo, "_duo_generate", g)
         monkeypatch.setattr(reading_duo, "_reveal_turn_duo", r)
         monkeypatch.setattr(reading_duo, "_chat_active", a)
+        monkeypatch.setattr(reading_duo, "_reading_pause_s", lambda: 0.0)
 
         await reading_duo.handle_client_message(chat_id, MSG1, psychic_id=1, user_id=2)
         task = reading_duo._turn_tasks[chat_id]
@@ -283,6 +286,13 @@ def test_continuer_midreveal_no_new_generation(monkeypatch):
         return gen_calls
 
     assert asyncio.run(scenario()) == [MSG1]
+
+
+def test_reading_pause_reads_config():
+    # the reading-beat pause comes from DUO_READING_PAUSE_MS (default 2s)
+    from app.config import get_app_settings
+    assert reading_duo._reading_pause_s() == get_app_settings().DUO_READING_PAUSE_MS / 1000.0
+    assert reading_duo._reading_pause_s() == 2.0
 
 
 # ── typing shown before + through generation (no dead silence) ────────────────
@@ -311,12 +321,19 @@ def test_typing_shown_before_and_through_generation(monkeypatch):
     monkeypatch.setattr(reading_duo, "_duo_generate", fake_generate)
     monkeypatch.setattr(reading_duo, "_reveal_turn_duo", fake_reveal)
     monkeypatch.setattr(reading_duo, "_chat_active", fake_active)
+    monkeypatch.setattr(reading_duo, "_reading_pause_s", lambda: 0.0)
 
     async def scenario():
         await reading_duo.handle_client_message(chat_id, "will he come back?", psychic_id=1, user_id=2)
         await asyncio.wait_for(reading_duo._turn_tasks[chat_id], 3)
 
     asyncio.run(scenario())
-    assert order[0] == ("typing", True)                     # dots ON before anything
-    assert order[1] == ("generate", "will he come back?")   # ...held through generation
-    assert order[-1] == ("typing", False)                   # cleared at the end
+    # Reading beat FIRST (dots HIDDEN), THEN dots on and held continuously through generation +
+    # reveal, then cleared. The only intentional silence is the initial reading gap.
+    assert order == [
+        ("typing", False),                       # reading beat — dots hidden the moment it arrives
+        ("typing", True),                        # ...then dots turn on
+        ("generate", "will he come back?"),      # ...and stay on through the (invisible) generation
+        ("reveal", None),                        # ...and into the reveal
+        ("typing", False),                       # cleared at the end
+    ]

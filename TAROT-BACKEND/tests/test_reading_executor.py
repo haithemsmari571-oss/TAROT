@@ -350,6 +350,13 @@ def test_compute_proportional_typing_ms_scales_with_length_no_cap():
     assert c("", cfg) == 300                               # floor guards the zero-word edge
 
 
+def test_proportional_config_default_is_70wpm():
+    # 857ms/word ≈ 70 words/min (60000/70), no cap
+    cfg = ex.proportional_reveal_config_from_settings()
+    assert cfg.per_word_ms == 857
+    assert round(60000 / cfg.per_word_ms) == 70
+
+
 def test_play_reveal_proportional_total_is_sum_of_proportions():
     from app.services.ai.reading_executor import ProportionalRevealConfig, play_reveal_proportional
 
