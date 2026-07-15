@@ -79,15 +79,16 @@ class AppSettings(BaseSettings):
     SABRI_MICRO_MAX_ATTEMPTS: int = 2
     # ── Reading engine selector ──────────────────────────────────────────────
     # "two_agent" = the retired Valentina(draft)↔Sabri(JSON quality-gate) pipeline.
-    # "single_agent" = the live Reader (one Opus call in final voice; the deterministic
-    # return-ack strip + delivery guarantee run on its output).
-    # "two_role" = Valentina writes complete content / Sabri delivers (curate + hold +
-    # voice-preserving-facts + pace) — the next iteration, opt-in, built on this branch.
-    # Default stays single_agent (live) until the two_role A/B clears; no deploy w/o sign-off.
-    # Cutover 2026-07-13: A/B cleared single_agent (quality + latency + 0 leaks),
-    # so the default is now single_agent. Rollback: set READING_ENGINE=two_agent in
-    # the prod .env and restart (instant), or revert this line and redeploy.
-    READING_ENGINE: str = "single_agent"
+    # "single_agent" = the one-Opus-call Reader (final voice; deterministic return-ack strip +
+    # delivery guarantee on its output). Was the live prod default; now the rollback target.
+    # "two_role" = Valentina writes a complete reading / Sabri curates + holds the majority in
+    # reserve + rewrites to texting voice (facts verbatim) + paces; deterministic ≤26-word message
+    # chunker, proportional reveal, numerology injection + return-ack strip + fact check carried over.
+    # Branch cutover (single-agent-reader): default flipped to two_role to stage the next go-live.
+    # NOT yet deployed — main/prod still run single_agent until this branch is deployed with sign-off.
+    # Rollback after deploy: set READING_ENGINE=single_agent in the prod .env and restart (instant),
+    # or revert this line and redeploy.
+    READING_ENGINE: str = "two_role"
     # The single-agent Reader (only used when READING_ENGINE=single_agent). Opus for
     # the A/B — we want to see the quality ceiling before considering a cheaper tier.
     # Verified callable on this key before switching (2026-07-13).
