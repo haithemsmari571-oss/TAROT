@@ -135,6 +135,13 @@ class AppSettings(BaseSettings):
     # Guideline for how many messages constitute one natural conversational turn before
     # Sabri pauses for a response (soft — Sabri reads the moment, not a hard cutoff).
     SABRI_TURN_TARGET_MESSAGES: int = 10
+    # DETERMINISTIC message-length backstop (landingpage2's approach). Prompt instructions to
+    # "keep messages short" are unreliable without a code-side guarantee, so after Sabri
+    # generates, each of his messages is re-chunked to at most this many words: split on
+    # sentence boundaries, group sentences up to the cap, never merge across a paragraph break.
+    # Prevents a single 50-100+ word message (one ran 127s at 1200ms/word) — the proportional
+    # typing-speed math is unchanged; this only bounds individual message length.
+    SABRI_MAX_MESSAGE_WORDS: int = 26
     # ── Two-role proportional reveal pacing ──────────────────────────────────────
     # Sabri's chunked messages reveal at real human typing speed: DUO_PER_WORD_MS per word,
     # scaling DIRECTLY + PROPORTIONALLY with each message's length — NO upper cap (a short

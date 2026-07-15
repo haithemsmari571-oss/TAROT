@@ -63,6 +63,7 @@ Match the depth to what she's actually given you.
 * Full reading: she's given you a real question, a name + DOB, or a story -> write the complete four-part reading (below), rich and full.
 * Focused reply: a genuine follow-up question or a new direction mid-conversation -> write a complete, substantial answer to THAT, drawing fresh cards, not a whole new opening reading.
 Either way you are writing complete content, not a fragment — Sabri decides how much of it the client sees at once.
+LENGTH DISCIPLINE — write the COMPLETE reading, but a TIGHT one. An opening reading lands in roughly 450-650 words; a focused reply in 250-400. Depth over volume: cut any line that only restates another, and let each perception do real work. Sabri rations what you write across the whole conversation, so give the full arc richly but never pad. Shorter and sharper beats long and diffuse — hit every required technique and beat, just do it lean.
 6. THE ENGINES
 Numerology. When KNOWN NUMEROLOGY is provided below, those Life Path / Personal Year numbers are correct and authoritative — use them, never recompute. If none is provided, do not invent numbers.
 Life Path meanings: 1 identity/independence · 2 partnership/sensitivity · 3 expression, hides pain in performance · 4 structure, fears chaos · 5 freedom, fears being caged · 6 responsibility/caretaking · 7 depth/solitude, fears being truly known · 8 power/ambition, grips when scared · 9 completion/release · 11 intuitive channel · 22 master builder · 33 master teacher, carries others' pain.
@@ -89,7 +90,7 @@ Every insight uses one of these — vary them, don't lean on one repeatedly.
 8. FULL READING STRUCTURE (opening readings)
 Write these four parts as flowing prose, in order:
 Part 1 — Core Wound: name the ache and pattern. Don't paraphrase what she said — tell her what she didn't say. Land a real perception in the first lines.
-Part 2 — Insights (the body, 15-20 distinct insights): past->present->future flow, every insight uses one of the 13 techniques, temperature varies (sharp/tender/leaning-forward/chest-tight). Must include: 1-2 Absorb-and-Replace, 2 Two-Clause Rhythms (if hot/cold), 3 varied Behavioral Tells, 1 Overheard Conversation, 2-3 Client Assumption Hooks, 2 Mechanism Diagnoses, 1 Timing Reference, 1 Body/Silence Read, a Third-Party Read if relevant, at least 1 original coined phrase, the power dynamic named with compassion toward him, at least 1 gossip-angle line, mystical/spiritual language 2-4 times. Minimum 8 cards across the section, mostly invisible, 3-5 named openly.
+Part 2 — Insights (the body, 8-12 distinct insights — lean, each earning its place): past->present->future flow, every insight uses one of the 13 techniques, temperature varies (sharp/tender/leaning-forward/chest-tight). Prioritise, drawing on: Absorb-and-Replace, Two-Clause Rhythm (if hot/cold), 2-3 varied Behavioral Tells, an Overheard Conversation, 2 Client Assumption Hooks, a Mechanism Diagnosis, 1 Timing Reference, a Body/Silence Read, a Third-Party Read if relevant, at least 1 original coined phrase, the power dynamic named with compassion toward him, a gossip-angle line, mystical/spiritual language woven in. Aim for 5-8 cards across the section, mostly invisible, 3-5 named openly.
 Part 3 — Sharp Questions: a few Loaded Reflective Questions that pull the next piece of her story forward.
 Part 4 — Truths and Doorway: short grounded truths, empathy toward him preserved, restore her power, no toxic positivity or cliché. End on a doorway, never a goodbye.
 9. SUBSTANCE CHECK (silent, before you finish)
@@ -155,17 +156,19 @@ def build_valentina_input(
     return "\n\n".join(parts)
 
 
-def write_valentina(valentina_input: str, *, client_message=None, model=None, max_tokens=None) -> str:
+def write_valentina(valentina_input: str, *, client_message=None, model=None, max_tokens=None,
+                    system: str = None) -> str:
     """Run ONE Valentina turn and return her complete reading as prose (full accumulated text).
     Opus 4.6 with the same gated adaptive thinking as the single-agent Reader (deep turns think,
     short turns don't). Blocking — call from a thread on the event loop. Returns "" on any SDK
     error (never raises): the coordinator treats an empty Valentina result as a failed NEW turn
-    and delivers a fallback line rather than crashing or leaving dead silence."""
+    and delivers a fallback line rather than crashing or leaving dead silence. ``system`` overrides
+    the persona (used to A/B prompt variants); defaults to VALENTINA_SYSTEM_PROMPT."""
     s = get_app_settings()
     tp = thinking_for_turn(client_message)
     try:
         chunks = ai_client.run_chat_stream(
-            system=VALENTINA_SYSTEM_PROMPT,
+            system=system or VALENTINA_SYSTEM_PROMPT,
             user_content=valentina_input,
             model=model or s.READER_MODEL,
             max_tokens=max_tokens or s.READER_MAX_TOKENS,

@@ -54,6 +54,95 @@ def test_parse_inline_sentinel_does_not_leak():
     assert reserve == "he is a pisces life path 7"
 
 
+# ── deterministic message-length chunker (landingpage2 approach) ──────────────
+BIG = (
+    "i pulled the hermit next to the six of cups for him and it confirmed it — he's not gone. "
+    "he's sitting in this low-grade shame right now, the kind a man feels when he knows he's been "
+    "inconsistent and doesn't know how to re-enter without acknowledging it. there was a moment, "
+    "last time you two spoke, where you expected him to step forward and he just... stood there. "
+    "he replays that too. he tells himself he'll reach out tomorrow. tomorrow becomes next week. "
+    "the longer the gap the heavier the shame, and the heavier the shame the harder it is to pick "
+    "up the phone"
+)
+
+
+def test_chunk_long_message_enforces_word_cap():
+    out = S.chunk_message(BIG, 26)
+    assert len(BIG.split()) > 100                         # the 127s message
+    assert len(out) >= 5
+    assert all(len(m.split()) <= 26 for m in out)         # HARD cap — no 50-100+ word message
+
+
+def test_chunk_splits_on_sentence_boundaries():
+    out = S.chunk_message("short first sentence here. and a second one after it.", 26)
+    # both fit under the cap, but they're grouped as whole sentences (not split mid-sentence)
+    assert out == ["short first sentence here. and a second one after it."]
+
+
+def test_chunk_short_message_unchanged():
+    assert S.chunk_message("hes a pisces with a life path 7", 26) == ["hes a pisces with a life path 7"]
+
+
+def test_chunk_bubbles_never_merges_across_paragraph_break():
+    out = S.chunk_bubbles(["short one", BIG, "ok last"], 26)
+    assert out[0] == "short one"                          # first bubble intact, not merged forward
+    assert out[-1] == "ok last"                           # last bubble intact, not merged backward
+    assert all(len(m.split()) <= 26 for m in out)
+
+
+def test_chunk_single_overlong_sentence_hard_split():
+    # one run-on "sentence" with no terminal punctuation, 40 words -> split to <=26
+    run_on = " ".join(f"w{i}" for i in range(40))
+    out = S.chunk_message(run_on, 26)
+    assert len(out) == 2 and all(len(m.split()) <= 26 for m in out)
+
+
+def test_chunk_preserves_card_names_across_split():
+    # a named card must not be broken across two messages (fidelity)
+    out = S.chunk_message(BIG, 26)
+    joined = " ".join(out).lower()
+    assert "six of cups" in joined and "hermit" in joined
+
+
+def test_sabri_deliver_applies_length_cap():
+    raw = BIG + "\n\n@@RESERVE@@\nheld stuff"
+    bubbles, reserve = S.sabri_deliver("x", source_content="", sabri_call=lambda _i: raw)
+    assert all(len(b.split()) <= 26 for b in bubbles)     # the 106-word bubble was chunked
+    assert reserve == "held stuff"
+
+
+def test_chunk_never_splits_multiword_card_in_hard_split():
+    # Review finding (high): a >26-word sentence with NO clause punctuation used to hard word-count
+    # split, breaking "the Knight of Cups" across two messages. Atom-aware split keeps it whole.
+    inp = ("i really feel like the cards are showing me something huge and heavy and important "
+           "about you and your family and your future and the Knight of Cups is here")
+    out = S.chunk_message(inp, 26)
+    assert all(len(m.split()) <= 26 for m in out)
+    assert any("knight of cups" in m.lower() for m in out)         # card name intact in ONE message
+    # and it is never severed: no message has "knight" without the full "knight of cups"
+    assert all("knight" not in m.lower() or "knight of cups" in m.lower() for m in out)
+
+
+def test_chunk_preserves_spaced_dash():
+    # Review finding (low): the spaced en/em-dash used to be consumed by the clause split.
+    inp = ("ok so listen the reading is really clear here and there is a lot to say about your "
+           "path so here it is your key years are 2020 – 2024 for love.")
+    joined = " ".join(S.chunk_message(inp, 26))
+    assert "–" in joined and "2020" in joined and "2024" in joined
+
+
+def test_return_ack_split_across_chunk_boundary_still_stripped():
+    # Review finding (high): chunking BEFORE the strip let a return-ack phrase split across a chunk
+    # boundary slip through. Stripping first (on the un-chunked bubble) drops it whole.
+    long_ack = ("ok so honestly the energy around you is so incredibly heavy and tangled and "
+                "complicated right now and everything has really shifted a lot since we last "
+                "spoke about him")
+    bubbles, _ = S.sabri_deliver("x", source_content="",
+                                 sabri_call=lambda _i: long_ack + "\n\nthe cards are clear")
+    assert all("last spoke" not in b.lower() for b in bubbles)     # not leaked
+    assert bubbles == ["the cards are clear"]
+
+
 # ── fact preservation: numbers, cards, signs/planets, names ───────────────────
 def test_missing_facts_none_when_preserved_across_bubbles_and_reserve():
     src = "she has a life path 5. the Knight of Cups is his card. he is a Pisces. born march 3."

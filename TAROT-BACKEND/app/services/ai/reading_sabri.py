@@ -135,6 +135,89 @@ def run_sabri(sabri_input: str, *, model=None, max_tokens=None) -> str:
     return result.get("text") or ""
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Deterministic message-length chunker (landingpage2's approach) — a CODE backstop so
+# no single delivery message can run 50-100+ words, regardless of what Sabri's prompt asked
+# for. Split each of Sabri's messages (a paragraph) on sentence boundaries, greedily group
+# sentences up to max_words, and NEVER merge across a paragraph break. A single sentence that
+# alone exceeds max_words is split on clause punctuation, then hard word-count as a last resort,
+# so the cap is guaranteed. The proportional typing math (1200ms/word, no cap) is untouched —
+# this bounds LENGTH, not speed.
+# ═════════════════════════════════════════════════════════════════════════════
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
+# Lookbehind → clause punctuation is PRESERVED on split. Dashes are deliberately NOT split points
+# (a spaced dash split used to be consumed/dropped); a dash survives as its own atom in the
+# last-resort split below.
+_CLAUSE_BOUNDARY = re.compile(r"(?<=[,;:])\s+")
+_ATOM_RE = None
+
+
+def _atomize(text: str):
+    """Tokenize into words, but keep a known MULTI-WORD term (e.g. 'the Knight of Cups',
+    'wheel of fortune') as ONE unsplittable token — so the last-resort word grouping can never
+    break a card name across two messages. Built lazily (the term vocab is defined below)."""
+    global _ATOM_RE
+    if _ATOM_RE is None:
+        multi = sorted((t for t in _KNOWN_TERMS if " " in t), key=len, reverse=True)
+        _ATOM_RE = re.compile("|".join(re.escape(t) for t in multi) + r"|\S+", re.IGNORECASE)
+    return [m.group(0) for m in _ATOM_RE.finditer(text)]
+
+
+def _greedy_group(units, max_words: int):
+    """Pack units (sentences/clauses/atoms) into ≤max_words groups, in order, without splitting a
+    unit. A unit longer than max_words is emitted alone (callers pre-split so this doesn't happen)."""
+    groups, cur, cw = [], [], 0
+    for u in units:
+        w = len(u.split())
+        if cur and cw + w > max_words:
+            groups.append(" ".join(cur))
+            cur, cw = [], 0
+        cur.append(u)
+        cw += w
+    if cur:
+        groups.append(" ".join(cur))
+    return groups
+
+
+def _split_long_sentence(sentence: str, max_words: int):
+    """A single sentence longer than max_words: split on clause punctuation (,;:), then — as a last
+    resort for a clause that is still too long — group ATOMS (words, with multi-word card names kept
+    whole). No piece exceeds max_words and no card name is ever split across two messages."""
+    clauses = [c.strip() for c in _CLAUSE_BOUNDARY.split(sentence) if c.strip()]
+    out = []
+    for grp in _greedy_group(clauses, max_words):
+        if len(grp.split()) <= max_words:
+            out.append(grp)
+        else:  # a single clause still too long → atom-aware grouping (never splits a card name)
+            out.extend(_greedy_group(_atomize(grp), max_words))
+    return out
+
+
+def chunk_message(text: str, max_words: int):
+    """Split ONE message (a paragraph) into ≤max_words delivery messages on sentence boundaries.
+    Internal whitespace is normalized (a message is one line). Pure."""
+    text = " ".join((text or "").split())
+    if not text:
+        return []
+    sentences = [s.strip() for s in _SENTENCE_BOUNDARY.split(text) if s.strip()]
+    units = []
+    for s in sentences:
+        if len(s.split()) <= max_words:
+            units.append(s)
+        else:
+            units.extend(_split_long_sentence(s, max_words))
+    return _greedy_group(units, max_words)
+
+
+def chunk_bubbles(bubbles, max_words: int):
+    """Re-chunk each of Sabri's messages to ≤max_words, flattened, NEVER merging across a
+    message/paragraph boundary. Pure."""
+    out = []
+    for b in bubbles:
+        out.extend(chunk_message(b, max_words) or ([b] if b.strip() else []))
+    return out
+
+
 def parse_sabri_output(text: str):
     """Split Sabri's raw output into (bubbles, reserve).
 
@@ -260,13 +343,17 @@ def sabri_deliver(
             logger.warning("sabri_call_failed", attempt=attempt, error=str(e))
             continue
         bubbles, reserve = parse_sabri_output(raw)
+        # Strip return-acks on the UN-chunked messages FIRST — a multi-word ack phrase ("since we
+        # last spoke") must be matched whole, before the length backstop could split it across a
+        # chunk boundary and slip it past the filter. THEN enforce the per-message length cap.
         dropped = [b for b in bubbles if is_return_acknowledgment(b)]
         bubbles = [b for b in bubbles if not is_return_acknowledgment(b)]
+        bubbles = chunk_bubbles(bubbles, s.SABRI_MAX_MESSAGE_WORDS)
         if dropped:
             logger.warning("sabri_dropped_return_acks", count=len(dropped), dropped=dropped)
         if bubbles:
             if source_content:
-                miss = missing_facts(source_content, "\n".join(bubbles) + "\n" + reserve, names=names)
+                miss = missing_facts(source_content, " ".join(bubbles) + " " + reserve, names=names)
                 if has_missing_facts(miss):
                     logger.warning("sabri_fact_drift", attempt=attempt, **miss)
             logger.info("sabri_turn_ready", bubbles=len(bubbles), reserve_chars=len(reserve),
