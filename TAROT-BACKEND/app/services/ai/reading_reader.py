@@ -206,32 +206,111 @@ She's smarter, more honest, and has lived more than you. She's not paying for in
 # call is injectable into run_reader_turn. Wired into the live path (Phase 5) behind
 # READING_ENGINE=single_agent via reading_pipeline → reading_executor.
 # ─────────────────────────────────────────────────────────────────────────────
-def _numerology_block(date_of_birth, current_year) -> str:
-    """Deterministic Life Path + Personal Year for the client's DOB, rendered as
-    authoritative given facts. The model computes numerology WRONG when left to do
-    it live (a smoke test read Life Path 6 for 22 Jul 1992, correct is 5), so the
-    numbers are handed to it here and it is told not to recompute. Returns "" when
-    there is no DOB on file (a first-session/thin dossier) — nothing is injected."""
-    if not date_of_birth:
-        return ""
+# ── deterministic numerology extraction of a THIRD PARTY named with a DOB ─────
+# The client's own numerology comes from the dossier DOB. A third party (an ex/partner)
+# named WITH a date of birth in the message ("my ex daniel ... born march 3 1990") gets
+# the same deterministic injection instead of being computed live (which the model gets
+# wrong). Extraction is deliberately conservative: a date must be clearly parseable AND
+# introduced by a RELATIONSHIP cue + a plausible name in the same sentence, else it is
+# skipped (the model handles it, exactly as today — no false injection). A self-cue
+# ("im sarah ...") is NOT a third party — the client's DOB already comes from the dossier.
+_MONTHS = {}
+for _i, _m in enumerate(
+    "january february march april may june july august september october november december".split(), 1
+):
+    _MONTHS[_m] = _i
+    _MONTHS[_m[:3]] = _i
+_MON_ALT = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec"
+_DATE_MDY = re.compile(rf"\b({_MON_ALT})[a-z]*\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})\b")
+_DATE_DMY = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MON_ALT})[a-z]*\.?,?\s+(\d{{4}})\b")
+_DATE_ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+_REL_CUE = re.compile(
+    r"\bmy\s+(?:ex(?:[-\s](?:boyfriend|girlfriend|husband|wife|partner))?|partner|husband|"
+    r"wife|boyfriend|girlfriend|fianc[e\xe9]e?|man|guy)\s+([a-z][a-z'-]{1,20})"
+)
+_NAME_STOP = {"keeps", "kept", "keep", "went", "goes", "going", "is", "was", "born", "has",
+              "had", "been", "and", "the", "who", "just", "still", "always", "never", "left"}
+
+
+def _parse_dates(text):
+    """Every parseable date in ``text`` as (date, (start, end)) — month-name, day-month, ISO."""
+    from datetime import date as _date
+
+    found = []
+    for m in _DATE_MDY.finditer(text):
+        try:
+            found.append((_date(int(m.group(3)), _MONTHS[m.group(1)], int(m.group(2))), m.span()))
+        except (ValueError, KeyError):
+            pass
+    for m in _DATE_DMY.finditer(text):
+        try:
+            found.append((_date(int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1))), m.span()))
+        except (ValueError, KeyError):
+            pass
+    for m in _DATE_ISO.finditer(text):
+        try:
+            found.append((_date(int(m.group(1)), int(m.group(2)), int(m.group(3))), m.span()))
+        except ValueError:
+            pass
+    return sorted(found, key=lambda x: x[1][0])
+
+
+def _extract_subject_dobs(text):
+    """(Name, date) for THIRD parties named-with-a-DOB in the message. Conservative: a
+    relationship cue + plausible name must precede the date within the same sentence, else
+    the date is skipped (no false injection). Returns [] on any/no match. Pure."""
+    t = (text or "").lower()
+    out = []
+    seen = set()
+    for d, span in _parse_dates(t):
+        sentence_start = max((t.rfind(c, 0, span[0]) for c in ".?!"), default=-1) + 1
+        cues = list(_REL_CUE.finditer(t[sentence_start:span[0]]))
+        if not cues:
+            continue
+        name = cues[-1].group(1)
+        if name in _NAME_STOP or (name, d) in seen:
+            continue
+        seen.add((name, d))
+        out.append((name.capitalize(), d))
+    return out
+
+
+def _numerology_block(date_of_birth, current_year, client_message=None) -> str:
+    """Deterministic Life Path + Personal Year as authoritative given facts, so the model
+    never computes numerology live (a smoke test read Life Path 6 for 22 Jul 1992; correct
+    is 5). Covers the CLIENT's own DOB (from the dossier) AND any THIRD PARTY named with a
+    DOB in ``client_message`` (an ex/partner) — same calculator, same pattern. Returns ""
+    when there is nothing to inject (thin/first-session file and no datable third party)."""
     try:
         from app.utils.life_path_calculator import (
             calculate_life_path_number,
             calculate_personal_year,
         )
-
-        life_path = calculate_life_path_number(date_of_birth)
-        lines = [
-            "KNOWN NUMEROLOGY (authoritative — these are correct, use them, do NOT recompute):",
-            f"Life Path: {life_path}",
-        ]
-        if current_year:
-            py = calculate_personal_year(date_of_birth, current_year)
-            lines.append(f"Personal Year ({current_year}): {py}")
-        return "\n".join(lines)
-    except Exception as e:  # noqa: BLE001 — a bad DOB must never break the turn
+    except Exception as e:  # noqa: BLE001
         logger.warning("reader_numerology_skipped", error=str(e))
         return ""
+
+    facts = []
+    if date_of_birth:  # the client's own numerology (from the dossier DOB) — unchanged
+        try:
+            line = f"Life Path: {calculate_life_path_number(date_of_birth)}"
+            if current_year:
+                line += f"\nPersonal Year ({current_year}): {calculate_personal_year(date_of_birth, current_year)}"
+            facts.append(line)
+        except Exception as e:  # noqa: BLE001 — a bad DOB must never break the turn
+            logger.warning("reader_numerology_skipped", error=str(e))
+    for name, dob in _extract_subject_dobs(client_message):  # a third party named with a DOB
+        try:
+            line = f"{name} — Life Path: {calculate_life_path_number(dob)}"
+            if current_year:
+                line += f", Personal Year ({current_year}): {calculate_personal_year(dob, current_year)}"
+            facts.append(line)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("reader_numerology_skipped", error=str(e))
+    if not facts:
+        return ""
+    return ("KNOWN NUMEROLOGY (authoritative — these are correct, use them, do NOT recompute):\n"
+            + "\n".join(facts))
 
 
 def build_reader_input(
@@ -250,7 +329,8 @@ def build_reader_input(
 
     ``date_of_birth`` (a date or 'YYYY-MM-DD'/'DD/MM/YYYY' string) + ``current_year``
     inject the client's Life Path and Personal Year as authoritative given facts, so
-    the model is never left to compute numerology live (which it gets wrong)."""
+    the model is never left to compute numerology live (which it gets wrong). Any third
+    party named with a DOB in ``client_message`` is injected the same deterministic way."""
     parts = []
     tx = chat_transcript or []
     if tx:
@@ -264,7 +344,7 @@ def build_reader_input(
         "CLIENT FILE (load silently, never cite):\n"
         + (client_file or "(none — first session)")
     )
-    numerology = _numerology_block(date_of_birth, current_year)
+    numerology = _numerology_block(date_of_birth, current_year, client_message=client_message)
     if numerology:
         parts.append(numerology)
     parts.append("SESSION METADATA:\n" + json.dumps(session_metadata or {}, ensure_ascii=False))
@@ -283,24 +363,46 @@ def build_reader_input(
 _FENCE_LINES = {"```", "```json", "```text"}
 
 
-def parse_reader_output(text: str):
-    """Split the Reader's raw output into (bubbles, holds):
-    bubbles — client-facing messages (blank-line separated, before @@HOLD@@);
-    holds  — list of (trigger, line) parsed from `<trigger> :: <line>` rows after @@HOLD@@.
-    Tolerates stray code-fence lines the model may echo from the prompt's example. Pure."""
-    raw = (text or "").strip()
-    # Drop any stray fence lines (the model can echo the @@HOLD@@ example's fences).
-    raw = "\n".join(ln for ln in raw.splitlines() if ln.strip() not in _FENCE_LINES)
-    body, _, hold_section = raw.partition(HOLD_SENTINEL)
-    bubbles = [b.strip() for b in re.split(r"\n[ \t]*\n", body) if b.strip()]
-    holds = []
-    for ln in hold_section.splitlines():
+def _hold_rows(section: str):
+    """Parse `<trigger> :: <line>` rows (a HOLD_SEP with non-empty text after it) into
+    (trigger, line) tuples; blank/malformed rows are skipped. Pure."""
+    rows = []
+    for ln in section.splitlines():
         s = ln.strip()
         if not s or HOLD_SEP not in s:
             continue
         trigger, _, line = s.partition(HOLD_SEP)
         if line.strip():
-            holds.append((trigger.strip(), line.strip()))
+            rows.append((trigger.strip(), line.strip()))
+    return rows
+
+
+def _is_hold_row(block: str) -> bool:
+    """True if a client-body block is actually an internal hold-row (`<trigger> :: <line>`)
+    that leaked BEFORE the @@HOLD@@ sentinel — an internal label, never a client message."""
+    return any(
+        HOLD_SEP in ln and ln.partition(HOLD_SEP)[2].strip()
+        for ln in block.splitlines()
+    )
+
+
+def parse_reader_output(text: str):
+    """Split the Reader's raw output into (bubbles, holds):
+    bubbles — client-facing messages (blank-line separated, before @@HOLD@@);
+    holds  — list of (trigger, line) parsed from `<trigger> :: <line>` rows after @@HOLD@@.
+
+    Deterministic delivery guard (mirrors the two-role @@RESERVE@@ residual-drop): an internal
+    hold-row that appears in the BODY — off-contract, before the sentinel — is an internal
+    label, NOT a client message; it is routed into holds (banked), never delivered verbatim.
+    Tolerates stray code-fence lines the model may echo from the prompt's example. Pure."""
+    raw = (text or "").strip()
+    # Drop any stray fence lines (the model can echo the @@HOLD@@ example's fences).
+    raw = "\n".join(ln for ln in raw.splitlines() if ln.strip() not in _FENCE_LINES)
+    body, _, hold_section = raw.partition(HOLD_SENTINEL)
+    body_blocks = [b.strip() for b in re.split(r"\n[ \t]*\n", body) if b.strip()]
+    bubbles = [b for b in body_blocks if not _is_hold_row(b)]
+    leaked = "\n".join(b for b in body_blocks if _is_hold_row(b))
+    holds = _hold_rows(leaked + "\n" + hold_section)
     return bubbles, holds
 
 

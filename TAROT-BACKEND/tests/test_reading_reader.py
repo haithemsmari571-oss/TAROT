@@ -48,6 +48,33 @@ def test_parse_empty_input():
     assert parse_reader_output("   \n  ") == ([], [])
 
 
+def test_parse_body_hold_row_before_sentinel_is_not_delivered():
+    # Off-contract leak: a hold-row (`<trigger> :: <line>`) placed in the BODY, before
+    # @@HOLD@@, must NOT be delivered verbatim to the client — it is an internal label,
+    # routed into holds (banked) instead, mirroring the two-role @@RESERVE@@ residual-drop.
+    from app.services.ai.reading_reader import HOLD_SEP
+
+    text = ("if she asks about him :: theres a third person\n\n"
+            "hey love the cards are loud\n\n@@HOLD@@\nif Y :: banked line")
+    bubbles, holds = parse_reader_output(text)
+    assert bubbles == ["hey love the cards are loud"]                 # the label is NOT shown
+    assert ("if she asks about him", "theres a third person") in holds  # it is banked instead
+    assert ("if Y", "banked line") in holds
+    assert all(HOLD_SEP not in b for b in bubbles)                    # no internal sep leaks
+
+
+def test_parse_inline_and_doubled_hold_sentinel_do_not_leak():
+    # The sentinel itself never reaches a bubble (partition on the first @@HOLD@@ occurrence).
+    from app.services.ai.reading_reader import HOLD_SENTINEL
+
+    for raw in ["here u go @@HOLD@@ if X :: secret held line",
+                "real bubble\n\n@@HOLD@@\nif X :: a\n@@HOLD@@\nif Y :: b",
+                "@@HOLD@@\nif X :: only a hold section"]:
+        bubbles, _ = parse_reader_output(raw)
+        assert all(HOLD_SENTINEL not in b for b in bubbles)
+        assert all("secret held line" not in b for b in bubbles)
+
+
 # ── build_reader_input ───────────────────────────────────────────────────────
 def test_build_input_includes_sections_and_empty_buffer():
     out = build_reader_input(
@@ -122,6 +149,42 @@ def test_build_input_bad_dob_does_not_raise():
         session_metadata={}, held_back_buffer=[], date_of_birth="not-a-date", current_year=2026,
     )
     assert "KNOWN NUMEROLOGY" not in out       # unparseable DOB is skipped, never crashes
+
+
+def test_build_input_injects_third_party_numerology_from_message():
+    # A THIRD PARTY named with a DOB in the message (an ex) gets the SAME deterministic
+    # injection as the client — same calculator, same pattern. Daniel b. 3 Mar 1990:
+    # 1+9+9+0+0+3+0+3 = 25 -> 7 (Life Path); month 3 + day 3 + 2026 -> 16 -> 7 (Personal Year).
+    out = build_reader_input(
+        client_message="my ex daniel keeps going hot and cold, born march 3 1990. will he come back?",
+        chat_transcript=[], client_file=None, session_metadata={}, held_back_buffer=[],
+        date_of_birth=None, current_year=2026,
+    )
+    assert "Daniel — Life Path: 7" in out
+    assert "Personal Year (2026): 7" in out
+
+
+def test_build_input_third_party_and_client_together_no_double_injection():
+    from datetime import date
+
+    out = build_reader_input(
+        client_message="my ex daniel, born march 3 1990. im sarah, july 22 1992.",
+        chat_transcript=[], client_file=None, session_metadata={}, held_back_buffer=[],
+        date_of_birth=date(1992, 7, 22), current_year=2026,
+    )
+    assert "Life Path: 5" in out               # the client (Sarah), unlabeled, from her dossier DOB
+    assert "Daniel — Life Path: 7" in out      # the third party, labeled, from the message
+    assert "Sarah — Life Path" not in out      # a self-cue ('im sarah') is NOT a third party
+
+
+def test_build_input_no_third_party_without_relationship_cue():
+    # A date with no relationship cue is left to the model (conservative — no false injection).
+    out = build_reader_input(
+        client_message="he was born march 3 1990 and it still shows",
+        chat_transcript=[], client_file=None, session_metadata={}, held_back_buffer=[],
+        current_year=2026,
+    )
+    assert "KNOWN NUMEROLOGY" not in out
 
 
 # ── run_reader_turn (injected model call) ────────────────────────────────────

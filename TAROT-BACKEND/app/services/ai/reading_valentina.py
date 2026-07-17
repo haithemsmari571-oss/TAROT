@@ -149,7 +149,7 @@ def build_valentina_input(
     parts.append(
         "CLIENT FILE (load silently, never cite):\n" + (client_file or "(none — first session)")
     )
-    numerology = _numerology_block(date_of_birth, current_year)
+    numerology = _numerology_block(date_of_birth, current_year, client_message=client_message)
     if numerology:
         parts.append(numerology)
     parts.append("SESSION METADATA:\n" + json.dumps(session_metadata or {}, ensure_ascii=False))
