@@ -27,6 +27,7 @@ from .content_generation_run import ContentGenerationRun
 from .push_token import PushToken
 from .favorite import FavoritePsychic
 from .ai_draft import AiDraft
+from .reading_session_state import ReadingSessionStateRow
 
 __all__ = [
     "User",
@@ -59,4 +60,5 @@ __all__ = [
     "PushToken",
     "FavoritePsychic",
     "AiDraft",
+    "ReadingSessionStateRow",
 ]

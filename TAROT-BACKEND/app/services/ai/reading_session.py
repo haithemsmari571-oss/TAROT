@@ -8,11 +8,15 @@ be persisted for reconnect when the real-time layer is built (later phase).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from app.logging_config import get_logger
 from app.services.ai.reading_contracts import DeliveryItem, HeldItem
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -128,28 +132,162 @@ def compute_metadata(state: ReadingSessionState, now: Optional[datetime] = None)
     }
 
 
+# ── durability: write-through + rehydrate to reading_session_states (keyed by chat_id) ──
+# The persisted messages/chats tables already hold delivered content; this layer persists
+# ONLY the ephemeral engine state (reserve, held-back buffer, delivery queue + position,
+# working transcript, counters) so a restart resumes a reading instead of starting empty
+# (and resume_delivery no longer silently no-ops). Persistence NEVER breaks a turn: any DB
+# error degrades to pure in-memory. DB availability is probed once and cached so a down or
+# absent DB can't slow the hot path (or the test suite) with repeated slow connects.
+def _chat_id_of(session_id: str) -> Optional[int]:
+    if session_id and session_id.startswith("chat:"):
+        try:
+            return int(session_id.split(":", 1)[1])
+        except ValueError:
+            return None
+    return None
+
+
+def _state_to_row_fields(state: ReadingSessionState) -> dict:
+    return dict(
+        chat_id=state.chat_id,
+        session_id=state.session_id,
+        client_id=state.client_id,
+        is_first_session=state.is_first_session,
+        reserve=state.reserve or "",
+        held_back_buffer=json.dumps([asdict(h) for h in state.held_back_buffer]),
+        delivery_queue=json.dumps([asdict(d) for d in state.delivery_queue]),
+        queue_position=state.queue_position,
+        chat_transcript=json.dumps(state.chat_transcript or []),
+        messages_sent_count=state.messages_sent_count,
+        client_response_lengths=json.dumps(state.client_response_lengths or []),
+        client_response_times=json.dumps(state.client_response_times or []),
+        sabri_correction_count=state.sabri_correction_count,
+        waiting_for_response=state.waiting_for_response,
+        session_start=state.session_start,
+        last_activity_at=state.last_activity_at,
+    )
+
+
+def _row_to_state(row) -> ReadingSessionState:
+    return ReadingSessionState(
+        session_id=row.session_id,
+        client_id=row.client_id,
+        chat_id=row.chat_id,
+        is_first_session=row.is_first_session,
+        reserve=row.reserve or "",
+        held_back_buffer=[HeldItem(**h) for h in json.loads(row.held_back_buffer or "[]")],
+        delivery_queue=[DeliveryItem(**d) for d in json.loads(row.delivery_queue or "[]")],
+        queue_position=row.queue_position,
+        chat_transcript=json.loads(row.chat_transcript or "[]"),
+        messages_sent_count=row.messages_sent_count,
+        client_response_lengths=json.loads(row.client_response_lengths or "[]"),
+        client_response_times=json.loads(row.client_response_times or "[]"),
+        sabri_correction_count=row.sabri_correction_count,
+        waiting_for_response=row.waiting_for_response,
+        session_start=row.session_start,
+        last_activity_at=row.last_activity_at,
+    )
+
+
 class SessionStore:
-    """In-memory session store, keyed by session_id. Swap for a persisted store
-    when reconnect support lands with the real-time layer."""
+    """Session store keyed by session_id, write-through to ``reading_session_states`` and
+    rehydrating from it on an in-memory miss — so a backend restart resumes a reading
+    instead of starting empty. ``session_factory`` is injectable for tests; the process
+    singleton uses the app's ``SessionLocal``. Persistence degrades gracefully to pure
+    in-memory (the prior behaviour) on any DB error, probing availability once and caching
+    it so a down/absent DB never slows the hot path."""
 
-    def __init__(self) -> None:
+    def __init__(self, session_factory=None) -> None:
         self._sessions: Dict[str, ReadingSessionState] = {}
+        self._session_factory = session_factory  # None -> app SessionLocal (lazy)
+        self._db_ok: Optional[bool] = None        # None=unprobed; cached True/False after
 
+    def _open(self):
+        if self._session_factory is not None:
+            return self._session_factory()
+        from app.database.client import SessionLocal
+
+        return SessionLocal()
+
+    # ── in-memory + durable ──────────────────────────────────────────────────
     def get(self, session_id: str) -> Optional[ReadingSessionState]:
-        return self._sessions.get(session_id)
+        state = self._sessions.get(session_id)
+        if state is not None:
+            return state
+        return self._rehydrate(session_id)  # cold miss -> the DB (post-restart resume)
 
     def put(self, state: ReadingSessionState) -> None:
         self._sessions[state.session_id] = state
+        self._persist(state)  # write-through
 
     def get_or_create(self, session_id: str, **kwargs) -> ReadingSessionState:
-        state = self._sessions.get(session_id)
+        state = self.get(session_id)  # rehydrate-aware
         if state is None:
             state = create_session_state(session_id, **kwargs)
-            self._sessions[session_id] = state
+            self.put(state)
         return state
 
     def delete(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+        self._delete_row(_chat_id_of(session_id))
+
+    # ── durability helpers (never raise into a turn) ─────────────────────────
+    def _persist(self, state: ReadingSessionState) -> None:
+        if state.chat_id is None or self._db_ok is False:
+            return
+        try:
+            from app.models.reading_session_state import ReadingSessionStateRow
+
+            fields = _state_to_row_fields(state)
+            with self._open() as db:
+                row = db.get(ReadingSessionStateRow, state.chat_id)
+                if row is None:
+                    db.add(ReadingSessionStateRow(**fields))
+                else:
+                    for key, value in fields.items():
+                        setattr(row, key, value)
+                db.commit()
+            self._db_ok = True
+        except Exception as e:  # noqa: BLE001 — persistence must never break a turn
+            if self._db_ok is None:
+                self._db_ok = False  # DB down/absent this process -> stop retrying
+            logger.warning("reading_session_persist_failed", chat_id=state.chat_id, error=str(e))
+
+    def _rehydrate(self, session_id: str) -> Optional[ReadingSessionState]:
+        chat_id = _chat_id_of(session_id)
+        if chat_id is None or self._db_ok is False:
+            return None
+        try:
+            from app.models.reading_session_state import ReadingSessionStateRow
+
+            with self._open() as db:
+                row = db.get(ReadingSessionStateRow, chat_id)
+            self._db_ok = True
+            if row is None:
+                return None
+            state = _row_to_state(row)
+            self._sessions[session_id] = state
+            return state
+        except Exception as e:  # noqa: BLE001
+            if self._db_ok is None:
+                self._db_ok = False
+            logger.warning("reading_session_rehydrate_failed", chat_id=chat_id, error=str(e))
+            return None
+
+    def _delete_row(self, chat_id: Optional[int]) -> None:
+        if chat_id is None or self._db_ok is False:
+            return
+        try:
+            from app.models.reading_session_state import ReadingSessionStateRow
+
+            with self._open() as db:
+                row = db.get(ReadingSessionStateRow, chat_id)
+                if row is not None:
+                    db.delete(row)
+                    db.commit()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("reading_session_delete_failed", chat_id=chat_id, error=str(e))
 
 
 _STORE = SessionStore()
