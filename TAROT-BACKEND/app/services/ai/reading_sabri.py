@@ -313,6 +313,31 @@ def has_missing_facts(missing) -> bool:
     return bool(missing["numbers"] or missing["terms"] or missing["names"])
 
 
+def _audit_sabri_attempt(chat_id, turn_number, attempt, raw, dropped, miss, *, delivered):
+    """Append one two_role sabri_delivery audit row for this attempt (the raw Sabri output +
+    advisory notes: any dropped return-acks and fact-drift vs Valentina's draft). Never
+    affects the turn — errors swallowed; only logs when a chat_id context was threaded in."""
+    if chat_id is None:
+        return
+    try:
+        import json
+
+        from app.services.ai.reading_draft_log import get_draft_log
+
+        notes = {}
+        if dropped:
+            notes["dropped_return_acks"] = dropped
+        if miss and has_missing_facts(miss):
+            notes["fact_drift"] = miss
+        get_draft_log().log(
+            chat_id=chat_id, turn_number=turn_number, attempt_number=attempt,
+            engine="two_role", stage="sabri_delivery", raw_content=raw,
+            notes=json.dumps(notes) if notes else None, is_delivered=delivered,
+        )
+    except Exception:  # noqa: BLE001 — audit logging must never affect a turn
+        pass
+
+
 def sabri_deliver(
     sabri_input: str,
     *,
@@ -321,6 +346,8 @@ def sabri_deliver(
     sabri_call=None,
     max_attempts: int = None,
     fallback_message: str = FALLBACK_MESSAGE,
+    chat_id=None,
+    turn_number: int = 0,
 ):
     """Run one Sabri turn end-to-end → (bubbles, reserve).
 
@@ -352,11 +379,14 @@ def sabri_deliver(
         bubbles = chunk_bubbles(bubbles, s.SABRI_MAX_MESSAGE_WORDS)
         if dropped:
             logger.warning("sabri_dropped_return_acks", count=len(dropped), dropped=dropped)
+        miss = (
+            missing_facts(source_content, " ".join(bubbles) + " " + reserve, names=names)
+            if (bubbles and source_content) else None
+        )
+        if miss and has_missing_facts(miss):
+            logger.warning("sabri_fact_drift", attempt=attempt, **miss)
+        _audit_sabri_attempt(chat_id, turn_number, attempt, raw, dropped, miss, delivered=bool(bubbles))
         if bubbles:
-            if source_content:
-                miss = missing_facts(source_content, " ".join(bubbles) + " " + reserve, names=names)
-                if has_missing_facts(miss):
-                    logger.warning("sabri_fact_drift", attempt=attempt, **miss)
             logger.info("sabri_turn_ready", bubbles=len(bubbles), reserve_chars=len(reserve),
                         attempt=attempt)
             return bubbles, reserve

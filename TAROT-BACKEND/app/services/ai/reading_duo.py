@@ -87,6 +87,15 @@ async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
         reading_valentina.write_valentina, valentina_input, client_message=message
     )
     logger.info("duo_valentina_written", chat_id=chat_id, chars=len(text))
+    try:
+        from app.services.ai.reading_draft_log import get_draft_log
+
+        get_draft_log().log(
+            chat_id=chat_id, turn_number=state.messages_sent_count, engine="two_role",
+            stage="valentina_draft", raw_content=text, is_delivered=False,
+        )
+    except Exception:  # noqa: BLE001 — audit logging must never affect a turn
+        pass
     return text
 
 
@@ -105,7 +114,8 @@ async def _sabri_turn(chat_id, message, trigger_entry, state, source_content, is
         turn_target=s.SABRI_TURN_TARGET_MESSAGES,
     )
     bubbles, reserve = await asyncio.to_thread(
-        reading_sabri.sabri_deliver, sabri_input, source_content=source_content
+        reading_sabri.sabri_deliver, sabri_input, source_content=source_content,
+        chat_id=chat_id, turn_number=state.messages_sent_count,
     )
     logger.info("duo_sabri_delivered", chat_id=chat_id, bubbles=len(bubbles),
                 reserve_chars=len(reserve), is_new=is_new)

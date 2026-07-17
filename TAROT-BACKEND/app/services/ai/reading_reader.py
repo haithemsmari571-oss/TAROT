@@ -459,8 +459,30 @@ def _read_full(reader_input: str, *, model=None, max_tokens=None, client_message
     )
 
 
+def _audit_reader_attempt(chat_id, turn_number, attempt, raw_text, holds, *, delivered):
+    """Append one single_agent reader_output audit row for this attempt (the raw output
+    BEFORE hold-splitting; notes = the parsed holds). Never affects the turn — any error is
+    swallowed, and it only logs when a chat_id context was threaded through."""
+    if chat_id is None:
+        return
+    try:
+        import json
+
+        from app.services.ai.reading_draft_log import get_draft_log
+
+        get_draft_log().log(
+            chat_id=chat_id, turn_number=turn_number, attempt_number=attempt,
+            engine="single_agent", stage="reader_output", raw_content=raw_text,
+            notes=json.dumps([[t, ln] for (t, ln) in holds]) if holds else None,
+            is_delivered=delivered,
+        )
+    except Exception:  # noqa: BLE001 — audit logging must never affect a turn
+        pass
+
+
 def run_reader_turn(reader_input: str, *, client_message=None, reader_call=None,
-                    max_attempts=None, fallback_message: str = FALLBACK_MESSAGE):
+                    max_attempts=None, fallback_message: str = FALLBACK_MESSAGE,
+                    chat_id=None, turn_number=0):
     """One Reader turn → the FINAL (bubbles, holds) for the client.
 
     call → parse → strip return-acks (reusing the deterministic filter) → bounded retry
@@ -487,6 +509,7 @@ def run_reader_turn(reader_input: str, *, client_message=None, reader_call=None,
         holds = [(t, ln) for (t, ln) in holds if not is_return_acknowledgment(ln)]
         if dropped:
             logger.warning("reader_dropped_return_acks", count=len(dropped), dropped=dropped)
+        _audit_reader_attempt(chat_id, turn_number, attempt, text, holds, delivered=bool(bubbles))
         if bubbles:
             logger.info("reader_turn_ready", bubbles=len(bubbles), holds=len(holds), attempt=attempt)
             return bubbles, holds

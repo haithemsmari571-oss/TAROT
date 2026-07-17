@@ -175,7 +175,8 @@ async def _generate_turn(chat_id, message, trigger_entry, state, user_id):
     state.client_file = client_file
     reader_input = _reader_input_for(message, trigger_entry, state, client_file, dob, datetime.now())
     bubbles, holds = await asyncio.to_thread(
-        reading_reader.run_reader_turn, reader_input, client_message=message
+        reading_reader.run_reader_turn, reader_input, client_message=message,
+        chat_id=chat_id, turn_number=state.messages_sent_count,
     )
     logger.info("reveal_generated", chat_id=chat_id, bubbles=len(bubbles), holds=len(holds))
     return bubbles, holds
