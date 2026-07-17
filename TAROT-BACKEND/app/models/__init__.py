@@ -28,6 +28,7 @@ from .push_token import PushToken
 from .favorite import FavoritePsychic
 from .ai_draft import AiDraft
 from .reading_session_state import ReadingSessionStateRow
+from .reading_draft_attempt import ReadingDraftAttempt
 
 __all__ = [
     "User",
@@ -61,4 +62,5 @@ __all__ = [
     "FavoritePsychic",
     "AiDraft",
     "ReadingSessionStateRow",
+    "ReadingDraftAttempt",
 ]
