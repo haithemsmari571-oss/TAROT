@@ -362,7 +362,9 @@ def get_chat_messages_endpoint(
             db.query(Message)
             .filter(Message.chat_id == chat_id)
             .filter(Message.id < before_id)
-            .order_by(Message.created_at.desc())
+            # id is the tiebreak: created_at alone is not a total order (equal
+            # timestamps sort non-deterministically and can skip/dupe across pages).
+            .order_by(Message.created_at.desc(), Message.id.desc())
             .limit(limit)
             .all()
         )
@@ -372,7 +374,7 @@ def get_chat_messages_endpoint(
         messages = (
             db.query(Message)
             .filter(Message.chat_id == chat_id)
-            .order_by(Message.created_at.desc())
+            .order_by(Message.created_at.desc(), Message.id.desc())
             .limit(abs(offset))
             .all()
         )
@@ -382,7 +384,7 @@ def get_chat_messages_endpoint(
         messages = (
             db.query(Message)
             .filter(Message.chat_id == chat_id)
-            .order_by(Message.created_at.asc())
+            .order_by(Message.created_at.asc(), Message.id.asc())
             .offset(offset)
             .limit(limit)
             .all()
