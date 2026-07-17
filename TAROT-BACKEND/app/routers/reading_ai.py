@@ -55,7 +55,7 @@ def _draft_out(d: AiDraft) -> dict:
 
 
 @router.put("/{chat_id}/response-mode")
-def set_response_mode(
+async def set_response_mode(
     chat_id: int,
     payload: ResponseModeUpdate,
     user: User = Depends(get_current_user),
@@ -72,6 +72,13 @@ def set_response_mode(
     logger.info(
         "response_mode_set", chat_id=chat_id, mode=payload.mode.value, by=user.id
     )
+    # Switching away from full-auto must STOP any in-flight or queued AI turn —
+    # otherwise a stale generation/reveal finishes (and a queued redirect runs as a
+    # full extra AI turn) after the operator already took over. Committed first so a
+    # message arriving during the cancel already sees the new mode. Never raises.
+    from app.services.ai.reading_hybrid import cancel_ai_turns_for_mode_change
+
+    await cancel_ai_turns_for_mode_change(chat_id, payload.mode)
     return JSONResponse(
         content={"chat_id": chat_id, "response_mode": payload.mode.value},
         status_code=200,

@@ -241,13 +241,19 @@ class MessageHandler(BaseEventHandler):
         )
 
         # ── AI reading pipeline (Valentina drafts, Sabri checks) ───────────────
-        # Only a CLIENT message on an ACTIVE reading triggers a reader reply. The
-        # conversation's response_mode (human/hybrid/sabri) and the master switch
-        # are enforced inside the launcher; this is fire-and-forget and never
-        # blocks or affects the client's own message.
+        # Only a CLIENT message on an ACTIVE reading triggers a reader reply. A HYBRID
+        # chat (two_role engine) is intercepted FIRST: Sabri is skipped outright and
+        # Valentina's raw draft goes to the ai_drafts review panel instead of auto-
+        # sending — see reading_hybrid. Every other chat (SABRI, HUMAN, other engines)
+        # flows through the auto pipeline exactly as before (response_mode and the
+        # master switch are enforced inside the launcher). Both launchers are
+        # fire-and-forget and never block or affect the client's own message.
         from app.enums.chat_status import ChatStatus
 
         if sender_is_paying_client and chat.status == ChatStatus.ACTIVE:
-            from app.services.ai.reading_pipeline import maybe_launch_pipeline
+            from app.services.ai.reading_hybrid import maybe_launch_hybrid
 
-            maybe_launch_pipeline(self.chat_id, db_message.id, content)
+            if not maybe_launch_hybrid(self.chat_id, db_message.id, content, chat):
+                from app.services.ai.reading_pipeline import maybe_launch_pipeline
+
+                maybe_launch_pipeline(self.chat_id, db_message.id, content)
