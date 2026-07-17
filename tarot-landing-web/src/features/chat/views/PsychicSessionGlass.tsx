@@ -20,6 +20,8 @@ import { GlassChatInput } from "../components/GlassChatInput";
 import { GlassChatSidebar } from "../components/GlassChatSidebar";
 import { PsychicSessionSummaryModal } from "../components/PsychicSessionSummaryModal";
 import { ClientDossierCard } from "../components/ClientDossierCard";
+import { ResponseModeSwitcher } from "../components/ResponseModeSwitcher";
+import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { getClientDossier, ClientDossier } from "../api/dossierApi";
 import { formatGbp } from "../../../lib/currency";
 import { useChatFacade } from "../hooks/useChatFacade";
@@ -1414,23 +1416,43 @@ const PsychicSessionGlass = () => {
                 </div>
               )}
 
-              {/* Admin Mode Banner (for chat view) */}
+              {/* Admin Mode Banner (for chat view) — carries the per-conversation
+                  Human / Hybrid / Sabri switcher, same as the admin chat detail page. */}
               {isAdmin && currentChat && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
-                  className="mb-4 px-6 py-4 rounded-2xl backdrop-blur-xl border flex items-center gap-3"
+                  className="mb-4 px-6 py-4 rounded-2xl backdrop-blur-xl border flex items-center justify-between gap-3 flex-wrap"
                   style={{
                     background: `linear-gradient(135deg, ${COLORS.starGold}20 0%, ${COLORS.starGold}10 100%)`,
                     borderColor: `${COLORS.starGold}30`,
                     boxShadow: `0 4px 16px ${COLORS.starGold}20`,
                   }}
                 >
-                  <Icon icon="mdi:shield-account" width={20} height={20} color={COLORS.starGold} />
-                  <span className="text-sm font-bold" style={{ color: COLORS.starGold }}>
-                    Admin Mode: Connected as {currentChat.psychic_name || 'Psychic'}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <Icon icon="mdi:shield-account" width={20} height={20} color={COLORS.starGold} />
+                    <span className="text-sm font-bold" style={{ color: COLORS.starGold }}>
+                      Admin Mode: Connected as {currentChat.psychic_name || 'Psychic'}
+                    </span>
+                  </div>
+                  {selectedChat && <ResponseModeSwitcher chatId={selectedChat} />}
+                </motion.div>
+              )}
+
+              {/* Assigned reader (non-admin): the same mode switcher in its own glass row. */}
+              {!isAdmin && canParticipate && currentChat && selectedChat && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className="mb-4 px-6 py-3 rounded-2xl backdrop-blur-xl border flex items-center justify-end"
+                  style={{
+                    background: `linear-gradient(135deg, ${COLORS.primary}15 0%, ${COLORS.secondary}10 100%)`,
+                    borderColor: `${COLORS.primary}30`,
+                  }}
+                >
+                  <ResponseModeSwitcher chatId={selectedChat} />
                 </motion.div>
               )}
 
@@ -1664,6 +1686,17 @@ const PsychicSessionGlass = () => {
                   )}
                 </div>
               </motion.div>
+
+              {/* AI Draft Review — a PENDING Valentina draft awaiting the operator's
+                  decision (hybrid mode, or a sabri fallback). Renders nothing when no
+                  draft is pending. Same shared panel as the admin chat detail page. */}
+              {canParticipate && selectedChat && (
+                <DraftReviewPanel
+                  chatId={selectedChat}
+                  active={currentChat?.status === "ACTIVE"}
+                  className="mb-3"
+                />
+              )}
 
               {/* Input with enhanced design */}
               <motion.div
