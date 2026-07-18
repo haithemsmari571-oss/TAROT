@@ -124,12 +124,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="w-[340px] rounded-2xl backdrop-blur-xl border relative overflow-hidden"
-      style={{
-        background: `linear-gradient(135deg, ${COLORS.surface}EE 0%, ${COLORS.surfaceAccent}BB 100%)`,
-        borderColor: `${COLORS.neutralDarkGray}30`,
-        boxShadow: `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}10`,
-      }}
+      className="glass-panel w-[340px] relative overflow-hidden"
     >
       {/* Mystical background pattern */}
       <div

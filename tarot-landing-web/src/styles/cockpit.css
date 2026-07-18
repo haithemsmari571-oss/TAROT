@@ -1,0 +1,83 @@
+/* Cockpit design system (Phase 1) — consumes ONLY the CSS variables injected at the
+   AdminLayout root from src/styles/cockpitTheme.ts (which derives them from
+   src/theme.ts). No literal colors or durations in this file. */
+
+/* ————— Glass panel: frosted translucent surface, mode-accent glow border,
+         subtle inner top highlight. Shared by cards across the admin panel. ————— */
+.glass-panel {
+  position: relative;
+  border-radius: var(--glass-radius);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--glass-surface-rgb), var(--glass-surface-alpha)) 0%,
+    rgba(var(--glass-surface-accent-rgb), var(--glass-surface-accent-alpha)) 100%
+  );
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(var(--mode-accent-rgb), var(--glass-border-alpha));
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(var(--mode-accent-rgb), var(--glass-glow-alpha)),
+    inset 0 1px 0 rgba(var(--glass-white-rgb), var(--glass-inner-highlight-alpha));
+  transition:
+    border-color var(--motion-medium) var(--ease-in-out),
+    box-shadow var(--motion-medium) var(--ease-in-out);
+}
+
+/* ————— Keyframes ————— */
+@keyframes ck-fade-slide-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ck-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(var(--mode-accent-rgb), 0); }
+  50% { box-shadow: 0 0 26px rgba(var(--mode-accent-rgb), 0.45); }
+}
+
+@keyframes ck-success-flash {
+  0% { opacity: 0; transform: scale(0.85); }
+  25% { opacity: 1; transform: scale(1.04); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes ck-crossfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ————— Animation utilities (Task C moments — not ambient motion) ————— */
+.anim-fade-slide-in {
+  animation: ck-fade-slide-in var(--motion-medium) var(--ease-out) both;
+}
+.anim-pulse-glow {
+  animation: ck-pulse-glow var(--motion-slow) var(--ease-in-out) 2;
+}
+.anim-success-flash {
+  animation: ck-success-flash var(--motion-slow) var(--ease-out) both;
+}
+.anim-crossfade {
+  animation: ck-crossfade var(--motion-medium) var(--ease-in-out) both;
+}
+
+/* Background/theme swap fade (mode switching) — a transition, not an animation,
+   so the fade-out to the dark hold and the fade-in both use it. */
+.mode-fade {
+  transition: opacity var(--motion-slow) var(--ease-in-out);
+}
+
+/* ————— Reduced motion: every cockpit animation goes static, matching the
+         existing VantaBackground static-fallback behaviour. ————— */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-slide-in,
+  .anim-pulse-glow,
+  .anim-success-flash,
+  .anim-crossfade {
+    animation: none !important;
+  }
+  .mode-fade,
+  .glass-panel {
+    transition: none !important;
+  }
+}

@@ -74,7 +74,7 @@ export const ResponseModeSwitcher = ({
       </span>
       <div
         className="flex rounded-xl overflow-hidden border"
-        style={{ borderColor: `${COLORS.primary}40` }}
+        style={{ borderColor: "rgba(var(--mode-accent-rgb), 0.4)" }}
       >
         {(["HUMAN", "HYBRID", "SABRI"] as ResponseMode[]).map((mode) => {
           const active = responseMode === mode;
@@ -94,8 +94,9 @@ export const ResponseModeSwitcher = ({
               }
               className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
               style={{
+                // Active pill wears the mode accent (CSS var — shifts with the mode).
                 background: active
-                  ? `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
+                  ? `linear-gradient(135deg, rgba(var(--mode-accent-rgb), 0.95) 0%, rgba(var(--mode-accent-soft-rgb), 0.85) 100%)`
                   : "transparent",
                 color: active ? COLORS.neutralWhite : COLORS.neutralGray,
               }}

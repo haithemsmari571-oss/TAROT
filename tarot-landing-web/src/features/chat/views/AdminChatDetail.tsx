@@ -668,12 +668,7 @@ const AdminChatDetail = () => {
       >
         <div
           ref={scrollRef}
-          className="h-full overflow-y-auto overflow-x-hidden rounded-3xl p-6 backdrop-blur-xl border"
-          style={{
-            background: `linear-gradient(135deg, ${COLORS.surface}80 0%, ${COLORS.surfaceAccent}60 100%)`,
-            borderColor: `${COLORS.neutralDarkGray}30`,
-            boxShadow: `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}05`,
-          }}
+          className="glass-panel h-full overflow-y-auto overflow-x-hidden p-6"
         >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center">

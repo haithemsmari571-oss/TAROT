@@ -158,11 +158,7 @@ export const DraftReviewPanel = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`relative z-10 p-4 rounded-2xl border backdrop-blur-xl ${className}`}
-      style={{
-        background: `linear-gradient(135deg, ${COLORS.secondary}20 0%, ${COLORS.primary}10 100%)`,
-        borderColor: `${COLORS.secondary}50`,
-      }}
+      className={`glass-panel relative z-10 p-4 ${className}`}
     >
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">

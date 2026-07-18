@@ -1228,12 +1228,7 @@ const PsychicSessionGlass = () => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="mb-6 p-5 rounded-2xl backdrop-blur-xl border relative overflow-hidden"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.surface}EE 0%, ${COLORS.surfaceAccent}BB 100%)`,
-                  borderColor: `${COLORS.neutralDarkGray}30`,
-                  boxShadow: `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}10`,
-                }}
+                className="glass-panel mb-6 p-5 relative overflow-hidden"
               >
                 {/* Decorative gradient overlay */}
                 <div
@@ -1521,11 +1516,8 @@ const PsychicSessionGlass = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 ref={scrollRef}
-                className="mb-6 p-6 rounded-2xl backdrop-blur-xl border flex-1 relative"
+                className="glass-panel mb-6 p-6 flex-1 relative"
                 style={{
-                  background: `linear-gradient(135deg, ${COLORS.surface}CC 0%, ${COLORS.surfaceAccent}99 100%)`,
-                  borderColor: `${COLORS.neutralDarkGray}30`,
-                  boxShadow: `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}05`,
                   height: "calc(100vh - 360px)",
                   minHeight: "500px",
                   maxHeight: "calc(100vh - 360px)",

@@ -22,6 +22,40 @@ export const COLORS = {
   success: "#3FB950",
 };
 
+// ————————————————————————————————————————————————————————————————————————
+// Cockpit design-system tokens (Phase 1: session cockpit; Phase 2 rolls the same
+// primitives out across the admin panel). These are the single source of truth —
+// src/styles/cockpitTheme.ts turns them into CSS variables, src/styles/cockpit.css
+// consumes the variables. Change values here, never inline.
+// ————————————————————————————————————————————————————————————————————————
+
+/** Frosted "glass panel" surface treatment (see .glass-panel in cockpit.css). */
+export const GLASS = {
+  blur: "18px",
+  radius: "1rem",
+  surfaceAlpha: 0.55,          // frosted fill, top of gradient
+  surfaceAccentAlpha: 0.4,     // frosted fill, bottom of gradient
+  borderAlpha: 0.3,            // mode-accent tinted border
+  glowAlpha: 0.12,             // soft outer glow in the mode accent
+  innerHighlightAlpha: 0.07,   // 1px inner top highlight
+};
+
+/** Motion tokens — named durations/easings + the keyframes in cockpit.css. */
+export const MOTION = {
+  fast: "150ms",
+  medium: "320ms",
+  slow: "650ms",
+  easeOut: "cubic-bezier(0.22, 1, 0.36, 1)",
+  easeInOut: "cubic-bezier(0.45, 0, 0.25, 1)",
+};
+
+/** AI persona identities — halo palettes AND per-mode accent sources.
+ *  (Previously private to PersonaBadge; shared so mode themes stay in sync.) */
+export const PERSONAS = {
+  valentina: { base: "#C1443A", backdrop: "#2A1408" }, // crimson-gold on warm dark
+  sabri: { base: "#5D3A9B", backdrop: "#14092E" },     // royal purple on dark indigo
+};
+
 export const TYPOGRAPHY = {
   fontFamily: {
     heading: "'Bricolage Grotesque', sans-serif",

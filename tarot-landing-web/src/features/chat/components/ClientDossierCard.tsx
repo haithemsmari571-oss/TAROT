@@ -50,12 +50,7 @@ export const ClientDossierCard = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="w-[340px] rounded-2xl backdrop-blur-xl border relative overflow-hidden mb-4"
-      style={{
-        background: `linear-gradient(135deg, ${COLORS.surface}EE 0%, ${COLORS.surfaceAccent}BB 100%)`,
-        borderColor: `${COLORS.neutralDarkGray}30`,
-        boxShadow: `0 8px 32px ${COLORS.dark}60`,
-      }}
+      className="glass-panel w-[340px] relative overflow-hidden mb-4"
     >
       <div className="relative z-10 p-5 space-y-4">
         {/* Header: name + new/returning (+ whole-card collapse when collapsible) */}

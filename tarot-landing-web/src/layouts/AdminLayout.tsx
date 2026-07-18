@@ -5,6 +5,8 @@ import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import { COLORS } from "../theme";
 import { VantaBackground } from "../components/VantaBackground";
+import { COCKPIT_CSS_VARS, MODE_THEME_VARS } from "../styles/cockpitTheme";
+import "../styles/cockpit.css";
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 
@@ -50,9 +52,11 @@ export default function AdminLayout() {
   const showSidebar = location.pathname.startsWith('/admin');
 
   return (
-    <div 
-      className="flex h-screen w-full overflow-hidden" 
-      style={{ backgroundColor: COLORS.dark }}
+    <div
+      className="flex h-screen w-full overflow-hidden"
+      // Design-system CSS variables (glass surfaces, motion tokens, mode accents)
+      // injected here so every admin screen inherits them; values live in theme.ts.
+      style={{ backgroundColor: COLORS.dark, ...COCKPIT_CSS_VARS, ...MODE_THEME_VARS.HUMAN }}
     >
       {/* Show Navbar for non-admin routes */}
       {!showSidebar && <Navbar />}
