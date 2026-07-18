@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +50,12 @@ export const DraftReviewPanel = ({
   // Editable text of the AI draft currently shown in the review box.
   const [draftText, setDraftText] = useState("");
   const [activeDraftId, setActiveDraftId] = useState<number | null>(null);
+  // Task-C moments (motion tokens from cockpit.css; reduced-motion statics both):
+  // a NEW draft arriving plays fade-slide-in + a brief glow pulse; a successful
+  // send flashes a check before the panel advances.
+  const [arrivalAnim, setArrivalAnim] = useState(false);
+  const [justSent, setJustSent] = useState(false);
+  const lastNewestDraftId = useRef<number | null>(null);
 
   // Same query key as ResponseModeSwitcher -> react-query dedupes to one request.
   const { data: chatDetails } = useQuery({
@@ -88,6 +94,20 @@ export const DraftReviewPanel = ({
   }
   const currentIndex = currentDraft ? drafts.findIndex((d) => d.id === currentDraft.id) : -1;
 
+  // A draft the panel has not seen before landing at the top of the queue is the
+  // "new draft arrived" moment. First load (nothing seen yet) does not animate.
+  const newestDraftId = drafts.length > 0 ? drafts[drafts.length - 1].id : null;
+  useEffect(() => {
+    if (newestDraftId == null) return;
+    const isNewArrival =
+      lastNewestDraftId.current != null && newestDraftId !== lastNewestDraftId.current;
+    lastNewestDraftId.current = newestDraftId;
+    if (!isNewArrival) return;
+    setArrivalAnim(true);
+    const t = setTimeout(() => setArrivalAnim(false), 1400);
+    return () => clearTimeout(t);
+  }, [newestDraftId]);
+
   // Stepping loads the target draft's text (unsaved edits to the previous one are let go).
   const stepTo = (index: number) => {
     const target = drafts[index];
@@ -106,6 +126,9 @@ export const DraftReviewPanel = ({
       setDraftText("");
       queryClient.invalidateQueries({ queryKey: ["chatDrafts", chatId] });
       toast.success("Draft sent");
+      // Success flash before the panel clears/advances (no-op if unmounted).
+      setJustSent(true);
+      setTimeout(() => setJustSent(false), 900);
     },
     onError: (error: unknown) => {
       toast.error(apiErrorDetail(error) || "Failed to send draft");
@@ -163,8 +186,21 @@ export const DraftReviewPanel = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-panel relative z-10 p-4 ${fill ? "flex flex-col min-h-0" : ""} ${className}`}
+      className={`glass-panel relative z-10 p-4 ${fill ? "flex flex-col min-h-0" : ""} ${
+        arrivalAnim ? "anim-fade-slide-in anim-pulse-glow" : ""
+      } ${className}`}
     >
+      {justSent && (
+        <div
+          className="anim-success-flash absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
+          style={{
+            borderRadius: "var(--glass-radius)",
+            background: "rgba(var(--success-rgb), 0.14)",
+          }}
+        >
+          <Icon icon="mdi:check-circle" width={56} height={56} color={COLORS.success} />
+        </div>
+      )}
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <Icon icon="mdi:robot-outline" width={18} height={18} color={COLORS.secondary} />
