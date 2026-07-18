@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { COLORS } from "../../../theme";
-import { getChatDetails, setResponseMode, ResponseMode } from "../api/chatApi";
+import {
+  getChatDetails,
+  getDraftGenerating,
+  setResponseMode,
+  ResponseMode,
+} from "../api/chatApi";
 import { useToast } from "../../../components/Toast/useToast";
 import { apiErrorDetail } from "../api/apiError";
+import { PersonaBadge } from "./PersonaBadge";
 
 /**
  * Per-conversation response-mode switcher: Human / Hybrid / Sabri.
@@ -29,6 +35,20 @@ export const ResponseModeSwitcher = ({
   });
   const responseMode: ResponseMode = (data?.response_mode as ResponseMode) || "SABRI";
 
+  // Same query key the draft panel polls — react-query dedupes to one request. Drives
+  // the persona halo (mounted only while that persona is actively generating).
+  const { data: generatingData } = useQuery({
+    queryKey: ["draftGenerating", chatId],
+    queryFn: () => getDraftGenerating(chatId),
+    enabled: !!chatId,
+    refetchInterval: 2500,
+  });
+  const generating = !!generatingData?.generating;
+  // Which persona fronts the current mode: Valentina drafts in Hybrid; Sabri runs
+  // the automatic engine. HUMAN mode has no AI persona to show.
+  const activePersona =
+    responseMode === "HYBRID" ? "valentina" : responseMode === "SABRI" ? "sabri" : null;
+
   const setModeMutation = useMutation({
     mutationFn: (mode: ResponseMode) => setResponseMode(chatId, mode),
     onSuccess: () => {
@@ -42,7 +62,10 @@ export const ResponseModeSwitcher = ({
   });
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center gap-3 ${className}`}>
+      {activePersona && (
+        <PersonaBadge persona={activePersona} active={generating} />
+      )}
       <span
         className="text-xs font-bold uppercase tracking-wider"
         style={{ color: COLORS.neutralGray }}

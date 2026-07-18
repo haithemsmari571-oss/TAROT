@@ -32,10 +32,19 @@ _tasks: Dict[int, Set[asyncio.Task]] = {}
 
 
 def is_generating(chat_id: int) -> bool:
-    """True while a HYBRID draft generation is in flight for this chat — the signal the
-    cockpit's "Valentina is writing…" indicator polls. Clears when the turn finishes,
-    errors (swallowed inside the turn), or the process restarts (the generation died)."""
-    return any(not t.done() for t in _tasks.get(chat_id, set()))
+    """True while an AI turn is in flight for this chat — the single signal the cockpit's
+    "writing…" indicator and the persona halos poll. Covers a HYBRID draft generation
+    (this module's task set) AND an automatic-mode (two_role) turn (the duo coordinator's
+    _active flag — read only, no locked-file edit). Clears when the turn finishes, errors
+    (swallowed inside the turn), or the process restarts (the generation died with it)."""
+    if any(not t.done() for t in _tasks.get(chat_id, set())):
+        return True
+    try:
+        from app.services.ai import reading_duo
+
+        return bool(reading_duo._active.get(chat_id))
+    except Exception:  # noqa: BLE001 — the signal must never raise
+        return False
 
 
 def _hybrid_applies(chat) -> bool:

@@ -244,6 +244,18 @@ def test_is_generating_reflects_inflight_task(monkeypatch):
     assert after is False
 
 
+def test_is_generating_covers_automatic_mode_turns():
+    # The SAME signal drives the "writing…" indicator and the persona halos: it must
+    # also see an in-flight automatic (two_role) turn, not only hybrid draft tasks.
+    assert reading_hybrid.is_generating(7399) is False
+    reading_duo._active[7399] = True
+    try:
+        assert reading_hybrid.is_generating(7399) is True
+    finally:
+        reading_duo._active.pop(7399, None)
+    assert reading_hybrid.is_generating(7399) is False
+
+
 def test_regen_creates_new_draft_without_rerecording_transcript(monkeypatch):
     factory = _mem_db(monkeypatch)
     _seed_chat(factory, 7310, ResponseMode.HYBRID)
