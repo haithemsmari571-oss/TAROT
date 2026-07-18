@@ -203,7 +203,7 @@ export const DraftReviewPanel = ({
       )}
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <Icon icon="mdi:robot-outline" width={18} height={18} color={COLORS.secondary} />
+          <Icon icon="mdi:crystal-ball" width={18} height={18} color={COLORS.secondary} />
           <span
             className="text-xs font-bold uppercase tracking-wider"
             style={{ color: COLORS.secondary }}
