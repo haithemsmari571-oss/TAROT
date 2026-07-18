@@ -10,8 +10,7 @@ const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 
 // Cockpit clouds palette — brand tokens where a true counterpart exists
 // (background -> COLORS.dark, sky -> COLORS.primaryDark), bespoke values where the
-// theme has none (dusty lavender clouds, deliberately MUTED gold light —
-// COLORS.starGold is far too bright for a background glow).
+// theme has none (dusty lavender clouds, near-white cream light).
 //
 // CLOUDS2's shader has exactly these uniforms: skyColor, cloudColor, lightColor
 // (cloudShadowColor and the sun* options belong to the older CLOUDS effect and are
@@ -19,6 +18,13 @@ const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 // is sampled from that noise image, and the dist default points at a URL that only
 // exists in vanta's own gallery — without a valid texture the "clouds" render as a
 // featureless sky gradient. /noise.png is deterministic, generated RGBA noise.
+//
+// lightColor is NOT an accent: the shader shades every cloud pixel with
+// mix(lightColor, cloudColor, density), so thin/edge areas — most of the visible
+// cloud surface — are almost pure lightColor. A saturated value here tints the
+// whole scene (the muted gold #8A6D3A washed everything tan); it must stay
+// near-white so skyColor/cloudColor read as the actual palette, with only a
+// whisper of warmth in the cream.
 const COCKPIT_CLOUDS_OPTIONS = {
   mouseControls: false,
   touchControls: false,
@@ -28,7 +34,7 @@ const COCKPIT_CLOUDS_OPTIONS = {
   backgroundColor: hexNum(COLORS.dark),        // #0D1117 cosmic near-black
   skyColor: hexNum(COLORS.primaryDark),        // #5D3A9B deep royal purple
   cloudColor: hexNum("#9B8AC4"),               // dusty lavender
-  lightColor: hexNum("#8A6D3A"),               // faint warm gold, muted
+  lightColor: hexNum("#EFE9DC"),               // pale warm cream, near-white
 };
 
 // Static same-palette fallback (prefers-reduced-motion, or effect init failure).
