@@ -24,6 +24,7 @@ import { ResponseModeSwitcher } from "../components/ResponseModeSwitcher";
 import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { useReaderTypingSignal } from "../hooks/useReaderTypingSignal";
 import { useCockpitModeSync } from "../hooks/useCockpitModeSync";
+import { useDraftPanelVisible } from "../hooks/useDraftPanelVisible";
 import { getClientDossier, ClientDossier } from "../api/dossierApi";
 import { formatGbp } from "../../../lib/currency";
 import { useChatFacade } from "../hooks/useChatFacade";
@@ -117,6 +118,13 @@ const PsychicSessionGlass = () => {
   // Publish the open session's reply mode so the layout themes itself (per-mode
   // background + accent variables); the queue view clears back to the default.
   useCockpitModeSync(activeView === "chat" ? selectedChat : null);
+
+  // Whether the draft panel has anything to show — while it does, it is the rail's
+  // focal point (full height); otherwise the dossier/session cards get the rail.
+  const draftFocal = useDraftPanelVisible(
+    activeView === "chat" ? selectedChat : null,
+    currentChat?.status === "ACTIVE"
+  );
 
   // Chat session state management with WebSocket (for psychic role)
   const {
@@ -1727,28 +1735,40 @@ const PsychicSessionGlass = () => {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className="w-[340px] shrink-0 flex flex-col self-start sticky top-6"
-                style={{ maxHeight: "calc(100vh - 48px)" }}
+                className="w-[380px] xl:w-[430px] shrink-0 flex flex-col self-start sticky top-6"
+                style={{
+                  maxHeight: "calc(100vh - 48px)",
+                  // Full height only while the draft panel is the focal point.
+                  height: draftFocal ? "calc(100vh - 48px)" : undefined,
+                }}
               >
-                {/* AI Draft Review — a PENDING Valentina draft awaiting the operator's
-                    decision (hybrid mode, or a sabri fallback). Renders nothing when no
-                    draft is pending. Same shared panel as the admin chat detail page. */}
+                {/* AI Draft Review — the focal point of the screen whenever a draft is
+                    pending: fills the rail height, full draft text readable without
+                    scrolling. Renders nothing when there is nothing to review. */}
                 {canParticipate && selectedChat && (
                   <DraftReviewPanel
                     chatId={selectedChat}
                     active={currentChat?.status === "ACTIVE"}
-                    className="mb-4 shrink-0"
+                    className="mb-4 flex-1"
+                    fill
                   />
                 )}
 
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                <div
+                  className={`${
+                    draftFocal ? "shrink-0 max-h-[35%]" : "flex-1 min-h-0"
+                  } overflow-y-auto custom-scrollbar`}
+                >
                 {/* Platform-wide client dossier — history, spend, astro, notes.
-                    Notes are add/edit-able here too (works for ended chats). */}
+                    Notes are add/edit-able here too (works for ended chats). Starts
+                    collapsed so it never fights the draft for space; one click expands
+                    and nothing is lost. */}
                 <ClientDossierCard
                   dossier={dossier}
                   chatId={selectedChat}
                   onChanged={loadDossier}
                   collapsible
+                  defaultCollapsed
                 />
                 <GlassChatSidebar
                   chat={currentChat}

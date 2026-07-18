@@ -766,10 +766,17 @@ const AdminChatDetail = () => {
 
         {/* AI Draft Review — hybrid mode, or a sabri-mode draft that fell back.
             The client never sees this; it only reaches the client if you Send.
+            The pane is the focal point while a draft is pending: full column
+            height, draft text readable without scrolling.
             (Shared component, also used by the Glass cockpit.) */}
         {draftPaneVisible && (
-          <aside className="shrink-0 lg:w-[420px] px-8 pb-4 lg:pl-0 lg:pr-8 lg:py-6 lg:overflow-y-auto custom-scrollbar">
-            <DraftReviewPanel chatId={Number(chatId)} active={isChatActive} />
+          <aside className="shrink-0 lg:w-[480px] xl:w-[560px] px-8 pb-4 lg:pl-0 lg:pr-8 lg:py-6 lg:overflow-hidden flex flex-col">
+            <DraftReviewPanel
+              chatId={Number(chatId)}
+              active={isChatActive}
+              className="lg:flex-1 lg:min-h-0"
+              fill
+            />
           </aside>
         )}
       </div>

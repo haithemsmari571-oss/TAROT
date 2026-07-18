@@ -30,6 +30,7 @@ export const ClientDossierCard = ({
   chatId,
   onChanged,
   collapsible = false,
+  defaultCollapsed = false,
 }: {
   dossier: ClientDossier | null;
   chatId?: number | null;
@@ -37,9 +38,11 @@ export const ClientDossierCard = ({
   /** Whole-card collapse toggle in the header — for tight rails (e.g. next to the
       draft pane) where the dossier shares a column. All content stays available. */
   collapsible?: boolean;
+  /** Start collapsed (rail default while the draft panel is the focal point). */
+  defaultCollapsed?: boolean;
 }) => {
   const [notesOpen, setNotesOpen] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   if (!dossier) return null;
 
   const { client, stats, notes } = dossier;
@@ -50,7 +53,7 @@ export const ClientDossierCard = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-panel w-[340px] relative overflow-hidden mb-4"
+      className="glass-panel w-full relative overflow-hidden mb-4"
     >
       <div className="relative z-10 p-5 space-y-4">
         {/* Header: name + new/returning (+ whole-card collapse when collapsible) */}

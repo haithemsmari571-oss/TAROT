@@ -32,11 +32,16 @@ export const DraftReviewPanel = ({
   chatId,
   active,
   className = "",
+  fill = false,
 }: {
   chatId: number;
   /** Poll only while the reading is live (chat status ACTIVE). */
   active: boolean;
   className?: string;
+  /** Fill the parent column: the panel stretches to full height and the draft
+      textarea takes the spare space, so a typical draft reads without scrolling.
+      The draft is the focal point of the screen whenever one is pending. */
+  fill?: boolean;
 }) => {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -158,7 +163,7 @@ export const DraftReviewPanel = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-panel relative z-10 p-4 ${className}`}
+      className={`glass-panel relative z-10 p-4 ${fill ? "flex flex-col min-h-0" : ""} ${className}`}
     >
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
@@ -240,8 +245,10 @@ export const DraftReviewPanel = ({
               setDraftText(e.target.value);
               readerTyping.onActivity();
             }}
-            rows={3}
-            className="w-full px-4 py-3 rounded-xl border resize-none outline-none text-sm"
+            rows={fill ? 10 : 3}
+            className={`w-full px-4 py-3 rounded-xl border resize-none outline-none text-[15px] leading-relaxed ${
+              fill ? "flex-1 min-h-[30vh]" : ""
+            }`}
             style={{
               background: `${COLORS.dark}80`,
               borderColor: `${COLORS.neutralDarkGray}50`,
