@@ -276,7 +276,7 @@ const AdminChatDetail = () => {
 
   if (isLoadingDetails || isLoadingMessages) {
     return (
-      <div className="flex items-center justify-center h-screen -m-4 md:-m-8 lg:-m-10" style={{ backgroundColor: COLORS.dark }}>
+      <div className="flex items-center justify-center h-screen -m-4 md:-m-8 lg:-m-10">
         <div className="fixed inset-0 pointer-events-none -z-10">
           <div className="starfield"></div>
           <div className="starfield-dense"></div>
@@ -295,7 +295,7 @@ const AdminChatDetail = () => {
 
   if (!chatDetails) {
     return (
-      <div className="flex items-center justify-center h-screen -m-4 md:-m-8 lg:-m-10" style={{ backgroundColor: COLORS.dark }}>
+      <div className="flex items-center justify-center h-screen -m-4 md:-m-8 lg:-m-10">
         <div className="fixed inset-0 pointer-events-none -z-10">
           <div className="starfield"></div>
           <div className="starfield-dense"></div>
@@ -324,10 +324,9 @@ const AdminChatDetail = () => {
   }
 
   return (
-    <div 
-      className="flex flex-col h-screen overflow-hidden -m-4 md:-m-8 lg:-m-10" 
-      style={{ backgroundColor: COLORS.dark }}
-    >
+    // Root stays transparent: the cockpit Clouds2 layer in AdminLayout sits behind
+    // this page at z-0 — an opaque background here would hide it completely.
+    <div className="flex flex-col h-screen overflow-hidden -m-4 md:-m-8 lg:-m-10">
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none -z-10">
         <div className="starfield"></div>

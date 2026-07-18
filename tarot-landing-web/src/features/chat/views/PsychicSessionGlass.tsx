@@ -940,10 +940,7 @@ const PsychicSessionGlass = () => {
 
   if (loading) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: COLORS.dark }}
-      >
+      <div className="min-h-screen flex items-center justify-center">
         <Icon
           icon="solar:black-hole-line-duotone"
           className="text-5xl animate-spin"
@@ -954,12 +951,11 @@ const PsychicSessionGlass = () => {
   }
 
   return (
+    // Root stays transparent: the cockpit Clouds2 layer in AdminLayout sits behind
+    // this page at z-0 — an opaque background here would hide it completely.
     <div
       className="min-h-screen p-6 md:p-8 relative overflow-hidden"
-      style={{
-        backgroundColor: COLORS.dark,
-        fontFamily: TYPOGRAPHY.fontFamily.body,
-      }}
+      style={{ fontFamily: TYPOGRAPHY.fontFamily.body }}
     >
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
