@@ -1686,17 +1686,6 @@ const PsychicSessionGlass = () => {
                 </div>
               </motion.div>
 
-              {/* AI Draft Review — a PENDING Valentina draft awaiting the operator's
-                  decision (hybrid mode, or a sabri fallback). Renders nothing when no
-                  draft is pending. Same shared panel as the admin chat detail page. */}
-              {canParticipate && selectedChat && (
-                <DraftReviewPanel
-                  chatId={selectedChat}
-                  active={currentChat?.status === "ACTIVE"}
-                  className="mb-3"
-                />
-              )}
-
               {/* Input with enhanced design */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -1730,16 +1719,40 @@ const PsychicSessionGlass = () => {
               </motion.div>
             </div>
 
-            {/* Sidebar with enhanced entry animation */}
+            {/* Right rail — vertical split. The AI draft/review panel sits at the TOP
+                as its own persistent pane: it does not live in (or scroll with) the
+                message thread, and stays in view the whole time a draft is pending.
+                The dossier + session cards stack below it in their own scroll area;
+                the dossier is collapsible so the draft keeps the headline space
+                without a third column. */}
             {currentChat && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
+                className="w-[340px] shrink-0 flex flex-col self-start sticky top-6"
+                style={{ maxHeight: "calc(100vh - 48px)" }}
               >
+                {/* AI Draft Review — a PENDING Valentina draft awaiting the operator's
+                    decision (hybrid mode, or a sabri fallback). Renders nothing when no
+                    draft is pending. Same shared panel as the admin chat detail page. */}
+                {canParticipate && selectedChat && (
+                  <DraftReviewPanel
+                    chatId={selectedChat}
+                    active={currentChat?.status === "ACTIVE"}
+                    className="mb-4 shrink-0"
+                  />
+                )}
+
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                 {/* Platform-wide client dossier — history, spend, astro, notes.
                     Notes are add/edit-able here too (works for ended chats). */}
-                <ClientDossierCard dossier={dossier} chatId={selectedChat} onChanged={loadDossier} />
+                <ClientDossierCard
+                  dossier={dossier}
+                  chatId={selectedChat}
+                  onChanged={loadDossier}
+                  collapsible
+                />
                 <GlassChatSidebar
                   chat={currentChat}
                   clientDob={clientDob}
@@ -1758,6 +1771,7 @@ const PsychicSessionGlass = () => {
                   onEndChat={handleEndChat}
                   isEnding={isTerminating}
                 />
+                </div>
               </motion.div>
             )}
           </motion.div>

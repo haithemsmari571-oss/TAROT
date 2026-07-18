@@ -13,6 +13,7 @@ import {
 } from "../api/chatApi";
 import { ResponseModeSwitcher } from "../components/ResponseModeSwitcher";
 import { DraftReviewPanel } from "../components/DraftReviewPanel";
+import { useDraftPanelVisible } from "../hooks/useDraftPanelVisible";
 import { useToast } from "../../../components/Toast/useToast";
 import "../../../styles/starfield.css";
 
@@ -81,6 +82,9 @@ const AdminChatDetail = () => {
 
   const pricePerSecond = sessionTimeData?.price_per_second || chatDetails?.psychic?.price_per_second || 0;
   const isChatActive = chatDetails?.status === "ACTIVE";
+  // Whether the draft side pane has anything to show (mirrors DraftReviewPanel's
+  // own null-check) — the pane only reserves width when it does.
+  const draftPaneVisible = useDraftPanelVisible(chatId ? Number(chatId) : null, isChatActive);
   // Mode switching + AI-draft review live in the shared ResponseModeSwitcher /
   // DraftReviewPanel components (also used by the Glass cockpit).
 
@@ -646,12 +650,21 @@ const AdminChatDetail = () => {
         </motion.div>
       )}
 
+      {/* Body: vertical split — conversation thread on the left, the draft/review pane
+          as its own persistent column on the right. The pane only reserves width while
+          a draft is pending / generating (or Hybrid's manual entry point is offered),
+          and it never scrolls away with the thread. Below lg it stacks under the
+          composer instead of side-by-side. */}
+      <div className="flex-1 relative z-10 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+        {/* Conversation thread + composer */}
+        <div className="flex-1 flex flex-col min-w-0">
+
       {/* Messages Container */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex-1 relative z-10 overflow-hidden px-8 py-6"
+        className="flex-1 relative overflow-hidden px-8 py-6"
       >
         <div
           ref={scrollRef}
@@ -706,17 +719,12 @@ const AdminChatDetail = () => {
         </div>
       </motion.div>
 
-      {/* AI Draft Review — hybrid mode, or a sabri-mode draft that fell back.
-          The client never sees this; it only reaches the client if you Send.
-          (Shared component, also used by the Glass cockpit.) */}
-      <DraftReviewPanel chatId={Number(chatId)} active={isChatActive} className="mx-8 mb-2 mt-4" />
-
       {/* Input Area */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="relative z-10 px-8 py-6 backdrop-blur-xl border-t"
+        className="relative px-8 py-6 backdrop-blur-xl border-t"
         style={{
           background: `linear-gradient(135deg, ${COLORS.surface}CC 0%, ${COLORS.surfaceAccent}99 100%)`,
           borderColor: `${COLORS.neutralDarkGray}30`,
@@ -752,6 +760,17 @@ const AdminChatDetail = () => {
           </button>
         </div>
       </motion.div>
+        </div>
+
+        {/* AI Draft Review — hybrid mode, or a sabri-mode draft that fell back.
+            The client never sees this; it only reaches the client if you Send.
+            (Shared component, also used by the Glass cockpit.) */}
+        {draftPaneVisible && (
+          <aside className="shrink-0 lg:w-[420px] px-8 pb-4 lg:pl-0 lg:pr-8 lg:py-6 lg:overflow-y-auto custom-scrollbar">
+            <DraftReviewPanel chatId={Number(chatId)} active={isChatActive} />
+          </aside>
+        )}
+      </div>
     </div>
   );
 };

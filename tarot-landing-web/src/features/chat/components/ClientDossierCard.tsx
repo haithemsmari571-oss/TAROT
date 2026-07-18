@@ -29,16 +29,22 @@ export const ClientDossierCard = ({
   dossier,
   chatId,
   onChanged,
+  collapsible = false,
 }: {
   dossier: ClientDossier | null;
   chatId?: number | null;
   onChanged?: () => void;
+  /** Whole-card collapse toggle in the header — for tight rails (e.g. next to the
+      draft pane) where the dossier shares a column. All content stays available. */
+  collapsible?: boolean;
 }) => {
   const [notesOpen, setNotesOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   if (!dossier) return null;
 
   const { client, stats, notes } = dossier;
   const zodiacGlyph = client.zodiac ? ZODIAC_ICON[client.zodiac] : null;
+  const bodyHidden = collapsible && collapsed;
 
   return (
     <motion.div
@@ -52,23 +58,37 @@ export const ClientDossierCard = ({
       }}
     >
       <div className="relative z-10 p-5 space-y-4">
-        {/* Header: name + new/returning */}
+        {/* Header: name + new/returning (+ whole-card collapse when collapsible) */}
         <div className="flex items-center justify-between">
           <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: COLORS.neutralGray }}>
             Client Dossier
           </p>
-          <span
-            className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
-            style={{
-              backgroundColor: stats.is_returning ? `${COLORS.primary}22` : `${COLORS.starGold}22`,
-              color: stats.is_returning ? COLORS.primary : COLORS.starGold,
-              border: `1px solid ${stats.is_returning ? COLORS.primary : COLORS.starGold}44`,
-            }}
-          >
-            {stats.is_returning ? "Returning" : "New"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
+              style={{
+                backgroundColor: stats.is_returning ? `${COLORS.primary}22` : `${COLORS.starGold}22`,
+                color: stats.is_returning ? COLORS.primary : COLORS.starGold,
+                border: `1px solid ${stats.is_returning ? COLORS.primary : COLORS.starGold}44`,
+              }}
+            >
+              {stats.is_returning ? "Returning" : "New"}
+            </span>
+            {collapsible && (
+              <button
+                onClick={() => setCollapsed((c) => !c)}
+                title={collapsed ? "Expand dossier" : "Collapse dossier"}
+                className="p-1 rounded-lg transition-all"
+                style={{ background: `${COLORS.neutralDarkGray}40`, color: COLORS.neutralWhite }}
+              >
+                <Icon icon={collapsed ? "solar:alt-arrow-down-linear" : "solar:alt-arrow-up-linear"} width={14} height={14} />
+              </button>
+            )}
+          </div>
         </div>
 
+        {!bodyHidden && (
+        <>
         {/* Astro row */}
         <div className="flex items-stretch gap-2">
           <div className="flex-1 rounded-xl border p-2.5 text-center" style={{ backgroundColor: `${COLORS.neutralWhite}06`, borderColor: `${COLORS.neutralWhite}12` }}>
@@ -121,6 +141,8 @@ export const ClientDossierCard = ({
             />
           )}
         </div>
+        </>
+        )}
       </div>
     </motion.div>
   );
