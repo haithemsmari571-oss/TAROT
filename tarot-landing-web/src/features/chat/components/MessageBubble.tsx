@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { rgb } from "../../../styles/cockpitTheme";
 
 interface MessageBubbleProps {
   content: string;
@@ -110,7 +111,10 @@ export const MessageBubble = ({
             style={
               isOwn
                 ? {
-                    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                    // In the cockpit, own bubbles wear the active reply mode's accent
+                    // (CSS vars from AdminLayout); the client page has no vars and
+                    // falls back to the brand gradient.
+                    background: `linear-gradient(135deg, rgba(var(--mode-accent-rgb, ${rgb(COLORS.primary)}), 0.95) 0%, rgba(var(--mode-accent-soft-rgb, ${rgb(COLORS.secondary)}), 0.9) 100%)`,
                   }
                 : {
                     backgroundColor: "rgba(18,18,26,0.62)",

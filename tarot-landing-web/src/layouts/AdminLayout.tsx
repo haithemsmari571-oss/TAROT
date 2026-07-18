@@ -1,11 +1,13 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CLOUDS2 from "vanta/dist/vanta.clouds2.min";
+import NET from "vanta/dist/vanta.net.min";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
-import { COLORS } from "../theme";
+import { COLORS, MOTION, PERSONAS } from "../theme";
 import { VantaBackground } from "../components/VantaBackground";
-import { COCKPIT_CSS_VARS, MODE_THEME_VARS } from "../styles/cockpitTheme";
+import { COCKPIT_CSS_VARS, MODE_THEME_VARS, CockpitMode } from "../styles/cockpitTheme";
+import { CockpitModeContext } from "../features/chat/context/cockpitModeContext";
 import "../styles/cockpit.css";
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
@@ -44,19 +46,71 @@ const COCKPIT_CLOUDS_FALLBACK = {
   background: `linear-gradient(160deg, ${COLORS.dark} 0%, #241547 55%, ${COLORS.primaryDark} 130%)`,
 };
 
+// Automatic (Sabri) background: NET recolored out of the demo pink into the royal
+// purple family on the dark navy base. NET's real option set (confirmed against
+// vanta.net.min.js defaultOptions: color, backgroundColor, points, maxDistance,
+// spacing, showDots — there is NO speed option) — "calmer/sparser than the demo"
+// comes from fewer points + wider spacing + shorter link distance.
+const COCKPIT_NET_OPTIONS = {
+  mouseControls: false,
+  touchControls: false,
+  gyroControls: false,
+  color: hexNum(PERSONAS.sabri.base),          // #5D3A9B royal purple
+  backgroundColor: hexNum(COLORS.dark),        // #0D1117 dark navy base
+  points: 6,                                   // demo: 10
+  spacing: 22,                                 // demo: 15
+  maxDistance: 19,                             // demo: 20
+  showDots: true,
+};
+
+const COCKPIT_NET_FALLBACK = {
+  background: `radial-gradient(circle at 70% 30%, ${PERSONAS.sabri.base}30 0%, ${COLORS.dark} 65%)`,
+};
+
+// Human mode: no AI is active — no effect at all, just the same-palette gradient
+// dimmed to read calm and quiet ("you are fully in control").
+const COCKPIT_HUMAN_STYLE = {
+  ...COCKPIT_CLOUDS_FALLBACK,
+  opacity: 0.45,
+};
+
+const MODE_FADE_MS = parseInt(MOTION.slow, 10);
+
 export default function AdminLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
-  
+  // Reply mode of the open cockpit conversation (set by the session views via
+  // CockpitModeContext); null = no conversation open → default to the Hybrid look.
+  const [cockpitMode, setCockpitMode] = useState<CockpitMode | null>(null);
+  const activeMode: CockpitMode = cockpitMode ?? "HYBRID";
+
+  // Mode switches fade the background through a brief dark hold, then mount the
+  // new effect — deliberately NOT a dual-canvas crossfade: two live WebGL effects
+  // overlapping is a real perf risk (Halo alone is expensive), and unmounting
+  // first keeps the one-canvas-at-a-time + .destroy() discipline intact.
+  const [renderedMode, setRenderedMode] = useState<CockpitMode>(activeMode);
+  const [bgVisible, setBgVisible] = useState(true);
+  useEffect(() => {
+    if (renderedMode === activeMode) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate: starts the fade-out leg of the mode transition; the swap happens in the timeout
+    setBgVisible(false);
+    const t = setTimeout(() => {
+      setRenderedMode(activeMode);
+      setBgVisible(true);
+    }, MODE_FADE_MS);
+    return () => clearTimeout(t);
+  }, [activeMode, renderedMode]);
+
   // Show sidebar for all /admin routes
   const showSidebar = location.pathname.startsWith('/admin');
 
   return (
+    <CockpitModeContext.Provider value={{ mode: cockpitMode, setMode: setCockpitMode }}>
     <div
       className="flex h-screen w-full overflow-hidden"
       // Design-system CSS variables (glass surfaces, motion tokens, mode accents)
       // injected here so every admin screen inherits them; values live in theme.ts.
-      style={{ backgroundColor: COLORS.dark, ...COCKPIT_CSS_VARS, ...MODE_THEME_VARS.HUMAN }}
+      style={{ backgroundColor: COLORS.dark, ...COCKPIT_CSS_VARS, ...MODE_THEME_VARS[activeMode] }}
     >
       {/* Show Navbar for non-admin routes */}
       {!showSidebar && <Navbar />}
@@ -86,18 +140,39 @@ export default function AdminLayout() {
       {/* 3. MAIN CONTENT: Scrollable area for Admin Pages */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative">
 
-        {/* Cockpit background: one persistent Clouds2 layer shared by the Glass cockpit
-            and the chat-detail screen. Mounted HERE (the layout survives navigation
-            between the two) so the drift never restarts and no fresh WebGL context is
-            spun up per navigation; leaving /admin/chats unmounts and destroys it. */}
+        {/* Cockpit background: one persistent per-mode layer shared by the Glass
+            cockpit and the chat-detail screen. Mounted HERE (the layout survives
+            navigation between the two) so the drift never restarts per navigation;
+            leaving /admin/chats — or switching mode — unmounts and destroys it.
+            HYBRID: Clouds2 (Valentina). SABRI: Net (royal purple, sparse).
+            HUMAN: no effect, dimmed static gradient. */}
         {location.pathname.startsWith("/admin/chats") && (
-          <VantaBackground
-            effect={CLOUDS2}
-            options={COCKPIT_CLOUDS_OPTIONS}
-            className="absolute inset-0 z-0 pointer-events-none"
-            fallbackStyle={COCKPIT_CLOUDS_FALLBACK}
-            debugLabel="clouds2"
-          />
+          <div
+            className="absolute inset-0 z-0 pointer-events-none mode-fade"
+            style={{ opacity: bgVisible ? 1 : 0, backgroundColor: COLORS.dark }}
+          >
+            {renderedMode === "HYBRID" && (
+              <VantaBackground
+                effect={CLOUDS2}
+                options={COCKPIT_CLOUDS_OPTIONS}
+                className="absolute inset-0"
+                fallbackStyle={COCKPIT_CLOUDS_FALLBACK}
+                debugLabel="clouds2"
+              />
+            )}
+            {renderedMode === "SABRI" && (
+              <VantaBackground
+                effect={NET}
+                options={COCKPIT_NET_OPTIONS}
+                className="absolute inset-0"
+                fallbackStyle={COCKPIT_NET_FALLBACK}
+                debugLabel="net"
+              />
+            )}
+            {renderedMode === "HUMAN" && (
+              <div className="absolute inset-0" style={COCKPIT_HUMAN_STYLE} />
+            )}
+          </div>
         )}
 
         {/* Mobile Toggle Button (Floating) - Only show for admin routes */}
@@ -125,5 +200,6 @@ export default function AdminLayout() {
         </div>
       </main>
     </div>
+    </CockpitModeContext.Provider>
   );
 }

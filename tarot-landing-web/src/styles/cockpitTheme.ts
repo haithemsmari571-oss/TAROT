@@ -1,7 +1,7 @@
 import { COLORS, GLASS, MOTION, PERSONAS } from "../theme";
 
 /** "#RRGGBB" -> "r, g, b" for rgba(var(--x-rgb), alpha) composition in CSS. */
-const rgb = (hex: string) => {
+export const rgb = (hex: string) => {
   const n = parseInt(hex.slice(1), 16);
   return `${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}`;
 };

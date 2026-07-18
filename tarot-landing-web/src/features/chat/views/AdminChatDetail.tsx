@@ -14,6 +14,7 @@ import {
 import { ResponseModeSwitcher } from "../components/ResponseModeSwitcher";
 import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { useDraftPanelVisible } from "../hooks/useDraftPanelVisible";
+import { useCockpitModeSync } from "../hooks/useCockpitModeSync";
 import { useToast } from "../../../components/Toast/useToast";
 import "../../../styles/starfield.css";
 
@@ -85,6 +86,9 @@ const AdminChatDetail = () => {
   // Whether the draft side pane has anything to show (mirrors DraftReviewPanel's
   // own null-check) — the pane only reserves width when it does.
   const draftPaneVisible = useDraftPanelVisible(chatId ? Number(chatId) : null, isChatActive);
+  // Publish this conversation's reply mode so the layout themes itself (background
+  // effect + accent variables).
+  useCockpitModeSync(chatId ? Number(chatId) : null);
   // Mode switching + AI-draft review live in the shared ResponseModeSwitcher /
   // DraftReviewPanel components (also used by the Glass cockpit).
 
@@ -692,10 +696,13 @@ const AdminChatDetail = () => {
                     <div
                       className="max-w-[70%] px-5 py-3 rounded-2xl backdrop-blur-xl border"
                       style={{
+                        // Reader-side bubbles wear the active reply mode's accent.
                         background: isFromPsychic
-                          ? `linear-gradient(135deg, ${COLORS.primary}40 0%, ${COLORS.secondary}30 100%)`
+                          ? `linear-gradient(135deg, rgba(var(--mode-accent-rgb), 0.30) 0%, rgba(var(--mode-accent-soft-rgb), 0.20) 100%)`
                           : `linear-gradient(135deg, ${COLORS.surfaceAccent}60 0%, ${COLORS.surface}80 100%)`,
-                        borderColor: isFromPsychic ? `${COLORS.primary}50` : `${COLORS.neutralDarkGray}40`,
+                        borderColor: isFromPsychic
+                          ? "rgba(var(--mode-accent-rgb), 0.4)"
+                          : `${COLORS.neutralDarkGray}40`,
                         boxShadow: `0 4px 16px ${COLORS.dark}40`,
                       }}
                     >

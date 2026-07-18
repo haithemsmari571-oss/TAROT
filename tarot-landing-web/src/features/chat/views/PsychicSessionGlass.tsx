@@ -23,6 +23,7 @@ import { ClientDossierCard } from "../components/ClientDossierCard";
 import { ResponseModeSwitcher } from "../components/ResponseModeSwitcher";
 import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { useReaderTypingSignal } from "../hooks/useReaderTypingSignal";
+import { useCockpitModeSync } from "../hooks/useCockpitModeSync";
 import { getClientDossier, ClientDossier } from "../api/dossierApi";
 import { formatGbp } from "../../../lib/currency";
 import { useChatFacade } from "../hooks/useChatFacade";
@@ -112,6 +113,10 @@ const PsychicSessionGlass = () => {
     if (!clientId || activeView !== "chat") return;
     loadDossier();
   }, [clientId, activeView, selectedChat, loadDossier]);
+
+  // Publish the open session's reply mode so the layout themes itself (per-mode
+  // background + accent variables); the queue view clears back to the default.
+  useCockpitModeSync(activeView === "chat" ? selectedChat : null);
 
   // Chat session state management with WebSocket (for psychic role)
   const {

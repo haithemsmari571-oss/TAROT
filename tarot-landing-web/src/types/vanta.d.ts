@@ -9,6 +9,15 @@ declare module "vanta/dist/vanta.clouds2.min" {
   export default effect;
 }
 
+declare module "vanta/dist/vanta.net.min" {
+  export type VantaInstance = {
+    destroy: () => void;
+    setOptions?: (options: Record<string, unknown>) => void;
+  };
+  const effect: (options: Record<string, unknown>) => VantaInstance;
+  export default effect;
+}
+
 declare module "vanta/dist/vanta.halo.min" {
   export type VantaInstance = {
     destroy: () => void;
