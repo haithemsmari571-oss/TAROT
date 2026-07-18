@@ -215,6 +215,149 @@ def test_switch_to_sabri_cancels_nothing():
     assert asyncio.run(scenario()) is True  # switching TO full-auto interrupts nothing
 
 
+# ── generating signal + manual "Generate new reply" ──────────────────────────
+def test_is_generating_reflects_inflight_task(monkeypatch):
+    factory = _mem_db(monkeypatch)
+    _seed_chat(factory, 7309, ResponseMode.HYBRID)
+    get_session_store().delete("chat:7309")
+    _hybrid_env(monkeypatch)
+    import time as _time
+
+    monkeypatch.setattr(
+        reading_valentina, "write_valentina",
+        lambda inp, client_message=None: (_time.sleep(0.3), "SLOW DRAFT")[1],
+    )
+    with factory() as dbs:
+        chat = dbs.query(Chat).filter(Chat.id == 7309).first()
+
+    async def scenario():
+        assert reading_hybrid.is_generating(7309) is False
+        assert reading_hybrid.maybe_launch_hybrid(7309, 1, "will he text me?", chat) is True
+        during = reading_hybrid.is_generating(7309)   # in-flight -> the indicator shows
+        for task in list(reading_hybrid._tasks.get(7309, set())):
+            await task
+        after = reading_hybrid.is_generating(7309)    # finished -> the indicator clears
+        return during, after
+
+    during, after = asyncio.run(scenario())
+    assert during is True
+    assert after is False
+
+
+def test_regen_creates_new_draft_without_rerecording_transcript(monkeypatch):
+    factory = _mem_db(monkeypatch)
+    _seed_chat(factory, 7310, ResponseMode.HYBRID)
+    get_session_store().delete("chat:7310")
+    _hybrid_env(monkeypatch)
+    with factory() as dbs:
+        chat = dbs.query(Chat).filter(Chat.id == 7310).first()
+
+    async def scenario():
+        # automatic turn: records the client message + drafts
+        assert reading_hybrid.maybe_launch_hybrid(7310, 41, "is he coming back?", chat) is True
+        for task in list(reading_hybrid._tasks.get(7310, set())):
+            await task
+        # manual regen against the SAME latest message: drafts again, records NOTHING new
+        assert reading_hybrid.launch_hybrid_regen(7310, 41, "is he coming back?", chat) is True
+        for task in list(reading_hybrid._tasks.get(7310, set())):
+            await task
+
+    asyncio.run(scenario())
+    with factory() as dbs:
+        drafts = dbs.query(AiDraft).filter(AiDraft.chat_id == 7310).all()
+    assert len(drafts) == 2                       # a fresh PENDING draft per run
+    assert all(d.status == AiDraftStatus.PENDING for d in drafts)
+    state = get_session_store().get("chat:7310")
+    client_entries = [e for e in state.chat_transcript if e.get("role") == "client"]
+    assert len(client_entries) == 1               # the regen did NOT duplicate the message
+
+
+def test_regen_refuses_non_hybrid_chat(monkeypatch):
+    factory = _mem_db(monkeypatch)
+    _seed_chat(factory, 7311, ResponseMode.SABRI)
+    _hybrid_env(monkeypatch)
+    with factory() as dbs:
+        chat = dbs.query(Chat).filter(Chat.id == 7311).first()
+
+    async def scenario():
+        return reading_hybrid.launch_hybrid_regen(7311, 1, "hello?", chat)
+
+    assert asyncio.run(scenario()) is False
+
+
+def _seed_endpoint_chat(db, make_user, mode, with_message=True):
+    from app.models.message import Message
+
+    admin = make_user(role=Role.ADMIN)
+    client = make_user()
+    psychic = make_user()
+    chat = Chat(user_id=client.id, psychic_id=psychic.id, status=ChatStatus.ACTIVE,
+                response_mode=mode)
+    db.add(chat)
+    db.commit()
+    db.refresh(chat)
+    if with_message:
+        db.add(Message(chat_id=chat.id, sender_id=client.id, content="is he coming back?"))
+        db.commit()
+    return admin, chat
+
+
+def test_generate_endpoint_launches_regen_for_hybrid(db, make_user, monkeypatch):
+    import json as _json
+
+    from app.routers.reading_ai import generate_draft
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    calls = []
+    monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: False)
+    monkeypatch.setattr(
+        reading_hybrid, "launch_hybrid_regen",
+        lambda cid, mid, content, c: calls.append((cid, content)) or True,
+    )
+    resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
+    assert resp.status_code == 202
+    assert _json.loads(resp.body)["status"] == "generating"
+    assert calls == [(chat.id, "is he coming back?")]  # the client's latest message
+
+
+def test_generate_endpoint_rejects_non_hybrid(db, make_user, monkeypatch):
+    from app.routers.reading_ai import generate_draft
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.SABRI)
+    resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
+    assert resp.status_code == 409
+
+
+def test_generate_endpoint_rejects_when_already_generating(db, make_user, monkeypatch):
+    from app.routers.reading_ai import generate_draft
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: True)
+    resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
+    assert resp.status_code == 409
+
+
+def test_generate_endpoint_400_without_client_message(db, make_user, monkeypatch):
+    from app.routers.reading_ai import generate_draft
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID, with_message=False)
+    monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: False)
+    resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
+    assert resp.status_code == 400
+
+
+def test_generating_endpoint_reports_flag(db, make_user, monkeypatch):
+    import json as _json
+
+    from app.routers.reading_ai import get_draft_generating
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    monkeypatch.setattr("app.services.ai.reading_hybrid.is_generating", lambda cid: True)
+    resp = get_draft_generating(chat.id, user=admin, db=db)
+    assert resp.status_code == 200
+    assert _json.loads(resp.body) == {"chat_id": chat.id, "generating": True}
+
+
 def test_endpoint_commits_mode_then_cancels(db, make_user, monkeypatch):
     from app.routers.reading_ai import set_response_mode
     from app.schemas.reading_ai import ResponseModeUpdate

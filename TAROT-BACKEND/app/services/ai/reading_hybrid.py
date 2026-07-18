@@ -31,11 +31,14 @@ logger = get_logger(__name__)
 _tasks: Dict[int, Set[asyncio.Task]] = {}
 
 
-def maybe_launch_hybrid(chat_id: int, client_message_id, client_message: str, chat) -> bool:
-    """Fire-and-forget one HYBRID draft turn when this chat should bypass the auto
-    pipeline. Returns True when the message is HANDLED here (the caller must NOT launch
-    the auto pipeline); False otherwise — SABRI/HUMAN chats and non-two_role engines are
-    untouched and flow exactly as before."""
+def is_generating(chat_id: int) -> bool:
+    """True while a HYBRID draft generation is in flight for this chat — the signal the
+    cockpit's "Valentina is writing…" indicator polls. Clears when the turn finishes,
+    errors (swallowed inside the turn), or the process restarts (the generation died)."""
+    return any(not t.done() for t in _tasks.get(chat_id, set()))
+
+
+def _hybrid_applies(chat) -> bool:
     from app.config import get_app_settings
     from app.enums.response_mode import ResponseMode
 
@@ -45,9 +48,15 @@ def maybe_launch_hybrid(chat_id: int, client_message_id, client_message: str, ch
         # Deliberate gap: single_agent / legacy HYBRID keeps its current behaviour
         # (same as SABRI) until a design for it is decided.
         return False
+    return True
+
+
+def _launch(chat_id: int, client_message_id, client_message: str, user_id,
+            *, record_message: bool) -> bool:
     try:
         task = asyncio.create_task(
-            _run_hybrid_turn(chat_id, client_message_id, client_message, chat.user_id)
+            _run_hybrid_turn(chat_id, client_message_id, client_message, user_id,
+                             record_message=record_message)
         )
     except RuntimeError:
         logger.warning("hybrid_no_event_loop", chat_id=chat_id)
@@ -58,12 +67,40 @@ def maybe_launch_hybrid(chat_id: int, client_message_id, client_message: str, ch
     return True
 
 
-async def _run_hybrid_turn(chat_id: int, client_message_id, client_message: str, user_id) -> None:
+def maybe_launch_hybrid(chat_id: int, client_message_id, client_message: str, chat) -> bool:
+    """Fire-and-forget one HYBRID draft turn when this chat should bypass the auto
+    pipeline. Returns True when the message is HANDLED here (the caller must NOT launch
+    the auto pipeline); False otherwise — SABRI/HUMAN chats and non-two_role engines are
+    untouched and flow exactly as before."""
+    if not _hybrid_applies(chat):
+        return False
+    return _launch(chat_id, client_message_id, client_message, chat.user_id,
+                   record_message=True)
+
+
+def launch_hybrid_regen(chat_id: int, client_message_id, client_message: str, chat) -> bool:
+    """Manual "Generate new reply": run the SAME hybrid turn the automatic per-message
+    trigger uses, on demand, against the client's latest message — but WITHOUT re-recording
+    that message on the session transcript (the automatic run already recorded it; a
+    duplicate would distort Valentina's conversation context). Returns False when hybrid
+    doesn't apply to this chat (not HYBRID / wrong engine)."""
+    if not _hybrid_applies(chat):
+        return False
+    return _launch(chat_id, client_message_id, client_message, chat.user_id,
+                   record_message=False)
+
+
+async def _run_hybrid_turn(chat_id: int, client_message_id, client_message: str, user_id,
+                           *, record_message: bool = True) -> None:
     """One HYBRID turn: record the client message on the (durable) session state, run
     Valentina to a complete raw draft (reusing the two_role writer — which also writes the
     Phase-2 valentina_draft audit row), and store it as a PENDING ai_drafts row. No Sabri,
     no broadcast, no typing. An empty/failed draft stores nothing (never a fallback send —
-    in HYBRID nothing reaches the client without a human action)."""
+    in HYBRID nothing reaches the client without a human action).
+
+    ``record_message=False`` is the manual-regen path: the message was already recorded by
+    the automatic run, so it is only re-used as Valentina's CLIENT MESSAGE (the newest
+    client transcript entry is excluded from RECENT CONVERSATION to avoid duplication)."""
     from app.config import get_app_settings
 
     if not get_app_settings().AI_DRAFTING_ENABLED:
@@ -104,9 +141,17 @@ async def _run_hybrid_turn(chat_id: int, client_message_id, client_message: str,
             state = create_session_state(
                 session_id, client_id=user_id, chat_id=chat_id, is_first_session=True
             )
-        record_client_message(state, client_message)
-        trigger_entry = state.chat_transcript[-1]
-        store.put(state)
+        if record_message:
+            record_client_message(state, client_message)
+            trigger_entry = state.chat_transcript[-1]
+            store.put(state)
+        else:
+            # Manual regen: don't re-record; exclude the newest client entry (the message
+            # being answered, recorded by the automatic run) from RECENT CONVERSATION.
+            trigger_entry = next(
+                (e for e in reversed(state.chat_transcript) if e.get("role") == "client"),
+                None,
+            )
 
         # Valentina writes the full draft — the SAME writer the two_role engine uses
         # (dossier + DOB numerology + transcript), which also logs the valentina_draft

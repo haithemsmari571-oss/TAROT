@@ -301,6 +301,19 @@ export const discardDraft = async (
   await axiosClient.post(`/chat/${chatId}/drafts/${draftId}/discard`);
 };
 
+/** Whether a Hybrid draft generation is in flight — drives "Valentina is writing…". */
+export const getDraftGenerating = async (
+  chatId: number
+): Promise<{ chat_id: number; generating: boolean }> => {
+  const response = await axiosClient.get(`/chat/${chatId}/drafts/generating`);
+  return response.data;
+};
+
+/** Manually force a fresh draft for the client's latest message (Hybrid only). */
+export const generateDraft = async (chatId: number): Promise<void> => {
+  await axiosClient.post(`/chat/${chatId}/drafts/generate`);
+};
+
 /**
  * WebSocket connection for real-time chat
  */

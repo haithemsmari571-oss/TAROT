@@ -107,6 +107,86 @@ def list_drafts(
     return JSONResponse(content=[_draft_out(d) for d in drafts], status_code=200)
 
 
+@router.get("/{chat_id}/drafts/generating")
+def get_draft_generating(
+    chat_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Whether a HYBRID draft generation is in flight for this chat — polled by the
+    cockpit's "Valentina is writing…" indicator so a client message never leaves a
+    silent gap while the draft generates."""
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if not _authorize(user, chat):
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+
+    from app.services.ai.reading_hybrid import is_generating
+
+    return JSONResponse(
+        content={"chat_id": chat_id, "generating": is_generating(chat_id)},
+        status_code=200,
+    )
+
+
+@router.post("/{chat_id}/drafts/generate")
+async def generate_draft(
+    chat_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Manual "Generate new reply" (Hybrid only): force a fresh Valentina draft for the
+    client's LATEST message on demand — the exact same turn the automatic per-message
+    trigger runs, via reading_hybrid.launch_hybrid_regen (no second code path)."""
+    from app.enums.chat_status import ChatStatus
+    from app.enums.response_mode import ResponseMode
+    from app.models.message import Message
+    from app.services.ai import reading_hybrid
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if not _authorize(user, chat):
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+    if chat.response_mode != ResponseMode.HYBRID:
+        return JSONResponse(
+            content={"detail": "Chat is not in Hybrid mode"}, status_code=409
+        )
+    if chat.status != ChatStatus.ACTIVE:
+        return JSONResponse(content={"detail": "Chat is not active"}, status_code=409)
+    if reading_hybrid.is_generating(chat_id):
+        return JSONResponse(
+            content={"detail": "A draft is already generating"}, status_code=409
+        )
+
+    latest = (
+        db.query(Message)
+        .filter(
+            Message.chat_id == chat_id,
+            Message.sender_id == chat.user_id,
+            Message.is_system.is_(False),
+        )
+        .order_by(desc(Message.id))
+        .first()
+    )
+    if not latest:
+        return JSONResponse(
+            content={"detail": "No client message to reply to"}, status_code=400
+        )
+
+    launched = reading_hybrid.launch_hybrid_regen(chat_id, latest.id, latest.content, chat)
+    if not launched:
+        return JSONResponse(
+            content={"detail": "Hybrid generation is unavailable for this engine"},
+            status_code=409,
+        )
+    logger.info("hybrid_regen_requested", chat_id=chat_id, by=user.id, message_id=latest.id)
+    return JSONResponse(
+        content={"chat_id": chat_id, "status": "generating"}, status_code=202
+    )
+
+
 @router.post("/{chat_id}/drafts/{draft_id}/send")
 async def send_draft(
     chat_id: int,
