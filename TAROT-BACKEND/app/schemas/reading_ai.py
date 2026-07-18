@@ -12,3 +12,7 @@ class ResponseModeUpdate(BaseModel):
 class DraftSend(BaseModel):
     # Optional edited text; when omitted the stored draft is sent as-is.
     content: Optional[str] = None
+
+
+class TypingUpdate(BaseModel):
+    typing: bool

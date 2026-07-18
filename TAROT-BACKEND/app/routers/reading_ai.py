@@ -22,7 +22,7 @@ from app.logging_config import get_logger
 from app.models.ai_draft import AiDraft
 from app.models.chat import Chat
 from app.models.user import User
-from app.schemas.reading_ai import DraftSend, ResponseModeUpdate
+from app.schemas.reading_ai import DraftSend, ResponseModeUpdate, TypingUpdate
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -76,12 +76,42 @@ async def set_response_mode(
     # otherwise a stale generation/reveal finishes (and a queued redirect runs as a
     # full extra AI turn) after the operator already took over. Committed first so a
     # message arriving during the cancel already sees the new mode. Never raises.
-    from app.services.ai.reading_hybrid import cancel_ai_turns_for_mode_change
+    from app.enums.response_mode import ResponseMode as _RM
+    from app.services.ai import reading_hybrid
 
-    await cancel_ai_turns_for_mode_change(chat_id, payload.mode)
+    await reading_hybrid.cancel_ai_turns_for_mode_change(chat_id, payload.mode)
+    # Switching TO Automatic takes over the conversation NOW: cancel any in-flight
+    # HYBRID draft generation (it would land as a silent PENDING draft) and, if the
+    # chat is hanging on an unanswered client message, auto-answer it immediately.
+    if payload.mode == _RM.SABRI:
+        await reading_hybrid.handover_to_auto(chat_id, db, chat)
     return JSONResponse(
         content={"chat_id": chat_id, "response_mode": payload.mode.value},
         status_code=200,
+    )
+
+
+@router.put("/{chat_id}/typing")
+async def set_reader_typing(
+    chat_id: int,
+    payload: TypingUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Broadcast the reader's typing state to the client — the SAME typing_start/
+    typing_stop events the AI engines already emit (and ClientChat already renders),
+    now fireable by the operator while editing a draft or typing a manual reply."""
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if not _authorize(user, chat):
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+
+    from app.services.ai import reading_executor
+
+    await reading_executor.broadcast_typing(chat_id, payload.typing, chat.psychic_id)
+    return JSONResponse(
+        content={"chat_id": chat_id, "typing": payload.typing}, status_code=200
     )
 
 

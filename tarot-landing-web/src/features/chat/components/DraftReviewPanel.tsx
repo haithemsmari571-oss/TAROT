@@ -13,6 +13,7 @@ import {
 } from "../api/chatApi";
 import { useToast } from "../../../components/Toast/useToast";
 import { apiErrorDetail } from "../api/apiError";
+import { useReaderTypingSignal } from "../hooks/useReaderTypingSignal";
 
 /**
  * AI draft review panel — PENDING Valentina drafts awaiting a human decision (hybrid
@@ -39,6 +40,8 @@ export const DraftReviewPanel = ({
 }) => {
   const toast = useToast();
   const queryClient = useQueryClient();
+  // The client sees "Valentina is typing…" while the operator edits a draft here.
+  const readerTyping = useReaderTypingSignal(chatId);
   // Editable text of the AI draft currently shown in the review box.
   const [draftText, setDraftText] = useState("");
   const [activeDraftId, setActiveDraftId] = useState<number | null>(null);
@@ -93,6 +96,7 @@ export const DraftReviewPanel = ({
     mutationFn: ({ draftId, content }: { draftId: number; content: string }) =>
       sendDraft(chatId, draftId, content),
     onSuccess: () => {
+      readerTyping.stop();
       setActiveDraftId(null);
       setDraftText("");
       queryClient.invalidateQueries({ queryKey: ["chatDrafts", chatId] });
@@ -106,6 +110,7 @@ export const DraftReviewPanel = ({
   const discardDraftMutation = useMutation({
     mutationFn: (draftId: number) => discardDraft(chatId, draftId),
     onSuccess: () => {
+      readerTyping.stop();
       setActiveDraftId(null);
       setDraftText("");
       queryClient.invalidateQueries({ queryKey: ["chatDrafts", chatId] });
@@ -235,7 +240,10 @@ export const DraftReviewPanel = ({
 
           <textarea
             value={draftText}
-            onChange={(e) => setDraftText(e.target.value)}
+            onChange={(e) => {
+              setDraftText(e.target.value);
+              readerTyping.onActivity();
+            }}
             rows={3}
             className="w-full px-4 py-3 rounded-xl border resize-none outline-none text-sm"
             style={{

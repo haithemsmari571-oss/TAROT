@@ -358,6 +358,100 @@ def test_generating_endpoint_reports_flag(db, make_user, monkeypatch):
     assert _json.loads(resp.body) == {"chat_id": chat.id, "generating": True}
 
 
+# ── switching TO Automatic takes over the conversation now ───────────────────
+def test_handover_cancels_hybrid_and_launches_auto_for_unanswered(db, make_user, monkeypatch):
+    # The silent-draft race from live testing: a client message arrives, the hybrid turn
+    # claims it, the operator switches to Automatic 2s later — the turn must be CANCELLED
+    # and the unanswered message handed to the real auto pipeline.
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)  # last msg = client's
+    launched = []
+    monkeypatch.setattr(
+        "app.services.ai.reading_pipeline.maybe_launch_pipeline",
+        lambda cid, mid, content: launched.append((cid, content)),
+    )
+
+    async def scenario():
+        async def stuck_hybrid_generation():
+            await asyncio.sleep(60)
+
+        task = asyncio.create_task(stuck_hybrid_generation())
+        reading_hybrid._tasks.setdefault(chat.id, set()).add(task)
+        await reading_hybrid.handover_to_auto(chat.id, db, chat)
+        return task
+
+    task = asyncio.run(scenario())
+    assert task.cancelled()                              # no more silent PENDING draft
+    assert launched == [(chat.id, "is he coming back?")]  # the hanging message is auto-answered
+
+
+def test_handover_skips_launch_when_reader_answered_last(db, make_user, monkeypatch):
+    from app.models.message import Message
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    db.add(Message(chat_id=chat.id, sender_id=chat.psychic_id, content="he is circling back"))
+    db.commit()  # last message is now the READER's — nothing is hanging
+    launched = []
+    monkeypatch.setattr(
+        "app.services.ai.reading_pipeline.maybe_launch_pipeline",
+        lambda cid, mid, content: launched.append(cid),
+    )
+    asyncio.run(reading_hybrid.handover_to_auto(chat.id, db, chat))
+    assert launched == []  # no false auto-reply to an already-answered conversation
+
+
+def test_mode_switch_to_sabri_triggers_handover(db, make_user, monkeypatch):
+    from app.routers.reading_ai import set_response_mode
+    from app.schemas.reading_ai import ResponseModeUpdate
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    calls = []
+
+    async def spy(cid, dbs, c):
+        calls.append(cid)
+
+    monkeypatch.setattr(reading_hybrid, "handover_to_auto", spy)
+    resp = asyncio.run(set_response_mode(chat.id, ResponseModeUpdate(mode=ResponseMode.SABRI),
+                                         user=admin, db=db))
+    assert resp.status_code == 200
+    assert calls == [chat.id]                 # switch TO Automatic hands the chat over
+    resp = asyncio.run(set_response_mode(chat.id, ResponseModeUpdate(mode=ResponseMode.HUMAN),
+                                         user=admin, db=db))
+    assert resp.status_code == 200
+    assert calls == [chat.id]                 # switch to HUMAN does NOT
+
+
+# ── operator typing indicator bridge ─────────────────────────────────────────
+def test_typing_endpoint_broadcasts_reader_typing(db, make_user, monkeypatch):
+    from app.routers.reading_ai import set_reader_typing
+    from app.schemas.reading_ai import TypingUpdate
+    from app.services.ai import reading_executor
+
+    admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    sent = []
+
+    async def spy(cid, on, sender):
+        sent.append((cid, on, sender))
+
+    monkeypatch.setattr(reading_executor, "broadcast_typing", spy)
+    resp = asyncio.run(set_reader_typing(chat.id, TypingUpdate(typing=True), user=admin, db=db))
+    assert resp.status_code == 200
+    resp = asyncio.run(set_reader_typing(chat.id, TypingUpdate(typing=False), user=admin, db=db))
+    assert resp.status_code == 200
+    assert sent == [(chat.id, True, chat.psychic_id), (chat.id, False, chat.psychic_id)]
+
+
+def test_typing_endpoint_forbids_the_client(db, make_user, monkeypatch):
+    from app.models.user import User as _User
+    from app.routers.reading_ai import set_reader_typing
+    from app.schemas.reading_ai import TypingUpdate
+
+    _admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
+    client_user = db.query(_User).filter(_User.id == chat.user_id).first()
+    resp = asyncio.run(set_reader_typing(chat.id, TypingUpdate(typing=True),
+                                         user=client_user, db=db))
+    assert resp.status_code == 403  # the client must never drive the reader's indicator
+
+
 def test_endpoint_commits_mode_then_cancels(db, make_user, monkeypatch):
     from app.routers.reading_ai import set_response_mode
     from app.schemas.reading_ai import ResponseModeUpdate

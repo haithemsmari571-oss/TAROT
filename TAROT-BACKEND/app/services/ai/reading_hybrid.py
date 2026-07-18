@@ -200,6 +200,39 @@ async def cancel_hybrid(chat_id: int) -> None:
                 pass
 
 
+async def handover_to_auto(chat_id: int, db, chat) -> None:
+    """Switching TO Automatic (SABRI) must take over the conversation NOW, not only on
+    the next message. Closes the silent-draft race found in live testing: a client
+    message that arrived seconds before the switch had already been claimed by an
+    in-flight HYBRID generation, whose output landed as a PENDING draft in a review
+    queue the operator had just mentally left — the client saw nothing, the operator
+    saw nothing, and no new message meant the auto engine never fired.
+
+    So: cancel any in-flight HYBRID generation, and if the conversation is hanging on
+    an unanswered client message (the chat's last non-system message is the client's),
+    launch the real auto pipeline for it. Known narrow trade-off: if the cancelled
+    hybrid turn had already recorded the message on the session transcript, the auto
+    turn records it again (a duplicated context line — cosmetic, never client-visible
+    as a duplicate reply). Never raises — the mode change must stand regardless."""
+    try:
+        await cancel_hybrid(chat_id)
+        from app.models.message import Message
+
+        last = (
+            db.query(Message)
+            .filter(Message.chat_id == chat_id, Message.is_system.is_(False))
+            .order_by(Message.id.desc())
+            .first()
+        )
+        if last is not None and last.sender_id == chat.user_id:
+            from app.services.ai.reading_pipeline import maybe_launch_pipeline
+
+            maybe_launch_pipeline(chat_id, last.id, last.content)
+            logger.info("hybrid_handover_to_auto", chat_id=chat_id, message_id=last.id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("hybrid_handover_failed", chat_id=chat_id, error=str(e))
+
+
 async def cancel_ai_turns_for_mode_change(chat_id: int, new_mode) -> None:
     """Switching a chat away from full-auto (to HUMAN or HYBRID) cancels its in-flight and
     queued AI turns — otherwise a stale generation/reveal finishes and a queued redirect

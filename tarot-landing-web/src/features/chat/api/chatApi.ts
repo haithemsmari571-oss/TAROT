@@ -314,6 +314,11 @@ export const generateDraft = async (chatId: number): Promise<void> => {
   await axiosClient.post(`/chat/${chatId}/drafts/generate`);
 };
 
+/** Broadcast the reader's typing state to the client (typing_start/typing_stop). */
+export const sendReaderTyping = async (chatId: number, typing: boolean): Promise<void> => {
+  await axiosClient.put(`/chat/${chatId}/typing`, { typing });
+};
+
 /**
  * WebSocket connection for real-time chat
  */

@@ -22,6 +22,7 @@ import { PsychicSessionSummaryModal } from "../components/PsychicSessionSummaryM
 import { ClientDossierCard } from "../components/ClientDossierCard";
 import { ResponseModeSwitcher } from "../components/ResponseModeSwitcher";
 import { DraftReviewPanel } from "../components/DraftReviewPanel";
+import { useReaderTypingSignal } from "../hooks/useReaderTypingSignal";
 import { getClientDossier, ClientDossier } from "../api/dossierApi";
 import { formatGbp } from "../../../lib/currency";
 import { useChatFacade } from "../hooks/useChatFacade";
@@ -39,6 +40,8 @@ const PsychicSessionGlass = () => {
   const queryClient = useQueryClient();
   const [activeView, setActiveView] = useState<"queue" | "chat">("queue");
   const [selectedChat, setSelectedChat] = useState<number | null>(null);
+  // The client sees "Valentina is typing…" while the operator types a manual reply.
+  const readerTyping = useReaderTypingSignal(selectedChat);
   const [processingChats, setProcessingChats] = useState<Set<number>>(
     new Set()
   );
@@ -1706,8 +1709,14 @@ const PsychicSessionGlass = () => {
               >
                 <GlassChatInput
                   value={input}
-                  onChange={setInput}
-                  onSend={handleSendMessage}
+                  onChange={(value) => {
+                    setInput(value);
+                    readerTyping.onActivity();
+                  }}
+                  onSend={() => {
+                    readerTyping.stop();
+                    handleSendMessage();
+                  }}
                   disabled={
                     !canParticipate ||
                     currentChat?.status !== "ACTIVE" ||
