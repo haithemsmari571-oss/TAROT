@@ -52,7 +52,9 @@ export const MODE_THEME_VARS: Record<CockpitMode, Record<string, string>> = {
   HYBRID: {
     "--mode-accent": PERSONAS.valentina.base,
     "--mode-accent-rgb": rgb(PERSONAS.valentina.base),
-    "--mode-accent-soft-rgb": rgb(COLORS.secondary),
+    // Same hue, darkened — a purple far-stop made tall bubbles drift
+    // crimson->purple down the thread (looked accidental, was accidental).
+    "--mode-accent-soft-rgb": rgb(PERSONAS.valentina.deep),
   },
   SABRI: {
     "--mode-accent": COLORS.primaryDark,

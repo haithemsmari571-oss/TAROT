@@ -112,7 +112,7 @@ export const DossierNotes = ({ notes, clientId, chatId, onChanged }: DossierNote
         <button
           onClick={openNew}
           className="w-full mb-2 rounded-xl border border-dashed py-2 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors hover:bg-white/[0.04]"
-          style={{ borderColor: `${COLORS.primary}44`, color: COLORS.primary }}
+          style={{ borderColor: `${COLORS.starGold}55`, color: COLORS.starGold }}
         >
           <Icon icon="solar:add-circle-bold" className="text-sm" /> Add note
         </button>
@@ -129,11 +129,11 @@ export const DossierNotes = ({ notes, clientId, chatId, onChanged }: DossierNote
               key={n.id}
               onClick={() => openView(n)}
               className="w-full text-left rounded-xl border p-2.5 flex items-center gap-2.5 transition-colors hover:bg-white/[0.06]"
-              style={{ backgroundColor: `${COLORS.neutralWhite}05`, borderColor: `${COLORS.neutralWhite}12` }}
+              style={{ backgroundColor: `${COLORS.starGold}08`, borderColor: `${COLORS.starGold}26` }}
             >
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: `${COLORS.primary}18`, border: `1px solid ${COLORS.primary}33` }}
+                style={{ backgroundColor: `${COLORS.starGold}14`, border: `1px solid ${COLORS.starGold}33` }}
               >
                 <Icon icon="solar:document-text-bold-duotone" className="text-base" style={{ color: COLORS.primary }} />
               </div>
@@ -225,7 +225,7 @@ export const DossierNotes = ({ notes, clientId, chatId, onChanged }: DossierNote
                     <div className="flex items-start gap-3 mb-4 pr-10 flex-shrink-0">
                       <div
                         className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: `${COLORS.primary}18`, border: `1px solid ${COLORS.primary}33` }}
+                        style={{ backgroundColor: `${COLORS.starGold}14`, border: `1px solid ${COLORS.starGold}33` }}
                       >
                         <Icon icon="solar:document-text-bold-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
                       </div>

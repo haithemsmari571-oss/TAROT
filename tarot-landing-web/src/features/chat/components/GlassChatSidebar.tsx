@@ -130,7 +130,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
       <div
         className="absolute inset-0 opacity-5"
         style={{
-          backgroundImage: `radial-gradient(circle, ${COLORS.primary} 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(circle, ${COLORS.starGold} 1px, transparent 1px)`,
           backgroundSize: "24px 24px",
         }}
       />
@@ -139,7 +139,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
       <div
         className="absolute top-0 left-0 right-0 h-24 opacity-30 pointer-events-none"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${COLORS.primary}40 0%, transparent 70%)`,
+          background: `radial-gradient(circle at 50% 0%, ${COLORS.starGold}30 0%, transparent 70%)`,
         }}
       />
 
@@ -187,18 +187,18 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           <div
             className="flex-1 h-px"
             style={{
-              background: `linear-gradient(90deg, transparent 0%, ${COLORS.neutralDarkGray}60 50%, transparent 100%)`,
+              background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
             }}
           />
           <Icon
             icon="solar:star-bold"
             className="text-xs"
-            style={{ color: COLORS.primary, opacity: 0.5 }}
+            style={{ color: COLORS.starGold, opacity: 0.6 }}
           />
           <div
             className="flex-1 h-px"
             style={{
-              background: `linear-gradient(90deg, transparent 0%, ${COLORS.neutralDarkGray}60 50%, transparent 100%)`,
+              background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
             }}
           />
         </div>
@@ -210,8 +210,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           transition={{ delay: 0.2 }}
         >
           <p
-            className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
-            style={{ color: COLORS.neutralGray }}
+            className="oracle-label mb-3"
           >
             Session Status
           </p>
@@ -348,16 +347,15 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                 transition={{ delay: 0.28 }}
               >
                 <p
-                  className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
-                  style={{ color: COLORS.neutralGray }}
+                  className="oracle-label mb-3"
                 >
                   Minutes Remaining
                 </p>
                 <div
-                  className="px-5 py-3 rounded-xl text-center border"
-                  style={{ backgroundColor: `${COLORS.primary}12`, borderColor: `${COLORS.primary}33` }}
+                  className="oracle-tile px-5 py-3 text-center"
+                  
                 >
-                  <span className="text-2xl font-black" style={{ color: COLORS.neutralWhite }}>
+                  <span className="oracle-figure text-2xl">
                     {Math.max(0, remainingMinutes)} min
                   </span>
                 </div>
@@ -372,8 +370,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
             >
               <div className="flex items-center justify-between mb-3">
                 <p
-                  className="text-[9px] font-black uppercase tracking-[0.15em]"
-                  style={{ color: COLORS.neutralGray }}
+                  className="oracle-label"
                 >
                   Session Time
                 </p>
@@ -383,9 +380,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                   onClick={() => setShowSeconds(!showSeconds)}
                   className="px-2.5 py-1 rounded-lg transition-all duration-300 border"
                   style={{
-                    backgroundColor: `${COLORS.neutralWhite}08`,
-                    borderColor: `${COLORS.neutralWhite}15`,
-                  }}
+                                      }}
                 >
                   <span
                     className="text-[8px] font-black uppercase tracking-wider"
@@ -397,11 +392,9 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
               </div>
               
               <div
-                className="px-5 py-4 rounded-xl text-center relative overflow-hidden border"
+                className="oracle-tile px-5 py-4 text-center relative overflow-hidden"
                 style={{
-                  backgroundColor: `${COLORS.neutralWhite}08`,
-                  borderColor: `${COLORS.neutralWhite}15`,
-                  boxShadow: `inset 0 2px 10px ${COLORS.dark}40`,
+                                    boxShadow: `inset 0 2px 10px ${COLORS.dark}40`,
                 }}
               >
                 {/* Subtle animated gradient */}
@@ -424,8 +417,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                     style={{ color: COLORS.primary }}
                   />
                   <span
-                    className="text-3xl font-black tabular-nums"
-                    style={{ color: COLORS.neutralWhite }}
+                    className="oracle-figure text-3xl"
                   >
                     {formatTime(seconds, showSeconds)}
                   </span>
@@ -440,17 +432,16 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
               transition={{ delay: 0.4 }}
             >
               <p
-                className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
-                style={{ color: COLORS.neutralGray }}
+                className="oracle-label mb-3"
               >
                 Charged so far · what the client pays
               </p>
               <div
-                className="px-5 py-4 rounded-xl text-center relative overflow-hidden border"
+                className="oracle-tile px-5 py-4 text-center relative overflow-hidden"
                 style={{
-                  backgroundColor: `${COLORS.starGold}15`,
-                  borderColor: `${COLORS.starGold}40`,
-                  boxShadow: `0 0 25px ${COLORS.starGold}15, inset 0 2px 10px ${COLORS.dark}40`,
+                  
+                  
+                  boxShadow: `0 0 25px ${COLORS.starGold}15`,
                 }}
               >
                 {/* Shimmer effect */}
@@ -473,8 +464,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                     style={{ color: COLORS.starGold }}
                   />
                   <span
-                    className="text-3xl font-black"
-                    style={{ color: COLORS.neutralWhite }}
+                    className="oracle-figure text-3xl"
                   >
                     {formatCurrency(estimatedCost)}
                   </span>
@@ -490,13 +480,12 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                 transition={{ delay: 0.45 }}
               >
                 <p
-                  className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
-                  style={{ color: COLORS.neutralGray }}
+                  className="oracle-label mb-3"
                 >
                   Client Time Remaining
                 </p>
                 <div
-                  className="px-5 py-4 rounded-xl text-center relative overflow-hidden border"
+                  className="oracle-tile px-5 py-4 text-center relative overflow-hidden"
                   style={{
                     backgroundColor: showCriticalWarning 
                       ? `rgba(239, 68, 68, 0.2)` 
@@ -528,13 +517,13 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                       }}
                     />
                     <span
-                      className="text-3xl font-black tabular-nums"
+                      className="oracle-figure text-3xl"
                       style={{ 
                         color: showCriticalWarning 
                           ? '#EF4444' 
                           : showLowBalanceWarning 
                             ? '#FB923C' 
-                            : COLORS.neutralWhite 
+                            : COLORS.starGold 
                       }}
                     >
                       {formatTime(Math.max(0, Math.floor(remainingSeconds)), showSeconds)}
@@ -571,17 +560,14 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                 transition={{ delay: 0.5 }}
               >
                 <p
-                  className="text-[9px] font-black uppercase tracking-[0.15em] mb-3"
-                  style={{ color: COLORS.neutralGray }}
+                  className="oracle-label mb-3"
                 >
                   Client Balance
                 </p>
                 <div
-                  className="px-5 py-3 rounded-xl text-center relative overflow-hidden border"
+                  className="oracle-tile px-5 py-3 text-center relative overflow-hidden"
                   style={{
-                    backgroundColor: `${COLORS.neutralWhite}08`,
-                    borderColor: `${COLORS.neutralWhite}15`,
-                  }}
+                                      }}
                 >
                   <div className="flex items-center justify-center gap-2 relative z-10">
                     <Icon
@@ -590,8 +576,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                       style={{ color: COLORS.neutralGray }}
                     />
                     <span
-                      className="text-xl font-black"
-                      style={{ color: COLORS.neutralWhite }}
+                      className="oracle-figure text-xl"
                     >
                       {formatCurrency(clientBalance)}
                     </span>
@@ -628,18 +613,18 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
               <div
                 className="flex-1 h-px"
                 style={{
-                  background: `linear-gradient(90deg, transparent 0%, ${COLORS.neutralDarkGray}60 50%, transparent 100%)`,
+                  background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
                 }}
               />
               <Icon
                 icon="solar:star-bold"
                 className="text-xs"
-                style={{ color: COLORS.primary, opacity: 0.5 }}
+                style={{ color: COLORS.starGold, opacity: 0.6 }}
               />
               <div
                 className="flex-1 h-px"
                 style={{
-                  background: `linear-gradient(90deg, transparent 0%, ${COLORS.neutralDarkGray}60 50%, transparent 100%)`,
+                  background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
                 }}
               />
             </div>

@@ -52,7 +52,10 @@ export const MOTION = {
 /** AI persona identities — halo palettes AND per-mode accent sources.
  *  (Previously private to PersonaBadge; shared so mode themes stay in sync.) */
 export const PERSONAS = {
-  valentina: { base: "#C1443A", backdrop: "#2A1408" }, // crimson-gold on warm dark
+  // crimson-gold on warm dark; deep = same hue darkened, the far stop of
+  // Valentina gradients (a contrasting hue there made tall message bubbles
+  // visibly drift crimson->purple down the thread).
+  valentina: { base: "#C1443A", backdrop: "#2A1408", deep: "#8E332B" },
   sabri: { base: "#5D3A9B", backdrop: "#14092E" },     // royal purple on dark indigo
 };
 

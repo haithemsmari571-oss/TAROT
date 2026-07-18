@@ -1566,13 +1566,13 @@ const PsychicSessionGlass = () => {
                         onClick={handleLoadMoreMessages}
                         className="px-6 py-3 rounded-full border cursor-pointer transition-all duration-300"
                         style={{
-                          backgroundColor: `${COLORS.primary}20`,
-                          borderColor: `${COLORS.primary}50`,
+                          backgroundColor: "rgba(var(--gold-rgb), 0.10)",
+                          borderColor: "rgba(var(--gold-rgb), 0.4)",
                         }}
                       >
                         <p
                           className="text-[10px] font-black uppercase tracking-wider flex items-center gap-2"
-                          style={{ color: COLORS.primary }}
+                          style={{ color: COLORS.starGold }}
                         >
                           <Icon icon="solar:arrow-up-bold" className="text-sm" />
                           Load More Messages

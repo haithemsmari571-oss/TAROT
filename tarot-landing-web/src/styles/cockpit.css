@@ -94,6 +94,48 @@
 }
 .oracle-text::selection { background: rgba(var(--valentina-rgb), 0.45); }
 
+/* Oracle tile — the small-surface sibling of .oracle-card for stat blocks,
+   dossier tiles, note rows, the composer: same warm translucent material and
+   gold hairline, lighter weight (no corner brackets, softer aura). */
+.oracle-tile {
+  position: relative;
+  border-radius: 0.9rem;
+  background: linear-gradient(
+    160deg,
+    rgba(var(--valentina-backdrop-rgb), 0.42) 0%,
+    rgba(var(--glass-surface-rgb), 0.38) 100%
+  );
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(var(--gold-rgb), 0.28);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(var(--gold-rgb), 0.16);
+}
+
+/* Section label in the oracle voice: gold small caps, wide tracking. */
+.oracle-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: rgba(var(--gold-rgb), 0.8);
+}
+
+/* Numeric readouts (timer, charges, balance) in the display face, gold. */
+.oracle-figure {
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 800;
+  color: rgb(var(--gold-rgb));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gold hairline divider. */
+.oracle-hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(var(--gold-rgb), 0.5) 50%, transparent 100%);
+}
+
 /* The conversation floats directly over the Vanta layer — no card box; the
    scroll edges dissolve instead of clipping. */
 .thread-scrim {

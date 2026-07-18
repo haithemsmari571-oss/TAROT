@@ -58,7 +58,7 @@ export const ClientDossierCard = ({
       <div className="relative z-10 p-5 space-y-4">
         {/* Header: name + new/returning (+ whole-card collapse when collapsible) */}
         <div className="flex items-center justify-between">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: COLORS.neutralGray }}>
+          <p className="oracle-label">
             Client Dossier
           </p>
           <div className="flex items-center gap-2">
@@ -89,18 +89,18 @@ export const ClientDossierCard = ({
         <>
         {/* Astro row */}
         <div className="flex items-stretch gap-2">
-          <div className="flex-1 rounded-xl border p-2.5 text-center" style={{ backgroundColor: `${COLORS.neutralWhite}06`, borderColor: `${COLORS.neutralWhite}12` }}>
+          <div className="oracle-tile flex-1 p-2.5 text-center">
             <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">Zodiac</div>
             <div className="text-sm font-black text-white flex items-center justify-center gap-1">
               {zodiacGlyph && <span style={{ color: COLORS.starGold }}>{zodiacGlyph}</span>}
               {client.zodiac || "—"}
             </div>
           </div>
-          <div className="flex-1 rounded-xl border p-2.5 text-center" style={{ backgroundColor: `${COLORS.neutralWhite}06`, borderColor: `${COLORS.neutralWhite}12` }}>
+          <div className="oracle-tile flex-1 p-2.5 text-center">
             <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">Life Path</div>
             <div className="text-sm font-black text-white">{client.life_path ?? "—"}</div>
           </div>
-          <div className="flex-1 rounded-xl border p-2.5 text-center" style={{ backgroundColor: `${COLORS.neutralWhite}06`, borderColor: `${COLORS.neutralWhite}12` }}>
+          <div className="oracle-tile flex-1 p-2.5 text-center">
             <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">DOB</div>
             <div className="text-[11px] font-bold text-white leading-tight mt-1">{fmtDate(client.date_of_birth) || "—"}</div>
           </div>
@@ -108,13 +108,13 @@ export const ClientDossierCard = ({
 
         {/* Spend + readings (client spend only — no earnings) */}
         <div className="flex items-stretch gap-2">
-          <div className="flex-1 rounded-xl border p-2.5" style={{ backgroundColor: `${COLORS.starGold}10`, borderColor: `${COLORS.starGold}30` }}>
+          <div className="oracle-tile flex-1 p-2.5">
             <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">Lifetime spend</div>
-            <div className="text-base font-black" style={{ color: COLORS.starGold }}>{gbp(stats.lifetime_spend)}</div>
+            <div className="oracle-figure text-base">{gbp(stats.lifetime_spend)}</div>
           </div>
-          <div className="flex-1 rounded-xl border p-2.5" style={{ backgroundColor: `${COLORS.neutralWhite}06`, borderColor: `${COLORS.neutralWhite}12` }}>
+          <div className="oracle-tile flex-1 p-2.5">
             <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">Past readings</div>
-            <div className="text-base font-black text-white">{stats.session_count}</div>
+            <div className="oracle-figure text-base">{stats.session_count}</div>
           </div>
         </div>
 
@@ -122,8 +122,7 @@ export const ClientDossierCard = ({
         <div>
           <button
             onClick={() => setNotesOpen((o) => !o)}
-            className="w-full flex items-center justify-between text-[9px] font-black uppercase tracking-[0.15em] mb-2"
-            style={{ color: COLORS.neutralGray }}
+            className="oracle-label w-full flex items-center justify-between mb-2"
           >
             <span className="flex items-center gap-1.5">
               <Icon icon="solar:notes-bold-duotone" /> Reading notes ({notes.length})
