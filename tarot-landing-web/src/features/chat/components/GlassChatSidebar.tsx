@@ -145,83 +145,41 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
 
       <div className="relative z-10 p-6 space-y-6">
         {/* Client Info with mystical card design */}
+        {/* Compact identity row — the old oversized avatar/ring ornament ate a
+            large empty block; a 36px mark + name + chat# + DOB says the same in
+            one line. */}
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="text-center"
+          className="flex items-center gap-3"
         >
-          <div className="relative inline-block mb-4">
-            {/* Outer glow ring */}
-            <div
-              className="absolute -inset-2 rounded-full blur-lg opacity-50"
-              style={{
-                background: `radial-gradient(circle, ${COLORS.primary}60 0%, transparent 70%)`,
-              }}
-            />
-            
-            {/* Avatar container */}
-            <div
-              className="relative w-24 h-24 rounded-full flex items-center justify-center overflow-hidden"
-              style={{
-                background: `linear-gradient(135deg, ${COLORS.primary}50 0%, ${COLORS.primary}20 100%)`,
-                border: `3px solid ${COLORS.primary}70`,
-                boxShadow: `0 0 30px ${COLORS.primary}30, inset 0 2px 10px ${COLORS.dark}40`,
-              }}
-            >
-              {/* Inner shine effect */}
-              <div
-                className="absolute inset-0 opacity-40"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.neutralWhite}20 0%, transparent 50%, ${COLORS.neutralWhite}10 100%)`,
-                }}
-              />
-              
-              <Icon
-                icon="solar:user-bold-duotone"
-                className="text-5xl relative z-10"
-                style={{ color: COLORS.primary }}
-              />
-              
-              {/* Status indicator ring */}
-              {chat.status === "ACTIVE" && (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0"
-                  style={{
-                    border: `2px dashed ${COLORS.primary}60`,
-                    borderRadius: "50%",
-                  }}
-                />
-              )}
-            </div>
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+            style={{
+              background: `linear-gradient(135deg, ${COLORS.primary}40 0%, ${COLORS.primary}15 100%)`,
+              border: `1.5px solid ${COLORS.primary}60`,
+            }}
+          >
+            <Icon icon="solar:user-bold-duotone" className="text-lg" style={{ color: COLORS.primary }} />
           </div>
-
-          <h3 className="text-xl font-black text-white mb-2">
-            {displayName}
-          </h3>
-          <p
-            className="text-[9px] font-black uppercase tracking-[0.2em] mb-1"
-            style={{ color: COLORS.neutralGray }}
-          >
-            Chat #{chat.id}
-          </p>
-          {/* Client date of birth — the reader needs this for the reading */}
-          <p
-            className="text-[11px] font-bold tracking-wide mt-1 flex items-center justify-center gap-1.5"
-            style={{ color: clientDob ? COLORS.starGold : COLORS.neutralGray }}
-          >
-            <Icon icon="solar:calendar-bold-duotone" className="text-xs" />
-            DOB:{" "}
-            {clientDob
-              ? new Date(clientDob).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })
-              : "not provided"}
-          </p>
+          <div className="min-w-0">
+            <h3 className="text-base font-black text-white leading-tight truncate">{displayName}</h3>
+            <p
+              className="text-[10px] font-bold tracking-wide flex items-center gap-2"
+              style={{ color: clientDob ? COLORS.starGold : COLORS.neutralGray }}
+            >
+              <span style={{ color: COLORS.neutralGray }}>#{chat.id}</span>
+              <Icon icon="solar:calendar-bold-duotone" className="text-[10px]" />
+              {clientDob
+                ? new Date(clientDob).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "DOB not provided"}
+            </p>
+          </div>
         </motion.div>
 
         {/* Elegant divider */}

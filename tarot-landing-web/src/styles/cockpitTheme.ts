@@ -30,6 +30,11 @@ export const COCKPIT_CSS_VARS: Record<string, string> = {
   "--ease-out": MOTION.easeOut,
   "--ease-in-out": MOTION.easeInOut,
   "--success-rgb": rgb(COLORS.success),
+  // Oracle-card motif (Valentina's draft console): gold + crimson on warm dark.
+  "--gold-rgb": rgb(COLORS.starGold),
+  "--valentina-rgb": rgb(PERSONAS.valentina.base),
+  "--valentina-backdrop-rgb": rgb(PERSONAS.valentina.backdrop),
+  "--lavender-rgb": rgb(COLORS.primaryLight),
 };
 
 /**

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { COLORS } from "../../../theme";
+import { COLORS, PERSONAS } from "../../../theme";
 import {
   discardDraft,
   generateDraft,
@@ -33,6 +33,7 @@ export const DraftReviewPanel = ({
   active,
   className = "",
   fill = false,
+  variant = "card",
 }: {
   chatId: number;
   /** Poll only while the reading is live (chat status ACTIVE). */
@@ -42,6 +43,11 @@ export const DraftReviewPanel = ({
       textarea takes the spare space, so a typical draft reads without scrolling.
       The draft is the focal point of the screen whenever one is pending. */
   fill?: boolean;
+  /** Visual chrome: "card" = the original glass card (admin detail page);
+      "oracle" = the Glass cockpit's tarot-card console — gold-ornamented frame,
+      editorial Valentina title, ink-on-card draft text, gold-to-crimson send
+      bar. Identical logic/behaviour in both. */
+  variant?: "card" | "oracle";
 }) => {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -95,14 +101,22 @@ export const DraftReviewPanel = ({
   const currentIndex = currentDraft ? drafts.findIndex((d) => d.id === currentDraft.id) : -1;
 
   // A draft the panel has not seen before landing at the top of the queue is the
-  // "new draft arrived" moment. First load (nothing seen yet) does not animate.
+  // "new draft arrived" moment. Only the very first effect run is exempt (opening a
+  // panel onto already-queued drafts must not animate) — after that ANY change,
+  // including empty-queue -> first draft, plays the arrival.
   const newestDraftId = drafts.length > 0 ? drafts[drafts.length - 1].id : null;
+  const arrivalInitialized = useRef(false);
   useEffect(() => {
-    if (newestDraftId == null) return;
-    const isNewArrival =
-      lastNewestDraftId.current != null && newestDraftId !== lastNewestDraftId.current;
+    if (!arrivalInitialized.current) {
+      arrivalInitialized.current = true;
+      lastNewestDraftId.current = newestDraftId;
+      return;
+    }
+    if (newestDraftId == null || newestDraftId === lastNewestDraftId.current) {
+      lastNewestDraftId.current = newestDraftId;
+      return;
+    }
     lastNewestDraftId.current = newestDraftId;
-    if (!isNewArrival) return;
     setArrivalAnim(true);
     const t = setTimeout(() => setArrivalAnim(false), 1400);
     return () => clearTimeout(t);
@@ -158,8 +172,13 @@ export const DraftReviewPanel = ({
   // Nothing to show: no draft, nothing generating, and no manual entry point (non-Hybrid).
   if (!currentDraft && !generating && !(isHybrid && active)) return null;
 
+  const oracle = variant === "oracle";
+
   const writingIndicator = (
-    <span className="flex items-center gap-1.5 text-xs" style={{ color: COLORS.secondary }}>
+    <span
+      className="flex items-center gap-1.5 text-xs"
+      style={{ color: oracle ? COLORS.starGold : COLORS.secondary }}
+    >
       <Icon icon="eos-icons:three-dots-loading" width={22} height={22} />
       Valentina is writing…
     </span>
@@ -173,8 +192,8 @@ export const DraftReviewPanel = ({
       className="px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 flex items-center gap-1.5 border"
       style={{
         background: "transparent",
-        borderColor: `${COLORS.secondary}50`,
-        color: COLORS.secondary,
+        borderColor: oracle ? "rgba(var(--gold-rgb), 0.45)" : `${COLORS.secondary}50`,
+        color: oracle ? COLORS.starGold : COLORS.secondary,
       }}
     >
       <Icon icon="mdi:autorenew" width={14} height={14} />
@@ -186,10 +205,11 @@ export const DraftReviewPanel = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-panel relative z-10 p-4 ${fill ? "flex flex-col min-h-0" : ""} ${
-        arrivalAnim ? "anim-fade-slide-in anim-pulse-glow" : ""
-      } ${className}`}
+      className={`${oracle ? "oracle-card p-6" : "glass-panel p-4"} relative z-10 ${
+        fill ? "flex flex-col min-h-0" : ""
+      } ${arrivalAnim ? "anim-fade-slide-in anim-pulse-glow" : ""} ${className}`}
     >
+      {oracle && <div className="oracle-corners absolute inset-0 pointer-events-none" />}
       {justSent && (
         <div
           className="anim-success-flash absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
@@ -201,6 +221,45 @@ export const DraftReviewPanel = ({
           <Icon icon="mdi:check-circle" width={56} height={56} color={COLORS.success} />
         </div>
       )}
+      {oracle ? (
+        /* Oracle header: Valentina gets editorial weight — gold display name over a
+           small-caps status line, crystal ball as her sigil, gold hairline below. */
+        <div className="mb-4 shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Icon icon="mdi:crystal-ball" width={30} height={30} color={COLORS.starGold} className="shrink-0" />
+              <div className="min-w-0">
+                <div className="text-oracle-title text-[26px] leading-none">Valentina</div>
+                <div
+                  className="text-[10px] font-bold uppercase tracking-[0.18em] mt-2 whitespace-nowrap"
+                  style={{
+                    color: currentDraft && !currentDraft.sabri_passed
+                      ? COLORS.warning
+                      : `${COLORS.starGold}CC`,
+                  }}
+                >
+                  {currentDraft
+                    ? currentDraft.sabri_passed
+                      ? "Draft · checks passed"
+                      : "Draft · needs your review"
+                    : "Oracle console"}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              {generateButton}
+            </div>
+          </div>
+          {generating && <div className="mt-3">{writingIndicator}</div>}
+          <div
+            className="mt-4 h-px"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(var(--gold-rgb), 0.55) 50%, transparent 100%)",
+            }}
+          />
+        </div>
+      ) : (
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <Icon icon="mdi:crystal-ball" width={18} height={18} color={COLORS.secondary} />
@@ -257,6 +316,37 @@ export const DraftReviewPanel = ({
           {generateButton}
         </div>
       </div>
+      )}
+
+      {/* Oracle stepper: Draft Nº over the queue, gold ghost arrows. */}
+      {oracle && drafts.length > 1 && currentIndex >= 0 && (
+        <div className="flex items-center justify-end gap-2 mb-2 shrink-0">
+          <button
+            onClick={() => stepTo(currentIndex - 1)}
+            disabled={currentIndex <= 0}
+            title="Previous draft"
+            className="px-1.5 py-1 rounded-lg transition-all disabled:opacity-30 border"
+            style={{ borderColor: "rgba(var(--gold-rgb), 0.35)", color: COLORS.starGold }}
+          >
+            <Icon icon="mdi:chevron-left" width={15} height={15} />
+          </button>
+          <span
+            className="text-[11px] font-bold uppercase tracking-[0.25em] tabular-nums"
+            style={{ color: `${COLORS.starGold}CC` }}
+          >
+            Draft {currentIndex + 1} of {drafts.length}
+          </span>
+          <button
+            onClick={() => stepTo(currentIndex + 1)}
+            disabled={currentIndex >= drafts.length - 1}
+            title="Next draft"
+            className="px-1.5 py-1 rounded-lg transition-all disabled:opacity-30 border"
+            style={{ borderColor: "rgba(var(--gold-rgb), 0.35)", color: COLORS.starGold }}
+          >
+            <Icon icon="mdi:chevron-right" width={15} height={15} />
+          </button>
+        </div>
+      )}
 
       {currentDraft ? (
         <>
@@ -282,48 +372,94 @@ export const DraftReviewPanel = ({
               readerTyping.onActivity();
             }}
             rows={fill ? 10 : 3}
-            className={`w-full px-4 py-3 rounded-xl border resize-none outline-none text-[15px] leading-relaxed ${
-              fill ? "flex-1 min-h-[30vh]" : ""
-            }`}
-            style={{
-              background: `${COLORS.dark}80`,
-              borderColor: `${COLORS.neutralDarkGray}50`,
-              color: COLORS.neutralWhite,
-            }}
+            className={
+              oracle
+                ? `oracle-text w-full custom-scrollbar ${fill ? "flex-1 min-h-[30vh]" : ""}`
+                : `w-full px-4 py-3 rounded-xl border resize-none outline-none text-[15px] leading-relaxed ${
+                    fill ? "flex-1 min-h-[30vh]" : ""
+                  }`
+            }
+            style={
+              oracle
+                ? undefined
+                : {
+                    background: `${COLORS.dark}80`,
+                    borderColor: `${COLORS.neutralDarkGray}50`,
+                    color: COLORS.neutralWhite,
+                  }
+            }
           />
 
-          <div className="flex items-center justify-end gap-3 mt-3">
-            <button
-              onClick={() => discardDraftMutation.mutate(currentDraft.id)}
-              disabled={discardDraftMutation.isPending}
-              className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
-              style={{ background: `${COLORS.neutralDarkGray}50`, color: COLORS.neutralGray }}
-            >
-              Discard
-            </button>
-            <button
-              onClick={() =>
-                draftText.trim() &&
-                sendDraftMutation.mutate({ draftId: currentDraft.id, content: draftText.trim() })
-              }
-              disabled={!draftText.trim() || sendDraftMutation.isPending}
-              className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-2"
-              style={{
-                background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-                color: COLORS.neutralWhite,
-              }}
-            >
-              <Icon
-                icon={sendDraftMutation.isPending ? "eos-icons:loading" : "mdi:send"}
-                width={16}
-                height={16}
-              />
-              {sendDraftMutation.isPending ? "Sending..." : "Send as reader"}
-            </button>
-          </div>
+          {oracle ? (
+            /* Send is the unmistakable primary act: a full-width gold-to-crimson
+               bar with a glow; Discard is a quiet ghost beside it. */
+            <div className="flex items-center gap-3 mt-4 shrink-0">
+              <button
+                onClick={() => discardDraftMutation.mutate(currentDraft.id)}
+                disabled={discardDraftMutation.isPending}
+                className="px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                style={{ color: COLORS.neutralGray, background: "transparent", border: `1px solid ${COLORS.neutralDarkGray}60` }}
+              >
+                Discard
+              </button>
+              <button
+                onClick={() =>
+                  draftText.trim() &&
+                  sendDraftMutation.mutate({ draftId: currentDraft.id, content: draftText.trim() })
+                }
+                disabled={!draftText.trim() || sendDraftMutation.isPending}
+                className="flex-1 px-5 py-3 rounded-xl text-sm font-black uppercase tracking-[0.15em] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{
+                  background: `linear-gradient(100deg, ${COLORS.starGold} 0%, ${PERSONAS.valentina.base} 85%)`,
+                  color: "#1A0D05",
+                  boxShadow: "0 0 26px rgba(var(--gold-rgb), 0.35), 0 4px 18px rgba(0,0,0,0.4)",
+                }}
+              >
+                <Icon
+                  icon={sendDraftMutation.isPending ? "eos-icons:loading" : "mdi:send"}
+                  width={17}
+                  height={17}
+                />
+                {sendDraftMutation.isPending ? "Sending..." : "Send as reader"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-3 mt-3">
+              <button
+                onClick={() => discardDraftMutation.mutate(currentDraft.id)}
+                disabled={discardDraftMutation.isPending}
+                className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                style={{ background: `${COLORS.neutralDarkGray}50`, color: COLORS.neutralGray }}
+              >
+                Discard
+              </button>
+              <button
+                onClick={() =>
+                  draftText.trim() &&
+                  sendDraftMutation.mutate({ draftId: currentDraft.id, content: draftText.trim() })
+                }
+                disabled={!draftText.trim() || sendDraftMutation.isPending}
+                className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-2"
+                style={{
+                  background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                  color: COLORS.neutralWhite,
+                }}
+              >
+                <Icon
+                  icon={sendDraftMutation.isPending ? "eos-icons:loading" : "mdi:send"}
+                  width={16}
+                  height={16}
+                />
+                {sendDraftMutation.isPending ? "Sending..." : "Send as reader"}
+              </button>
+            </div>
+          )}
         </>
       ) : (
-        <div className="text-xs py-1" style={{ color: COLORS.neutralGray }}>
+        <div
+          className={oracle ? "text-sm py-2 leading-relaxed" : "text-xs py-1"}
+          style={{ color: oracle ? `${COLORS.neutralWhite}99` : COLORS.neutralGray }}
+        >
           {generating
             ? "A fresh draft is being written — it will appear here the moment it's ready."
             : "No draft pending. Use “New reply” to have Valentina draft a response to the client's latest message."}

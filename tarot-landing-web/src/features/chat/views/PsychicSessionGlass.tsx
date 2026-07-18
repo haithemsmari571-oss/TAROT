@@ -1241,16 +1241,11 @@ const PsychicSessionGlass = () => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="glass-panel mb-6 p-5 relative overflow-hidden"
+                className="mb-4 relative"
               >
-                {/* Decorative gradient overlay */}
-                <div
-                  className="absolute top-0 left-0 right-0 h-1 opacity-70"
-                  style={{
-                    background: `linear-gradient(90deg, transparent 0%, ${COLORS.primary} 50%, transparent 100%)`,
-                  }}
-                />
-
+                {/* Frameless editorial header: no card box — the reading floats on
+                    the clouds. Client ✦ Valentina in display type, controls as
+                    quiet ghosts, a single gold hairline underneath. */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <motion.button
@@ -1260,12 +1255,8 @@ const PsychicSessionGlass = () => {
                         setActiveView("queue");
                         setSelectedChat(null);
                       }}
-                      className="p-3 rounded-xl border transition-all duration-300 group"
-                      style={{
-                        backgroundColor: `${COLORS.surfaceAccent}90`,
-                        borderColor: `${COLORS.neutralDarkGray}50`,
-                        color: COLORS.primary,
-                      }}
+                      className="p-2.5 rounded-xl transition-all duration-300 group"
+                      style={{ color: COLORS.starGold, background: "rgba(var(--gold-rgb), 0.08)" }}
                     >
                       <Icon
                         icon="solar:alt-arrow-left-bold"
@@ -1274,24 +1265,17 @@ const PsychicSessionGlass = () => {
                     </motion.button>
 
                     <div className="flex items-center gap-3">
-                      <div
-                        className="w-12 h-12 rounded-full flex items-center justify-center"
-                        style={{
-                          background: `linear-gradient(135deg, ${COLORS.primary}40 0%, ${COLORS.primary}20 100%)`,
-                          border: `2px solid ${COLORS.primary}60`,
-                        }}
-                      >
-                        <Icon
-                          icon="solar:user-bold-duotone"
-                          className="text-2xl"
-                          style={{ color: COLORS.primary }}
-                        />
-                      </div>
                       <div>
-                        <h2 className="text-xl font-black text-white">
-                          {currentChat?.user_name || "Chat Session"}
+                        <h2
+                          className="text-[26px] leading-none font-black text-white"
+                          style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
+                        >
+                          {/* user_name can be the "client -> psychic" pair label — show
+                              the client alone; Valentina gets her own gold mark. */}
+                          {(currentChat?.user_name || "Chat Session").split(" -> ")[0]}{" "}
+                          <span className="text-oracle-title">✦ Valentina</span>
                         </h2>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mt-1.5">
                           <p
                             className="text-[9px] font-black uppercase tracking-widest"
                             style={{ color: COLORS.neutralGray }}
@@ -1378,6 +1362,15 @@ const PsychicSessionGlass = () => {
                   </div>
                 </div>
 
+                {/* Gold hairline closes the header strip */}
+                <div
+                  className="mt-4 h-px"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, rgba(var(--gold-rgb), 0.5) 0%, rgba(var(--gold-rgb), 0.12) 55%, transparent 100%)",
+                  }}
+                />
+
                 {/* Warning for non-participants */}
                 {!canParticipate && (
                   <motion.div
@@ -1430,17 +1423,17 @@ const PsychicSessionGlass = () => {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
-                  className="mb-4 px-6 py-4 rounded-2xl backdrop-blur-xl border flex items-center justify-between gap-3 flex-wrap"
-                  style={{
-                    background: `linear-gradient(135deg, ${COLORS.starGold}20 0%, ${COLORS.starGold}10 100%)`,
-                    borderColor: `${COLORS.starGold}30`,
-                    boxShadow: `0 4px 16px ${COLORS.starGold}20`,
-                  }}
+                  className="mb-4 px-1 flex items-center justify-between gap-3 flex-wrap"
                 >
-                  <div className="flex items-center gap-3">
-                    <Icon icon="mdi:shield-account" width={20} height={20} color={COLORS.starGold} />
-                    <span className="text-sm font-bold" style={{ color: COLORS.starGold }}>
-                      Admin Mode: Connected as {currentChat.psychic_name || 'Psychic'}
+                  {/* Frameless console row — no gold box; the switcher carries the
+                      mode accent, the label stays a quiet gold whisper. */}
+                  <div className="flex items-center gap-2.5">
+                    <Icon icon="mdi:shield-account" width={16} height={16} color={COLORS.starGold} />
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-[0.25em]"
+                      style={{ color: `${COLORS.starGold}CC` }}
+                    >
+                      Admin · as {currentChat.psychic_name || 'Psychic'}
                     </span>
                   </div>
                   {selectedChat && <ResponseModeSwitcher chatId={selectedChat} />}
@@ -1529,7 +1522,7 @@ const PsychicSessionGlass = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 ref={scrollRef}
-                className="glass-panel mb-6 p-6 flex-1 relative"
+                className="thread-scrim mb-4 px-2 flex-1 relative custom-scrollbar"
                 style={{
                   height: "calc(100vh - 360px)",
                   minHeight: "500px",
@@ -1751,6 +1744,7 @@ const PsychicSessionGlass = () => {
                     active={currentChat?.status === "ACTIVE"}
                     className="mb-4 flex-1"
                     fill
+                    variant="oracle"
                   />
                 )}
 

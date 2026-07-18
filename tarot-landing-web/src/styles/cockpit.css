@@ -24,6 +24,83 @@
     box-shadow var(--motion-medium) var(--ease-in-out);
 }
 
+/* ————— Oracle card: the tarot-card frame for Valentina's draft console.
+         Warm translucent dark over the Vanta layer, gold hairline + corner
+         ornaments, crimson aura. Backdrop kept light-alpha so the clouds
+         genuinely show through the blur. ————— */
+.oracle-card {
+  position: relative;
+  border-radius: 1.25rem;
+  background: linear-gradient(
+    168deg,
+    rgba(var(--valentina-backdrop-rgb), 0.5) 0%,
+    rgba(var(--glass-surface-rgb), 0.42) 48%,
+    rgba(var(--valentina-backdrop-rgb), 0.46) 100%
+  );
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 0 0 1px rgba(var(--gold-rgb), 0.38),
+    0 10px 48px rgba(0, 0, 0, 0.5),
+    0 0 46px rgba(var(--valentina-rgb), 0.28),
+    inset 0 0 70px rgba(var(--valentina-rgb), 0.08),
+    inset 0 1px 0 rgba(var(--gold-rgb), 0.28);
+}
+/* Corner ornaments — four gold L-brackets (two pseudos on the card, two on the
+   .oracle-corners child). */
+.oracle-card::before,
+.oracle-card::after,
+.oracle-corners::before,
+.oracle-corners::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: rgba(var(--gold-rgb), 0.8);
+  border-style: solid;
+  pointer-events: none;
+}
+.oracle-card::before { top: 7px; left: 7px; border-width: 2px 0 0 2px; border-top-left-radius: 6px; }
+.oracle-card::after { bottom: 7px; right: 7px; border-width: 0 2px 2px 0; border-bottom-right-radius: 6px; }
+.oracle-corners::before { top: 7px; right: 7px; border-width: 2px 2px 0 0; border-top-right-radius: 6px; }
+.oracle-corners::after { bottom: 7px; left: 7px; border-width: 0 0 2px 2px; border-bottom-left-radius: 6px; }
+
+/* Editorial gold display treatment for Valentina's name / oracle headings. */
+.text-oracle-title {
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  background: linear-gradient(
+    100deg,
+    rgba(var(--gold-rgb), 1) 0%,
+    rgba(var(--lavender-rgb), 0.95) 55%,
+    rgba(var(--gold-rgb), 1) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Draft text reads as ink on the card, not a boxed input. */
+.oracle-text {
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  caret-color: rgb(var(--gold-rgb));
+  color: rgba(var(--glass-white-rgb), 0.94);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.oracle-text::selection { background: rgba(var(--valentina-rgb), 0.45); }
+
+/* The conversation floats directly over the Vanta layer — no card box; the
+   scroll edges dissolve instead of clipping. */
+.thread-scrim {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+}
+
 /* ————— Keyframes ————— */
 @keyframes ck-fade-slide-in {
   from { opacity: 0; transform: translateY(10px); }
