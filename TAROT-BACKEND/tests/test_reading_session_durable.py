@@ -106,6 +106,34 @@ def test_resume_delivery_resumes_after_restart(monkeypatch):
     assert captured["reserve"].startswith("BANKED")
 
 
+def test_rehydrated_aware_datetimes_are_normalised_to_naive():
+    # Regression: Postgres returns timezone-AWARE datetimes for the store's timestamptz
+    # columns; the engine uses naive datetime.now() throughout. Unnormalised, the first
+    # record_client_message after a restart rehydration raised "can't subtract
+    # offset-naive and offset-aware datetimes" and silently killed every hybrid/duo turn.
+    # (SQLite hands back naive values, so the plain restart test above can't catch it —
+    # this test injects aware values explicitly, as Postgres would.)
+    from datetime import timezone
+
+    from app.models.reading_session_state import ReadingSessionStateRow
+
+    store = _db_backed_store()
+    _populate_mid_delivery(store)
+    with store._session_factory() as db:  # make the stored timestamps AWARE, as Postgres returns them
+        row = db.get(ReadingSessionStateRow, 42)
+        row.session_start = row.session_start.replace(tzinfo=timezone.utc)
+        row.last_activity_at = row.last_activity_at.replace(tzinfo=timezone.utc)
+        db.commit()
+    store._sessions.clear()  # restart
+
+    state = store.get("chat:42")
+    assert state is not None
+    assert state.session_start.tzinfo is None       # normalised back to naive
+    assert state.last_activity_at.tzinfo is None
+    record_client_message(state, "a message after the restart")  # must not raise
+    assert state.chat_transcript[-1]["content"] == "a message after the restart"
+
+
 def test_resume_delivery_noop_for_unknown_chat(monkeypatch):
     store = _db_backed_store()  # empty DB — no session for this chat
     monkeypatch.setattr("app.services.ai.reading_session.get_session_store", lambda: store)

@@ -169,6 +169,20 @@ def _state_to_row_fields(state: ReadingSessionState) -> dict:
     )
 
 
+def _naive_local(value: Optional[datetime]) -> Optional[datetime]:
+    """Normalise a rehydrated datetime to the engine's NAIVE-local convention.
+
+    The engine uses naive ``datetime.now()`` throughout, but Postgres returns
+    timezone-AWARE datetimes for the store's timestamptz columns — mixing the two
+    raises "can't subtract offset-naive and offset-aware datetimes" on the first
+    ``record_client_message`` after a restart rehydration (the bug that silently
+    killed every hybrid/duo turn post-restart). SQLite returns naive values, which
+    pass through untouched — which is also why the restart test alone missed this."""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone().replace(tzinfo=None)
+
+
 def _row_to_state(row) -> ReadingSessionState:
     return ReadingSessionState(
         session_id=row.session_id,
@@ -185,8 +199,8 @@ def _row_to_state(row) -> ReadingSessionState:
         client_response_times=json.loads(row.client_response_times or "[]"),
         sabri_correction_count=row.sabri_correction_count,
         waiting_for_response=row.waiting_for_response,
-        session_start=row.session_start,
-        last_activity_at=row.last_activity_at,
+        session_start=_naive_local(row.session_start),
+        last_activity_at=_naive_local(row.last_activity_at),
     )
 
 
