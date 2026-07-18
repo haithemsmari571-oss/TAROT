@@ -55,7 +55,8 @@ export const ResponseModeSwitcher = ({
       >
         {(["HUMAN", "HYBRID", "SABRI"] as ResponseMode[]).map((mode) => {
           const active = responseMode === mode;
-          const label = mode === "HUMAN" ? "Human" : mode === "HYBRID" ? "Hybrid" : "Sabri";
+          // Display labels only — the API value stays the internal enum ("SABRI").
+          const label = mode === "HUMAN" ? "Human" : mode === "HYBRID" ? "Hybrid" : "Automatic";
           return (
             <button
               key={mode}
@@ -65,8 +66,8 @@ export const ResponseModeSwitcher = ({
                 mode === "HUMAN"
                   ? "You type every reply (no AI)"
                   : mode === "HYBRID"
-                    ? "Valentina drafts — you review & send (Sabri is skipped)"
-                    : "AI drafts, Sabri checks, auto-sends on a clean pass"
+                    ? "AI writes a draft — nothing sends until you review it"
+                    : "AI writes and sends replies automatically"
               }
               className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
               style={{

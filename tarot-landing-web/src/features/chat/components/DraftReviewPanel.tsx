@@ -101,7 +101,7 @@ export const DraftReviewPanel = ({
               color: currentDraft.sabri_passed ? COLORS.success : COLORS.warning,
             }}
           >
-            {currentDraft.sabri_passed ? "Sabri: passed" : "Sabri: needs review"}
+            {currentDraft.sabri_passed ? "Checks passed" : "Needs your review"}
           </span>
           <span className="text-[10px]" style={{ color: COLORS.neutralGray }}>
             {currentDraft.attempts} attempt{currentDraft.attempts === 1 ? "" : "s"}
