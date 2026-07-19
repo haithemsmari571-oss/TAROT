@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { COLORS, PERSONAS, TYPOGRAPHY } from "../../../theme";
 import { useChats } from "../hooks/useChats";
 import { updateChatStatus, getChatMessages, getChatSessionTime, getChatDetails, pauseChatManual, resumeChat } from "../api/chatApi";
 import { stopNotificationSound } from "../../../lib/notificationSound";
@@ -899,14 +899,22 @@ const PsychicSessionGlass = () => {
 
   const statusPriority: Record<string, number> = {
     ACTIVE: 0,
+    PAUSED: 0,
     REQUESTED: 1,
   };
 
-  const filteredChats =
-    (activeTab === "ALL"
-      ? chats
-      : chats.filter((chat) => chat.status === activeTab)
-    ).filter((chat) =>
+  // A PAUSED reading is a live session on hold (the pause/resume flow), so it
+  // belongs under Active — previously it silently vanished into "All" only.
+  const matchesTab = (chat: any) =>
+    activeTab === "ALL"
+      ? true
+      : activeTab === "ACTIVE"
+        ? chat.status === "ACTIVE" || chat.status === "PAUSED"
+        : chat.status === activeTab;
+
+  const filteredChats = chats
+    .filter(matchesTab)
+    .filter((chat) =>
       (chat.user_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (chat.psychic_name || "").toLowerCase().includes(searchQuery.toLowerCase())
     ).sort((a, b) => {
@@ -942,7 +950,7 @@ const PsychicSessionGlass = () => {
     {
       key: "ACTIVE",
       label: "Active",
-      count: chats.filter((c) => c.status === "ACTIVE").length,
+      count: chats.filter((c) => c.status === "ACTIVE" || c.status === "PAUSED").length,
     },
     {
       key: "ENDED",
@@ -970,19 +978,20 @@ const PsychicSessionGlass = () => {
       className="min-h-screen p-6 md:p-8 relative overflow-hidden"
       style={{ fontFamily: TYPOGRAPHY.fontFamily.body }}
     >
-      {/* Animated background elements */}
+      {/* Animated background elements — the queue carries the crimson-gold family
+          (matching its NET layer); the open-session view keeps its original tint. */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
           className="absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl opacity-10 animate-pulse"
           style={{
-            background: `radial-gradient(circle, ${COLORS.primary} 0%, transparent 70%)`,
+            background: `radial-gradient(circle, ${activeView === "queue" ? PERSONAS.valentina.base : COLORS.primary} 0%, transparent 70%)`,
             animation: "pulse 8s ease-in-out infinite",
           }}
         />
         <div
           className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full blur-3xl opacity-10"
           style={{
-            background: `radial-gradient(circle, ${COLORS.primary} 0%, transparent 70%)`,
+            background: `radial-gradient(circle, ${activeView === "queue" ? COLORS.starGold : COLORS.primary} 0%, transparent 70%)`,
             animation: "pulse 12s ease-in-out infinite reverse",
           }}
         />
@@ -1009,7 +1018,7 @@ const PsychicSessionGlass = () => {
                 <div
                   className="w-1 h-16 rounded-full"
                   style={{
-                    background: `linear-gradient(180deg, ${COLORS.primary} 0%, transparent 100%)`,
+                    background: `linear-gradient(180deg, ${COLORS.starGold} 0%, ${PERSONAS.valentina.base}60 70%, transparent 100%)`,
                   }}
                 />
                 <div>
@@ -1020,25 +1029,25 @@ const PsychicSessionGlass = () => {
                     <Icon
                       icon="solar:chat-round-line-bold-duotone"
                       className="text-4xl"
-                      style={{ color: COLORS.primary }}
+                      style={{ color: COLORS.starGold }}
                     />
                     <span className="text-white">Psychic</span>{" "}
-                    <span style={{ color: COLORS.primary }}>Sessions</span>
+                    <span className="text-oracle-title">Sessions</span>
                   </h1>
                   <div className="flex items-center gap-3 mt-2">
                     <div
                       className="flex items-center gap-2 px-3 py-1 rounded-full border"
                       style={{
-                        backgroundColor: `${COLORS.primary}10`,
-                        borderColor: `${COLORS.primary}30`,
+                        backgroundColor: "rgba(var(--gold-rgb), 0.08)",
+                        borderColor: "rgba(var(--gold-rgb), 0.3)",
                       }}
                     >
                       <div
                         className="w-2 h-2 rounded-full animate-pulse"
-                        style={{ backgroundColor: COLORS.primary }}
+                        style={{ backgroundColor: COLORS.starGold }}
                       />
                       <span
-                        style={{ color: COLORS.primary }}
+                        style={{ color: COLORS.starGold }}
                         className="text-[10px] font-bold uppercase tracking-wider"
                       >
                         Live
@@ -1077,19 +1086,28 @@ const PsychicSessionGlass = () => {
               </div>
             )}
 
-            {/* Search Bar */}
+            {/* Search Bar — oracle glass, gold hairline that brightens on focus */}
             <div className="relative mb-6">
-              <Icon icon="solar:magnifer-linear" className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: COLORS.neutralGray }} />
+              <Icon icon="solar:magnifer-linear" className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "rgba(var(--gold-rgb), 0.6)" }} />
               <input
                 type="text"
-                placeholder="Search by username..."
+                placeholder="Search by client or reader..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full px-12 py-3.5 rounded-2xl text-sm outline-none transition-all backdrop-blur-xl border"
                 style={{
-                  backgroundColor: `${COLORS.surface}DD`,
-                  borderColor: `${COLORS.neutralDarkGray}50`,
+                  backgroundColor: `${COLORS.surface}B8`,
+                  borderColor: "rgba(var(--gold-rgb), 0.22)",
                   color: COLORS.neutralWhite,
+                  caretColor: COLORS.starGold,
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "rgba(var(--gold-rgb), 0.55)";
+                  e.currentTarget.style.boxShadow = "0 0 24px rgba(var(--gold-rgb), 0.12)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "rgba(var(--gold-rgb), 0.22)";
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               />
               {searchQuery && (
@@ -1108,7 +1126,7 @@ const PsychicSessionGlass = () => {
               className="relative mb-8 p-1.5 rounded-2xl backdrop-blur-xl border overflow-hidden"
               style={{
                 background: `linear-gradient(135deg, ${COLORS.surface}DD 0%, ${COLORS.surfaceAccent}AA 100%)`,
-                borderColor: `${COLORS.neutralDarkGray}30`,
+                borderColor: "rgba(var(--gold-rgb), 0.16)",
                 boxShadow: `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}10`,
               }}
             >
@@ -1117,13 +1135,13 @@ const PsychicSessionGlass = () => {
                 className="absolute inset-0 opacity-50 blur-xl"
                 style={{
                   background: `radial-gradient(circle at ${tabs.findIndex((t) => t.key === activeTab) * 25 + 12.5
-                    }% 50%, ${COLORS.primary}20 0%, transparent 50%)`,
+                    }% 50%, rgba(var(--gold-rgb), 0.14) 0%, transparent 50%)`,
                   transition: "all 0.3s ease",
                 }}
               />
 
               <div className="relative flex gap-2">
-                {tabs.map((tab, index) => (
+                {tabs.map((tab) => (
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
@@ -1131,13 +1149,13 @@ const PsychicSessionGlass = () => {
                     style={{
                       backgroundColor:
                         activeTab === tab.key
-                          ? COLORS.primary
+                          ? COLORS.starGold
                           : `${COLORS.neutralWhite}05`,
                       color:
                         activeTab === tab.key ? COLORS.dark : COLORS.neutralGray,
                       boxShadow:
                         activeTab === tab.key
-                          ? `0 4px 20px ${COLORS.primary}50, inset 0 1px 0 ${COLORS.neutralWhite}20`
+                          ? `0 4px 20px rgba(var(--gold-rgb), 0.35), inset 0 1px 0 ${COLORS.neutralWhite}20`
                           : "none",
                     }}
                   >
@@ -1145,7 +1163,7 @@ const PsychicSessionGlass = () => {
                       <div
                         className="absolute inset-0"
                         style={{
-                          background: `linear-gradient(135deg, ${COLORS.primary}FF 0%, ${COLORS.primary}DD 100%)`,
+                          background: `linear-gradient(135deg, ${COLORS.starGold}FF 0%, ${COLORS.starGold}DD 100%)`,
                           borderRadius: "12px",
                         }}
                       />
@@ -1158,14 +1176,14 @@ const PsychicSessionGlass = () => {
                           backgroundColor:
                             activeTab === tab.key
                               ? `${COLORS.dark}50`
-                              : `${COLORS.primary}30`,
+                              : "rgba(var(--gold-rgb), 0.14)",
                           color:
                             activeTab === tab.key
                               ? COLORS.neutralWhite
-                              : COLORS.primary,
+                              : COLORS.starGold,
                           border: `1px solid ${activeTab === tab.key
                               ? `${COLORS.dark}70`
-                              : `${COLORS.primary}50`
+                              : "rgba(var(--gold-rgb), 0.4)"
                             }`,
                         }}
                       >
@@ -1197,7 +1215,7 @@ const PsychicSessionGlass = () => {
                 <Icon
                   icon="solar:chat-line-bold-duotone"
                   className="text-7xl mx-auto mb-6"
-                  style={{ color: COLORS.neutralGray, opacity: 0.5 }}
+                  style={{ color: COLORS.starGold, opacity: 0.35 }}
                 />
                 <p className="text-white/70 text-base font-bold mb-2">
                   No {activeTab.toLowerCase()} sessions
@@ -1210,17 +1228,23 @@ const PsychicSessionGlass = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredChats.map((chat) => (
-                  <GlassChatListItem
+              /* Inbox surface: one glass panel, rows separated by gold hairlines —
+                 rows themselves are chrome-free (GlassChatListItem). */
+              <div className="glass-panel overflow-hidden">
+                {filteredChats.map((chat, i) => (
+                  <div
                     key={chat.id}
-                    chat={chat}
-                    onAccept={() => handleAcceptChat(chat.id)}
-                    onDeny={() => handleDenyChat(chat.id)}
-                    onEnter={() => handleEnterChat(chat.id)}
-                    isProcessing={processingChats.has(chat.id)}
-                    isPsychic={user?.role === "PSYCHIC" || isAdmin}
-                  />
+                    style={i > 0 ? { borderTop: "1px solid rgba(var(--gold-rgb), 0.1)" } : undefined}
+                  >
+                    <GlassChatListItem
+                      chat={chat}
+                      onAccept={() => handleAcceptChat(chat.id)}
+                      onDeny={() => handleDenyChat(chat.id)}
+                      onEnter={() => handleEnterChat(chat.id)}
+                      isProcessing={processingChats.has(chat.id)}
+                      isPsychic={user?.role === "PSYCHIC" || isAdmin}
+                    />
+                  </div>
                 ))}
               </div>
             )}

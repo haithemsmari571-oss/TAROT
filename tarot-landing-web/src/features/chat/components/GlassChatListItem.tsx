@@ -1,6 +1,6 @@
 import React from "react";
 import { Icon } from "@iconify/react";
-import { COLORS } from "../../../theme";
+import { COLORS, PERSONAS } from "../../../theme";
 
 interface GlassChatListItemProps {
   chat: any;
@@ -11,252 +11,203 @@ interface GlassChatListItemProps {
   isPsychic?: boolean;
 }
 
+// Semantic status colors — deliberately separate from the gold/crimson oracle
+// palette so state reads instantly (green live, amber waiting, orange paused).
+const STATUS_META: Record<string, { color: string; label: string }> = {
+  REQUESTED: { color: "#F59E0B", label: "Pending" },
+  ACTIVE: { color: "#4ADE80", label: "Active" },
+  PAUSED: { color: "#FB923C", label: "Paused" },
+  ENDED: { color: COLORS.neutralGray, label: "Ended" },
+};
+
+// Inbox-style relative time — operational data the operator scans constantly,
+// so it stays terse ("5m ago"), rolling up to a short date once it's stale.
+const relativeTime = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return "";
+  const secs = Math.floor((Date.now() - then) / 1000);
+  if (secs < 60) return "just now";
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  if (secs < 7 * 86400) return `${Math.floor(secs / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+};
+
+/**
+ * One row of the sessions-list inbox: avatar, client ✦ reader, relative time,
+ * a one-line preview of the latest message, and a needs-attention star on
+ * pending requests. The row itself opens the session (same onEnter as before);
+ * per-status actions stay as explicit buttons on the right.
+ */
 export const GlassChatListItem: React.FC<GlassChatListItemProps> = ({
   chat,
   onAccept,
   onDeny,
   onEnter,
   isProcessing,
-  isPsychic = true,
 }) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "REQUESTED":
-        return "#F59E0B";
-      case "ACTIVE":
-        return "#4ADE80";
-      case "ENDED":
-        return COLORS.neutralGray;
-      default:
-        return COLORS.neutralGray;
-    }
-  };
+  const status = STATUS_META[chat.status] ?? { color: COLORS.neutralGray, label: chat.status };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "REQUESTED":
-        return "solar:bell-bold-duotone";
-      case "ACTIVE":
-        return "solar:chat-round-line-bold-duotone";
-      case "ENDED":
-        return "solar:check-circle-bold-duotone";
-      default:
-        return "solar:chat-line-bold-duotone";
-    }
-  };
-
-  const displayName = chat.user_name || "Unknown User";
-
-  const statusColor = getStatusColor(chat.status);
-  const statusIcon = getStatusIcon(chat.status);
+  // Admin rows arrive as "client -> psychic"; psychic rows as just the client.
+  const [clientName, psychicName] = (chat.user_name || "Unknown User").split(" -> ");
+  const isLive = chat.status === "ACTIVE" || chat.status === "PAUSED";
 
   return (
     <div
-      className="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-300 cursor-pointer overflow-hidden"
-      style={{
-        background: `linear-gradient(135deg, ${COLORS.surface}EE 0%, ${COLORS.surfaceAccent}BB 100%)`,
-        borderColor: `${COLORS.neutralDarkGray}40`,
-        boxShadow: `0 4px 20px ${COLORS.dark}50, inset 0 1px 0 ${COLORS.neutralWhite}08`,
-      }}
+      className="group relative flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors duration-300"
+      style={{ backgroundColor: "transparent" }}
+      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(var(--gold-rgb), 0.05)")}
+      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
       onClick={onEnter}
     >
-      {/* Animated gradient border on hover */}
+      {/* Status accent hairline on the left edge */}
       <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{
-          background: `linear-gradient(135deg, ${COLORS.primary}10 0%, transparent 50%, ${COLORS.primary}10 100%)`,
-          borderRadius: "16px",
-        }}
+        className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full"
+        style={{ background: `linear-gradient(180deg, ${status.color} 0%, ${status.color}30 100%)` }}
       />
 
-      {/* Status accent bar */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
-        style={{
-          background: `linear-gradient(180deg, ${statusColor} 0%, ${statusColor}40 100%)`,
-        }}
-      />
-
-      <div className="relative z-10 flex items-center justify-between">
-        {/* Left: User Info */}
-        <div className="flex items-center gap-4 flex-1">
-          {/* Avatar with enhanced design */}
-          <div className="relative">
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center relative overflow-hidden"
-              style={{
-                background: `linear-gradient(135deg, ${COLORS.primary}50 0%, ${COLORS.primary}20 100%)`,
-                border: `2px solid ${COLORS.primary}70`,
-              }}
-            >
-              {/* Shimmer effect */}
-              <div
-                className="absolute inset-0 opacity-30"
-                style={{
-                  background: `linear-gradient(135deg, transparent 0%, ${COLORS.neutralWhite}20 50%, transparent 100%)`,
-                }}
-              />
-              <Icon
-                icon="solar:user-bold-duotone"
-                className="text-2xl relative z-10"
-                style={{ color: COLORS.primary }}
-              />
-            </div>
-            
-            {/* Status indicator badge */}
-            <div
-              className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2"
-              style={{
-                backgroundColor: COLORS.dark,
-                borderColor: statusColor,
-              }}
-            >
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{
-                  backgroundColor: statusColor,
-                  animation: chat.status === "ACTIVE" ? "pulse 2s ease-in-out infinite" : "none",
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-white font-black text-base truncate">
-                {displayName}
-              </h3>
-              {chat.status === "REQUESTED" && (
-                <div>
-                  <Icon
-                    icon="solar:star-bold"
-                    className="text-xs"
-                    style={{ color: COLORS.primary }}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <p
-                className="text-[9px] font-black uppercase tracking-widest"
-                style={{ color: COLORS.neutralGray }}
-              >
-                Session #{chat.id}
-              </p>
-              {chat.created_at && (
-                <>
-                  <span style={{ color: COLORS.neutralGray }}>•</span>
-                  <p
-                    className="text-[9px] font-bold"
-                    style={{ color: COLORS.neutralGray }}
-                  >
-                    {new Date(chat.created_at).toLocaleDateString()}
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Middle: Status with enhanced design */}
+      {/* Avatar: real profile picture when the API has one, else the client's initial */}
+      <div className="relative shrink-0">
         <div
-          className="px-4 py-2 rounded-xl flex items-center gap-2 mx-6 border"
+          className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden"
           style={{
-            backgroundColor: `${statusColor}12`,
-            borderColor: `${statusColor}30`,
-            boxShadow: `0 0 20px ${statusColor}15`,
+            background: `linear-gradient(135deg, rgba(var(--gold-rgb), 0.18) 0%, rgba(var(--valentina-rgb), 0.14) 100%)`,
+            border: "1px solid rgba(var(--gold-rgb), 0.35)",
           }}
         >
-          <Icon
-            icon={statusIcon}
-            className="text-base"
-            style={{ color: statusColor }}
-          />
+          {chat.user_profile_pic_url ? (
+            <img
+              src={chat.user_profile_pic_url}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-sm font-black" style={{ color: COLORS.starGold }}>
+              {(clientName || "?").charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div
+          className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
+          style={{ backgroundColor: status.color, borderColor: COLORS.dark }}
+        >
+          {chat.status === "ACTIVE" && (
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{ backgroundColor: status.color, animation: "pulse 2s ease-in-out infinite" }}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Name + preview — dense operational text, compact scale */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-white truncate">
+            {clientName}
+            {psychicName && (
+              <span className="font-semibold" style={{ color: "rgba(var(--gold-rgb), 0.75)" }}>
+                {" "}✦ {psychicName}
+              </span>
+            )}
+          </h3>
           <span
-            className="text-[10px] font-black uppercase tracking-wider"
-            style={{ color: statusColor }}
+            className="shrink-0 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full border"
+            style={{
+              color: status.color,
+              borderColor: `${status.color}45`,
+              backgroundColor: `${status.color}12`,
+            }}
           >
-            {chat.status}
+            {chat.status === "PAUSED" ? "Paused" : status.label}
+          </span>
+        </div>
+        <p className="text-xs text-white/45 truncate mt-0.5">
+          {chat.last_message || "No messages yet"}
+        </p>
+      </div>
+
+      {/* Right rail: relative time + star + per-status actions */}
+      <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-[10px] font-bold tabular-nums" style={{ color: COLORS.neutralGray }}>
+            {relativeTime(chat.updated_at)}
+          </span>
+          <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: `${COLORS.neutralGray}90` }}>
+            #{chat.id}
           </span>
         </div>
 
-        {/* Right: Actions with enhanced buttons */}
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          {chat.status === "REQUESTED" && (
-            <>
-              <button
-                onClick={onAccept}
-                disabled={isProcessing}
-                className="px-5 py-2.5 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 relative overflow-hidden"
-                style={{
-                  backgroundColor: `${COLORS.primary}20`,
-                  borderColor: `${COLORS.primary}70`,
-                  color: COLORS.primary,
-                  boxShadow: `0 0 15px ${COLORS.primary}20`,
-                }}
-              >
-                <div
-                  className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity"
-                  style={{
-                    background: `linear-gradient(135deg, ${COLORS.primary}10 0%, transparent 100%)`,
-                  }}
-                />
-                <Icon icon="solar:check-circle-bold-duotone" className="text-base relative z-10" />
-                <span className="relative z-10">{isProcessing ? "Processing..." : "Accept"}</span>
-              </button>
-              <button
-                onClick={onDeny}
-                disabled={isProcessing}
-                className="px-5 py-2.5 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                style={{
-                  backgroundColor: "rgba(248, 113, 113, 0.15)",
-                  borderColor: "rgba(248, 113, 113, 0.5)",
-                  color: "#F87171",
-                }}
-              >
-                <Icon icon="solar:close-circle-bold-duotone" className="text-base" />
-                Decline
-              </button>
-            </>
-          )}
+        {/* Needs-attention star: a pending request is the inbox's "unread" */}
+        {chat.status === "REQUESTED" && (
+          <Icon
+            icon="solar:star-bold"
+            className="text-base"
+            style={{ color: COLORS.starGold, filter: `drop-shadow(0 0 6px ${COLORS.starGold}70)` }}
+          />
+        )}
 
-          {chat.status === "ACTIVE" && (
+        {chat.status === "REQUESTED" && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={onEnter}
-              className="px-6 py-2.5 rounded-xl border-2 transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 relative overflow-hidden"
+              onClick={onAccept}
+              disabled={isProcessing}
+              className="px-4 py-2 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               style={{
-                backgroundColor: COLORS.primary,
-                borderColor: COLORS.primary,
-                color: COLORS.dark,
-                boxShadow: `0 4px 20px ${COLORS.primary}50`,
+                backgroundColor: "rgba(var(--gold-rgb), 0.14)",
+                borderColor: "rgba(var(--gold-rgb), 0.55)",
+                color: COLORS.starGold,
               }}
             >
-              <div
-                className="absolute inset-0 opacity-50"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.neutralWhite}20 0%, transparent 100%)`,
-                }}
-              />
-              <Icon icon="solar:chat-round-line-bold-duotone" className="text-base relative z-10" />
-              <span className="relative z-10">Enter Session</span>
+              <Icon icon="solar:check-circle-bold-duotone" className="text-sm" />
+              {isProcessing ? "…" : "Accept"}
             </button>
-          )}
-
-          {chat.status === "ENDED" && (
             <button
-              onClick={onEnter}
-              className="px-5 py-2.5 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
+              onClick={onDeny}
+              disabled={isProcessing}
+              className="px-4 py-2 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               style={{
-                backgroundColor: `${COLORS.neutralGray}15`,
-                borderColor: `${COLORS.neutralGray}50`,
-                color: COLORS.neutralGray,
+                backgroundColor: "rgba(248, 113, 113, 0.12)",
+                borderColor: "rgba(248, 113, 113, 0.45)",
+                color: "#F87171",
               }}
             >
-              <Icon icon="solar:eye-bold-duotone" className="text-base" />
-              View History
+              <Icon icon="solar:close-circle-bold-duotone" className="text-sm" />
+              Decline
             </button>
-          )}
-        </div>
+          </div>
+        )}
+
+        {isLive && (
+          <button
+            onClick={onEnter}
+            className="px-4 py-2 rounded-xl transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-1.5"
+            style={{
+              background: `linear-gradient(100deg, ${COLORS.starGold} 0%, ${PERSONAS.valentina.base} 90%)`,
+              color: COLORS.dark,
+              boxShadow: "0 2px 14px rgba(var(--gold-rgb), 0.35)",
+            }}
+          >
+            <Icon icon="solar:chat-round-line-bold-duotone" className="text-sm" />
+            Enter
+          </button>
+        )}
+
+        {chat.status === "ENDED" && (
+          <button
+            onClick={onEnter}
+            className="px-4 py-2 rounded-xl border transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-1.5"
+            style={{
+              backgroundColor: `${COLORS.neutralWhite}06`,
+              borderColor: "rgba(var(--gold-rgb), 0.22)",
+              color: COLORS.neutralGray,
+            }}
+          >
+            <Icon icon="solar:eye-bold-duotone" className="text-sm" />
+            History
+          </button>
+        )}
       </div>
     </div>
   );

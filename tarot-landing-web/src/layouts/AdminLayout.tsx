@@ -67,6 +67,25 @@ const COCKPIT_NET_FALLBACK = {
   background: `radial-gradient(circle at 70% 30%, ${PERSONAS.sabri.base}30 0%, ${COLORS.dark} 65%)`,
 };
 
+// Sessions-list (queue) background: the same sparse NET, recolored out of Sabri's
+// purple into the Valentina crimson — the list isn't tied to a persona, so it
+// carries the primary crimson-gold brand family instead. Same calm tuning.
+const QUEUE_NET_OPTIONS = {
+  mouseControls: false,
+  touchControls: false,
+  gyroControls: false,
+  color: hexNum(PERSONAS.valentina.base),      // #C1443A crimson
+  backgroundColor: hexNum(COLORS.dark),        // #0D1117 dark base
+  points: 6,                                   // demo: 10
+  spacing: 22,                                 // demo: 15
+  maxDistance: 19,                             // demo: 20
+  showDots: true,
+};
+
+const QUEUE_NET_FALLBACK = {
+  background: `radial-gradient(circle at 30% 20%, ${PERSONAS.valentina.base}28 0%, transparent 55%), radial-gradient(circle at 80% 70%, ${COLORS.starGold}14 0%, transparent 60%), ${COLORS.dark}`,
+};
+
 // Human mode: no AI is active — no effect at all, just the same-palette gradient
 // dimmed to read calm and quiet ("you are fully in control").
 const COCKPIT_HUMAN_STYLE = {
@@ -80,26 +99,30 @@ export default function AdminLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
   // Reply mode of the open cockpit conversation (set by the session views via
-  // CockpitModeContext); null = no conversation open → default to the Hybrid look.
+  // CockpitModeContext); null = no conversation open → the sessions-list (queue)
+  // look: crimson NET. CSS accent variables still fall back to the Hybrid set —
+  // the queue's oracle styling is built on the same crimson-gold family.
   const [cockpitMode, setCockpitMode] = useState<CockpitMode | null>(null);
   const activeMode: CockpitMode = cockpitMode ?? "HYBRID";
+  type BgMode = CockpitMode | "QUEUE";
+  const activeBg: BgMode = cockpitMode ?? "QUEUE";
 
   // Mode switches fade the background through a brief dark hold, then mount the
   // new effect — deliberately NOT a dual-canvas crossfade: two live WebGL effects
   // overlapping is a real perf risk (Halo alone is expensive), and unmounting
   // first keeps the one-canvas-at-a-time + .destroy() discipline intact.
-  const [renderedMode, setRenderedMode] = useState<CockpitMode>(activeMode);
+  const [renderedMode, setRenderedMode] = useState<BgMode>(activeBg);
   const [bgVisible, setBgVisible] = useState(true);
   useEffect(() => {
-    if (renderedMode === activeMode) return;
+    if (renderedMode === activeBg) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate: starts the fade-out leg of the mode transition; the swap happens in the timeout
     setBgVisible(false);
     const t = setTimeout(() => {
-      setRenderedMode(activeMode);
+      setRenderedMode(activeBg);
       setBgVisible(true);
     }, MODE_FADE_MS);
     return () => clearTimeout(t);
-  }, [activeMode, renderedMode]);
+  }, [activeBg, renderedMode]);
 
   // Show sidebar for all /admin routes
   const showSidebar = location.pathname.startsWith('/admin');
@@ -145,7 +168,8 @@ export default function AdminLayout() {
             navigation between the two) so the drift never restarts per navigation;
             leaving /admin/chats — or switching mode — unmounts and destroys it.
             HYBRID: Clouds2 (Valentina). SABRI: Net (royal purple, sparse).
-            HUMAN: no effect, dimmed static gradient. */}
+            HUMAN: no effect, dimmed static gradient.
+            QUEUE (no conversation open — the sessions list): Net, crimson. */}
         {location.pathname.startsWith("/admin/chats") && (
           <div
             className="absolute inset-0 z-0 pointer-events-none mode-fade"
@@ -171,6 +195,15 @@ export default function AdminLayout() {
             )}
             {renderedMode === "HUMAN" && (
               <div className="absolute inset-0" style={COCKPIT_HUMAN_STYLE} />
+            )}
+            {renderedMode === "QUEUE" && (
+              <VantaBackground
+                effect={NET}
+                options={QUEUE_NET_OPTIONS}
+                className="absolute inset-0"
+                fallbackStyle={QUEUE_NET_FALLBACK}
+                debugLabel="net-queue"
+              />
             )}
           </div>
         )}
