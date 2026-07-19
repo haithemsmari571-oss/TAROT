@@ -33,18 +33,18 @@
   border-radius: 1.25rem;
   background: linear-gradient(
     168deg,
-    rgba(var(--valentina-backdrop-rgb), 0.5) 0%,
+    rgba(var(--oracle-backdrop-rgb), 0.5) 0%,
     rgba(var(--glass-surface-rgb), 0.42) 48%,
-    rgba(var(--valentina-backdrop-rgb), 0.46) 100%
+    rgba(var(--oracle-backdrop-rgb), 0.46) 100%
   );
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   box-shadow:
-    0 0 0 1px rgba(var(--gold-rgb), 0.38),
+    0 0 0 1px rgba(var(--oracle-rgb), 0.38),
     0 10px 48px rgba(0, 0, 0, 0.5),
     0 0 46px rgba(var(--valentina-rgb), 0.28),
     inset 0 0 70px rgba(var(--valentina-rgb), 0.08),
-    inset 0 1px 0 rgba(var(--gold-rgb), 0.28);
+    inset 0 1px 0 rgba(var(--oracle-rgb), 0.28);
 }
 /* Corner ornaments — four gold L-brackets (two pseudos on the card, two on the
    .oracle-corners child). */
@@ -56,7 +56,7 @@
   position: absolute;
   width: 16px;
   height: 16px;
-  border-color: rgba(var(--gold-rgb), 0.8);
+  border-color: rgba(var(--oracle-rgb), 0.8);
   border-style: solid;
   pointer-events: none;
 }
@@ -72,9 +72,9 @@
   letter-spacing: 0.01em;
   background: linear-gradient(
     100deg,
-    rgba(var(--gold-rgb), 1) 0%,
+    rgba(var(--oracle-rgb), 1) 0%,
     rgba(var(--lavender-rgb), 0.95) 55%,
-    rgba(var(--gold-rgb), 1) 100%
+    rgba(var(--oracle-rgb), 1) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -87,7 +87,7 @@
   border: none;
   outline: none;
   resize: none;
-  caret-color: rgb(var(--gold-rgb));
+  caret-color: rgb(var(--oracle-rgb));
   color: rgba(var(--glass-white-rgb), 0.94);
   font-size: 16px;
   line-height: 1.8;
@@ -102,15 +102,15 @@
   border-radius: 0.9rem;
   background: linear-gradient(
     160deg,
-    rgba(var(--valentina-backdrop-rgb), 0.42) 0%,
+    rgba(var(--oracle-backdrop-rgb), 0.42) 0%,
     rgba(var(--glass-surface-rgb), 0.38) 100%
   );
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(var(--gold-rgb), 0.28);
+  border: 1px solid rgba(var(--oracle-rgb), 0.28);
   box-shadow:
     0 4px 18px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(var(--gold-rgb), 0.16);
+    inset 0 1px 0 rgba(var(--oracle-rgb), 0.16);
 }
 
 /* Section label in the oracle voice: gold small caps, wide tracking. */
@@ -119,21 +119,21 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  color: rgba(var(--gold-rgb), 0.8);
+  color: rgba(var(--oracle-rgb), 0.8);
 }
 
 /* Numeric readouts (timer, charges, balance) in the display face, gold. */
 .oracle-figure {
   font-family: "Bricolage Grotesque", sans-serif;
   font-weight: 800;
-  color: rgb(var(--gold-rgb));
+  color: rgb(var(--oracle-rgb));
   font-variant-numeric: tabular-nums;
 }
 
 /* Gold hairline divider. */
 .oracle-hairline {
   height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(var(--gold-rgb), 0.5) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(var(--oracle-rgb), 0.5) 50%, transparent 100%);
 }
 
 /* The conversation floats directly over the Vanta layer — no card box; the

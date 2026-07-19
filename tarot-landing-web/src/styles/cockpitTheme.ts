@@ -32,6 +32,14 @@ export const COCKPIT_CSS_VARS: Record<string, string> = {
   "--success-rgb": rgb(COLORS.success),
   // Oracle-card motif (Valentina's draft console): gold + crimson on warm dark.
   "--gold-rgb": rgb(COLORS.starGold),
+  // Oracle-material accent — what .oracle-* primitives and session chrome are
+  // tinted with. Defaults to gold; MODE_THEME_VARS overrides it per reply mode
+  // (muted heather in Human, purple in Automatic). --gold-rgb stays literal
+  // gold for surfaces that are gold regardless of mode (the sessions list).
+  "--oracle-rgb": rgb(COLORS.starGold),
+  // Warm-dark base tint of oracle surfaces; per-mode override (neutral surface
+  // in Human — no persona warmth when no persona is active).
+  "--oracle-backdrop-rgb": rgb(PERSONAS.valentina.backdrop),
   "--valentina-rgb": rgb(PERSONAS.valentina.base),
   "--valentina-backdrop-rgb": rgb(PERSONAS.valentina.backdrop),
   "--lavender-rgb": rgb(COLORS.primaryLight),
@@ -48,6 +56,8 @@ export const MODE_THEME_VARS: Record<CockpitMode, Record<string, string>> = {
     "--mode-accent": COLORS.primary,
     "--mode-accent-rgb": rgb(COLORS.primary),
     "--mode-accent-soft-rgb": rgb(COLORS.secondary),
+    "--oracle-rgb": rgb(COLORS.humanQuiet),
+    "--oracle-backdrop-rgb": rgb(COLORS.surface),
   },
   HYBRID: {
     "--mode-accent": PERSONAS.valentina.base,
@@ -55,10 +65,16 @@ export const MODE_THEME_VARS: Record<CockpitMode, Record<string, string>> = {
     // Same hue, darkened — a purple far-stop made tall bubbles drift
     // crimson->purple down the thread (looked accidental, was accidental).
     "--mode-accent-soft-rgb": rgb(PERSONAS.valentina.deep),
+    "--oracle-rgb": rgb(COLORS.starGold),
+    "--oracle-backdrop-rgb": rgb(PERSONAS.valentina.backdrop),
   },
   SABRI: {
     "--mode-accent": COLORS.primaryDark,
     "--mode-accent-rgb": rgb(COLORS.primaryDark),
     "--mode-accent-soft-rgb": rgb(COLORS.secondary),
+    // Task 2 flips this to the readable mid-purple; gold until then so the
+    // Automatic screen doesn't half-change under Task 1's commit.
+    "--oracle-rgb": rgb(COLORS.starGold),
+    "--oracle-backdrop-rgb": rgb(PERSONAS.valentina.backdrop),
   },
 };

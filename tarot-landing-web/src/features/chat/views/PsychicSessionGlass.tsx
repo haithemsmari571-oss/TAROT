@@ -1047,8 +1047,8 @@ const PsychicSessionGlass = () => {
                     <div
                       className="flex items-center gap-2 px-3 py-1 rounded-full border"
                       style={{
-                        backgroundColor: "rgba(var(--gold-rgb), 0.08)",
-                        borderColor: "rgba(var(--gold-rgb), 0.3)",
+                        backgroundColor: "rgba(var(--oracle-rgb), 0.08)",
+                        borderColor: "rgba(var(--oracle-rgb), 0.3)",
                       }}
                     >
                       <div
@@ -1097,7 +1097,7 @@ const PsychicSessionGlass = () => {
 
             {/* Search Bar — oracle glass, gold hairline that brightens on focus */}
             <div className="relative mb-6">
-              <Icon icon="solar:magnifer-linear" className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "rgba(var(--gold-rgb), 0.6)" }} />
+              <Icon icon="solar:magnifer-linear" className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "rgba(var(--oracle-rgb), 0.6)" }} />
               <input
                 type="text"
                 placeholder="Search by client or reader..."
@@ -1106,16 +1106,16 @@ const PsychicSessionGlass = () => {
                 className="w-full px-12 py-3.5 rounded-2xl text-sm outline-none transition-all backdrop-blur-xl border"
                 style={{
                   backgroundColor: `${COLORS.surface}B8`,
-                  borderColor: "rgba(var(--gold-rgb), 0.22)",
+                  borderColor: "rgba(var(--oracle-rgb), 0.22)",
                   color: COLORS.neutralWhite,
                   caretColor: COLORS.starGold,
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(var(--gold-rgb), 0.55)";
-                  e.currentTarget.style.boxShadow = "0 0 24px rgba(var(--gold-rgb), 0.12)";
+                  e.currentTarget.style.borderColor = "rgba(var(--oracle-rgb), 0.55)";
+                  e.currentTarget.style.boxShadow = "0 0 24px rgba(var(--oracle-rgb), 0.12)";
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(var(--gold-rgb), 0.22)";
+                  e.currentTarget.style.borderColor = "rgba(var(--oracle-rgb), 0.22)";
                   e.currentTarget.style.boxShadow = "none";
                 }}
               />
@@ -1135,7 +1135,7 @@ const PsychicSessionGlass = () => {
               className="relative mb-8 p-1.5 rounded-2xl backdrop-blur-xl border overflow-hidden"
               style={{
                 background: `linear-gradient(135deg, ${COLORS.surface}DD 0%, ${COLORS.surfaceAccent}AA 100%)`,
-                borderColor: "rgba(var(--gold-rgb), 0.16)",
+                borderColor: "rgba(var(--oracle-rgb), 0.16)",
                 boxShadow: `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}10`,
               }}
             >
@@ -1144,7 +1144,7 @@ const PsychicSessionGlass = () => {
                 className="absolute inset-0 opacity-50 blur-xl"
                 style={{
                   background: `radial-gradient(circle at ${tabs.findIndex((t) => t.key === activeTab) * 25 + 12.5
-                    }% 50%, rgba(var(--gold-rgb), 0.14) 0%, transparent 50%)`,
+                    }% 50%, rgba(var(--oracle-rgb), 0.14) 0%, transparent 50%)`,
                   transition: "all 0.3s ease",
                 }}
               />
@@ -1164,7 +1164,7 @@ const PsychicSessionGlass = () => {
                         activeTab === tab.key ? COLORS.dark : COLORS.neutralGray,
                       boxShadow:
                         activeTab === tab.key
-                          ? `0 4px 20px rgba(var(--gold-rgb), 0.35), inset 0 1px 0 ${COLORS.neutralWhite}20`
+                          ? `0 4px 20px rgba(var(--oracle-rgb), 0.35), inset 0 1px 0 ${COLORS.neutralWhite}20`
                           : "none",
                     }}
                   >
@@ -1185,14 +1185,14 @@ const PsychicSessionGlass = () => {
                           backgroundColor:
                             activeTab === tab.key
                               ? `${COLORS.dark}50`
-                              : "rgba(var(--gold-rgb), 0.14)",
+                              : "rgba(var(--oracle-rgb), 0.14)",
                           color:
                             activeTab === tab.key
                               ? COLORS.neutralWhite
                               : COLORS.starGold,
                           border: `1px solid ${activeTab === tab.key
                               ? `${COLORS.dark}70`
-                              : "rgba(var(--gold-rgb), 0.4)"
+                              : "rgba(var(--oracle-rgb), 0.4)"
                             }`,
                         }}
                       >
@@ -1243,7 +1243,7 @@ const PsychicSessionGlass = () => {
                 {filteredChats.map((chat, i) => (
                   <div
                     key={chat.id}
-                    style={i > 0 ? { borderTop: "1px solid rgba(var(--gold-rgb), 0.1)" } : undefined}
+                    style={i > 0 ? { borderTop: "1px solid rgba(var(--oracle-rgb), 0.1)" } : undefined}
                   >
                     <GlassChatListItem
                       chat={chat}
@@ -1289,7 +1289,7 @@ const PsychicSessionGlass = () => {
                         setSelectedChat(null);
                       }}
                       className="p-2.5 rounded-xl transition-all duration-300 group"
-                      style={{ color: COLORS.starGold, background: "rgba(var(--gold-rgb), 0.08)" }}
+                      style={{ color: "rgb(var(--oracle-rgb))", background: "rgba(var(--oracle-rgb), 0.08)" }}
                     >
                       <Icon
                         icon="solar:alt-arrow-left-bold"
@@ -1400,7 +1400,7 @@ const PsychicSessionGlass = () => {
                   className="mt-4 h-px"
                   style={{
                     background:
-                      "linear-gradient(90deg, rgba(var(--gold-rgb), 0.5) 0%, rgba(var(--gold-rgb), 0.12) 55%, transparent 100%)",
+                      "linear-gradient(90deg, rgba(var(--oracle-rgb), 0.5) 0%, rgba(var(--oracle-rgb), 0.12) 55%, transparent 100%)",
                   }}
                 />
 
@@ -1461,10 +1461,10 @@ const PsychicSessionGlass = () => {
                   {/* Frameless console row — no gold box; the switcher carries the
                       mode accent, the label stays a quiet gold whisper. */}
                   <div className="flex items-center gap-2.5">
-                    <Icon icon="mdi:shield-account" width={16} height={16} color={COLORS.starGold} />
+                    <Icon icon="mdi:shield-account" width={16} height={16} color="rgb(var(--oracle-rgb))" />
                     <span
                       className="text-[10px] font-bold uppercase tracking-[0.25em]"
-                      style={{ color: `${COLORS.starGold}CC` }}
+                      style={{ color: `rgba(var(--oracle-rgb), 0.80)` }}
                     >
                       Admin · as {currentChat.psychic_name || 'Psychic'}
                     </span>
@@ -1599,13 +1599,13 @@ const PsychicSessionGlass = () => {
                         onClick={handleLoadMoreMessages}
                         className="px-6 py-3 rounded-full border cursor-pointer transition-all duration-300"
                         style={{
-                          backgroundColor: "rgba(var(--gold-rgb), 0.10)",
-                          borderColor: "rgba(var(--gold-rgb), 0.4)",
+                          backgroundColor: "rgba(var(--oracle-rgb), 0.10)",
+                          borderColor: "rgba(var(--oracle-rgb), 0.4)",
                         }}
                       >
                         <p
                           className="text-[10px] font-black uppercase tracking-wider flex items-center gap-2"
-                          style={{ color: COLORS.starGold }}
+                          style={{ color: "rgb(var(--oracle-rgb))" }}
                         >
                           <Icon icon="solar:arrow-up-bold" className="text-sm" />
                           Load More Messages

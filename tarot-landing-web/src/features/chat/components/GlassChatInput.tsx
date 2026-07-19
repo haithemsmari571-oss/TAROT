@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { COLORS, PERSONAS } from "../../../theme";
+import { COLORS } from "../../../theme";
 
 interface GlassChatInputProps {
   value: string;
@@ -33,15 +33,15 @@ export const GlassChatInput: React.FC<GlassChatInputProps> = ({
   return (
     <motion.div
       animate={{
-        borderColor: isFocused ? `${COLORS.starGold}70` : `${COLORS.starGold}30`,
+        borderColor: isFocused ? `rgba(var(--oracle-rgb), 0.44)` : `rgba(var(--oracle-rgb), 0.19)`,
         boxShadow: isFocused
-          ? `0 0 40px ${COLORS.starGold}25, 0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.starGold}20`
+          ? `0 0 40px rgba(var(--oracle-rgb), 0.15), 0 8px 32px ${COLORS.dark}60, inset 0 1px 0 rgba(var(--oracle-rgb), 0.13)`
           : `0 8px 32px ${COLORS.dark}60, inset 0 1px 0 ${COLORS.neutralWhite}05`,
       }}
       transition={{ duration: 0.3 }}
       className="relative p-5 rounded-2xl backdrop-blur-xl border overflow-hidden"
       style={{
-        background: `linear-gradient(160deg, ${PERSONAS.valentina.backdrop}70 0%, ${COLORS.surface}66 100%)`,
+        background: `linear-gradient(160deg, rgba(var(--oracle-backdrop-rgb), 0.44) 0%, ${COLORS.surface}66 100%)`,
       }}
     >
       {/* Animated gradient background on focus */}
@@ -52,7 +52,7 @@ export const GlassChatInput: React.FC<GlassChatInputProps> = ({
         transition={{ duration: 0.3 }}
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${COLORS.starGold}0A 0%, transparent 70%)`,
+          background: `radial-gradient(circle at 50% 0%, rgba(var(--oracle-rgb), 0.04) 0%, transparent 70%)`,
         }}
       />
 
@@ -65,7 +65,7 @@ export const GlassChatInput: React.FC<GlassChatInputProps> = ({
         transition={{ duration: 0.4, ease: "easeOut" }}
         className="absolute top-0 left-0 right-0 h-0.5 origin-center"
         style={{
-          background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold} 50%, transparent 100%)`,
+          background: `linear-gradient(90deg, transparent 0%, rgb(var(--oracle-rgb)) 50%, transparent 100%)`,
         }}
       />
 
@@ -83,7 +83,7 @@ export const GlassChatInput: React.FC<GlassChatInputProps> = ({
           {/* Icon indicator */}
           <motion.div
             animate={{
-              color: isFocused ? COLORS.starGold : COLORS.neutralGray,
+              color: isFocused ? "rgb(var(--oracle-rgb))" : COLORS.neutralGray,
               scale: isFocused ? 1.1 : 1,
             }}
             transition={{ duration: 0.2 }}
@@ -148,7 +148,7 @@ export const GlassChatInput: React.FC<GlassChatInputProps> = ({
             disabled={!value.trim() || disabled}
             className="relative p-4 rounded-xl transition-all duration-300 disabled:cursor-not-allowed overflow-hidden group"
             style={{
-              background: value.trim() && !disabled ? `linear-gradient(100deg, ${COLORS.starGold} 0%, ${PERSONAS.valentina.base} 85%)` : `${COLORS.neutralGray}30`,
+              background: value.trim() && !disabled ? `linear-gradient(100deg, rgb(var(--oracle-rgb)) 0%, rgb(var(--mode-accent-rgb)) 85%)` : `${COLORS.neutralGray}30`,
               opacity: !value.trim() || disabled ? 0.4 : 1,
             }}
           >
@@ -173,9 +173,9 @@ export const GlassChatInput: React.FC<GlassChatInputProps> = ({
                 className="absolute inset-0 rounded-xl"
                 animate={{
                   boxShadow: [
-                    `0 0 20px ${COLORS.starGold}40`,
-                    `0 0 30px ${COLORS.starGold}55`,
-                    `0 0 20px ${COLORS.starGold}40`,
+                    `0 0 20px rgba(var(--oracle-rgb), 0.25)`,
+                    `0 0 30px rgba(var(--oracle-rgb), 0.33)`,
+                    `0 0 20px rgba(var(--oracle-rgb), 0.25)`,
                   ],
                 }}
                 transition={{ duration: 2, repeat: Infinity }}

@@ -10,8 +10,12 @@ export const COLORS = {
   surfaceAccent: "#21262D", 
 
   // UI Accents
-  secondary: "#8A63D2",     
-  starGold: "#F2AE40",      
+  secondary: "#8A63D2",
+  starGold: "#F2AE40",
+  // Human-mode oracle accent: desaturated heather-silver — the "no AI active,
+  // you are fully in control" quiet counterpart to gold (Hybrid) and purple
+  // (Automatic). Deliberately near-neutral, never a loud persona color.
+  humanQuiet: "#B3ACC6",
   
   neutralWhite: "#E6EDF3",  
   neutralGray: "#8B949E",   

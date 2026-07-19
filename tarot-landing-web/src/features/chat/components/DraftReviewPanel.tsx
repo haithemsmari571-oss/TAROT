@@ -177,7 +177,7 @@ export const DraftReviewPanel = ({
   const writingIndicator = (
     <span
       className="flex items-center gap-1.5 text-xs"
-      style={{ color: oracle ? COLORS.starGold : COLORS.secondary }}
+      style={{ color: oracle ? "rgb(var(--oracle-rgb))" : COLORS.secondary }}
     >
       <Icon icon="eos-icons:three-dots-loading" width={22} height={22} />
       Valentina is writing…
@@ -192,8 +192,8 @@ export const DraftReviewPanel = ({
       className="px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 flex items-center gap-1.5 border"
       style={{
         background: "transparent",
-        borderColor: oracle ? "rgba(var(--gold-rgb), 0.45)" : `${COLORS.secondary}50`,
-        color: oracle ? COLORS.starGold : COLORS.secondary,
+        borderColor: oracle ? "rgba(var(--oracle-rgb), 0.45)" : `${COLORS.secondary}50`,
+        color: oracle ? "rgb(var(--oracle-rgb))" : COLORS.secondary,
       }}
     >
       <Icon icon="mdi:autorenew" width={14} height={14} />
@@ -227,7 +227,7 @@ export const DraftReviewPanel = ({
         <div className="mb-4 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <Icon icon="mdi:crystal-ball" width={30} height={30} color={COLORS.starGold} className="shrink-0" />
+              <Icon icon="mdi:crystal-ball" width={30} height={30} color="rgb(var(--oracle-rgb))" className="shrink-0" />
               <div className="min-w-0">
                 <div className="text-oracle-title text-[26px] leading-none">Valentina</div>
                 <div
@@ -235,7 +235,7 @@ export const DraftReviewPanel = ({
                   style={{
                     color: currentDraft && !currentDraft.sabri_passed
                       ? COLORS.warning
-                      : `${COLORS.starGold}CC`,
+                      : `rgba(var(--oracle-rgb), 0.80)`,
                   }}
                 >
                   {currentDraft
@@ -255,7 +255,7 @@ export const DraftReviewPanel = ({
             className="mt-4 h-px"
             style={{
               background:
-                "linear-gradient(90deg, transparent 0%, rgba(var(--gold-rgb), 0.55) 50%, transparent 100%)",
+                "linear-gradient(90deg, transparent 0%, rgba(var(--oracle-rgb), 0.55) 50%, transparent 100%)",
             }}
           />
         </div>
@@ -326,13 +326,13 @@ export const DraftReviewPanel = ({
             disabled={currentIndex <= 0}
             title="Previous draft"
             className="px-1.5 py-1 rounded-lg transition-all disabled:opacity-30 border"
-            style={{ borderColor: "rgba(var(--gold-rgb), 0.35)", color: COLORS.starGold }}
+            style={{ borderColor: "rgba(var(--oracle-rgb), 0.35)", color: "rgb(var(--oracle-rgb))" }}
           >
             <Icon icon="mdi:chevron-left" width={15} height={15} />
           </button>
           <span
             className="text-[11px] font-bold uppercase tracking-[0.25em] tabular-nums"
-            style={{ color: `${COLORS.starGold}CC` }}
+            style={{ color: `rgba(var(--oracle-rgb), 0.80)` }}
           >
             Draft {currentIndex + 1} of {drafts.length}
           </span>
@@ -341,7 +341,7 @@ export const DraftReviewPanel = ({
             disabled={currentIndex >= drafts.length - 1}
             title="Next draft"
             className="px-1.5 py-1 rounded-lg transition-all disabled:opacity-30 border"
-            style={{ borderColor: "rgba(var(--gold-rgb), 0.35)", color: COLORS.starGold }}
+            style={{ borderColor: "rgba(var(--oracle-rgb), 0.35)", color: "rgb(var(--oracle-rgb))" }}
           >
             <Icon icon="mdi:chevron-right" width={15} height={15} />
           </button>
@@ -410,9 +410,9 @@ export const DraftReviewPanel = ({
                 disabled={!draftText.trim() || sendDraftMutation.isPending}
                 className="flex-1 px-5 py-3 rounded-xl text-sm font-black uppercase tracking-[0.15em] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 style={{
-                  background: `linear-gradient(100deg, ${COLORS.starGold} 0%, ${PERSONAS.valentina.base} 85%)`,
+                  background: `linear-gradient(100deg, rgb(var(--oracle-rgb)) 0%, rgb(var(--mode-accent-rgb)) 85%)`,
                   color: "#1A0D05",
-                  boxShadow: "0 0 26px rgba(var(--gold-rgb), 0.35), 0 4px 18px rgba(0,0,0,0.4)",
+                  boxShadow: "0 0 26px rgba(var(--oracle-rgb), 0.35), 0 4px 18px rgba(0,0,0,0.4)",
                 }}
               >
                 <Icon

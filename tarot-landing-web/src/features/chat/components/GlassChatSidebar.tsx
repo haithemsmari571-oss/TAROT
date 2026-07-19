@@ -149,7 +149,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
       <div
         className="absolute inset-0 opacity-5"
         style={{
-          backgroundImage: `radial-gradient(circle, ${COLORS.starGold} 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(circle, rgb(var(--oracle-rgb)) 1px, transparent 1px)`,
           backgroundSize: "24px 24px",
         }}
       />
@@ -158,7 +158,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
       <div
         className="absolute top-0 left-0 right-0 h-24 opacity-30 pointer-events-none"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${COLORS.starGold}30 0%, transparent 70%)`,
+          background: `radial-gradient(circle at 50% 0%, rgba(var(--oracle-rgb), 0.19) 0%, transparent 70%)`,
         }}
       />
 
@@ -186,7 +186,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
             <h3 className="text-base font-black text-white leading-tight truncate">{displayName}</h3>
             <p
               className="text-[10px] font-bold tracking-wide flex items-center gap-2"
-              style={{ color: clientDob ? COLORS.starGold : COLORS.neutralGray }}
+              style={{ color: clientDob ? "rgb(var(--oracle-rgb))" : COLORS.neutralGray }}
             >
               <span style={{ color: COLORS.neutralGray }}>#{chat.id}</span>
               <Icon icon="solar:calendar-bold-duotone" className="text-[10px]" />
@@ -206,18 +206,18 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           <div
             className="flex-1 h-px"
             style={{
-              background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
+              background: `linear-gradient(90deg, transparent 0%, rgba(var(--oracle-rgb), 0.33) 50%, transparent 100%)`,
             }}
           />
           <Icon
             icon="solar:star-bold"
             className="text-xs"
-            style={{ color: COLORS.starGold, opacity: 0.6 }}
+            style={{ color: "rgb(var(--oracle-rgb))", opacity: 0.6 }}
           />
           <div
             className="flex-1 h-px"
             style={{
-              background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
+              background: `linear-gradient(90deg, transparent 0%, rgba(var(--oracle-rgb), 0.33) 50%, transparent 100%)`,
             }}
           />
         </div>
@@ -371,7 +371,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
               <button
                 onClick={() => setShowSeconds(!showSeconds)}
                 className="px-2 py-0.5 rounded-lg border transition-all"
-                style={{ borderColor: "rgba(var(--gold-rgb), 0.25)" }}
+                style={{ borderColor: "rgba(var(--oracle-rgb), 0.25)" }}
               >
                 <span
                   className="text-[8px] font-black uppercase tracking-wider"
@@ -388,7 +388,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                   Session time
                 </div>
                 <div className="oracle-figure text-lg flex items-center gap-1.5">
-                  <Icon icon="solar:clock-circle-bold-duotone" className="text-sm shrink-0" style={{ color: COLORS.starGold }} />
+                  <Icon icon="solar:clock-circle-bold-duotone" className="text-sm shrink-0" style={{ color: "rgb(var(--oracle-rgb))" }} />
                   {formatTime(seconds, showSeconds)}
                 </div>
               </div>
@@ -398,7 +398,7 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
                   Charged so far
                 </div>
                 <div className="oracle-figure text-lg flex items-center gap-1.5">
-                  <Icon icon="solar:banknote-2-bold-duotone" className="text-sm shrink-0" style={{ color: COLORS.starGold }} />
+                  <Icon icon="solar:banknote-2-bold-duotone" className="text-sm shrink-0" style={{ color: "rgb(var(--oracle-rgb))" }} />
                   {formatCurrency(estimatedCost)}
                 </div>
               </div>
@@ -529,18 +529,18 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
               <div
                 className="flex-1 h-px"
                 style={{
-                  background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
+                  background: `linear-gradient(90deg, transparent 0%, rgba(var(--oracle-rgb), 0.33) 50%, transparent 100%)`,
                 }}
               />
               <Icon
                 icon="solar:star-bold"
                 className="text-xs"
-                style={{ color: COLORS.starGold, opacity: 0.6 }}
+                style={{ color: "rgb(var(--oracle-rgb))", opacity: 0.6 }}
               />
               <div
                 className="flex-1 h-px"
                 style={{
-                  background: `linear-gradient(90deg, transparent 0%, ${COLORS.starGold}55 50%, transparent 100%)`,
+                  background: `linear-gradient(90deg, transparent 0%, rgba(var(--oracle-rgb), 0.33) 50%, transparent 100%)`,
                 }}
               />
             </div>
