@@ -25,6 +25,9 @@ services:
       - "8000:8000"
     volumes:
       - ./TAROT-BACKEND:/app
+      # Second Brain client-records vault — mounted READ-ONLY (:ro): the
+      # backend only ever reads these files, and the mount enforces it.
+      - ../secondbrain/client-records:/vault/client-records:ro
     env_file:
       - ./TAROT-BACKEND/.env
     environment:
@@ -32,6 +35,9 @@ services:
       - MAIL_SERVER=mailpit
       - MAIL_PORT=1025
       - RELOAD=true
+      # Container-side path of the vault mount above. Only files behind a
+      # human-CONFIRMED client_record_mappings row are ever read.
+      - CLIENT_RECORDS_VAULT_DIR=/vault/client-records
     dns:
       - 8.8.8.8
       - 1.1.1.1
