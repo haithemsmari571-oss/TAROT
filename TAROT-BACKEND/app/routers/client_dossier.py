@@ -153,3 +153,100 @@ def edit_note(
         },
         status_code=200,
     )
+
+
+# ── Client-records vault mappings (Second Brain CRM, read-only) ──────────────
+# Review workflow for auto-proposed tarot-client → vault-file matches. Admins
+# only (not psychics): confirming a mapping feeds a long-term client archive
+# into draft generation, an operator-level trust decision. Only CONFIRMED rows
+# are ever read by the pipeline — PENDING/REJECTED are invisible to it.
+
+_MAPPING_ADMIN = (Role.ADMIN, Role.SUPERADMIN)
+
+
+def _mapping_out(m) -> dict:
+    return {
+        "id": m.id,
+        "user_id": m.user_id,
+        "vault_filename": m.vault_filename,
+        "vault_client_uid": m.vault_client_uid,
+        "vault_dob": m.vault_dob.isoformat() if m.vault_dob else None,
+        "dob_tier": m.dob_tier,
+        "match_method": m.match_method,
+        "match_score": m.match_score,
+        "status": m.status,
+        "reviewed_by": m.reviewed_by,
+        "reviewed_at": m.reviewed_at.isoformat() if m.reviewed_at else None,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
+
+
+@router.post("/client-record-mappings/scan")
+def scan_client_record_mappings(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run the auto-matcher over all client users; upsert PENDING proposals."""
+    if user.role not in _MAPPING_ADMIN:
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+    from app.services.client_record_matching import scan_and_propose
+
+    return JSONResponse(content=scan_and_propose(db), status_code=200)
+
+
+@router.get("/client-record-mappings")
+def list_client_record_mappings(
+    status: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List mapping proposals, optionally filtered by status (PENDING/...)."""
+    if user.role not in _MAPPING_ADMIN:
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+    from app.models.client_record_mapping import ClientRecordMapping
+
+    q = db.query(ClientRecordMapping).order_by(ClientRecordMapping.id)
+    if status:
+        q = q.filter(ClientRecordMapping.status == status.upper())
+    rows = q.all()
+    # username alongside each row so the reviewer can judge without a join
+    names = {
+        u.id: u.username
+        for u in db.query(User).filter(User.id.in_([m.user_id for m in rows])).all()
+    } if rows else {}
+    out = [{**_mapping_out(m), "username": names.get(m.user_id)} for m in rows]
+    return JSONResponse(content=out, status_code=200)
+
+
+@router.post("/client-record-mappings/{mapping_id}/confirm")
+def confirm_client_record_mapping(
+    mapping_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Human approval: this mapping becomes usable by draft generation."""
+    if user.role not in _MAPPING_ADMIN:
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+    from app.services.client_record_matching import review_mapping
+
+    row = review_mapping(db, mapping_id, confirm=True, reviewer_id=user.id)
+    if row is None:
+        return JSONResponse(content={"detail": "Mapping not found"}, status_code=404)
+    return JSONResponse(content=_mapping_out(row), status_code=200)
+
+
+@router.post("/client-record-mappings/{mapping_id}/reject")
+def reject_client_record_mapping(
+    mapping_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Human refusal: kept as REJECTED so the scanner never re-proposes it."""
+    if user.role not in _MAPPING_ADMIN:
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+    from app.services.client_record_matching import review_mapping
+
+    row = review_mapping(db, mapping_id, confirm=False, reviewer_id=user.id)
+    if row is None:
+        return JSONResponse(content={"detail": "Mapping not found"}, status_code=404)
+    return JSONResponse(content=_mapping_out(row), status_code=200)

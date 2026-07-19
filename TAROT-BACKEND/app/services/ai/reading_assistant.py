@@ -155,8 +155,17 @@ def build_client_file(db: Session, client_id: int) -> Optional[str]:
 
     Returns None for a brand-new client (no prior notes and not returning), so
     callers can flag is_first_session — matching the spec's "not found ->
-    client_file null". Loaded silently; never cited back to the client."""
+    client_file null". Loaded silently; never cited back to the client.
+
+    If the client has a human-CONFIRMED mapping to a Second Brain client-records
+    file, that record (size-capped) is appended additively — the dossier lines
+    above it are unchanged. No confirmed mapping (or the vault feature being
+    disabled) leaves the output byte-for-byte what it always was."""
     from app.services.client_dossier import get_client_dossier
+    from app.services.client_records_vault import load_confirmed_record_text
+
+    # Never raises; None unless a CONFIRMED mapping exists AND the file reads.
+    vault_text = load_confirmed_record_text(db, client_id)
 
     dossier = get_client_dossier(db, client_id)
     if not dossier:
@@ -166,8 +175,10 @@ def build_client_file(db: Session, client_id: int) -> Optional[str]:
     stats = dossier.get("stats", {})
     notes = dossier.get("notes", [])
 
-    # No prior notes and never returning => treat as a new client (no file).
-    if not notes and not stats.get("is_returning"):
+    # No prior notes and never returning => treat as a new client (no file) —
+    # unless a confirmed long-term record exists: then the client is known to
+    # the practice even if this platform account is fresh.
+    if not notes and not stats.get("is_returning") and not vault_text:
         return None
 
     parts = [
@@ -182,6 +193,13 @@ def build_client_file(db: Session, client_id: int) -> Optional[str]:
         for n in notes[:15]:
             tag = "[AI] " if n.get("source") == "AI_ATLAS" else ""
             parts.append(f"  - {tag}{n.get('title') or ''}: {n.get('note')}")
+    if vault_text:
+        parts.append("")
+        parts.append(
+            "LONG-TERM CLIENT RECORD (practice archive — same silent-scaffolding "
+            "rules as the rest of this file: never cite it, never repeat it back):"
+        )
+        parts.append(vault_text)
     return "\n".join(parts)
 
 

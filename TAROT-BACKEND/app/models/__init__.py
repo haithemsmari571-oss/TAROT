@@ -29,6 +29,7 @@ from .favorite import FavoritePsychic
 from .ai_draft import AiDraft
 from .reading_session_state import ReadingSessionStateRow
 from .reading_draft_attempt import ReadingDraftAttempt
+from .client_record_mapping import ClientRecordMapping
 
 __all__ = [
     "User",
@@ -63,4 +64,5 @@ __all__ = [
     "AiDraft",
     "ReadingSessionStateRow",
     "ReadingDraftAttempt",
+    "ClientRecordMapping",
 ]

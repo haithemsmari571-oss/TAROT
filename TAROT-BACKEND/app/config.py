@@ -164,6 +164,13 @@ class AppSettings(BaseSettings):
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512
+    # ── Second Brain client-records vault (READ-ONLY) ────────────────────────────
+    # Local folder of the CRM's client-records markdown files. Empty (the default,
+    # and the state in the Docker container) disables the feature entirely: no
+    # vault reads, drafting behaves exactly as before. Only files behind a
+    # human-CONFIRMED client_record_mappings row are ever read (never written).
+    # Host dev value: C:\Users\Haithem\Desktop\LAMMA\secondbrain\client-records
+    CLIENT_RECORDS_VAULT_DIR: str = ""
 
     # ── Delivery execution (typing simulation + pacing between messages) ──
     # Typing-indicator duration: ~ms per character, with ±randomness, clamped so
