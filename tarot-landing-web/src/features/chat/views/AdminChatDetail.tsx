@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { COLORS } from "../../../theme";
+import { COLORS, TYPOGRAPHY } from "../../../theme";
 import {
   getChatDetails,
   getChatMessages,
@@ -348,7 +348,7 @@ const AdminChatDetail = () => {
         className="relative z-10 px-8 py-6 backdrop-blur-xl border-b"
         style={{
           background: `linear-gradient(135deg, ${COLORS.surface}CC 0%, ${COLORS.surfaceAccent}99 100%)`,
-          borderColor: `${COLORS.neutralDarkGray}30`,
+          borderColor: "rgba(var(--oracle-rgb), 0.18)",
           boxShadow: `0 8px 32px ${COLORS.dark}60`,
         }}
       >
@@ -357,16 +357,21 @@ const AdminChatDetail = () => {
             onClick={() => navigate("/admin/chats")}
             className="p-3 rounded-xl transition-all hover:scale-110"
             style={{
-              background: `${COLORS.neutralDarkGray}50`,
-              border: `1px solid ${COLORS.neutralDarkGray}`,
+              background: "rgba(var(--oracle-rgb), 0.08)",
+              border: "1px solid rgba(var(--oracle-rgb), 0.25)",
             }}
           >
-            <Icon icon="mdi:arrow-left" width={24} height={24} color={COLORS.neutralWhite} />
+            <Icon icon="mdi:arrow-left" width={24} height={24} color="rgb(var(--oracle-rgb))" />
           </button>
 
           <div className="flex-1">
-            <h1 className="text-2xl font-black text-white uppercase tracking-tight">
-              {chatDetails.client.username} <span style={{ color: COLORS.primary }}>↔</span> {chatDetails.psychic.username}
+            {/* Editorial pair title — client in white, reader carries the oracle mark */}
+            <h1
+              className="text-2xl font-black text-white tracking-tight"
+              style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
+            >
+              {chatDetails.client.username}{" "}
+              <span className="text-oracle-title">✦ {chatDetails.psychic.username}</span>
             </h1>
             <div className="flex items-center gap-3 mt-2">
               <div
@@ -404,51 +409,38 @@ const AdminChatDetail = () => {
           {/* Session Stats - Only show if chat is ACTIVE and not paused */}
           {isChatActive && !isPaused && (
             <div className="flex items-center gap-6">
-              <div
-                className="px-6 py-3 rounded-2xl backdrop-blur-xl border"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.surface}80 0%, ${COLORS.surfaceAccent}60 100%)`,
-                  borderColor: `${COLORS.neutralDarkGray}40`,
-                }}
-              >
+              {/* Dense operational stats: compact oracle tiles, figures at
+                  text-lg — glanced at constantly, never hero display type. */}
+              <div className="oracle-tile px-4 py-2.5">
                 <div className="text-center">
-                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
+                  <div className="oracle-label">
                     Session Time
                   </div>
-                  <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.primary }}>
+                  <div className="oracle-figure text-lg tabular-nums mt-0.5">
                     {awaitingJoin ? "Waiting for client…" : formatTime(seconds)}
                   </div>
                 </div>
               </div>
 
-              <div
-                className="px-6 py-3 rounded-2xl backdrop-blur-xl border"
-                style={{
-                  background: `linear-gradient(135deg, ${COLORS.starGold}20 0%, ${COLORS.starGold}10 100%)`,
-                  borderColor: `${COLORS.starGold}30`,
-                }}
-              >
+              <div className="oracle-tile px-4 py-2.5">
                 <div className="text-center">
-                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
+                  <div className="oracle-label">
                     Est. Earnings
                   </div>
-                  <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.starGold }}>
+                  <div className="oracle-figure text-lg tabular-nums mt-0.5">
                     £{estimatedCost.toFixed(2)}
                   </div>
                 </div>
               </div>
 
               {/* Client balance — free welcome credit is spent before paid balance */}
-              <div
-                className="px-6 py-3 rounded-2xl backdrop-blur-xl border"
-                style={{ background: `${COLORS.primary}12`, borderColor: `${COLORS.primary}30` }}
-              >
+              <div className="oracle-tile px-4 py-2.5">
                 <div className="text-center">
-                  <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
+                  <div className="oracle-label">
                     Client Balance
                   </div>
-                  <div className="text-sm font-black tabular-nums mt-1 flex items-center gap-2 justify-center">
-                    <span style={{ color: COLORS.starGold }}>£{(sessionTimeData?.credit_balance ?? 0).toFixed(2)} credit</span>
+                  <div className="text-sm font-black tabular-nums mt-0.5 flex items-center gap-2 justify-center">
+                    <span style={{ color: "rgb(var(--oracle-rgb))" }}>£{(sessionTimeData?.credit_balance ?? 0).toFixed(2)} credit</span>
                     <span style={{ color: COLORS.neutralGray }}>·</span>
                     <span style={{ color: COLORS.neutralWhite }}>£{(sessionTimeData?.paid_balance ?? 0).toFixed(2)} paid</span>
                   </div>
@@ -459,7 +451,7 @@ const AdminChatDetail = () => {
                 <div className="text-xs" style={{ color: COLORS.neutralGray }}>
                   Rate
                 </div>
-                <div className="text-sm font-bold mt-1" style={{ color: COLORS.starGold }}>
+                <div className="text-sm font-bold mt-1" style={{ color: "rgb(var(--oracle-rgb))" }}>
                   {pricePerSecond.toFixed(4)} pts/sec
                 </div>
               </div>
@@ -501,7 +493,7 @@ const AdminChatDetail = () => {
                   <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
                     Paused at
                   </div>
-                  <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.warning }}>
+                  <div className="text-lg font-black tabular-nums mt-0.5" style={{ color: COLORS.warning }}>
                     {formatTime(seconds)}
                   </div>
                 </div>
@@ -510,15 +502,15 @@ const AdminChatDetail = () => {
               <div
                 className="px-6 py-3 rounded-2xl backdrop-blur-xl border"
                 style={{
-                  background: `linear-gradient(135deg, ${COLORS.starGold}20 0%, ${COLORS.starGold}10 100%)`,
-                  borderColor: `${COLORS.starGold}30`,
+                  background: `linear-gradient(135deg, rgba(var(--oracle-rgb), 0.13) 0%, rgba(var(--oracle-rgb), 0.06) 100%)`,
+                  borderColor: `rgba(var(--oracle-rgb), 0.19)`,
                 }}
               >
                 <div className="text-center">
                   <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
                     Est. Earnings (Paused)
                   </div>
-                  <div className="text-2xl font-black tabular-nums mt-1" style={{ color: COLORS.starGold }}>
+                  <div className="text-lg font-black tabular-nums mt-0.5" style={{ color: "rgb(var(--oracle-rgb))" }}>
                     £{estimatedCost.toFixed(2)}
                   </div>
                 </div>
@@ -561,7 +553,7 @@ const AdminChatDetail = () => {
           {!isChatActive && !isPaused && (
             <div className="text-right">
               <div className="text-sm" style={{ color: COLORS.neutralGray }}>
-                Rate: <span className="font-bold" style={{ color: COLORS.starGold }}>
+                Rate: <span className="font-bold" style={{ color: "rgb(var(--oracle-rgb))" }}>
                   {chatDetails.psychic.price_per_second} pts/sec
                 </span>
               </div>
@@ -576,13 +568,13 @@ const AdminChatDetail = () => {
         animate={{ opacity: 1, y: 0 }}
         className="relative z-10 px-8 py-4 backdrop-blur-xl border-b flex items-center justify-between gap-3"
         style={{
-          background: `linear-gradient(135deg, ${COLORS.starGold}20 0%, ${COLORS.starGold}10 100%)`,
-          borderColor: `${COLORS.starGold}30`,
+          background: `linear-gradient(135deg, rgba(var(--oracle-rgb), 0.13) 0%, rgba(var(--oracle-rgb), 0.06) 100%)`,
+          borderColor: `rgba(var(--oracle-rgb), 0.19)`,
         }}
       >
         <div className="flex items-center gap-3">
-          <Icon icon="mdi:shield-account" width={20} height={20} color={COLORS.starGold} />
-          <span className="text-sm font-bold" style={{ color: COLORS.starGold }}>
+          <Icon icon="mdi:shield-account" width={20} height={20} color="rgb(var(--oracle-rgb))" />
+          <span className="text-sm font-bold" style={{ color: "rgb(var(--oracle-rgb))" }}>
             Admin Mode: Sending messages as {chatDetails.psychic.username}
           </span>
         </div>
@@ -729,7 +721,7 @@ const AdminChatDetail = () => {
         className="relative px-8 py-6 backdrop-blur-xl border-t"
         style={{
           background: `linear-gradient(135deg, ${COLORS.surface}CC 0%, ${COLORS.surfaceAccent}99 100%)`,
-          borderColor: `${COLORS.neutralDarkGray}30`,
+          borderColor: "rgba(var(--oracle-rgb), 0.16)",
         }}
       >
         <div className="flex items-end gap-4">
@@ -742,10 +734,19 @@ const AdminChatDetail = () => {
             rows={2}
             className="flex-1 px-5 py-4 rounded-2xl backdrop-blur-xl border resize-none outline-none transition-all"
             style={{
-              background: `${COLORS.dark}80`,
-              borderColor: `${COLORS.neutralDarkGray}50`,
+              background: `linear-gradient(160deg, rgba(var(--oracle-backdrop-rgb), 0.44) 0%, ${COLORS.surface}66 100%)`,
+              borderColor: "rgba(var(--oracle-rgb), 0.22)",
               color: COLORS.neutralWhite,
+              caretColor: "rgb(var(--oracle-rgb))",
               opacity: !isConnected ? 0.5 : 1,
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = "rgba(var(--oracle-rgb), 0.5)";
+              e.currentTarget.style.boxShadow = "0 0 24px rgba(var(--oracle-rgb), 0.12)";
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = "rgba(var(--oracle-rgb), 0.22)";
+              e.currentTarget.style.boxShadow = "none";
             }}
           />
           <button
@@ -753,9 +754,9 @@ const AdminChatDetail = () => {
             disabled={!input.trim() || !isConnected}
             className="px-6 py-4 rounded-2xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
             style={{
-              background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-              color: COLORS.neutralWhite,
-              boxShadow: `0 4px 20px ${COLORS.primary}40`,
+              background: `linear-gradient(100deg, rgb(var(--oracle-rgb)) 0%, rgb(var(--mode-accent-rgb)) 85%)`,
+              color: COLORS.dark,
+              boxShadow: "0 4px 20px rgba(var(--oracle-rgb), 0.25)",
             }}
           >
             <Icon icon="mdi:send" width={24} height={24} />
@@ -776,6 +777,7 @@ const AdminChatDetail = () => {
               active={isChatActive}
               className="lg:flex-1 lg:min-h-0"
               fill
+              variant="oracle"
             />
           </aside>
         )}
