@@ -72,9 +72,10 @@ export const MODE_THEME_VARS: Record<CockpitMode, Record<string, string>> = {
     "--mode-accent": COLORS.primaryDark,
     "--mode-accent-rgb": rgb(COLORS.primaryDark),
     "--mode-accent-soft-rgb": rgb(COLORS.secondary),
-    // Task 2 flips this to the readable mid-purple; gold until then so the
-    // Automatic screen doesn't half-change under Task 1's commit.
-    "--oracle-rgb": rgb(COLORS.starGold),
-    "--oracle-backdrop-rgb": rgb(PERSONAS.valentina.backdrop),
+    // Sabri's oracle accent is the readable mid-purple (secondary), not the
+    // royal #5D3A9B — hairlines at low alpha and figure text need the lighter
+    // value to stay legible on dark glass. Identity purple stays on halo/net.
+    "--oracle-rgb": rgb(COLORS.secondary),
+    "--oracle-backdrop-rgb": rgb(PERSONAS.sabri.backdrop),
   },
 };
