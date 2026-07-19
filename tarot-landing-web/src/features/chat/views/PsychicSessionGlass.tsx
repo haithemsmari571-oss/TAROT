@@ -77,6 +77,13 @@ const PsychicSessionGlass = () => {
 
   const currentChat = chats.find((c) => c.id === selectedChat);
 
+  // user_name arrives as "client -> psychic" for admins, or just the client's
+  // name when the viewer IS the assigned psychic (then the reader is the viewer
+  // themselves). Never hardcode the reader — chats can belong to any reader.
+  const [chatClientName, pairReaderName] = (currentChat?.user_name || "").split(" -> ");
+  const readerName =
+    pairReaderName || (user?.role === "PSYCHIC" ? user?.username : null) || "Reader";
+
   // On entering a chat, fetch its details to get the client id + DOB (and, for
   // admins, the psychic_token for impersonation). Works for the assigned psychic
   // and admins/superadmins alike.
@@ -842,8 +849,10 @@ const PsychicSessionGlass = () => {
           new Date(a.created_at || a.timestamp || 0).getTime() -
           new Date(b.created_at || b.timestamp || 0).getTime()
       );
-      const psychicName = currentChat?.psychic_name || "Psychic";
-      const clientName = currentChat?.user_name || "Client";
+      // psychic_name is not in the list payload — derive from the pair label /
+      // viewer identity like the header does, never a hardcoded fallback persona.
+      const psychicName = readerName;
+      const clientName = chatClientName || "Client";
       const lines = msgs.map((m: any) => {
         const ts = m.created_at || m.timestamp;
         const t = ts ? new Date(ts).toLocaleString("en-GB") : "";
@@ -863,7 +872,7 @@ const PsychicSessionGlass = () => {
     } finally {
       setIsCopying(false);
     }
-  }, [selectedChat, currentChat?.psychic_name, currentChat?.user_name, currentChat?.psychic_id, toast]);
+  }, [selectedChat, readerName, chatClientName, currentChat?.psychic_id, toast]);
 
   // Manual pause/resume (psychic/admin). Pause reuses the backend's existing
   // pause_session via /pause (no top-up flow); resume reuses /resume.
@@ -1268,7 +1277,7 @@ const PsychicSessionGlass = () => {
                 className="mb-4 relative"
               >
                 {/* Frameless editorial header: no card box — the reading floats on
-                    the clouds. Client ✦ Valentina in display type, controls as
+                    the clouds. Client ✦ reader in display type, controls as
                     quiet ghosts, a single gold hairline underneath. */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -1295,9 +1304,9 @@ const PsychicSessionGlass = () => {
                           style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
                         >
                           {/* user_name can be the "client -> psychic" pair label — show
-                              the client alone; Valentina gets her own gold mark. */}
-                          {(currentChat?.user_name || "Chat Session").split(" -> ")[0]}{" "}
-                          <span className="text-oracle-title">✦ Valentina</span>
+                              the client alone; the reader gets the gold mark. */}
+                          {chatClientName || "Chat Session"}{" "}
+                          <span className="text-oracle-title">✦ {readerName}</span>
                         </h2>
                         <div className="flex items-center gap-2 mt-1.5">
                           <p
