@@ -77,6 +77,25 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
     return formatGbp(amount);
   };
 
+  // A client with a large stardust balance legitimately holds thousands of
+  // prepaid minutes; raw values ("9615383 min", "160256:22:13") don't fit a
+  // compact tile. Roll up to the largest unit that reads at a glance.
+  const formatCompactMinutes = (mins: number) => {
+    if (isNaN(mins) || mins < 0) return "0 min";
+    if (mins < 120) return `${Math.floor(mins)} min`;
+    const hours = mins / 60;
+    if (hours < 48) return `${Math.round(hours)} hrs`;
+    return `${Math.round(hours / 24).toLocaleString("en-GB")} days`;
+  };
+
+  const formatRemainingTime = (totalSeconds: number, includeSeconds: boolean) => {
+    const hours = totalSeconds / 3600;
+    if (hours < 48) return formatTime(totalSeconds, includeSeconds);
+    const days = hours / 24;
+    if (days < 100) return `${Math.floor(days)}d ${Math.floor(hours % 24)}h`;
+    return `${Math.round(days).toLocaleString("en-GB")} days`;
+  };
+
   const displayName = chat.user_name || "Unknown User";
 
   const getStatusColor = (status: string) => {
@@ -336,215 +355,112 @@ export const GlassChatSidebar: React.FC<GlassChatSidebarProps> = ({
           </motion.div>
         )}
 
-        {/* Session Time & Earnings — only once the client has joined (billing). */}
+        {/* Session vitals — dense operational readouts the operator glances at
+            constantly: a 2-up grid of compact tiles, figures at text-lg. Display
+            drama stays reserved for identity moments (the Valentina title);
+            working data is information-dense. */}
         {isBillingLive && (
-          <>
-            {/* Minutes remaining (per-minute prepaid) */}
-            {typeof remainingMinutes === "number" && (
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.28 }}
+          <motion.div
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <p className="oracle-label">Session vitals</p>
+              <button
+                onClick={() => setShowSeconds(!showSeconds)}
+                className="px-2 py-0.5 rounded-lg border transition-all"
+                style={{ borderColor: "rgba(var(--gold-rgb), 0.25)" }}
               >
-                <p
-                  className="oracle-label mb-3"
+                <span
+                  className="text-[8px] font-black uppercase tracking-wider"
+                  style={{ color: COLORS.neutralGray }}
                 >
-                  Minutes Remaining
-                </p>
-                <div
-                  className="oracle-tile px-5 py-3 text-center"
-                  
-                >
-                  <span className="oracle-figure text-2xl">
-                    {Math.max(0, remainingMinutes)} min
-                  </span>
+                  {showSeconds ? "HH:MM" : "HH:MM:SS"}
+                </span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="oracle-tile px-3 py-2.5">
+                <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">
+                  Session time
                 </div>
-              </motion.div>
-            )}
-
-            {/* Session Time Card */}
-            <motion.div
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <p
-                  className="oracle-label"
-                >
-                  Session Time
-                </p>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowSeconds(!showSeconds)}
-                  className="px-2.5 py-1 rounded-lg transition-all duration-300 border"
-                  style={{
-                                      }}
-                >
-                  <span
-                    className="text-[8px] font-black uppercase tracking-wider"
-                    style={{ color: COLORS.neutralGray }}
-                  >
-                    {showSeconds ? "HH:MM" : "HH:MM:SS"}
-                  </span>
-                </motion.button>
-              </div>
-              
-              <div
-                className="oracle-tile px-5 py-4 text-center relative overflow-hidden"
-                style={{
-                                    boxShadow: `inset 0 2px 10px ${COLORS.dark}40`,
-                }}
-              >
-                {/* Subtle animated gradient */}
-                <motion.div
-                  animate={{
-                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-                  }}
-                  transition={{ duration: 5, repeat: Infinity }}
-                  className="absolute inset-0 opacity-10"
-                  style={{
-                    background: `linear-gradient(90deg, transparent 0%, ${COLORS.primary}60 50%, transparent 100%)`,
-                    backgroundSize: "200% 100%",
-                  }}
-                />
-
-                <div className="flex items-center justify-center gap-3 relative z-10">
-                  <Icon
-                    icon="solar:clock-circle-bold-duotone"
-                    className="text-2xl"
-                    style={{ color: COLORS.primary }}
-                  />
-                  <span
-                    className="oracle-figure text-3xl"
-                  >
-                    {formatTime(seconds, showSeconds)}
-                  </span>
+                <div className="oracle-figure text-lg flex items-center gap-1.5">
+                  <Icon icon="solar:clock-circle-bold-duotone" className="text-sm shrink-0" style={{ color: COLORS.starGold }} />
+                  {formatTime(seconds, showSeconds)}
                 </div>
               </div>
-            </motion.div>
 
-            {/* Estimated Earnings Card */}
-            <motion.div
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              <p
-                className="oracle-label mb-3"
-              >
-                Charged so far · what the client pays
-              </p>
-              <div
-                className="oracle-tile px-5 py-4 text-center relative overflow-hidden"
-                style={{
-                  
-                  
-                  boxShadow: `0 0 25px ${COLORS.starGold}15`,
-                }}
-              >
-                {/* Shimmer effect */}
-                <motion.div
-                  animate={{
-                    x: ["-100%", "100%"],
-                  }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 opacity-20"
-                  style={{
-                    background: `linear-gradient(90deg, transparent 0%, ${COLORS.neutralWhite}60 50%, transparent 100%)`,
-                    width: "50%",
-                  }}
-                />
-
-                <div className="flex items-center justify-center gap-3 relative z-10">
-                  <Icon
-                    icon="solar:banknote-2-bold-duotone"
-                    className="text-2xl"
-                    style={{ color: COLORS.starGold }}
-                  />
-                  <span
-                    className="oracle-figure text-3xl"
-                  >
-                    {formatCurrency(estimatedCost)}
-                  </span>
+              <div className="oracle-tile px-3 py-2.5" title="What the client pays — client spend only">
+                <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">
+                  Charged so far
+                </div>
+                <div className="oracle-figure text-lg flex items-center gap-1.5">
+                  <Icon icon="solar:banknote-2-bold-duotone" className="text-sm shrink-0" style={{ color: COLORS.starGold }} />
+                  {formatCurrency(estimatedCost)}
                 </div>
               </div>
-            </motion.div>
 
-            {/* Client Remaining Time Card */}
-            {remainingSeconds !== null && remainingSeconds !== undefined && remainingSeconds > 0 && (
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.45 }}
-              >
-                <p
-                  className="oracle-label mb-3"
-                >
-                  Client Time Remaining
-                </p>
-                <div
-                  className="oracle-tile px-5 py-4 text-center relative overflow-hidden"
-                  style={{
-                    backgroundColor: showCriticalWarning 
-                      ? `rgba(239, 68, 68, 0.2)` 
-                      : showLowBalanceWarning 
-                        ? `rgba(251, 146, 60, 0.15)` 
-                        : `${COLORS.neutralWhite}08`,
-                    borderColor: showCriticalWarning 
-                      ? `rgba(239, 68, 68, 0.5)` 
-                      : showLowBalanceWarning 
-                        ? `rgba(251, 146, 60, 0.4)` 
-                        : `${COLORS.neutralWhite}15`,
-                    boxShadow: showCriticalWarning 
-                      ? `0 0 30px rgba(239, 68, 68, 0.3), inset 0 2px 10px ${COLORS.dark}40`
-                      : showLowBalanceWarning 
-                        ? `0 0 25px rgba(251, 146, 60, 0.2), inset 0 2px 10px ${COLORS.dark}40`
-                        : `inset 0 2px 10px ${COLORS.dark}40`,
-                  }}
-                >
-                  <div className="flex items-center justify-center gap-3 relative z-10">
-                    <Icon
-                      icon="solar:hourglass-bold-duotone"
-                      className="text-2xl"
-                      style={{ 
-                        color: showCriticalWarning 
-                          ? '#EF4444' 
-                          : showLowBalanceWarning 
-                            ? '#FB923C' 
-                            : COLORS.primary 
-                      }}
-                    />
-                    <span
-                      className="oracle-figure text-3xl"
-                      style={{ 
-                        color: showCriticalWarning 
-                          ? '#EF4444' 
-                          : showLowBalanceWarning 
-                            ? '#FB923C' 
-                            : COLORS.starGold 
-                      }}
-                    >
-                      {formatTime(Math.max(0, Math.floor(remainingSeconds)), showSeconds)}
-                    </span>
+              {typeof remainingMinutes === "number" && (
+                <div className="oracle-tile px-3 py-2.5">
+                  <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">
+                    Minutes left
                   </div>
-                  
+                  <div className="oracle-figure text-lg">{formatCompactMinutes(Math.max(0, remainingMinutes))}</div>
+                </div>
+              )}
+
+              {remainingSeconds !== null && remainingSeconds !== undefined && remainingSeconds > 0 && (
+                <div
+                  className="oracle-tile px-3 py-2.5"
+                  style={
+                    showCriticalWarning
+                      ? {
+                          backgroundColor: "rgba(239, 68, 68, 0.2)",
+                          borderColor: "rgba(239, 68, 68, 0.5)",
+                          boxShadow: "0 0 30px rgba(239, 68, 68, 0.3)",
+                        }
+                      : showLowBalanceWarning
+                        ? {
+                            backgroundColor: "rgba(251, 146, 60, 0.15)",
+                            borderColor: "rgba(251, 146, 60, 0.4)",
+                            boxShadow: "0 0 25px rgba(251, 146, 60, 0.2)",
+                          }
+                        : undefined
+                  }
+                >
+                  <div className="text-[8px] font-bold uppercase tracking-wider text-white/40 mb-0.5">
+                    Client time left
+                  </div>
+                  <div
+                    className="oracle-figure text-lg flex items-center gap-1.5"
+                    style={
+                      showCriticalWarning
+                        ? { color: "#EF4444" }
+                        : showLowBalanceWarning
+                          ? { color: "#FB923C" }
+                          : undefined
+                    }
+                  >
+                    <Icon icon="solar:hourglass-bold-duotone" className="text-sm shrink-0" />
+                    {formatRemainingTime(Math.max(0, Math.floor(remainingSeconds)), showSeconds)}
+                  </div>
                   {showCriticalWarning && (
-                    <p className="text-[9px] font-bold uppercase tracking-wider mt-2" style={{ color: '#EF4444' }}>
+                    <p className="text-[9px] font-bold uppercase tracking-wider mt-1" style={{ color: '#EF4444' }}>
                       🚨 Critical: &lt; 1 Minute
                     </p>
                   )}
                   {showLowBalanceWarning && !showCriticalWarning && (
-                    <p className="text-[9px] font-bold uppercase tracking-wider mt-2" style={{ color: '#FB923C' }}>
-                      ⚠️ Low Balance Warning
+                    <p className="text-[9px] font-bold uppercase tracking-wider mt-1" style={{ color: '#FB923C' }}>
+                      ⚠️ Low Balance
                     </p>
                   )}
                 </div>
-              </motion.div>
-            )}
-
-          </>
+              )}
+            </div>
+          </motion.div>
         )}
 
         {/* Balance + controls — shown whether awaiting join, billing, or in the
