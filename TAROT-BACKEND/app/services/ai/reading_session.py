@@ -40,6 +40,11 @@ class ReadingSessionState:
     client_response_lengths: List[int] = field(default_factory=list)  # chars per client msg
     client_response_times: List[float] = field(default_factory=list)  # reply latency, seconds
     sabri_correction_count: int = 0
+    # Commitments (openly named cards, timing windows) regex-extracted from
+    # DELIVERED turns only — never from discarded/regenerated drafts. Appended
+    # by reading_ledger.record_commitments, re-injected into Valentina's next
+    # turn so early-session commitments outlive the transcript window.
+    commitment_ledger: List[dict] = field(default_factory=list)
     # True while delivery is parked at a wait_for_response barrier — a reconnect
     # must NOT cross it; only a new client message (which re-plans) may.
     waiting_for_response: bool = False
@@ -163,6 +168,7 @@ def _state_to_row_fields(state: ReadingSessionState) -> dict:
         client_response_lengths=json.dumps(state.client_response_lengths or []),
         client_response_times=json.dumps(state.client_response_times or []),
         sabri_correction_count=state.sabri_correction_count,
+        commitment_ledger=json.dumps(state.commitment_ledger or []),
         waiting_for_response=state.waiting_for_response,
         session_start=state.session_start,
         last_activity_at=state.last_activity_at,
@@ -198,6 +204,7 @@ def _row_to_state(row) -> ReadingSessionState:
         client_response_lengths=json.loads(row.client_response_lengths or "[]"),
         client_response_times=json.loads(row.client_response_times or "[]"),
         sabri_correction_count=row.sabri_correction_count,
+        commitment_ledger=json.loads(getattr(row, "commitment_ledger", None) or "[]"),
         waiting_for_response=row.waiting_for_response,
         session_start=_naive_local(row.session_start),
         last_activity_at=_naive_local(row.last_activity_at),

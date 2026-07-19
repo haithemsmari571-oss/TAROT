@@ -22,7 +22,12 @@ from app.logging_config import get_logger
 from app.models.ai_draft import AiDraft
 from app.models.chat import Chat
 from app.models.user import User
-from app.schemas.reading_ai import DraftSend, ResponseModeUpdate, TypingUpdate
+from app.schemas.reading_ai import (
+    DraftSend,
+    ResponseModeUpdate,
+    SteeringNoteCreate,
+    TypingUpdate,
+)
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -255,6 +260,33 @@ async def send_draft(
 
     draft.status = AiDraftStatus.SENT
     db.commit()
+
+    # Memory: the APPROVED text (operator edits included) is delivered content,
+    # so record it on the engine's session state — Valentina's next turn must
+    # see what was actually said, exactly as Automatic reveals already do. Also
+    # advance the commitment ledger (cards/timing) — delivery is the only event
+    # that does; discarded or regenerated drafts never touch memory.
+    try:
+        from app.services.ai.reading_ledger import record_commitments
+        from app.services.ai.reading_session import (
+            get_session_store,
+            record_sent_message,
+        )
+
+        store = get_session_store()
+        # get_or_create, not get: a chat whose drafts only ever came from the
+        # manual "New reply" path has no persisted state yet (that path builds
+        # its state throwaway) — the first APPROVED delivery is exactly when
+        # durable engine memory should begin to exist.
+        state = store.get_or_create(
+            f"chat:{chat_id}", client_id=chat.user_id, chat_id=chat_id
+        )
+        record_sent_message(state, content)
+        record_commitments(state, content)
+        store.put(state)
+    except Exception:  # noqa: BLE001 — memory must never break a send
+        logger.exception("draft_send_memory_record_failed", chat_id=chat_id)
+
     logger.info("ai_draft_sent", chat_id=chat_id, draft_id=draft_id, by=user.id)
     return JSONResponse(
         content={"draft_id": draft_id, "message_id": message.id, "status": "SENT"},
@@ -287,3 +319,111 @@ def discard_draft(
         db.commit()
     logger.info("ai_draft_discarded", chat_id=chat_id, draft_id=draft_id, by=user.id)
     return JSONResponse(content={"draft_id": draft_id, "status": "DISCARDED"}, status_code=200)
+
+
+# ── Operator steering notes (Hybrid-only, session-scoped) ────────────────────
+# Guidance the operator leaves for Valentina's drafting. Bound to the chat's
+# CURRENT session (expires with it) and only ever retrieved while the chat is
+# in HYBRID mode — reading_steering.get_active_notes enforces both. Retired
+# notes are kept inactive as the audit trail.
+
+
+def _note_out(n) -> dict:
+    return {
+        "id": n.id,
+        "chat_id": n.chat_id,
+        "chat_session_id": n.chat_session_id,
+        "note": n.note,
+        "active": n.active,
+        "created_by": n.created_by,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+    }
+
+
+@router.get("/{chat_id}/steering-notes")
+def list_steering_notes(
+    chat_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Active notes of the chat's CURRENT session (chips in the cockpit)."""
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if not _authorize(user, chat):
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+
+    from app.models.reading_steering_note import ReadingSteeringNote
+    from app.services.ai.reading_steering import current_session
+
+    session = current_session(db, chat_id)
+    if session is None:
+        return JSONResponse(content=[], status_code=200)
+    rows = (
+        db.query(ReadingSteeringNote)
+        .filter(
+            ReadingSteeringNote.chat_id == chat_id,
+            ReadingSteeringNote.chat_session_id == session.id,
+            ReadingSteeringNote.active.is_(True),
+        )
+        .order_by(ReadingSteeringNote.id)
+        .all()
+    )
+    return JSONResponse(content=[_note_out(n) for n in rows], status_code=200)
+
+
+@router.post("/{chat_id}/steering-notes")
+def add_steering_note(
+    chat_id: int,
+    payload: SteeringNoteCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Leave guidance for Valentina's next drafts. HYBRID chats only; requires
+    a current session to bind to (notes are session-scoped by contract)."""
+    from app.enums.response_mode import ResponseMode
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if not _authorize(user, chat):
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+    if chat.response_mode != ResponseMode.HYBRID:
+        return JSONResponse(
+            content={"detail": "Steering notes are Hybrid-mode only"}, status_code=409
+        )
+    text = (payload.note or "").strip()
+    if not text:
+        return JSONResponse(content={"detail": "Empty note"}, status_code=400)
+
+    from app.services.ai.reading_steering import create_note
+
+    row = create_note(db, chat_id, text, created_by=user.id)
+    if row is None:
+        return JSONResponse(
+            content={"detail": "No active session to attach the note to"},
+            status_code=409,
+        )
+    return JSONResponse(content=_note_out(row), status_code=201)
+
+
+@router.post("/{chat_id}/steering-notes/{note_id}/retire")
+def retire_steering_note(
+    chat_id: int,
+    note_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """One-tap retire from the chips row (kept inactive as audit trail)."""
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if not _authorize(user, chat):
+        return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+
+    from app.services.ai.reading_steering import retire_note
+
+    row = retire_note(db, chat_id, note_id, retired_by=user.id)
+    if row is None:
+        return JSONResponse(content={"detail": "Note not found"}, status_code=404)
+    return JSONResponse(content=_note_out(row), status_code=200)

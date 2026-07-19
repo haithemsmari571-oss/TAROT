@@ -31,6 +31,11 @@ class ReadingSessionStateRow(Base):
     client_response_lengths: Mapped[str] = mapped_column(Text, default="[]", nullable=False)  # JSON
     client_response_times: Mapped[str] = mapped_column(Text, default="[]", nullable=False)  # JSON
     sabri_correction_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Regex-extracted commitments (named cards, timing windows) from DELIVERED
+    # turns only — see services/ai/reading_ledger.py. JSON list of dicts.
+    commitment_ledger: Mapped[str] = mapped_column(
+        Text, default="[]", server_default="[]", nullable=False
+    )
     waiting_for_response: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     session_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

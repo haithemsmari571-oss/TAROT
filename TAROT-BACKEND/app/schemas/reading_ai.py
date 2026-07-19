@@ -16,3 +16,7 @@ class DraftSend(BaseModel):
 
 class TypingUpdate(BaseModel):
     typing: bool
+
+
+class SteeringNoteCreate(BaseModel):
+    note: str

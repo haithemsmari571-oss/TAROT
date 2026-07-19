@@ -4,11 +4,14 @@ import { Icon } from "@iconify/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { COLORS, PERSONAS } from "../../../theme";
 import {
+  addSteeringNote,
   discardDraft,
   generateDraft,
   getChatDetails,
   getDraftGenerating,
   getPendingDrafts,
+  getSteeringNotes,
+  retireSteeringNote,
   sendDraft,
 } from "../api/chatApi";
 import { useToast } from "../../../components/Toast/useToast";
@@ -168,6 +171,38 @@ export const DraftReviewPanel = ({
       toast.error(apiErrorDetail(error) || "Failed to start a new draft");
     },
   });
+
+  // ── Operator steering notes (Hybrid-only, session-scoped) ──
+  // Guidance Valentina weighs on every following draft this session; chips show
+  // what's active, one tap retires. The backend refuses notes outside Hybrid
+  // and expires them with the session — the panel just reflects that.
+  const [noteText, setNoteText] = useState("");
+  const { data: steeringNotes } = useQuery({
+    queryKey: ["steeringNotes", chatId],
+    queryFn: () => getSteeringNotes(chatId),
+    enabled: !!chatId && active && isHybrid,
+    refetchInterval: 8000,
+  });
+  const addNoteMutation = useMutation({
+    mutationFn: (note: string) => addSteeringNote(chatId, note),
+    onSuccess: () => {
+      setNoteText("");
+      queryClient.invalidateQueries({ queryKey: ["steeringNotes", chatId] });
+    },
+    onError: (error: unknown) => {
+      toast.error(apiErrorDetail(error) || "Failed to save guidance");
+    },
+  });
+  const retireNoteMutation = useMutation({
+    mutationFn: (noteId: number) => retireSteeringNote(chatId, noteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["steeringNotes", chatId] });
+    },
+  });
+  const submitNote = () => {
+    const text = noteText.trim();
+    if (text && !addNoteMutation.isPending) addNoteMutation.mutate(text);
+  };
 
   // Nothing to show: no draft, nothing generating, and no manual entry point (non-Hybrid).
   if (!currentDraft && !generating && !(isHybrid && active)) return null;
@@ -463,6 +498,82 @@ export const DraftReviewPanel = ({
           {generating
             ? "A fresh draft is being written — it will appear here the moment it's ready."
             : "No draft pending. Use “New reply” to have Valentina draft a response to the client's latest message."}
+        </div>
+      )}
+
+      {/* Guidance for Valentina — Hybrid-only. Notes are session-scoped advisory
+          context ("shorter", "don't mention the ex") that she weighs on every
+          following draft; they expire when the session ends and never influence
+          Automatic mode. */}
+      {isHybrid && active && (
+        <div
+          className="mt-4 pt-3 shrink-0"
+          style={{
+            borderTop: oracle
+              ? "1px solid rgba(var(--oracle-rgb), 0.18)"
+              : `1px solid ${COLORS.neutralDarkGray}50`,
+          }}
+        >
+          <div
+            className="text-[10px] font-bold uppercase tracking-[0.18em] mb-2"
+            style={{ color: oracle ? "rgba(var(--oracle-rgb), 0.75)" : COLORS.neutralGray }}
+          >
+            Guidance for Valentina
+          </div>
+          {(steeringNotes?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {steeringNotes!.map((n) => (
+                <span
+                  key={n.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] leading-tight border"
+                  style={{
+                    borderColor: oracle
+                      ? "rgba(var(--oracle-rgb), 0.35)"
+                      : `${COLORS.secondary}50`,
+                    color: oracle ? "rgb(var(--oracle-rgb))" : COLORS.secondary,
+                    background: oracle ? "rgba(var(--oracle-rgb), 0.07)" : `${COLORS.secondary}12`,
+                  }}
+                >
+                  {n.note}
+                  <button
+                    onClick={() => retireNoteMutation.mutate(n.id)}
+                    title="Retire this guidance"
+                    className="opacity-60 hover:opacity-100 transition-opacity"
+                  >
+                    <Icon icon="mdi:close" width={12} height={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitNote()}
+              placeholder="e.g. keep it shorter · don't mention the ex"
+              className="flex-1 px-3 py-2 rounded-xl border outline-none text-[13px] bg-transparent"
+              style={{
+                borderColor: oracle
+                  ? "rgba(var(--oracle-rgb), 0.25)"
+                  : `${COLORS.neutralDarkGray}60`,
+                color: COLORS.neutralWhite,
+              }}
+            />
+            <button
+              onClick={submitNote}
+              disabled={!noteText.trim() || addNoteMutation.isPending}
+              title="Valentina weighs this on every following draft this session"
+              className="px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 border"
+              style={{
+                borderColor: oracle ? "rgba(var(--oracle-rgb), 0.45)" : `${COLORS.secondary}50`,
+                color: oracle ? "rgb(var(--oracle-rgb))" : COLORS.secondary,
+                background: "transparent",
+              }}
+            >
+              {addNoteMutation.isPending ? "Saving…" : "Add"}
+            </button>
+          </div>
         </div>
       )}
     </motion.div>

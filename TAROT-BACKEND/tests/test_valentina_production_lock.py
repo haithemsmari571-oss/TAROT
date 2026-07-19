@@ -9,15 +9,19 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
-    "app/config.py": "F0C26D8A27297A7F7A20D7FA57350F0AD75FA3D22260949B1BF7D75B7E64A274",
+    # Re-baselined for owner-directed website-repo work (NOT a Second Brain
+    # hash update): Phase 2 client-records vault merge touched config.py and
+    # reading_assistant.py; Phase 3 steering notes + commitment ledger touched
+    # reading_duo.py and reading_valentina.py.
+    "app/config.py": "8637E548DB99AD39EB48E2BF260C40058505F60FADD3366BFDC94926AA53BC99",
     "app/services/ai/client.py": "D623402DAD09D9F760D7E0EF740FC5EFF99DFB949A5DE314095E9C02BE4CB9CD",
     "app/services/ai/reading_pipeline.py": "CE051BD93273D51280E7FDB23DC9BDE5F48EA278AD8869FD89568A08CE93F50C",
-    "app/services/ai/reading_duo.py": "E971D1187E0560BABF8DD88D970A1D159A850C73486ED7814FFA6F8B40218C87",
-    "app/services/ai/reading_valentina.py": "CFA6E020E190B6692028725C8C25F8B8A112E13B051763EA5E0EF8047F829AC1",
+    "app/services/ai/reading_duo.py": "8CD7729FF6E2D14AF35071CE854D396EF413102B78A3EE28489185A16E56186C",
+    "app/services/ai/reading_valentina.py": "2C5FF2B308604B781CB385D088C755BB6BDB61A4158DD3309649E86A5C2257FA",
     "app/services/ai/reading_sabri.py": "C0BFF1AAC2681059ED4633210ACA2D0ED7A94E60D4FE3ED10F6B2E480FEE2E01",
     "app/services/ai/reading_reveal.py": "7B1C6CA75F480FA691D92FF194FA9F3ED16D3B3273B90E3B5B38A30348D21AAD",
     "app/services/ai/reading_reader.py": "3C5F0082FCF7284C949E3586CC1B5180F9D226F98426460BFAF95E81E882C396",
-    "app/services/ai/reading_assistant.py": "870A53FF7831C458C944C1A4CEA7FF9FB60A1555A22DCA60B9FBA6DAB76F7910",
+    "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",
     "app/services/ai/sabri_check.py": "7DEB9C5B38176A87BB57563BF70A9A58522FE1051E1163B72B8D75A106F10960",
     "app/services/client_dossier.py": "6EF712EB93AB666F63C69BE7DBA44833A03ADBE3A4BB02070351F3525AF905DB",
 }

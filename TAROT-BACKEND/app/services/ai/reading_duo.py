@@ -70,9 +70,19 @@ async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
 
     def _load_file_and_dob():
         with SessionLocal() as db:
-            return reading_assistant.build_client_file(db, user_id), get_client_dob(db, user_id)
+            # Steering notes are retrieved through reading_steering, which
+            # re-checks the chat's LIVE response mode and returns [] for
+            # anything but HYBRID — Automatic turns get zero note influence
+            # even when notes exist from earlier in the session.
+            from app.services.ai import reading_steering
 
-    client_file, dob = await asyncio.to_thread(_load_file_and_dob)
+            return (
+                reading_assistant.build_client_file(db, user_id),
+                get_client_dob(db, user_id),
+                reading_steering.get_active_notes(db, chat_id),
+            )
+
+    client_file, dob, steering_notes = await asyncio.to_thread(_load_file_and_dob)
     state.client_file = client_file
     now = datetime.now()
     valentina_input = reading_valentina.build_valentina_input(
@@ -82,6 +92,8 @@ async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
         session_metadata=compute_metadata(state, now),
         date_of_birth=dob,
         current_year=now.year,
+        steering_notes=steering_notes,
+        commitment_ledger=state.commitment_ledger,
     )
     text = await asyncio.to_thread(
         reading_valentina.write_valentina, valentina_input, client_message=message
@@ -161,6 +173,8 @@ async def _reveal_turn_duo(chat_id, bubbles, psychic_id, state):
     async def typing_fn(on: bool) -> None:
         await reading_executor.broadcast_typing(chat_id, on, psychic_id)
 
+    from app.services.ai.reading_ledger import record_commitments
+
     async def send_bubble(text: str) -> None:
         with SessionLocal() as db:
             chat = db.query(_Chat).filter(_Chat.id == chat_id).first()
@@ -170,6 +184,10 @@ async def _reveal_turn_duo(chat_id, bubbles, psychic_id, state):
                 )
             await broadcast_ai_message(db, chat, text)
         record_sent_message(state, text)
+        # Ledger advances ONLY on delivery, per bubble (not after the full
+        # reveal): a reveal cancelled mid-way has still DELIVERED its earlier
+        # bubbles, and their cards/timing must be remembered.
+        record_commitments(state, text)
 
     sent = await reading_executor.play_reveal_proportional(
         bubbles, send_bubble=send_bubble, typing_fn=typing_fn, sleep_fn=asyncio.sleep,
@@ -292,6 +310,10 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
             # delivery). On CONTINUE, shrink to what Sabri re-held; but if he released nothing
             # (a glue reply / fallback with no @@RESERVE@@), KEEP the prior reserve rather than
             # letting an un-echoed turn silently wipe all the banked content.
+            # TODO(phase-3 follow-up, deliberately NOT fixed here): the NEW-route replace
+            # also DISCARDS any prior undelivered reserve — Valentina content the client
+            # never saw vanishes silently. Known issue, separate task; do not widen this
+            # round's blast radius.
             if route == "new" or reserve.strip():
                 state.reserve = reserve
             store.put(state)

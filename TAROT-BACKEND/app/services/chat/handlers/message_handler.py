@@ -240,6 +240,30 @@ class MessageHandler(BaseEventHandler):
             message_id=db_message.id,
         )
 
+        # Memory: a manually-typed READER-side message (operator/psychic/admin)
+        # is delivered content — record it on the engine's session state so
+        # Valentina's next turn sees it, matching what Automatic reveals and
+        # approved-draft sends record. Only when a state already exists: chats
+        # the AI engine never touched don't grow engine state from human chat.
+        if user.id != chat.user_id:
+            try:
+                from app.services.ai.reading_ledger import record_commitments
+                from app.services.ai.reading_session import (
+                    get_session_store,
+                    record_sent_message,
+                )
+
+                store = get_session_store()
+                state = store.get(f"chat:{self.chat_id}")
+                if state is not None:
+                    record_sent_message(state, content)
+                    record_commitments(state, content)
+                    store.put(state)
+            except Exception:  # noqa: BLE001 — memory must never break a send
+                logger.exception(
+                    "manual_message_memory_record_failed", chat_id=self.chat_id
+                )
+
         # ── AI reading pipeline (Valentina drafts, Sabri checks) ───────────────
         # Only a CLIENT message on an ACTIVE reading triggers a reader reply. A HYBRID
         # chat (two_role engine) is intercepted FIRST: Sabri is skipped outright and

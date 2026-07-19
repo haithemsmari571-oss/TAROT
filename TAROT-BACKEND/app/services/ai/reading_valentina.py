@@ -131,11 +131,21 @@ def build_valentina_input(
     session_metadata,
     date_of_birth=None,
     current_year=None,
+    steering_notes=None,
+    commitment_ledger=None,
 ) -> str:
     """Assemble the single user-content payload for one Valentina turn: recent transcript,
     the client's message, the dossier (loaded silently), session metadata, and the injected
-    deterministic numerology. No held-back buffer — holding is Sabri's job now. Pure."""
+    deterministic numerology. No held-back buffer — holding is Sabri's job now. Pure.
+
+    ``steering_notes`` (operator guidance, HYBRID mode only — the caller passes [] in
+    Automatic, so the block is OMITTED there, not rendered empty) and
+    ``commitment_ledger`` (cards/timing already delivered this session) are Phase-3
+    memory: both blocks disappear entirely when there is nothing to say."""
     import json
+
+    from app.services.ai.reading_ledger import format_ledger_block
+    from app.services.ai.reading_steering import format_guidance_block
 
     parts = []
     tx = chat_transcript or []
@@ -145,6 +155,12 @@ def build_valentina_input(
             for m in tx[-_TRANSCRIPT_LIMIT:]
         ]
         parts.append("RECENT CONVERSATION:\n" + "\n".join(lines))
+    ledger_block = format_ledger_block(commitment_ledger)
+    if ledger_block:
+        parts.append(ledger_block)
+    guidance_block = format_guidance_block(steering_notes or [])
+    if guidance_block:
+        parts.append(guidance_block)
     parts.append(f"CLIENT MESSAGE:\n{client_message}")
     parts.append(
         "CLIENT FILE (load silently, never cite):\n" + (client_file or "(none — first session)")

@@ -314,6 +314,38 @@ export const generateDraft = async (chatId: number): Promise<void> => {
   await axiosClient.post(`/chat/${chatId}/drafts/generate`);
 };
 
+/** Operator steering notes — guidance Valentina weighs while drafting.
+ * Hybrid-only and scoped to the chat's current session (they expire with it). */
+export interface SteeringNote {
+  id: number;
+  chat_id: number;
+  chat_session_id: number;
+  note: string;
+  active: boolean;
+  created_by: number;
+  created_at: string | null;
+}
+
+export const getSteeringNotes = async (chatId: number): Promise<SteeringNote[]> => {
+  const response = await axiosClient.get(`/chat/${chatId}/steering-notes`);
+  return response.data;
+};
+
+export const addSteeringNote = async (
+  chatId: number,
+  note: string
+): Promise<SteeringNote> => {
+  const response = await axiosClient.post(`/chat/${chatId}/steering-notes`, { note });
+  return response.data;
+};
+
+export const retireSteeringNote = async (
+  chatId: number,
+  noteId: number
+): Promise<void> => {
+  await axiosClient.post(`/chat/${chatId}/steering-notes/${noteId}/retire`);
+};
+
 /** Broadcast the reader's typing state to the client (typing_start/typing_stop). */
 export const sendReaderTyping = async (chatId: number, typing: boolean): Promise<void> => {
   await axiosClient.put(`/chat/${chatId}/typing`, { typing });

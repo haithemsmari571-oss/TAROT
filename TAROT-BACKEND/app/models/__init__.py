@@ -30,6 +30,7 @@ from .ai_draft import AiDraft
 from .reading_session_state import ReadingSessionStateRow
 from .reading_draft_attempt import ReadingDraftAttempt
 from .client_record_mapping import ClientRecordMapping
+from .reading_steering_note import ReadingSteeringNote
 
 __all__ = [
     "User",
@@ -65,4 +66,5 @@ __all__ = [
     "ReadingSessionStateRow",
     "ReadingDraftAttempt",
     "ClientRecordMapping",
+    "ReadingSteeringNote",
 ]
