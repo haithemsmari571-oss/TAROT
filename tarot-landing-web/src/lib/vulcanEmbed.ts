@@ -16,11 +16,21 @@ const EMBED_ORIGIN =
   "http://127.0.0.1:4317";
 
 let active = false;
-let parentWindow: Window | null = null;
 let sequence = 0;
 
 export function isVulcanEmbedActive(): boolean {
   return active;
+}
+
+// The embedding CRM window. For a single-level iframe this is always
+// window.parent — more robust than relying on a message's event.source, which
+// some environments don't populate for cross-origin messages.
+function embedder(): Window | null {
+  try {
+    return typeof window !== "undefined" && window.parent && window.parent !== window ? window.parent : null;
+  } catch {
+    return null;
+  }
 }
 
 interface DestructiveRule {
@@ -64,8 +74,8 @@ export function classifyDestructive(
 }
 
 export function divertToVulcan(method: string, apiPath: string, body: unknown, reason: string): void {
-  if (!active || !parentWindow) return;
-  parentWindow.postMessage(
+  if (!active) return;
+  embedder()?.postMessage(
     {
       type: "vulcan:destructive",
       id: ++sequence,
@@ -86,8 +96,7 @@ export function initVulcanEmbed(): void {
     const data = event.data as { type?: string } | null;
     if (data?.type === "vulcan:activate") {
       active = true;
-      parentWindow = event.source as Window | null;
-      parentWindow?.postMessage({ type: "vulcan:activated" }, EMBED_ORIGIN);
+      embedder()?.postMessage({ type: "vulcan:activated" }, EMBED_ORIGIN);
     }
   });
 }
