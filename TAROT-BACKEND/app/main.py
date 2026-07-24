@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
@@ -33,6 +35,7 @@ from app.routers import (
     admin_ai_prompts_router,
     admin_content_router,
     reading_ai_router,
+    second_brain_readonly_router,
 )
 import app.models
 
@@ -98,10 +101,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Add CORS middleware - allow all origins for development
+# CORS: pinned to the known first-party origins (Stage 2 hardening — was "*").
+# The Second Brain CRM's Vulcan bridge is trusted explicitly; native mobile
+# apps send no Origin header, so CORS does not affect them. Extra origins can
+# be added per-environment via EXTRA_CORS_ORIGINS (comma-separated).
+_extra_origins = [
+    origin.strip()
+    for origin in os.environ.get("EXTRA_CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://askvalentina.co.uk",
+        "https://www.askvalentina.co.uk",
+        "http://localhost:5173",  # web dev server
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:4317",  # Second Brain CRM — Vulcan bridge
+        *_extra_origins,
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -264,6 +282,12 @@ app.include_router(
     reading_ai_router,
     prefix="/api/chat",
     tags=["AI Reading Pipeline"],
+)
+
+app.include_router(
+    second_brain_readonly_router,
+    prefix="/api/integrations/second-brain/valentina/v1",
+    tags=["Second Brain - Valentina (Read Only)"],
 )
 
 
