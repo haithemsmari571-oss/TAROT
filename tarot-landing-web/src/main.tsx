@@ -11,11 +11,6 @@ import { NotificationProvider } from './features/notifications/context/Notificat
 import IncomingReadingModal from './features/chat/components/IncomingReadingModal'
 import { TopUpProvider } from './features/payment/context/TopUpContext'
 import { CelebrationProvider } from './features/celebrations/CelebrationProvider'
-import { initVulcanEmbed } from './lib/vulcanEmbed'
-
-// Activates only when embedded in the CRM's Vulcan room (handshake-gated);
-// a harmless no-op in the standalone panel.
-initVulcanEmbed()
 
 const queryClient = new QueryClient(
   {defaultOptions: {

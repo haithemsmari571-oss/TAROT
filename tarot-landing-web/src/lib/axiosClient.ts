@@ -7,7 +7,6 @@ import {
   clearTokens,
   isTokenExpired
 } from "@/features/auth/utils";
-import { classifyDestructive, divertToVulcan, isVulcanEmbedActive } from "./vulcanEmbed";
 
 const axiosClient = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL}/api`,
@@ -71,23 +70,6 @@ axiosClient.interceptors.request.use(
               "modifying live data. Point VITE_API_URL at a local backend to allow it."
           )
         );
-      }
-    }
-
-    // Vulcan embedded mode: when this panel runs inside the CRM's Vulcan room,
-    // divert destructive writes to the CRM approval gateway instead of firing
-    // them directly. Inactive (and a no-op) in the standalone panel.
-    if (isVulcanEmbedActive()) {
-      const method = (config.method ?? "get").toLowerCase();
-      if (WRITE_METHODS.has(method)) {
-        const apiPath = `/api${config.url ?? ""}`;
-        const verdict = classifyDestructive(method, apiPath, config.data);
-        if (verdict.destructive) {
-          divertToVulcan(method, apiPath, config.data, verdict.reason);
-          return Promise.reject(
-            new Error(`[vulcan] "${verdict.reason}" was sent to the Second Brain approval inbox instead of running directly.`)
-          );
-        }
       }
     }
 
