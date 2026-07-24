@@ -194,8 +194,14 @@ def update_user(
             detail="Only superadmin can change user roles",
         )
 
-    # Only superadmin can change password or balance
-    if (user_data.password is not None or user_data.balance is not None) and admin.role != Role.SUPERADMIN:
+    # Only superadmin can change password or balance. The edit form echoes the
+    # current balance back on every save, so only an ACTUAL change counts —
+    # an unchanged balance (or blank password) must not 403 an admin edit.
+    wants_password_change = bool(user_data.password)
+    wants_balance_change = user_data.balance is not None and abs(
+        float(user_data.balance) - float(target_user.balance or 0)
+    ) >= 0.01
+    if (wants_password_change or wants_balance_change) and admin.role != Role.SUPERADMIN:
         raise HTTPException(
             status_code=403,
             detail="Only superadmin can change password or balance",

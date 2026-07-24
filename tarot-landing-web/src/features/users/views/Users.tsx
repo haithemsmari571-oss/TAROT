@@ -10,6 +10,7 @@ import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { formatGbp } from "../../../lib/currency";
 import { useAuth } from "../../auth/hooks/useAuth";
+import { UserRole } from "../../auth/types/auth.types";
 import { useUsers } from "../hooks/useUsers";
 import { Role, UserStatus } from "../types/user.types";
 import type { AdminUserDetail, AdminUserListItem } from "../types/user.types";
@@ -35,16 +36,17 @@ function useDebounce<T>(value: T, delay: number): T {
 const Users = () => {
   const { user: currentUser } = useAuth();
 
-  const { 
-    users: usersData, 
-    loading, 
-    error, 
-    fetchUsers, 
+  const {
+    users: usersData,
+    loading,
+    error,
+    fetchUsers,
     deleteUser,
     createUser,
     updateUser,
     verifyUser,
-    giftBalance 
+    giftBalance,
+    getUserById
   } = useUsers();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -101,7 +103,13 @@ const Users = () => {
         if (userData.password) {
           updateData.password = userData.password;
         }
-        if (userData.balance !== undefined) {
+        // Balance is superadmin-only on the backend; the form echoes the current
+        // value back, so only send it when a superadmin actually changed it.
+        if (
+          currentUser?.role === UserRole.SUPERADMIN &&
+          userData.balance !== undefined &&
+          Number(userData.balance) !== Number(selectedUser.balance)
+        ) {
           updateData.balance = userData.balance;
         }
         await updateUser(selectedUser.id, updateData);
