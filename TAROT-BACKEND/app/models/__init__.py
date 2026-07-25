@@ -17,6 +17,7 @@ from .notification import Notification
 from .buy_option import BuyOption
 from .landing_content import LandingContent
 from .client_note import ClientNote
+from .client_situation_record import ClientSituationRecord
 from .stardust_lot import StardustLot
 from .task import Task
 from .claim import Claim

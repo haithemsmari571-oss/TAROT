@@ -25,6 +25,7 @@ from .admin_ai_prompts import router as admin_ai_prompts_router
 from .admin_content import router as admin_content_router
 from .reading_ai import router as reading_ai_router
 from .second_brain_readonly import router as second_brain_readonly_router
+from .second_brain_situation import router as second_brain_situation_router
 
 __all__ = [
     "auth_router",
@@ -54,4 +55,5 @@ __all__ = [
     "admin_content_router",
     "reading_ai_router",
     "second_brain_readonly_router",
+    "second_brain_situation_router",
 ]

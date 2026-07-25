@@ -1,18 +1,27 @@
 from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import Date, Enum, Integer, Numeric
+from sqlalchemy import Date, Enum, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.role import Role
 from app.enums.user_status import UserStatus
 from app.models.base import Base
+from app.services.client_code import generate_client_code
 
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Human-readable, non-enumerable identifier shown in the Second Brain CRM
+    # (e.g. "AV-7F3K9Q"). Generated for every new ORM-created user; existing
+    # accounts are backfilled by the a9b8c7d6e5f4 migration. Nullable in the
+    # schema (SQLite can't add NOT NULL retroactively) but always populated in
+    # practice; the unique index is the integrity guarantee.
+    client_code: Mapped[Optional[str]] = mapped_column(
+        String(12), unique=True, index=True, nullable=True, default=generate_client_code
+    )
     role: Mapped[Role] = mapped_column(default=Role.USER)
     email: Mapped[str] = mapped_column(unique=True)
     username: Mapped[str] = mapped_column(unique=True)

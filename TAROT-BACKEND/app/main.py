@@ -36,6 +36,7 @@ from app.routers import (
     admin_content_router,
     reading_ai_router,
     second_brain_readonly_router,
+    second_brain_situation_router,
 )
 import app.models
 
@@ -288,6 +289,12 @@ app.include_router(
     second_brain_readonly_router,
     prefix="/api/integrations/second-brain/valentina/v1",
     tags=["Second Brain - Valentina (Read Only)"],
+)
+
+app.include_router(
+    second_brain_situation_router,
+    prefix="/api/integrations/second-brain/valentina/v2",
+    tags=["Second Brain - Situation Records (Read Only)"],
 )
 
 

@@ -105,6 +105,17 @@ def record_commitments(state, delivered_text: str) -> int:
     the ledger; capped so the injected block stays small. Returns how many new
     entries were added. Never raises — a ledger failure must not break a turn.
     """
+    # Atlas situation memory (Track A) piggybacks on this exact hook — the one
+    # deterministic per-delivered-bubble point both live delivery paths share.
+    # No-op unless SITUATION_MEMORY_ENABLED=true; fire-and-forget; writes ONLY
+    # client_situation_records; wrapped so it can never affect the ledger or
+    # the turn. Nothing reads that table back into replies yet (A-LIVE).
+    try:
+        from app.services.ai.situation_memory import record_situation
+
+        record_situation(getattr(state, "chat_id", None), None, delivered_text)
+    except Exception:  # noqa: BLE001
+        pass
     try:
         existing = {
             (e.get("kind"), str(e.get("value", "")).casefold())
