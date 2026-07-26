@@ -187,6 +187,52 @@ def test_admin_can_write_psychics(db, make_user, monkeypatch):
 
 
 # ── Admin user edit: unchanged balance no longer 403s an ADMIN ──────────────
+def test_superadmin_can_write_psychics(db, make_user, monkeypatch):
+    """SUPERADMIN holds every Permission, so it must pass the MANAGE_PSYCHICS
+    gate on all three write verbs. Asserted explicitly rather than inferred from
+    `Role.SUPERADMIN: list(Permission)` — a future narrowing of that map should
+    fail a test, not silently lock the owner out of psychic management."""
+    _stub_services(monkeypatch)
+    superadmin = make_user(role=Role.SUPERADMIN)
+    target = make_user(role=Role.PSYCHIC)
+    client = build_client(db, superadmin)
+
+    create = client.post(
+        "/api/psychic/",
+        data={"psychic_data": VALID_PSYCHIC_CREATE},
+        files={"profile_picture": ("p.png", b"png-bytes", "image/png")},
+    )
+    assert create.status_code == 200, create.text
+    assert client.patch(f"/api/psychic/{target.id}").status_code == 200
+    assert client.delete(f"/api/psychic/{target.id}").status_code == 204
+
+
+def test_psychic_write_gate_is_mounted_on_every_write_verb(db, make_user, monkeypatch):
+    """Belt-and-braces against the original bug class: assert the dependency is
+    actually PRESENT on POST/PATCH/DELETE, so deleting it would fail here even
+    if some future test happened to pass for another reason. Reads stay open."""
+    from app.routers import psychic_router
+
+    guarded, open_routes = {}, {}
+    for route in psychic_router.routes:
+        names = {
+            d.call.__name__ if hasattr(d.call, "__name__") else repr(d.call)
+            for d in getattr(route, "dependant", None).dependencies
+        } if getattr(route, "dependant", None) else set()
+        # The gate appears either as require_psychic_update_access or as the
+        # closure require_permission() returns (_check_permission).
+        gated = bool(names & {"require_psychic_update_access", "_check_permission"})
+        for method in route.methods:
+            (guarded if gated else open_routes)[(method, route.path)] = names
+
+    writes = {(m, p) for (m, p) in list(guarded) + list(open_routes) if m in {"POST", "PATCH", "PUT", "DELETE"}}
+    assert writes, "expected write routes on the psychic router"
+    ungated_writes = [k for k in writes if k in open_routes]
+    assert ungated_writes == [], f"UNAUTHENTICATED write routes: {ungated_writes}"
+    # And the public browse endpoints are still public.
+    assert any(m == "GET" for (m, _p) in open_routes)
+
+
 def test_admin_edit_with_echoed_balance_succeeds(db, make_user):
     admin = make_user(role=Role.ADMIN)
     target = make_user(balance=40, role=Role.USER)
