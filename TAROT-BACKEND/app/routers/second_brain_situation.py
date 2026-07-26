@@ -22,7 +22,7 @@ from app.dependencies.second_brain_readonly_auth import (
 from app.services.second_brain_situation import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
-    get_situation_record,
+    get_situation_records,
     list_situation_records,
 )
 
@@ -60,6 +60,9 @@ def _record_payload(record) -> dict[str, Any]:
     return {
         "client_id": record.client_id,
         "client_code": record.client_code,
+        # Which reader's silo this is. Consumers must key on (client, psychic),
+        # never on client alone.
+        "psychic_id": record.psychic_id,
         "situation": record.situation,
         "source": record.source,
         "chat_id": record.chat_id,
@@ -95,9 +98,19 @@ def get_situation(
     ref: str,
     scope: Annotated[SecondBrainReadonlyScope, Depends(get_situation_scope)],
     db: Annotated[Session, Depends(get_situation_db)],
+    psychic_id: Annotated[int | None, Query(ge=1)] = None,
 ):
-    record = get_situation_record(db, scope.allowed_psychic_ids, ref)
-    if record is None:
+    """One client's situation records — one per psychic they have seen.
+
+    Returns a LIST, because memory is siloed per reader. Pass ?psychic_id= to
+    narrow to a single reader's silo; a briefing path MUST do that rather than
+    reading the whole list.
+    """
+
+    records = get_situation_records(
+        db, scope.allowed_psychic_ids, ref, psychic_id=psychic_id
+    )
+    if not records:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No situation record for that client reference.",
@@ -105,4 +118,10 @@ def get_situation(
         )
     from fastapi.responses import JSONResponse
 
-    return JSONResponse(content=_record_payload(record), headers=_NO_STORE_HEADERS)
+    return JSONResponse(
+        content={
+            "records": [_record_payload(record) for record in records],
+            "total": len(records),
+        },
+        headers=_NO_STORE_HEADERS,
+    )

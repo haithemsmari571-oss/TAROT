@@ -247,7 +247,13 @@ def merge_situation(
 
 
 def apply_situation_update(db, chat_id: int, client_text: Optional[str], delivered_text: Optional[str]) -> bool:
-    """Synchronous core: derive the delta and upsert the client's record.
+    """Synchronous core: derive the delta and upsert THIS READER'S record for
+    this client.
+
+    Scoped to the (client, psychic) pair. There is deliberately no client-wide
+    document: merging readers would mean briefing one psychic with another
+    psychic's conversations. A chat with no psychic attached is skipped rather
+    than written to some shared row.
 
     Returns True when a row was written. Raises nothing to callers in the
     reading path — record_situation wraps this; direct callers (tests) may
@@ -264,19 +270,23 @@ def apply_situation_update(db, chat_id: int, client_text: Optional[str], deliver
         return False
 
     chat = db.query(Chat).filter(Chat.id == chat_id).first()
-    if chat is None or chat.user_id is None:
+    if chat is None or chat.user_id is None or chat.psychic_id is None:
         return False
     reader = db.query(User).filter(User.id == chat.psychic_id).first()
     reader_name = reader.username if reader is not None else None
 
     record = (
         db.query(ClientSituationRecord)
-        .filter(ClientSituationRecord.client_id == chat.user_id)
+        .filter(
+            ClientSituationRecord.client_id == chat.user_id,
+            ClientSituationRecord.psychic_id == chat.psychic_id,
+        )
         .first()
     )
     if record is None:
         record = ClientSituationRecord(
             client_id=chat.user_id,
+            psychic_id=chat.psychic_id,
             chat_id=chat_id,
             situation={},
             source=SituationSource.DETERMINISTIC,

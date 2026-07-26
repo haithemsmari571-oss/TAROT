@@ -10,6 +10,7 @@ placeholder text — per the phase's testing requirement.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -68,16 +69,40 @@ def test_generate_unique_client_code_respects_existing(db, make_user):
 
 def test_situation_record_model_roundtrip(db, make_user):
     client = make_user()
+    psychic = make_user(role=Role.PSYCHIC)
     record = ClientSituationRecord(
         client_id=client.id,
+        psychic_id=psychic.id,
         situation={"themes": ["grief-bereavement"]},
         source=SituationSource.DETERMINISTIC,
     )
     db.add(record)
     db.commit()
-    loaded = db.query(ClientSituationRecord).filter_by(client_id=client.id).one()
+    loaded = (
+        db.query(ClientSituationRecord)
+        .filter_by(client_id=client.id, psychic_id=psychic.id)
+        .one()
+    )
     assert loaded.situation["themes"] == ["grief-bereavement"]
     assert loaded.source == SituationSource.DETERMINISTIC
+
+
+def test_record_is_unique_per_client_psychic_pair_not_per_client(db, make_user):
+    """The schema change itself: client alone is no longer unique; the PAIR is."""
+    client = make_user()
+    yusuf = make_user(role=Role.PSYCHIC)
+    valentina = make_user(role=Role.PSYCHIC)
+
+    db.add(ClientSituationRecord(client_id=client.id, psychic_id=yusuf.id, situation={}))
+    db.add(ClientSituationRecord(client_id=client.id, psychic_id=valentina.id, situation={}))
+    db.commit()  # two rows for ONE client — impossible under the old schema
+    assert db.query(ClientSituationRecord).filter_by(client_id=client.id).count() == 2
+
+    # But the same pair twice must still be rejected.
+    db.add(ClientSituationRecord(client_id=client.id, psychic_id=yusuf.id, situation={}))
+    with pytest.raises(Exception):
+        db.commit()
+    db.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -130,8 +155,48 @@ def test_migration_up_down_on_sqlite(tmp_path):
     assert len(set(codes)) == 3  # backfill produced unique codes
     connection.close()
 
-    downgraded = _alembic(env, "downgrade", "-1")
-    assert downgraded.returncode == 0, downgraded.stderr
+    # head now includes the per-psychic siloing migration, so assert its shape.
+    connection = sqlite3.connect(db_path)
+    situation_columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(client_situation_records)")
+    }
+    assert "psychic_id" in situation_columns
+    indexes = {
+        row[1]: row[2]  # name -> unique flag
+        for row in connection.execute("PRAGMA index_list(client_situation_records)")
+    }
+    # client_id alone must NOT be unique any more; the PAIR must be.
+    assert indexes.get("ix_client_situation_records_client_id") == 0
+    assert "ix_client_situation_records_psychic_id" in indexes
+    pair_unique = [
+        name
+        for name, is_unique in indexes.items()
+        if is_unique
+        and [r[2] for r in connection.execute(f'PRAGMA index_info("{name}")')]
+        == ["client_id", "psychic_id"]
+    ]
+    assert pair_unique, f"no UNIQUE(client_id, psychic_id) found in {indexes}"
+    connection.close()
+
+    # Step back over the siloing migration only: the table survives, in the old
+    # one-row-per-client shape.
+    down_one = _alembic(env, "downgrade", "-1")
+    assert down_one.returncode == 0, down_one.stderr
+    connection = sqlite3.connect(db_path)
+    situation_columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(client_situation_records)")
+    }
+    assert "psychic_id" not in situation_columns
+    indexes = {
+        row[1]: row[2]
+        for row in connection.execute("PRAGMA index_list(client_situation_records)")
+    }
+    assert indexes.get("ix_client_situation_records_client_id") == 1, "unique again"
+    connection.close()
+
+    # And all the way back down removes the table and the client_code column.
+    down_two = _alembic(env, "downgrade", "-1")
+    assert down_two.returncode == 0, down_two.stderr
     connection = sqlite3.connect(db_path)
     tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "client_situation_records" not in tables
@@ -283,6 +348,131 @@ def test_enabled_write_goes_only_to_situation_table(db, make_user, monkeypatch):
     assert "financial-strain" in records[0].situation["themes"]
 
 
+# ---------------------------------------------------------------------------
+# Per-psychic siloing — the correctness requirement of this schema
+# ---------------------------------------------------------------------------
+
+# Two clearly distinguishable conversations. Nothing in one may ever appear in
+# the other reader's record.
+YUSUF_CLIENT_TEXT = (
+    "My husband hits me and I am afraid to go home. There is a restraining order now."
+)
+YUSUF_DELIVERED = "I hear how frightening that is. You will know where you stand within ten days."
+VALENTINA_CLIENT_TEXT = "My sister keeps draining me about money and I feel guilty saying no."
+VALENTINA_DELIVERED = "Your business will turn a corner within three weeks."
+
+
+def _seed_pair(db, make_user, client, psychic, client_text, delivered_text):
+    chat = Chat(user_id=client.id, psychic_id=psychic.id, status=ChatStatus.ACTIVE)
+    db.add(chat)
+    db.commit()
+    situation_memory.apply_situation_update(db, chat.id, client_text, delivered_text)
+    return chat
+
+
+def test_two_psychics_seeing_one_client_get_separate_records(db, make_user):
+    client = make_user()
+    yusuf = make_user(role=Role.PSYCHIC)
+    valentina = make_user(role=Role.PSYCHIC)
+
+    _seed_pair(db, make_user, client, yusuf, YUSUF_CLIENT_TEXT, YUSUF_DELIVERED)
+    _seed_pair(db, make_user, client, valentina, VALENTINA_CLIENT_TEXT, VALENTINA_DELIVERED)
+
+    records = db.query(ClientSituationRecord).filter_by(client_id=client.id).all()
+    assert len(records) == 2, "one record per reader, not one merged document"
+    assert {r.psychic_id for r in records} == {yusuf.id, valentina.id}
+
+
+def test_one_psychics_briefing_never_contains_the_others_content(db, make_user):
+    """THE leak test. Yusuf's record must not carry a single fact that only
+    appeared in the client's sessions with Valentina, and vice versa."""
+
+    client = make_user()
+    yusuf = make_user(role=Role.PSYCHIC)
+    valentina = make_user(role=Role.PSYCHIC)
+
+    _seed_pair(db, make_user, client, yusuf, YUSUF_CLIENT_TEXT, YUSUF_DELIVERED)
+    _seed_pair(db, make_user, client, valentina, VALENTINA_CLIENT_TEXT, VALENTINA_DELIVERED)
+
+    def silo(psychic):
+        return (
+            db.query(ClientSituationRecord)
+            .filter_by(client_id=client.id, psychic_id=psychic.id)
+            .one()
+        )
+
+    y, v = silo(yusuf).situation, silo(valentina).situation
+
+    # Each reader saw a genuinely different situation…
+    assert "family-violence" in y["themes"]
+    assert "family-drain" in v["themes"]
+    # …and neither leaks into the other.
+    assert "family-drain" not in y["themes"]
+    assert "family-violence" not in v["themes"]
+
+    # Sensitive flags are the highest-stakes field — check them explicitly.
+    assert y.get("sensitive_flags"), "the violence disclosure should raise a flag"
+    assert not set(y.get("sensitive_flags") or []) & set(v.get("sensitive_flags") or [])
+
+    # Open predictions stay with the reader who made them.
+    y_predictions = {p["value"] for p in y.get("open_predictions") or []}
+    v_predictions = {p["value"] for p in v.get("open_predictions") or []}
+    assert y_predictions and v_predictions
+    assert not (y_predictions & v_predictions)
+
+    # And last_reader is each silo's own reader, never overwritten by the other.
+    assert silo(yusuf).situation["last_reader"] == yusuf.username
+    assert silo(valentina).situation["last_reader"] == valentina.username
+
+    # Belt and braces: no substring of one conversation's people appears in the
+    # other record, serialized whole.
+    assert "draining" not in json.dumps(y)
+    assert "violence" not in json.dumps(v)
+
+
+def test_repeat_turns_with_the_same_psychic_still_merge_into_one_record(db, make_user):
+    """Siloing must not break the rolling behaviour WITHIN one reader's silo.
+
+    Note `chats` is uniquely keyed on (user_id, psychic_id), so a client and a
+    reader share ONE chat thread — repeat sessions are further delivered bubbles
+    on that same chat, which is what this simulates.
+    """
+
+    client = make_user()
+    yusuf = make_user(role=Role.PSYCHIC)
+    chat = _seed_pair(db, make_user, client, yusuf, YUSUF_CLIENT_TEXT, YUSUF_DELIVERED)
+    situation_memory.apply_situation_update(
+        db, chat.id, "My sister keeps draining me about money.", None
+    )
+
+    records = db.query(ClientSituationRecord).filter_by(client_id=client.id).all()
+    assert len(records) == 1, "same reader keeps ONE rolling record"
+    themes = records[0].situation["themes"]
+    assert "family-violence" in themes and "family-drain" in themes
+
+
+def test_a_chat_can_never_lack_a_psychic_and_the_writer_guards_anyway(db, make_user):
+    """The writer refuses to write without a psychic rather than falling back to
+    a shared client-wide row. The schema also forbids it, so this documents both
+    layers: the DB invariant, and the guard behind it."""
+
+    from app.models.chat import Chat as ChatModel
+
+    assert ChatModel.__table__.c.psychic_id.nullable is False
+
+    client = make_user()
+    db.add(ChatModel(user_id=client.id, psychic_id=None, status=ChatStatus.ACTIVE))
+    with pytest.raises(Exception):
+        db.commit()
+    db.rollback()
+
+    # And an unknown chat id writes nothing at all.
+    assert situation_memory.apply_situation_update(
+        db, 999_999, YUSUF_CLIENT_TEXT, YUSUF_DELIVERED
+    ) is False
+    assert db.query(ClientSituationRecord).count() == 0
+
+
 def test_enabled_hook_never_raises_even_on_bad_state(monkeypatch):
     monkeypatch.setenv(situation_memory.SITUATION_MEMORY_ENABLED_ENV, "true")
     # chat_id None, no DB available — must be silently ignored.
@@ -389,19 +579,23 @@ def test_v2_lists_and_fetches_by_code_and_id(db, make_user):
         assert row["client_code"] == client.client_code
         assert "avoidant-partner" in row["situation"]["themes"]
 
+        assert row["psychic_id"] == psychic.id  # every row names its reader
+
         by_code = http.get(
             f"/api/integrations/second-brain/valentina/v2/situations/{client.client_code}",
             headers=AUTH,
         )
         assert by_code.status_code == 200
-        assert by_code.json()["client_id"] == client.id
+        # A LIST now — one entry per psychic the client has seen.
+        assert by_code.json()["total"] == 1
+        assert by_code.json()["records"][0]["client_id"] == client.id
 
         by_id = http.get(
             f"/api/integrations/second-brain/valentina/v2/situations/{client.id}",
             headers=AUTH,
         )
         assert by_id.status_code == 200
-        assert by_id.json()["client_code"] == client.client_code
+        assert by_id.json()["records"][0]["client_code"] == client.client_code
 
 
 def test_v2_scope_excludes_unlisted_psychics_clients(db, make_user):
@@ -419,6 +613,101 @@ def test_v2_scope_excludes_unlisted_psychics_clients(db, make_user):
             headers=AUTH,
         )
         assert out.status_code == 404
+
+
+def test_v2_scope_hides_another_psychics_silo_for_a_SHARED_client(db, make_user):
+    """The read-side leak. One client, two readers, only one allowlisted: the
+    endpoint must return that reader's silo ONLY.
+
+    Under the old shape this was impossible to get right — scope was "clients
+    with >=1 chat handled by an allowed psychic" and there was a single merged
+    document per client, so an allowlisted reader's scope returned a record
+    containing the other reader's conversations.
+    """
+
+    client = make_user()
+    allowed = make_user(role=Role.PSYCHIC)
+    hidden = make_user(role=Role.PSYCHIC)
+    _seed_pair(db, make_user, client, allowed, YUSUF_CLIENT_TEXT, YUSUF_DELIVERED)
+    _seed_pair(db, make_user, client, hidden, VALENTINA_CLIENT_TEXT, VALENTINA_DELIVERED)
+
+    app = _make_v2_app(db, {allowed.id})
+    with TestClient(app) as http:
+        listing = http.get(
+            "/api/integrations/second-brain/valentina/v2/situations", headers=AUTH
+        ).json()
+        assert listing["total"] == 1
+        assert {row["psychic_id"] for row in listing["records"]} == {allowed.id}
+
+        detail = http.get(
+            f"/api/integrations/second-brain/valentina/v2/situations/{client.client_code}",
+            headers=AUTH,
+        ).json()
+        assert detail["total"] == 1
+        row = detail["records"][0]
+        assert row["psychic_id"] == allowed.id
+        # The hidden reader's content is absent from the whole response body.
+        assert "family-drain" not in json.dumps(detail)
+
+
+def test_v2_psychic_id_filter_narrows_to_one_silo(db, make_user):
+    """What a briefing path must use: ?psychic_id= returns exactly one silo."""
+
+    client = make_user()
+    a = make_user(role=Role.PSYCHIC)
+    b = make_user(role=Role.PSYCHIC)
+    _seed_pair(db, make_user, client, a, YUSUF_CLIENT_TEXT, YUSUF_DELIVERED)
+    _seed_pair(db, make_user, client, b, VALENTINA_CLIENT_TEXT, VALENTINA_DELIVERED)
+
+    app = _make_v2_app(db, {a.id, b.id})  # owner sees both
+    base = f"/api/integrations/second-brain/valentina/v2/situations/{client.client_code}"
+    with TestClient(app) as http:
+        both = http.get(base, headers=AUTH).json()
+        assert both["total"] == 2  # unfiltered: every silo the caller may see
+
+        only_a = http.get(f"{base}?psychic_id={a.id}", headers=AUTH).json()
+        assert only_a["total"] == 1
+        assert only_a["records"][0]["psychic_id"] == a.id
+        assert "family-drain" not in json.dumps(only_a)
+
+        only_b = http.get(f"{base}?psychic_id={b.id}", headers=AUTH).json()
+        assert only_b["total"] == 1
+        assert "family-violence" not in json.dumps(only_b)
+
+        # Asking for a silo outside the allowlist yields nothing, not a leak.
+        outsider = make_user(role=Role.PSYCHIC)
+        assert http.get(f"{base}?psychic_id={outsider.id}", headers=AUTH).status_code == 404
+
+
+def test_v2_empty_allowlist_sees_nothing(db, make_user):
+    """Two independent layers, both asserted.
+
+    The auth gate fail-closes the whole route when no psychic is allowlisted
+    (config.ready is false -> 404), and beneath that the query itself scopes on
+    psychic_id IN (), which matches no row. Either alone would be sufficient.
+    """
+
+    client, psychic, _ = _seed_situation(db, make_user)
+
+    app = _make_v2_app(db, set())
+    with TestClient(app) as http:
+        assert http.get(
+            "/api/integrations/second-brain/valentina/v2/situations", headers=AUTH
+        ).status_code == 404
+        assert http.get(
+            f"/api/integrations/second-brain/valentina/v2/situations/{client.client_code}",
+            headers=AUTH,
+        ).status_code == 404
+
+    # The service layer underneath returns nothing even if the gate were opened.
+    from app.services.second_brain_situation import (
+        get_situation_records,
+        list_situation_records,
+    )
+
+    rows, total = list_situation_records(db, frozenset())
+    assert rows == [] and total == 0
+    assert get_situation_records(db, frozenset(), client.client_code) == []
 
 
 def test_v2_registers_no_write_routes():
