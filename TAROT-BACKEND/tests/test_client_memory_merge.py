@@ -249,3 +249,99 @@ def _patch_ai(monkeypatch, run_chat):
 
     settings = get_app_settings()
     monkeypatch.setattr(settings, "AI_DRAFTING_ENABLED", True, raising=False)
+
+
+class TestLegacyNotes:
+    """The pre-merge pile is retired the first time a client is merged.
+
+    The old summariser wrote one AI_ATLAS note per session with no author. Left
+    in place they would sit beside the new single note and both would feed the
+    reading prompt — the duplication the merge exists to remove.
+    """
+
+    def _legacy(self, db, client_id, text):
+        from app.enums.note_source import NoteSource
+        from app.models.client_note import ClientNote
+
+        db.add(
+            ClientNote(
+                client_id=client_id,
+                author_psychic_id=None,
+                chat_id=1,
+                title="Reading summary (Atlas)",
+                note=text,
+                source=NoteSource.AI_ATLAS,
+            )
+        )
+        db.commit()
+
+    def test_first_merge_deletes_the_legacy_pile_and_leaves_one_note(self, db, monkeypatch):
+        from app.enums.note_source import NoteSource
+        from app.models.client_note import ClientNote
+
+        _chat(db)
+        for i in range(4):
+            self._legacy(db, 10, f"legacy summary {i}")
+        assert db.query(ClientNote).count() == 4
+
+        _patch_ai(monkeypatch, lambda **kw: {"text": "the merged summary"})
+        _msg(db, chat_id=1, sender_id=10, content="a", minutes=0)
+        _msg(db, chat_id=1, sender_id=20, content="b", minutes=1)
+        client_memory.merge_session(db, 1)
+
+        notes = db.query(ClientNote).all()
+        assert len(notes) == 1, "the legacy pile must be gone"
+        assert notes[0].note == "the merged summary"
+        assert notes[0].author_psychic_id == 20, "the surviving note is attributed to the reader"
+        assert (
+            db.query(ClientNote).filter(ClientNote.author_psychic_id.is_(None)).count() == 0
+        )
+
+    def test_human_notes_and_other_clients_are_untouched(self, db, monkeypatch):
+        from app.enums.note_source import NoteSource
+        from app.models.client_note import ClientNote
+
+        _chat(db)
+        self._legacy(db, 10, "legacy for our client")
+        self._legacy(db, 99, "legacy for someone else")
+        db.add(
+            ClientNote(
+                client_id=10,
+                author_psychic_id=20,
+                chat_id=1,
+                title="Reader note",
+                note="a human wrote this",
+                source=NoteSource.HUMAN,
+            )
+        )
+        db.commit()
+
+        _patch_ai(monkeypatch, lambda **kw: {"text": "merged"})
+        _msg(db, chat_id=1, sender_id=10, content="a", minutes=0)
+        _msg(db, chat_id=1, sender_id=20, content="b", minutes=1)
+        client_memory.merge_session(db, 1)
+
+        remaining = {(n.client_id, n.note) for n in db.query(ClientNote).all()}
+        assert (10, "a human wrote this") in remaining, "human notes are not Atlas output"
+        assert (99, "legacy for someone else") in remaining, "another client is not in scope"
+        assert (10, "legacy for our client") not in remaining
+
+    def test_retiring_is_idempotent_across_merges(self, db, monkeypatch):
+        from app.models.client_note import ClientNote
+
+        _chat(db)
+        self._legacy(db, 10, "legacy")
+        _patch_ai(monkeypatch, lambda **kw: {"text": "v1"})
+        _msg(db, chat_id=1, sender_id=10, content="a", minutes=0)
+        _msg(db, chat_id=1, sender_id=20, content="b", minutes=1)
+        client_memory.merge_session(db, 1)
+
+        _patch_ai(monkeypatch, lambda **kw: {"text": "v2"})
+        _msg(db, chat_id=1, sender_id=10, content="c", minutes=10)
+        _msg(db, chat_id=1, sender_id=20, content="d", minutes=11)
+        client_memory.merge_session(db, 1)
+
+        notes = db.query(ClientNote).all()
+        assert len(notes) == 1
+        assert notes[0].note == "v2"
+

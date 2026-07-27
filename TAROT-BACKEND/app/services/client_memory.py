@@ -210,6 +210,39 @@ def schedule_memory_merge(chat_id: int) -> None:
         logger.warning("client_memory_no_event_loop", chat_id=chat_id)
 
 
+def _retire_legacy_notes(db: Session, client_id: int) -> int:
+    """Drop the pre-merge pile of unattributed Atlas notes on first merge.
+
+    The old summariser wrote one AI_ATLAS note per session with
+    ``author_psychic_id = NULL``. Left in place they would sit beside the new
+    single note and both would feed the reading prompt — the exact duplication
+    the merge exists to remove, plus the old notes are unattributed so they leak
+    across readers.
+
+    Keyed on the NULL author, so it can only ever match the old writer's rows:
+    human notes have an author, and the merge's own mirror is keyed to a psychic.
+    Idempotent — after the first merge there is nothing left to match.
+    """
+    from app.enums.note_source import NoteSource
+    from app.models.client_note import ClientNote
+
+    legacy = (
+        db.query(ClientNote)
+        .filter(
+            ClientNote.client_id == client_id,
+            ClientNote.author_psychic_id.is_(None),
+            ClientNote.source == NoteSource.AI_ATLAS,
+        )
+        .all()
+    )
+    for note in legacy:
+        db.delete(note)
+    if legacy:
+        db.commit()
+        logger.info("client_memory_legacy_notes_retired", client_id=client_id, count=len(legacy))
+    return len(legacy)
+
+
 def _mirror_to_dossier(db: Session, row: ClientMemorySummary, chat_id: int) -> None:
     """Keep exactly one AI_ATLAS dossier note per (client, psychic), updated in place.
 
@@ -219,6 +252,8 @@ def _mirror_to_dossier(db: Session, row: ClientMemorySummary, chat_id: int) -> N
     """
     from app.enums.note_source import NoteSource
     from app.models.client_note import ClientNote
+
+    _retire_legacy_notes(db, row.client_id)
 
     note = (
         db.query(ClientNote)

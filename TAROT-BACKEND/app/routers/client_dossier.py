@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
+from app.dependencies.authorization import require_superadmin
 from app.dependencies.get_current_user import get_current_user
 from app.enums.role import Role
 from app.logging_config import get_logger
@@ -250,3 +251,41 @@ def reject_client_record_mapping(
     if row is None:
         return JSONResponse(content={"detail": "Mapping not found"}, status_code=404)
     return JSONResponse(content=_mapping_out(row), status_code=200)
+
+
+@router.delete("/clients/{client_id}/memory")
+def purge_client_memory_route(
+    client_id: int,
+    psychic_id: int | None = None,
+    user: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+):
+    """Erase a client's derived memory. IRREVERSIBLE.
+
+    Clears the rolling summary, deletes the mirrored Atlas dossier notes and the
+    deterministic situation records, and evicts any cached in-memory reading
+    state so a warm chat cannot rehydrate what was just removed. A purge floor is
+    stamped so the next session resumes after it rather than re-reading history.
+
+    SUPERADMIN only, and on the CRM side this route is propose-only: it reaches
+    production through the Approvals inbox, never the direct-execute path.
+
+    Deliberately NOT removed, and the caller should say so: the raw chat
+    transcript, the customer's account, and the spend-derived context
+    ("Returning client", "Past readings", "Lifetime spend") plus the CRM vault
+    archive, both of which are injected by production-locked code.
+    """
+    from app.services.client_memory import purge_client_memory
+
+    target = db.query(User).filter(User.id == client_id).first()
+    if target is None:
+        return JSONResponse(content={"detail": "Client not found"}, status_code=404)
+
+    report = purge_client_memory(db, client_id, psychic_id)
+    logger.info(
+        "client_memory_purge_requested",
+        client_id=client_id,
+        psychic_id=psychic_id,
+        actor_id=user.id,
+    )
+    return JSONResponse(content={"clientId": client_id, "psychicId": psychic_id, **report}, status_code=200)
