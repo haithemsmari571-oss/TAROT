@@ -425,7 +425,7 @@ const AdminChatDetail = () => {
               <div className="oracle-tile px-4 py-2.5">
                 <div className="text-center">
                   <div className="oracle-label">
-                    Est. Earnings
+                    Client Spend
                   </div>
                   <div className="oracle-figure text-lg tabular-nums mt-0.5">
                     £{estimatedCost.toFixed(2)}
@@ -508,7 +508,7 @@ const AdminChatDetail = () => {
               >
                 <div className="text-center">
                   <div className="text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.neutralGray }}>
-                    Est. Earnings (Paused)
+                    Client Spend (Paused)
                   </div>
                   <div className="text-lg font-black tabular-nums mt-0.5" style={{ color: "rgb(var(--oracle-rgb))" }}>
                     £{estimatedCost.toFixed(2)}
