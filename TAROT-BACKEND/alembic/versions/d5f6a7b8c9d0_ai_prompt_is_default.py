@@ -44,11 +44,27 @@ def upgrade() -> None:
         batch.add_column(
             sa.Column("is_default", sa.Integer(), nullable=False, server_default="1")
         )
-    # Existing rows: only an exact match still counts as "following the default".
+    # Existing rows: decide from EVIDENCE OF A SAVE, not from byte comparison.
+    #
+    # save_prompt appends a version row every time it runs and advances
+    # active_version, so active_version >= 2 means the owner has saved at least
+    # once. Comparing prompt against default_prompt instead would mislabel two
+    # real cases as untouched: a prompt that was edited and later restored (the
+    # deployed restore_default is save_prompt(row.default_prompt), so the text
+    # matches again), and a prompt deliberately saved as text equal to the
+    # default. Either would then be silently overwritten by the shipped wording
+    # on the next change to the code constant.
+    #
+    # Both conditions must hold to count as still-following-the-default: never
+    # saved, AND currently identical to the shipped text.
     op.execute(
         """
         UPDATE ai_prompts
-           SET is_default = CASE WHEN prompt = default_prompt THEN 1 ELSE 0 END
+           SET is_default = CASE
+                              WHEN COALESCE(active_version, 1) >= 2 THEN 0
+                              WHEN prompt = default_prompt THEN 1
+                              ELSE 0
+                            END
         """
     )
 

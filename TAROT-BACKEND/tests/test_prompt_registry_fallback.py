@@ -12,12 +12,14 @@
    restored. PROTECTED still refuses every write.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  (registers the mappers)
-from app.models import AiPrompt
+from app.models import AiPrompt, AiPromptVersion
 from app.models.base import Base
 from app.services.ai import registry
 
@@ -50,6 +52,17 @@ def _seed(db: Session, *, key="t.prompt", text="SHIPPED TEXT", classification="O
         is_default=1,
     )
     db.add(row)
+    db.flush()
+    # Mirror seed_prompts: a live row always has an ACTIVE version 1 alongside it.
+    db.add(
+        AiPromptVersion(
+            prompt_id=row.id,
+            version=1,
+            text=text,
+            state="ACTIVE",
+            activated_at=datetime.now(timezone.utc),
+        )
+    )
     db.commit()
     return row
 
@@ -127,6 +140,41 @@ class TestEditableAndRestorable:
         with pytest.raises(registry.PromptProtectedError):
             registry.restore_default(db, "t.prompt")
         assert registry.get_prompt_text(db, "t.prompt") == "SHIPPED"
+
+
+class TestNoSplitBrain:
+    """get_active_prompt must hand back the SAME text get_prompt_text resolves.
+
+    The numerology reading executed version.text directly, so the admin Test
+    button (which goes through render -> get_prompt_text) and production could
+    run different strings the moment the code constant moved ahead of the
+    seeded version row.
+    """
+
+    def test_active_prompt_text_matches_the_resolver(self, db):
+        row = _seed(db, text="V1 SHIPPED")
+        registry._CACHE.clear()
+
+        # Constant moves forward on a deploy; the version row stays at 1.
+        row.default_prompt = "V2 SHIPPED"
+        db.commit()
+        registry._CACHE.clear()
+
+        _prompt, version, text = registry.get_active_prompt(db, "t.prompt")
+        assert version.version == 1, "the active version row has not moved"
+        assert version.text == "V1 SHIPPED", "the version row still holds the old wording"
+        # ...but what runs is the resolved text, and it agrees with the Test path.
+        assert text == "V2 SHIPPED"
+        assert text == registry.get_prompt_text(db, "t.prompt")
+
+    def test_after_an_owner_edit_both_paths_still_agree(self, db):
+        _seed(db, text="V1 SHIPPED")
+        registry.save_prompt(db, "t.prompt", "OWNER TEXT")
+        registry._CACHE.clear()
+
+        _prompt, _version, text = registry.get_active_prompt(db, "t.prompt")
+        assert text == "OWNER TEXT"
+        assert text == registry.get_prompt_text(db, "t.prompt")
 
 
 class TestSeededDefaultsAreByteIdentical:

@@ -393,7 +393,16 @@ def restore_version(db: Session, key: str, version_id: int) -> AiPrompt:
     return save_prompt(db, key, version.text)
 
 
-def get_active_prompt(db: Session, key: str) -> tuple[AiPrompt, AiPromptVersion]:
+def get_active_prompt(db: Session, key: str) -> tuple[AiPrompt, AiPromptVersion, str]:
+    """The row, its active version row, and THE TEXT TO RUN.
+
+    Callers must use the third element. Executing ``version.text`` instead
+    bypasses resolve_prompt_text, which is how the numerology reading ended up
+    split-brain: the admin Test button resolved through get_prompt_text while
+    production executed the version row, so a prompt could be tested as one
+    string and shipped as another. The version row is still returned because
+    callers need its number for provenance — not for its text.
+    """
     row = get_prompt(db, key)
     version = (
         db.query(AiPromptVersion)
@@ -406,8 +415,9 @@ def get_active_prompt(db: Session, key: str) -> tuple[AiPrompt, AiPromptVersion]
     )
     if version is None:
         raise PromptNotFound(f"active version for {key}")
-    validate_prompt_text(row, version.text)
-    return row, version
+    text = resolve_prompt_text(row)
+    validate_prompt_text(row, text)
+    return row, version, text
 
 
 def record_run(db: Session, key: str, status: str, at: Optional[datetime] = None) -> None:
