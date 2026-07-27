@@ -83,7 +83,7 @@ const GiftBalanceModal = ({ isOpen, onClose, onGift, user, unitPriceCents = 100 
             <div className="p-6 rounded-[24px] bg-white/[0.02] border border-white/5 flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Current Balance</span>
               <span className="text-xl font-black text-white">
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((user.balance * unitPriceCents) / 100)}
+                {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format((user.balance * unitPriceCents) / 100)}
               </span>
             </div>
 

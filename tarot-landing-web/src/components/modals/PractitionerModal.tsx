@@ -278,7 +278,7 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
               <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.01] flex items-center justify-between gap-4">
                 <div className="flex flex-col">
                   <span className="text-[10px] font-black uppercase text-white tracking-widest">Pricing Matrix</span>
-                  <span className="text-[9px] text-white/30 uppercase font-bold mt-0.5">USD Base Rate per Second</span>
+                  <span className="text-[9px] text-white/30 uppercase font-bold mt-0.5">GBP Base Rate per Second</span>
                 </div>
                 <div className="w-28">
                   <PrimaryInput

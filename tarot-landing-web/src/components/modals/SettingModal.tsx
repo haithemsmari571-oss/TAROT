@@ -24,7 +24,7 @@ const getSettingLabel = (key: string): string => {
 
 const getSettingDescription = (key: string): string => {
   const descriptions: Record<string, string> = {
-    unit_price_cents: "The price of one point in cents (e.g., 100 = $1.00)",
+    unit_price_cents: "The price of one point in pence (e.g., 100 = £1.00)",
     stripe_api_key: "Your Stripe secret API key for payment processing",
     privacy_policy: "Privacy policy content in Markdown format",
     terms_of_service: "Terms of service content in Markdown format",

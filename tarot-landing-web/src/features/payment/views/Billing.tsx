@@ -489,7 +489,7 @@ const Billing = () => {
                     Rate
                   </span>
                   <span className="text-sm font-black text-white">
-                    $1 = 1 Stardust
+                    £1 = 1 Stardust
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">

@@ -434,7 +434,7 @@ const StardustGlider = ({
             onChange={(e) => setAmount(Number(e.target.value))}
             className="stardust-range"
             style={{ background: trackBackground }}
-            aria-label="Stardust offering amount in US dollars"
+            aria-label="Stardust offering amount in pounds"
           />
 
           {/* Tier legend / markers */}
