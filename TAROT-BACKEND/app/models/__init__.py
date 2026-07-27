@@ -16,6 +16,7 @@ from .review import Review
 from .notification import Notification
 from .buy_option import BuyOption
 from .landing_content import LandingContent
+from .client_memory_summary import ClientMemorySummary
 from .client_note import ClientNote
 from .client_situation_record import ClientSituationRecord
 from .stardust_lot import StardustLot
@@ -52,6 +53,7 @@ __all__ = [
     "Notification",
     "BuyOption",
     "LandingContent",
+    "ClientMemorySummary",
     "ClientNote",
     "StardustLot",
     "Task",

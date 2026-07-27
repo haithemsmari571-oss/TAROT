@@ -733,12 +733,19 @@ class SessionManager:
                     "The session ended because the connection was lost. You can start a new reading anytime.",
                 )
 
-            # Atlas: auto-summarise the finished reading into the client's dossier
-            # (fire-and-forget; respects the master switch, never blocks/fails end).
+            # Atlas: fold the finished reading into the client's ONE rolling
+            # summary for this reader (fire-and-forget; respects the master
+            # switch, never blocks/fails end).
+            #
+            # This replaces schedule_atlas_summary, which re-summarised the
+            # client's entire message history every time and appended the result
+            # beside all the previous ones. The merge reads the existing summary
+            # plus only the messages since its watermark, so history is never
+            # re-read — which is also what makes a memory purge stick.
             try:
-                from app.services.client_dossier import schedule_atlas_summary
+                from app.services.client_memory import schedule_memory_merge
 
-                schedule_atlas_summary(chat_id)
+                schedule_memory_merge(chat_id)
             except Exception as atlas_e:  # noqa: BLE001
                 logger.warning(
                     "atlas_schedule_failed", chat_id=chat_id, error=str(atlas_e)
