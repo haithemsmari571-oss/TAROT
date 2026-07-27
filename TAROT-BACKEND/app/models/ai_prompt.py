@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -30,6 +30,23 @@ class AiPrompt(Base):
 
     # [{ "name": "zodiac_sign", "description": "..." }, ...] documented in the UI.
     variables: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    output_schema: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    output_schema_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Unknown/future rows remain protected until code explicitly classifies them.
+    classification: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="PROTECTED", server_default="PROTECTED"
+    )
+    active_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    draft_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # 1 while the row still tracks the shipped default, 0 once the owner has
+    # edited it. This is what lets a later code change to a prompt constant
+    # actually reach the model: see registry.resolve_prompt_text. Without it the
+    # DB row was authoritative from the first seed, forever.
+    is_default: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="ACTIVE", server_default="ACTIVE"
@@ -43,7 +60,7 @@ class AiPrompt(Base):
         "AiPromptVersion",
         back_populates="prompt",
         cascade="all, delete-orphan",
-        order_by="desc(AiPromptVersion.id)",
+        order_by="desc(AiPromptVersion.version)",
     )
 
 
@@ -57,6 +74,13 @@ class AiPromptVersion(Base):
     prompt_id: Mapped[int] = mapped_column(
         ForeignKey("ai_prompts.id"), nullable=False, index=True
     )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="ACTIVE", server_default="ACTIVE"
+    )
+    activated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     prompt: Mapped["AiPrompt"] = relationship("AiPrompt", back_populates="versions")

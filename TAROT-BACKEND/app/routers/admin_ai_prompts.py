@@ -11,12 +11,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.client import get_db
-from app.dependencies.authorization import require_permission
-from app.enums.permissions import Permission
+from app.dependencies.authorization import require_superadmin
 from app.services.ai import client as ai_client
 from app.services.ai import registry
 
-router = APIRouter(dependencies=[Depends(require_permission(Permission.MANAGE_SETTINGS))])
+router = APIRouter(dependencies=[Depends(require_superadmin)])
 
 
 class PromptSave(BaseModel):
@@ -27,7 +26,12 @@ class PromptTest(BaseModel):
     variables: Optional[dict] = None
 
 
+class PromptActivate(BaseModel):
+    version: int | None = None
+
+
 def _to_detail(p) -> dict:
+    draft = next((version for version in p.versions if version.state == "DRAFT"), None)
     return {
         "key": p.key,
         "name": p.name,
@@ -36,7 +40,13 @@ def _to_detail(p) -> dict:
         "prompt": p.prompt,
         "default_prompt": p.default_prompt,
         "variables": p.variables or [],
+        "output_schema": p.output_schema,
+        "output_schema_version": p.output_schema_version,
+        "classification": p.classification,
         "status": p.status,
+        "active_version": p.active_version,
+        "draft_version": p.draft_version,
+        "draft_prompt": draft.text if draft else None,
         "char_count": len(p.prompt or ""),
         "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
         "last_run_status": p.last_run_status,
@@ -53,6 +63,9 @@ def list_ai_prompts(db: Session = Depends(get_db)):
             "description": p.description,
             "model": p.model,
             "status": p.status,
+            "classification": p.classification,
+            "active_version": p.active_version,
+            "draft_version": p.draft_version,
             "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
             "last_run_status": p.last_run_status,
         }
@@ -77,7 +90,40 @@ def save_ai_prompt(key: str, payload: PromptSave, db: Session = Depends(get_db))
         p = registry.save_prompt(db, key, payload.prompt)
     except registry.PromptNotFound:
         raise HTTPException(status_code=404, detail="Prompt not found")
+    except registry.PromptProtectedError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+    except registry.PromptValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return JSONResponse(content=jsonable_encoder(_to_detail(p)))
+
+
+@router.put("/ai-prompts/{key}/draft")
+def save_ai_prompt_draft(key: str, payload: PromptSave, db: Session = Depends(get_db)):
+    try:
+        registry.save_draft(db, key, payload.prompt)
+        prompt = registry.get_prompt(db, key)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    except registry.PromptProtectedError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+    except registry.PromptValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return JSONResponse(content=jsonable_encoder(_to_detail(prompt)))
+
+
+@router.post("/ai-prompts/{key}/activate")
+def activate_ai_prompt(
+    key: str, payload: PromptActivate, db: Session = Depends(get_db)
+):
+    try:
+        prompt = registry.activate_draft(db, key, payload.version)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt or draft version not found")
+    except registry.PromptProtectedError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+    except registry.PromptValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return JSONResponse(content=jsonable_encoder(_to_detail(prompt)))
 
 
 @router.post("/ai-prompts/{key}/restore-default")
@@ -86,6 +132,8 @@ def restore_ai_prompt_default(key: str, db: Session = Depends(get_db)):
         p = registry.restore_default(db, key)
     except registry.PromptNotFound:
         raise HTTPException(status_code=404, detail="Prompt not found")
+    except registry.PromptProtectedError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
     return JSONResponse(content=jsonable_encoder(_to_detail(p)))
 
 
@@ -98,9 +146,12 @@ def get_ai_prompt_versions(key: str, db: Session = Depends(get_db)):
     items = [
         {
             "id": v.id,
+            "version": v.version,
             "text": v.text,
+            "state": v.state,
             "char_count": len(v.text or ""),
             "created_at": v.created_at.isoformat() if v.created_at else None,
+            "activated_at": v.activated_at.isoformat() if v.activated_at else None,
         }
         for v in versions
     ]
@@ -113,7 +164,24 @@ def restore_ai_prompt_version(key: str, version_id: int, db: Session = Depends(g
         p = registry.restore_version(db, key, version_id)
     except registry.PromptNotFound:
         raise HTTPException(status_code=404, detail="Prompt or version not found")
+    except registry.PromptProtectedError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
     return JSONResponse(content=jsonable_encoder(_to_detail(p)))
+
+
+@router.post("/ai-prompts/{key}/versions/{version_number}/rollback")
+def rollback_ai_prompt_version(
+    key: str, version_number: int, db: Session = Depends(get_db)
+):
+    try:
+        prompt = registry.rollback_to_version(db, key, version_number)
+    except registry.PromptNotFound:
+        raise HTTPException(status_code=404, detail="Prompt or version not found")
+    except registry.PromptProtectedError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+    except registry.PromptValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return JSONResponse(content=jsonable_encoder(_to_detail(prompt)))
 
 
 # Sample values used to fill any variable the tester didn't supply.

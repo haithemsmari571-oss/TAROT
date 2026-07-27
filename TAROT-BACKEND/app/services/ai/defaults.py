@@ -7,6 +7,8 @@ summaries, …) to REGISTERED_PROMPTS and they appear in the admin "AI Prompts".
 """
 
 from app.config import get_app_settings
+from app.schemas.numerology import NumerologyReport
+from app.services.numerology_config import get_numerology_settings
 
 # The 22 Major Arcana (key -> name), matching the optimized card art (0-21).
 MAJOR_ARCANA = {
@@ -20,6 +22,7 @@ MAJOR_ARCANA = {
 
 # The code contract key for the nightly content prompt.
 DAILY_CONTENT_KEY = "daily_content"
+NUMEROLOGY_FULL_READING_KEY = "numerology.full-reading"
 
 # The shipped default prompt — Valentina's voice, ASA-compliant BY CONSTRUCTION,
 # and it asks for strict JSON so the code can parse the five fields reliably.
@@ -47,6 +50,48 @@ DAILY_CONTENT_VARIABLES = [
     {"name": "card_name", "description": "The Major Arcana card chosen for the day, e.g. 'The Star'."},
 ]
 
+NUMEROLOGY_FULL_READING_DEFAULT = """You are Ask Valentina's expert numerology interpreter.
+
+Create a detailed, compassionate and practical numerology reading using ONLY the verified calculation snapshot supplied below.
+
+Never recalculate, replace, contradict or invent a number. The deterministic calculator is the authority. Your job is interpretation and synthesis.
+
+Explain:
+- Personal overview
+- Life Path: character, strengths, challenges and growth
+- Birthday Number
+- Numerology grid and arrow patterns when supplied
+- Current Personal Year and timing
+- Expression, Soul Urge and Personality numbers when supplied
+- Relationships
+- Career, purpose and money
+- How the person's numbers interact
+- Practical guidance and reflection questions
+
+Write substantial, original Ask Valentina content. Do not mention Astro-Seek and do not imitate or reproduce another website's wording.
+
+Do not use guarantees, diagnosis, fear-based language, certainty about future events or absolute predictions. Treat numerology as spiritual and interpretive guidance.
+
+If a section's required verified value is absent, omit that section instead of inventing it.
+
+Return the required structured JSON only.
+
+VERIFIED CALCULATION SNAPSHOT:
+{{calculation_snapshot}}"""
+
+NUMEROLOGY_FULL_READING_VARIABLES = [
+    {
+        "name": "calculation_snapshot",
+        "placeholder": "{{calculation_snapshot}}",
+        "required": True,
+        "protected": True,
+        "description": (
+            "Immutable, server-calculated numerology facts. This required token "
+            "is replaced only after the active prompt version is loaded."
+        ),
+    },
+]
+
 
 def registered_prompts() -> list[dict]:
     """The full set of prompts the platform ships. Seeded on startup."""
@@ -62,5 +107,22 @@ def registered_prompts() -> list[dict]:
             "model": model,
             "default_prompt": DAILY_CONTENT_DEFAULT,
             "variables": DAILY_CONTENT_VARIABLES,
+            "output_schema": None,
+            "output_schema_version": None,
+            "classification": "APPROVAL_EDITABLE",
+        },
+        {
+            "key": NUMEROLOGY_FULL_READING_KEY,
+            "name": "Numerology Full Reading",
+            "description": (
+                "Interprets the verified deterministic numerology snapshot for the "
+                "public calculator. The model never calculates the numbers."
+            ),
+            "model": get_numerology_settings().NUMEROLOGY_MODEL,
+            "default_prompt": NUMEROLOGY_FULL_READING_DEFAULT,
+            "variables": NUMEROLOGY_FULL_READING_VARIABLES,
+            "output_schema": NumerologyReport.model_json_schema(),
+            "output_schema_version": "numerology-report-1",
+            "classification": "OWNER_EDITABLE",
         },
     ]
