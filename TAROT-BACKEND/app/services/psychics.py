@@ -213,13 +213,17 @@ def delete_psychic(db: Session, psychic_id: int):
 
 
 def read_psychic(db: Session, psychic_id: int):
+    # The route serving this is public, and PsychicRead carries `email`, so the
+    # role filter is what stops an anonymous caller walking the id range and
+    # harvesting every account's address — clients and admins included. Keep it
+    # in step with get_psychic above; a lookup by id alone is not safe here.
     psychic = (
         db.query(User)
         .options(
             joinedload(User.categories).joinedload(PsychicCategory.category),
             joinedload(User.availability),
         )
-        .filter_by(id=psychic_id)
+        .filter_by(role=Role.PSYCHIC, id=psychic_id)
         .first()
     )
     if not psychic:
