@@ -10,15 +10,18 @@ interface DeleteModalProps {
   title?: string;
   description?: string;
   itemName?: string;
+  /** Confirm-button text. Override wherever the action is not a hard delete. */
+  confirmLabel?: string;
 }
 
-const DeleteModal = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  title = "Purge Protocol", 
+const DeleteModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  title = "Purge Protocol",
   description = "Are you sure you want to permanently delete this node from the registry?",
-  itemName
+  itemName,
+  confirmLabel = "Authorize Purge"
 }: DeleteModalProps) => {
   if (!isOpen) return null;
 
@@ -91,7 +94,7 @@ const DeleteModal = ({
                 }}
               >
                 <span className="text-dark font-black uppercase text-[10px] tracking-[0.4em]">
-                  Authorize Purge
+                  {confirmLabel}
                 </span>
               </button>
               

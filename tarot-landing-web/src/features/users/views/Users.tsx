@@ -399,7 +399,7 @@ const Users = () => {
               <button 
                 className="p-3 rounded-xl text-white/20 hover:text-starGold hover:bg-starGold/5 transition-all"
                 onClick={() => { setUserToPurge(user); setIsDeleteModalOpen(true); }}
-                title="Delete User"
+                title="Suspend User"
               >
                 <Icon icon="solar:trash-bin-trash-bold-duotone" className="text-lg" />
               </button>
@@ -443,9 +443,10 @@ const Users = () => {
         isOpen={isDeleteModalOpen}
         onClose={() => { setIsDeleteModalOpen(false); setUserToPurge(null); }}
         onConfirm={handleConfirmPurge}
-        title="Delete User"
+        title="Suspend User"
         itemName={userToPurge?.username}
-        description="Are you sure you want to delete this user? This action will suspend their account."
+        description="Are you sure you want to suspend this user? Their account is retained and can be re-activated."
+        confirmLabel="Authorize Suspension"
       />
     </div>
   );
