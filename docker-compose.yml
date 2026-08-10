@@ -34,6 +34,11 @@ services:
       - DATABASE_URL=postgresql://tarot:tarot@postgres:5432/tarot
       - MAIL_SERVER=mailpit
       - MAIL_PORT=1025
+      - MAIL_STARTTLS=false
+      - MAIL_SSL_TLS=false
+      - MAIL_USE_CREDENTIALS=false
+      - MAIL_VALIDATE_CERTS=false
+      - MAIL_DEBUG=true
       - RELOAD=true
       # Container-side path of the vault mount above. Only files behind a
       # human-CONFIRMED client_record_mappings row are ever read.

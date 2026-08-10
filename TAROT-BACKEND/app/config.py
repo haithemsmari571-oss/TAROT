@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from pydantic import SecretStr, field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,16 +19,59 @@ class AppSettings(BaseSettings):
 
     DATABASE_URL: str = "postgresql://tarot:tarot@localhost:5432/tarot"
 
-    MAIL_USERNAME: str = "support@askvalentina.co.uk"
-    MAIL_PASSWORD: str = "BarCoffeeMirror21@"
-    MAIL_FROM: str = "support@askvalentina.co.uk"
-    MAIL_PORT: int = 465
-    MAIL_SERVER: str = "mail.privateemail.com"
-    MAIL_ENCRYPTION: str = "tls"
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_PORT: int
+    MAIL_SERVER: str
+    MAIL_STARTTLS: bool
+    MAIL_SSL_TLS: bool
+    MAIL_USE_CREDENTIALS: bool = True
+    MAIL_VALIDATE_CERTS: bool = True
+    MAIL_DEBUG: bool = False
 
-    JWT_SECRET_KEY: str = (
-        "b3bdc70d9d8fb5594b135a7a45d148ab51947cb29508655af27ff84e7492b257"
+    JWT_SECRET_KEY: str
+
+    @field_validator(
+        "MAIL_USERNAME",
+        "MAIL_PASSWORD",
+        "MAIL_FROM",
+        "MAIL_SERVER",
+        "JWT_SECRET_KEY",
+        mode="before",
     )
+    @classmethod
+    def require_security_setting(cls, value, info):
+        """Reject missing/blank security settings; committed source has no fallback."""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{info.field_name} must be provided via environment variable")
+        return value
+
+    @field_validator("MAIL_PORT")
+    @classmethod
+    def require_valid_mail_port(cls, value):
+        if not 1 <= value <= 65535:
+            raise ValueError("MAIL_PORT must be between 1 and 65535")
+        return value
+
+    @model_validator(mode="after")
+    def require_secure_production_mail_transport(self):
+        """Reject ambiguous or weakened SMTP transport settings in production."""
+        if self.ENVIRONMENT != "prod":
+            return self
+        if self.MAIL_STARTTLS == self.MAIL_SSL_TLS:
+            raise ValueError(
+                "Production email must enable exactly one of "
+                "MAIL_STARTTLS or MAIL_SSL_TLS"
+            )
+        if not self.MAIL_USE_CREDENTIALS:
+            raise ValueError("MAIL_USE_CREDENTIALS must be enabled in production")
+        if not self.MAIL_VALIDATE_CERTS:
+            raise ValueError("MAIL_VALIDATE_CERTS must be enabled in production")
+        if self.MAIL_DEBUG:
+            raise ValueError("MAIL_DEBUG must be disabled in production")
+        return self
+
     JWT_ALGORITHM: str = "HS256"
     # 24h. Production sets its own value via env; this default is deliberately
     # sane (not 9999) so a long-lived token can never ship by omission.

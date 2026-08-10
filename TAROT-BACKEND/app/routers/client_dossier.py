@@ -138,7 +138,13 @@ def edit_note(
     if user.role not in _ALLOWED:
         return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
 
-    entry = update_client_note(db, note_id, title=body.title, note=body.note)
+    entry = update_client_note(
+        db,
+        client_id=client_id,
+        note_id=note_id,
+        title=body.title,
+        note=body.note,
+    )
     if entry is None:
         return JSONResponse(content={"detail": "Note not found"}, status_code=404)
 

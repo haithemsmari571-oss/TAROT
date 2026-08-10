@@ -25,16 +25,16 @@ class EmailSchema(BaseModel):
 
 
 conf = ConnectionConfig(
-    MAIL_USERNAME="support@askvalentina.co.uk",
-    MAIL_PASSWORD="BarCoffeeMirror21@",
-    MAIL_FROM="support@askvalentina.co.uk",
-    MAIL_SERVER="mail.privateemail.com",
-    MAIL_PORT=465,
-    MAIL_STARTTLS=False,
-    MAIL_SSL_TLS=True,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True,
-    MAIL_DEBUG=True,
+    MAIL_USERNAME=settings.MAIL_USERNAME,
+    MAIL_PASSWORD=settings.MAIL_PASSWORD,
+    MAIL_FROM=settings.MAIL_FROM,
+    MAIL_SERVER=settings.MAIL_SERVER,
+    MAIL_PORT=settings.MAIL_PORT,
+    MAIL_STARTTLS=settings.MAIL_STARTTLS,
+    MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
+    USE_CREDENTIALS=settings.MAIL_USE_CREDENTIALS,
+    VALIDATE_CERTS=settings.MAIL_VALIDATE_CERTS,
+    MAIL_DEBUG=settings.MAIL_DEBUG,
 )
 
 app = FastAPI()

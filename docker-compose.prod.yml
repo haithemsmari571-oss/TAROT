@@ -12,8 +12,19 @@ services:
     env_file:
       - ./TAROT-BACKEND/.env
     environment:
-      - ENVIRONMENT=production
-      - RELOAD=
+      ENVIRONMENT: production
+      RELOAD: ""
+      MAIL_SERVER: ${MAIL_SERVER:?MAIL_SERVER is required for production}
+      MAIL_PORT: ${MAIL_PORT:?MAIL_PORT is required for production}
+      MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME is required for production}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required for production}
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM is required for production}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:?MAIL_STARTTLS is required for production}
+      MAIL_SSL_TLS: ${MAIL_SSL_TLS:?MAIL_SSL_TLS is required for production}
+      MAIL_USE_CREDENTIALS: ${MAIL_USE_CREDENTIALS:?MAIL_USE_CREDENTIALS is required for production}
+      MAIL_VALIDATE_CERTS: ${MAIL_VALIDATE_CERTS:?MAIL_VALIDATE_CERTS is required for production}
+      MAIL_DEBUG: ${MAIL_DEBUG:-false}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required for production}
     restart: unless-stopped
     depends_on:
       postgres:

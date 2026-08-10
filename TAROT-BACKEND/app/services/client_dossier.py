@@ -66,12 +66,17 @@ def create_client_note(
 
 def update_client_note(
     db: Session,
+    client_id: int,
     note_id: int,
     title: Optional[str] = None,
     note: Optional[str] = None,
 ) -> Optional[ClientNote]:
-    """Edit an existing dossier note's title and/or body. Returns None if missing."""
-    entry = db.query(ClientNote).filter(ClientNote.id == note_id).first()
+    """Edit a note only when it belongs to the requested client."""
+    entry = (
+        db.query(ClientNote)
+        .filter(ClientNote.id == note_id, ClientNote.client_id == client_id)
+        .first()
+    )
     if not entry:
         return None
     if note is not None:
@@ -83,7 +88,7 @@ def update_client_note(
         entry.title = (title.strip() or _auto_title(entry.note))[:200]
     db.commit()
     db.refresh(entry)
-    logger.info("client_note_updated", note_id=note_id)
+    logger.info("client_note_updated", note_id=note_id, client_id=client_id)
     return entry
 
 

@@ -34,7 +34,7 @@ jobs:
           script: |
             cd /root/TAROT
             git pull origin main
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend frontend
+            docker compose --env-file TAROT-BACKEND/.env -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend frontend
 
       # Short pause before retrying, to let a transient network/SSH blip clear.
       - name: Pause before retry
@@ -57,4 +57,4 @@ jobs:
           script: |
             cd /root/TAROT
             git pull origin main
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend frontend
+            docker compose --env-file TAROT-BACKEND/.env -f docker-compose.yml -f docker-compose.prod.yml up -d --build backend frontend

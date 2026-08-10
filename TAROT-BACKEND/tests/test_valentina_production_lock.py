@@ -9,11 +9,10 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
-    # Re-baselined for owner-directed website-repo work (NOT a Second Brain
-    # hash update): Phase 2 client-records vault merge touched config.py and
-    # reading_assistant.py; Phase 3 steering notes + commitment ledger touched
-    # reading_duo.py and reading_valentina.py.
-    "app/config.py": "8637E548DB99AD39EB48E2BF260C40058505F60FADD3366BFDC94926AA53BC99",
+    # Production Lock Version 3: owner-approved Phase 0 security hardening
+    # changed config.py and client_dossier.py. The other nine files remain at
+    # their Version 2 hashes; Versions 1 and 2 stay preserved in Second Brain.
+    "app/config.py": "A4D62184543A9EFCCBDDF9E0125FA21D4F3485CBADEEB0C21048DB4C5B759662",
     "app/services/ai/client.py": "D623402DAD09D9F760D7E0EF740FC5EFF99DFB949A5DE314095E9C02BE4CB9CD",
     "app/services/ai/reading_pipeline.py": "CE051BD93273D51280E7FDB23DC9BDE5F48EA278AD8869FD89568A08CE93F50C",
     "app/services/ai/reading_duo.py": "8CD7729FF6E2D14AF35071CE854D396EF413102B78A3EE28489185A16E56186C",
@@ -23,7 +22,7 @@ LOCKED_SHA256 = {
     "app/services/ai/reading_reader.py": "3C5F0082FCF7284C949E3586CC1B5180F9D226F98426460BFAF95E81E882C396",
     "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",
     "app/services/ai/sabri_check.py": "7DEB9C5B38176A87BB57563BF70A9A58522FE1051E1163B72B8D75A106F10960",
-    "app/services/client_dossier.py": "6EF712EB93AB666F63C69BE7DBA44833A03ADBE3A4BB02070351F3525AF905DB",
+    "app/services/client_dossier.py": "6A7F62BEDEAAEF7F5C70A382DAA6C31D918EA41B34207F20FCD1E1BA19DBFDE8",
 }
 
 
