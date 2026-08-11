@@ -99,6 +99,10 @@ class AppSettings(BaseSettings):
     CONTENT_JOB_HOUR_UTC: int = 3
 
     # ── AI reading pipeline (Valentina generates, Sabri directs delivery, Atlas remembers) ──
+    # Local-only Atlas dossier handoff. The URL is overridable for another local
+    # environment; the shared key has no value in source and must come from env.
+    ATLAS_DOSSIER_BASE_URL: str = "http://127.0.0.1:4317"
+    ATLAS_INTERNAL_KEY: str = ""
     # Master switch. Default ON — there is no live traffic to protect yet. Flip
     # to false to fully disable the reading pipeline and the Atlas auto-summary.
     AI_DRAFTING_ENABLED: bool = True

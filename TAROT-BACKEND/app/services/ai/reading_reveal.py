@@ -27,6 +27,9 @@ hold-back buffer all live in reading_reader and are used verbatim.
 import asyncio
 from datetime import datetime
 from typing import Dict, Tuple
+from urllib.parse import quote
+
+import httpx
 
 from app.config import get_app_settings
 from app.logging_config import get_logger
@@ -39,6 +42,9 @@ _active: Dict[int, bool] = {}                     # a turn loop is running for t
 _pending: Dict[int, Tuple[str, dict]] = {}        # queued redirect: (message, transcript entry)
 _turn_tasks: Dict[int, asyncio.Task] = {}
 
+_ATLAS_DOSSIER_TIMEOUT_SECONDS = 2.0
+_ATLAS_DOSSIER_PATH = "/internal/atlas/dossier"
+
 
 def _lock(chat_id: int) -> asyncio.Lock:
     lock = _locks.get(chat_id)
@@ -46,6 +52,74 @@ def _lock(chat_id: int) -> asyncio.Lock:
         lock = asyncio.Lock()
         _locks[chat_id] = lock
     return lock
+
+
+async def _fetch_atlas_memory_text(user_id) -> str:
+    """Fetch Atlas's prompt-ready dossier text once, always failing closed to empty."""
+    settings = get_app_settings()
+    base_url = str(getattr(settings, "ATLAS_DOSSIER_BASE_URL", "") or "").strip()
+    internal_key = str(getattr(settings, "ATLAS_INTERNAL_KEY", "") or "").strip()
+    source_user_id = str(user_id or "").strip()
+    if not base_url or not internal_key:
+        logger.warning("atlas_dossier_fetch_skipped", reason="configuration_missing")
+        return ""
+    if not source_user_id:
+        logger.warning("atlas_dossier_fetch_skipped", reason="source_user_id_missing")
+        return ""
+
+    url = f"{base_url.rstrip('/')}{_ATLAS_DOSSIER_PATH}/{quote(source_user_id, safe='')}"
+
+    async def _request():
+        async with httpx.AsyncClient(timeout=_ATLAS_DOSSIER_TIMEOUT_SECONDS) as client:
+            return await client.get(
+                url,
+                headers={"X-Atlas-Internal-Key": internal_key},
+            )
+
+    try:
+        response = await asyncio.wait_for(
+            _request(), timeout=_ATLAS_DOSSIER_TIMEOUT_SECONDS
+        )
+    except (asyncio.TimeoutError, httpx.TimeoutException):
+        logger.warning("atlas_dossier_fetch_failed", reason="timeout")
+        return ""
+    except Exception as error:  # noqa: BLE001 — memory must never break a reading
+        logger.warning(
+            "atlas_dossier_fetch_failed",
+            reason="connection",
+            error_type=type(error).__name__,
+        )
+        return ""
+
+    if response.status_code != 200:
+        logger.warning(
+            "atlas_dossier_fetch_failed",
+            reason="status",
+            status_code=response.status_code,
+        )
+        return ""
+
+    try:
+        payload = response.json()
+        text = payload.get("text") if isinstance(payload, dict) else None
+    except Exception as error:  # noqa: BLE001 — malformed JSON is no-memory
+        logger.warning(
+            "atlas_dossier_fetch_failed",
+            reason="invalid_response",
+            error_type=type(error).__name__,
+        )
+        return ""
+    if not isinstance(text, str):
+        logger.warning("atlas_dossier_fetch_failed", reason="invalid_response")
+        return ""
+    return text
+
+
+async def _atlas_memory_for_session(state, user_id) -> str:
+    """Return the session's cached Atlas text, including cached empty failures."""
+    if state.atlas_memory_text is None:
+        state.atlas_memory_text = await _fetch_atlas_memory_text(user_id)
+    return state.atlas_memory_text
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -139,7 +213,9 @@ async def resolve_classification(message: str) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 # Invisible generation + paced reveal (per turn).
 # ═════════════════════════════════════════════════════════════════════════════
-def _reader_input_for(message, trigger_entry, state, client_file, dob, now):
+def _reader_input_for(
+    message, trigger_entry, state, client_file, dob, now, atlas_memory_text=""
+):
     """Assemble the Reader input for a turn: the client message + the transcript WITHOUT
     the triggering entry (so it isn't duplicated into RECENT CONVERSATION on top of the
     CLIENT MESSAGE section) + numerology + fresh session metadata. Pure."""
@@ -147,7 +223,7 @@ def _reader_input_for(message, trigger_entry, state, client_file, dob, now):
     from app.services.ai.reading_session import compute_metadata
 
     transcript = [e for e in state.chat_transcript if e is not trigger_entry]
-    return reading_reader.build_reader_input(
+    reader_input = reading_reader.build_reader_input(
         client_message=message,
         chat_transcript=transcript,
         client_file=client_file,
@@ -156,6 +232,14 @@ def _reader_input_for(message, trigger_entry, state, client_file, dob, now):
         date_of_birth=dob,
         current_year=now.year,
     )
+    if atlas_memory_text:
+        return (
+            "ATLAS CLIENT MEMORY (load silently, never cite):\n"
+            + atlas_memory_text
+            + "\n\n"
+            + reader_input
+        )
+    return reader_input
 
 
 async def _generate_turn(chat_id, message, trigger_entry, state, user_id):
@@ -173,7 +257,16 @@ async def _generate_turn(chat_id, message, trigger_entry, state, user_id):
 
     client_file, dob = await asyncio.to_thread(_load_file_and_dob)
     state.client_file = client_file
-    reader_input = _reader_input_for(message, trigger_entry, state, client_file, dob, datetime.now())
+    atlas_memory_text = await _atlas_memory_for_session(state, user_id)
+    reader_input = _reader_input_for(
+        message,
+        trigger_entry,
+        state,
+        client_file,
+        dob,
+        datetime.now(),
+        atlas_memory_text,
+    )
     bubbles, holds = await asyncio.to_thread(
         reading_reader.run_reader_turn, reader_input, client_message=message,
         chat_id=chat_id, turn_number=state.messages_sent_count,

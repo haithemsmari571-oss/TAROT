@@ -25,6 +25,9 @@ class ReadingSessionState:
     client_id: Optional[int] = None
     chat_id: Optional[int] = None
     client_file: Optional[str] = None
+    # None means Atlas has not been attempted for this reading; "" is a completed
+    # empty/failed fetch and is deliberately cached so later turns never retry it.
+    atlas_memory_text: Optional[str] = None
     is_first_session: bool = True
     session_start: Optional[datetime] = None
     last_activity_at: Optional[datetime] = None

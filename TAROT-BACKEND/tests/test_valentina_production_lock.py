@@ -1,4 +1,4 @@
-"""Raw-byte verification of the eleven Phase 0 Production Lock files."""
+"""Raw-byte verification of the eleven Production Lock Version 4 files."""
 
 from __future__ import annotations
 
@@ -9,16 +9,16 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
-    # Production Lock Version 3: owner-approved Phase 0 security hardening
-    # changed config.py and client_dossier.py. The other nine files remain at
-    # their Version 2 hashes; Versions 1 and 2 stay preserved in Second Brain.
-    "app/config.py": "A4D62184543A9EFCCBDDF9E0125FA21D4F3485CBADEEB0C21048DB4C5B759662",
+    # Production Lock Version 4: owner-approved Milestone 10 Part B changed
+    # config.py and reading_reveal.py. The other nine files remain at their
+    # Version 3 hashes; Versions 1-3 stay preserved in Second Brain.
+    "app/config.py": "B760A1DB9ACE63180B1733215A10F63EC92F8CBCC306ADDAF693FC3CA147ADC1",
     "app/services/ai/client.py": "D623402DAD09D9F760D7E0EF740FC5EFF99DFB949A5DE314095E9C02BE4CB9CD",
     "app/services/ai/reading_pipeline.py": "CE051BD93273D51280E7FDB23DC9BDE5F48EA278AD8869FD89568A08CE93F50C",
     "app/services/ai/reading_duo.py": "8CD7729FF6E2D14AF35071CE854D396EF413102B78A3EE28489185A16E56186C",
     "app/services/ai/reading_valentina.py": "2C5FF2B308604B781CB385D088C755BB6BDB61A4158DD3309649E86A5C2257FA",
     "app/services/ai/reading_sabri.py": "C0BFF1AAC2681059ED4633210ACA2D0ED7A94E60D4FE3ED10F6B2E480FEE2E01",
-    "app/services/ai/reading_reveal.py": "7B1C6CA75F480FA691D92FF194FA9F3ED16D3B3273B90E3B5B38A30348D21AAD",
+    "app/services/ai/reading_reveal.py": "1D54D58FC4AE510F652327A502E50AB0F8430E48E2E662928E7C27D8E72FBA53",
     "app/services/ai/reading_reader.py": "3C5F0082FCF7284C949E3586CC1B5180F9D226F98426460BFAF95E81E882C396",
     "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",
     "app/services/ai/sabri_check.py": "7DEB9C5B38176A87BB57563BF70A9A58522FE1051E1163B72B8D75A106F10960",
