@@ -50,7 +50,11 @@ def _seed_chat(factory, chat_id, mode):
         db.commit()
 
 
-def _hybrid_env(monkeypatch, draft_text="VALENTINA RAW DRAFT — he's not gone..."):
+def _hybrid_env(
+    monkeypatch,
+    draft_text="VALENTINA RAW DRAFT — he's not gone...",
+    model_inputs=None,
+):
     """two_role engine, AI on/configured, Valentina stubbed, broadcast/Sabri spied."""
     from app.config import get_app_settings
     from app.services.ai import client as ai_client
@@ -61,10 +65,12 @@ def _hybrid_env(monkeypatch, draft_text="VALENTINA RAW DRAFT — he's not gone..
     monkeypatch.setattr(ai_client, "is_configured", lambda: True)
     monkeypatch.setattr(reading_assistant, "build_client_file", lambda db, uid: "DOSSIER")
     monkeypatch.setattr("app.services.client_dossier.get_client_dob", lambda db, uid: None)
-    monkeypatch.setattr(
-        reading_valentina, "write_valentina",
-        lambda inp, client_message=None: draft_text,
-    )
+    def fake_write(inp, client_message=None):
+        if model_inputs is not None:
+            model_inputs.append(inp)
+        return draft_text
+
+    monkeypatch.setattr(reading_valentina, "write_valentina", fake_write)
     calls = {"broadcast": [], "sabri": []}
     async def _no_broadcast(*a, **k):
         calls["broadcast"].append(a)
@@ -106,6 +112,32 @@ def test_hybrid_turn_writes_pending_draft_never_broadcasts_never_calls_sabri(mon
     assert d.sabri_passed is False
     assert calls["sabri"] == []       # Sabri disabled outright — never invoked
     assert calls["broadcast"] == []   # nothing auto-sent by the pipeline
+
+
+def test_hybrid_turn_passes_atlas_memory_to_the_shared_valentina_writer(monkeypatch):
+    factory = _mem_db(monkeypatch)
+    _seed_chat(factory, 7312, ResponseMode.HYBRID)
+    get_session_store().delete("chat:7312")
+    model_inputs = []
+    calls = _hybrid_env(monkeypatch, model_inputs=model_inputs)
+    memory_text = "SYNTHETIC_ATLAS_MEMORY_FOR_HYBRID_VALENTINA"
+
+    async def fake_atlas_memory(_state, _user_id):
+        return memory_text
+
+    monkeypatch.setattr(reading_duo, "_atlas_memory_for_session", fake_atlas_memory)
+    with factory() as db:
+        chat = db.query(Chat).filter(Chat.id == 7312).first()
+
+    handled = asyncio.run(
+        _run_handled_turn(7312, 556, "what do you see next?", chat)
+    )
+
+    assert handled is True
+    assert len(model_inputs) == 1
+    assert memory_text in model_inputs[0]
+    assert calls["sabri"] == []
+    assert calls["broadcast"] == []
 
 
 def test_hybrid_empty_valentina_stores_nothing_and_sends_nothing(monkeypatch):

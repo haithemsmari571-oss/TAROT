@@ -27,7 +27,10 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 from app.logging_config import get_logger
-from app.services.ai.reading_reveal import resolve_classification  # continue/redirect classifier (reused)
+from app.services.ai.reading_reveal import (  # continue/redirect classifier + Atlas cache (reused)
+    _atlas_memory_for_session,
+    resolve_classification,
+)
 
 logger = get_logger(__name__)
 
@@ -84,6 +87,7 @@ async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
 
     client_file, dob, steering_notes = await asyncio.to_thread(_load_file_and_dob)
     state.client_file = client_file
+    atlas_memory_text = await _atlas_memory_for_session(state, user_id)
     now = datetime.now()
     valentina_input = reading_valentina.build_valentina_input(
         client_message=message,
@@ -95,6 +99,13 @@ async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
         steering_notes=steering_notes,
         commitment_ledger=state.commitment_ledger,
     )
+    if atlas_memory_text:
+        valentina_input = (
+            "ATLAS CLIENT MEMORY (load silently, never cite):\n"
+            + atlas_memory_text
+            + "\n\n"
+            + valentina_input
+        )
     text = await asyncio.to_thread(
         reading_valentina.write_valentina, valentina_input, client_message=message
     )

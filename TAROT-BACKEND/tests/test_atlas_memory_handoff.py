@@ -1,4 +1,4 @@
-"""Atlas dossier handoff into the live single-agent Reader.
+"""Atlas dossier handoff into the single-agent and live two-role Readers.
 
 All HTTP, database, and model boundaries are synthetic fakes. No service or
 environment file is used by this suite.
@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import httpx
 
-from app.services.ai import reading_reader, reading_reveal
+from app.services.ai import reading_duo, reading_reader, reading_reveal
 from app.services.ai.reading_session import create_session_state, record_client_message
 
 
@@ -81,6 +81,54 @@ def _reader_input(state, message, trigger, memory):
         dob=None,
         now=datetime(2032, 1, 1, 12, 0, 0),
         atlas_memory_text=memory,
+    )
+
+
+def _install_duo_writer(monkeypatch, model_inputs, output="synthetic Valentina draft"):
+    from app.database import client as database_client
+    from app.services import client_dossier
+    from app.services.ai import (
+        reading_assistant,
+        reading_draft_log,
+        reading_steering,
+        reading_valentina,
+    )
+
+    class _DbContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(database_client, "SessionLocal", _DbContext)
+    monkeypatch.setattr(
+        reading_assistant, "build_client_file", lambda _db, _user_id: "LEGACY CLIENT FILE"
+    )
+    monkeypatch.setattr(client_dossier, "get_client_dob", lambda _db, _user_id: None)
+    monkeypatch.setattr(
+        reading_steering, "get_active_notes", lambda _db, _chat_id: []
+    )
+    monkeypatch.setattr(
+        reading_draft_log,
+        "get_draft_log",
+        lambda: SimpleNamespace(log=lambda **_fields: None),
+    )
+
+    def fake_write(valentina_input, **_kwargs):
+        model_inputs.append(valentina_input)
+        return output
+
+    monkeypatch.setattr(reading_valentina, "write_valentina", fake_write)
+
+
+def _write_duo_turn(state, message, user_id):
+    record_client_message(state, message)
+    trigger = state.chat_transcript[-1]
+    return asyncio.run(
+        reading_duo._write_valentina_turn(
+            state.chat_id, message, trigger, state, user_id
+        )
     )
 
 
@@ -318,3 +366,238 @@ def test_unparseable_response_warns_and_proceeds(monkeypatch):
             {"reason": "invalid_response", "error_type": "ValueError"},
         )
     ]
+
+
+def test_two_role_valentina_receives_atlas_text_once_across_messages(monkeypatch):
+    calls = []
+    model_inputs = []
+    memory_text = "ATLAS CLIENT MEMORY DOSSIER\n- Synthetic two-role memory"
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+    _install_http_client(
+        monkeypatch,
+        lambda _url, _headers: _FakeResponse(
+            payload={"dossier": {"client": {"clientCode": "AV-DUO"}}, "text": memory_text}
+        ),
+        calls,
+    )
+    _install_duo_writer(monkeypatch, model_inputs)
+    state = create_session_state("chat:92001", client_id=201, chat_id=92001)
+
+    assert _write_duo_turn(state, "first two-role question", 201) == "synthetic Valentina draft"
+    assert _write_duo_turn(state, "second two-role question", 201) == "synthetic Valentina draft"
+
+    assert len(calls) == 1
+    assert len(model_inputs) == 2
+    assert all(memory_text in model_input for model_input in model_inputs)
+    assert all(
+        model_input.startswith("ATLAS CLIENT MEMORY (load silently, never cite):\n")
+        for model_input in model_inputs
+    )
+
+
+def test_single_agent_and_two_role_share_the_same_session_cache(monkeypatch):
+    calls = []
+    duo_inputs = []
+    reader_inputs = []
+    memory_text = "ATLAS CLIENT MEMORY DOSSIER\n- Shared synthetic memory"
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+    _install_http_client(
+        monkeypatch,
+        lambda _url, _headers: _FakeResponse(
+            payload={"dossier": {"client": {"clientCode": "AV-SHARED"}}, "text": memory_text}
+        ),
+        calls,
+    )
+    _install_duo_writer(monkeypatch, duo_inputs)
+
+    def fake_reader_turn(reader_input, **_kwargs):
+        reader_inputs.append(reader_input)
+        return ["synthetic reader bubble"], []
+
+    monkeypatch.setattr(reading_reader, "run_reader_turn", fake_reader_turn)
+
+    single_first = create_session_state("chat:92002", client_id=202, chat_id=92002)
+    record_client_message(single_first, "single first")
+    trigger = single_first.chat_transcript[-1]
+    asyncio.run(
+        reading_reveal._generate_turn(92002, "single first", trigger, single_first, 202)
+    )
+    assert _write_duo_turn(single_first, "duo second", 202) == "synthetic Valentina draft"
+
+    duo_first = create_session_state("chat:92003", client_id=203, chat_id=92003)
+    assert _write_duo_turn(duo_first, "duo first", 203) == "synthetic Valentina draft"
+    record_client_message(duo_first, "single second")
+    trigger = duo_first.chat_transcript[-1]
+    asyncio.run(
+        reading_reveal._generate_turn(92003, "single second", trigger, duo_first, 203)
+    )
+
+    assert len(calls) == 2
+    assert len(duo_inputs) == 2
+    assert len(reader_inputs) == 2
+    assert all(memory_text in model_input for model_input in duo_inputs + reader_inputs)
+
+
+def test_two_role_atlas_connection_failure_warns_and_still_completes(monkeypatch):
+    calls = []
+    model_inputs = []
+    sabri_sources = []
+    warnings = _capture_warnings(monkeypatch)
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+
+    def connection_error(url, _headers):
+        raise httpx.ConnectError(
+            "synthetic Atlas unavailable", request=httpx.Request("GET", url)
+        )
+
+    _install_http_client(monkeypatch, connection_error, calls)
+    _install_duo_writer(monkeypatch, model_inputs)
+
+    async def fake_sabri(_chat_id, _message, _entry, _state, source_content, is_new):
+        assert is_new is True
+        sabri_sources.append(source_content)
+        return ["synthetic delivered bubble"], ""
+
+    monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
+    state = create_session_state("chat:92004", client_id=204, chat_id=92004)
+    record_client_message(state, "question while Atlas is down")
+    trigger = state.chat_transcript[-1]
+
+    bubbles, _reserve, route = asyncio.run(
+        reading_duo._duo_generate(
+            92004,
+            "question while Atlas is down",
+            trigger,
+            state,
+            204,
+            forced_route="new",
+        )
+    )
+
+    assert bubbles == ["synthetic delivered bubble"]
+    assert route == "new"
+    assert sabri_sources == ["synthetic Valentina draft"]
+    assert "ATLAS CLIENT MEMORY" not in model_inputs[0]
+    assert warnings == [
+        (
+            "atlas_dossier_fetch_failed",
+            {"reason": "connection", "error_type": "ConnectError"},
+        )
+    ]
+
+
+def test_two_role_atlas_401_warns_and_valentina_still_writes(monkeypatch):
+    calls = []
+    model_inputs = []
+    warnings = _capture_warnings(monkeypatch)
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+    _install_http_client(
+        monkeypatch,
+        lambda _url, _headers: _FakeResponse(status_code=401, payload={}),
+        calls,
+    )
+    _install_duo_writer(monkeypatch, model_inputs)
+    state = create_session_state("chat:92005", client_id=205, chat_id=92005)
+
+    assert _write_duo_turn(state, "question with rejected Atlas key", 205) == "synthetic Valentina draft"
+    assert "ATLAS CLIENT MEMORY" not in model_inputs[0]
+    assert warnings == [
+        ("atlas_dossier_fetch_failed", {"reason": "status", "status_code": 401})
+    ]
+
+
+def test_two_role_malformed_atlas_body_warns_and_valentina_still_writes(monkeypatch):
+    calls = []
+    model_inputs = []
+    warnings = _capture_warnings(monkeypatch)
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+    _install_http_client(
+        monkeypatch,
+        lambda _url, _headers: _FakeResponse(
+            json_error=ValueError("synthetic malformed Atlas body")
+        ),
+        calls,
+    )
+    _install_duo_writer(monkeypatch, model_inputs)
+    state = create_session_state("chat:92006", client_id=206, chat_id=92006)
+
+    assert _write_duo_turn(state, "question with malformed Atlas response", 206) == "synthetic Valentina draft"
+    assert "ATLAS CLIENT MEMORY" not in model_inputs[0]
+    assert warnings == [
+        (
+            "atlas_dossier_fetch_failed",
+            {"reason": "invalid_response", "error_type": "ValueError"},
+        )
+    ]
+
+
+def test_two_role_unmapped_client_is_a_normal_stranger(monkeypatch):
+    calls = []
+    model_inputs = []
+    warnings = _capture_warnings(monkeypatch)
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+    _install_http_client(
+        monkeypatch,
+        lambda _url, _headers: _FakeResponse(
+            payload={
+                "dossier": {
+                    "client": None,
+                    "snapshot": None,
+                    "facts": [],
+                    "situationalTimeline": [],
+                },
+                "text": "",
+            }
+        ),
+        calls,
+    )
+    _install_duo_writer(monkeypatch, model_inputs)
+    state = create_session_state("chat:92007", client_id=207, chat_id=92007)
+
+    assert _write_duo_turn(state, "first question from an unmapped client", 207) == "synthetic Valentina draft"
+    assert "CLIENT MESSAGE:\nfirst question from an unmapped client" in model_inputs[0]
+    assert "ATLAS CLIENT MEMORY" not in model_inputs[0]
+    assert len(calls) == 1
+    assert warnings == []
+
+
+def test_sabri_receives_only_valentina_prose_never_raw_atlas_memory(monkeypatch):
+    calls = []
+    model_inputs = []
+    sabri_sources = []
+    memory_text = "RAW_SYNTHETIC_ATLAS_MEMORY_MUST_NOT_REACH_SABRI"
+    valentina_output = "Valentina prose derived from her complete private context."
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+    _install_http_client(
+        monkeypatch,
+        lambda _url, _headers: _FakeResponse(
+            payload={"dossier": {"client": {"clientCode": "AV-SABRI"}}, "text": memory_text}
+        ),
+        calls,
+    )
+    _install_duo_writer(monkeypatch, model_inputs, output=valentina_output)
+
+    async def fake_sabri(_chat_id, _message, _entry, _state, source_content, is_new):
+        assert is_new is True
+        sabri_sources.append(source_content)
+        return ["humanized bubble"], ""
+
+    monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
+    state = create_session_state("chat:92008", client_id=208, chat_id=92008)
+    record_client_message(state, "question for Sabri boundary proof")
+    trigger = state.chat_transcript[-1]
+
+    asyncio.run(
+        reading_duo._duo_generate(
+            92008,
+            "question for Sabri boundary proof",
+            trigger,
+            state,
+            208,
+            forced_route="new",
+        )
+    )
+
+    assert memory_text in model_inputs[0]
+    assert sabri_sources == [valentina_output]
+    assert memory_text not in sabri_sources[0]
