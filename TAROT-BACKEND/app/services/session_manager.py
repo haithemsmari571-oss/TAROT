@@ -168,6 +168,7 @@ class SessionManager:
         self.requested_sessions: set[int] = set()
         self._monitoring_task: Optional[asyncio.Task] = None
         self._running = False
+        self._last_atlas_memory_sweep: Optional[datetime] = None
 
     async def start(self):
         """Start the session manager and monitoring loop"""
@@ -176,6 +177,21 @@ class SessionManager:
 
         # Load any active sessions from DB on startup
         self._load_active_sessions_from_db()
+
+        # Only jobs created by the new session-end hook are swept. Completed
+        # historical readings have no job row and are never backfilled.
+        try:
+            from app.services.atlas_client_memory_jobs import (
+                schedule_atlas_client_memory_sweep,
+            )
+
+            schedule_atlas_client_memory_sweep()
+            self._last_atlas_memory_sweep = datetime.now()
+        except Exception as atlas_e:  # noqa: BLE001 - never block app startup
+            logger.warning(
+                "atlas_client_memory_startup_sweep_failed",
+                error_type=type(atlas_e).__name__,
+            )
 
         # Start monitoring loop
         self._monitoring_task = asyncio.create_task(self._monitor_sessions())
@@ -642,6 +658,7 @@ class SessionManager:
 
         # Get fresh DB session for updates
         db = SessionLocal()
+        atlas_memory_job_id = None
         try:
             # Calculate final session info before ending
             final_info = self._calculate_session_info(session_state, db)
@@ -688,6 +705,20 @@ class SessionManager:
                     session_id=chat_session.id,
                     new_status="COMPLETED",
                 )
+                try:
+                    from app.services.atlas_client_memory_jobs import (
+                        enqueue_atlas_client_memory_job,
+                    )
+
+                    with db.begin_nested():
+                        enqueue_atlas_client_memory_job(db, chat_session.id)
+                    atlas_memory_job_id = chat_session.id
+                except Exception as atlas_e:  # noqa: BLE001 - ending must still commit
+                    logger.warning(
+                        "atlas_client_memory_enqueue_failed",
+                        chat_session_id=chat_session.id,
+                        error_type=type(atlas_e).__name__,
+                    )
             else:
                 logger.error(
                     "chat_session_not_found", session_id=session_state.session_id
@@ -733,23 +764,21 @@ class SessionManager:
                     "The session ended because the connection was lost. You can start a new reading anytime.",
                 )
 
-            # Atlas: fold the finished reading into the client's ONE rolling
-            # summary for this reader (fire-and-forget; respects the master
-            # switch, never blocks/fails end).
-            #
-            # This replaces schedule_atlas_summary, which re-summarised the
-            # client's entire message history every time and appended the result
-            # beside all the previous ones. The merge reads the existing summary
-            # plus only the messages since its watermark, so history is never
-            # re-read — which is also what makes a memory purge stick.
-            try:
-                from app.services.client_memory import schedule_memory_merge
+            # Process the committed, idempotent Atlas job off the reading path.
+            # Model or network failures retry once and never affect this end flow.
+            if atlas_memory_job_id is not None:
+                try:
+                    from app.services.atlas_client_memory_jobs import (
+                        schedule_atlas_client_memory_job,
+                    )
 
-                schedule_memory_merge(chat_id)
-            except Exception as atlas_e:  # noqa: BLE001
-                logger.warning(
-                    "atlas_schedule_failed", chat_id=chat_id, error=str(atlas_e)
-                )
+                    schedule_atlas_client_memory_job(atlas_memory_job_id)
+                except Exception as atlas_e:  # noqa: BLE001
+                    logger.warning(
+                        "atlas_client_memory_schedule_failed",
+                        chat_session_id=atlas_memory_job_id,
+                        error_type=type(atlas_e).__name__,
+                    )
 
         except Exception as e:
             logger.error(
@@ -1578,6 +1607,24 @@ class SessionManager:
             try:
                 # Get fresh DB session for this monitoring cycle
                 db = SessionLocal()
+
+                if (
+                    self._last_atlas_memory_sweep is None
+                    or (datetime.now() - self._last_atlas_memory_sweep).total_seconds() >= 60
+                ):
+                    try:
+                        from app.services.atlas_client_memory_jobs import (
+                            schedule_atlas_client_memory_sweep,
+                        )
+
+                        schedule_atlas_client_memory_sweep()
+                    except Exception as atlas_e:  # noqa: BLE001
+                        logger.warning(
+                            "atlas_client_memory_periodic_sweep_failed",
+                            error_type=type(atlas_e).__name__,
+                        )
+                    finally:
+                        self._last_atlas_memory_sweep = datetime.now()
 
                 # Check paused sessions for 30-minute timeout
                 for chat_id in list(self.paused_sessions.keys()):
