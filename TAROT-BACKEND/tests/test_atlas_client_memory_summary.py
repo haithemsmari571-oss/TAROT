@@ -91,6 +91,7 @@ def test_owner_instruction_has_one_standalone_source_file_and_all_sections():
     for section in range(1, 16):
         assert f"{section}. " in instruction
     assert "A read the psychic made is never attributed to the client." in instruction
+    assert "every cited message must have speaker CLIENT" in instruction
     assert "File approaching compression threshold." in instruction
     assert instruction.endswith("it must be findable in under ten seconds.")
 
@@ -146,6 +147,38 @@ def test_summarizer_uses_active_registry_version_and_returns_only_proposals(monk
     assert fake.calls[0]["input_text"] == build_atlas_summary_input(generation_input())
     assert fake.calls[0]["model"] == "synthetic-summary-model"
     assert fake.calls[0]["max_tokens"] == ATLAS_CLIENT_MEMORY_MAX_TOKENS
+
+
+def test_summarizer_rejects_fact_proposals_without_exclusively_client_evidence(monkeypatch):
+    output = f"""{NARRATIVE_START}
+## HEADER
+Updated synthetic living document.
+{NARRATIVE_END}
+{PROPOSALS_START}
+{{"proposals":[
+  {{"kind":"ADD_CLIENT_FACT","label":"Client fact","value":"accepted","evidenceMessageIds":["101"]}},
+  {{"kind":"ADD_CLIENT_FACT","label":"Psychic claim","value":"rejected","evidenceMessageIds":["102"]}},
+  {{"kind":"ADD_PERSON","name":"Mixed source","dateOfBirth":null,"relationshipToClient":"friend","details":{{}},"evidenceMessageIds":["101","102"]}},
+  {{"kind":"ADD_CLIENT_FACT","label":"No evidence","value":"rejected","evidenceMessageIds":[]}}
+]}}
+{PROPOSALS_END}"""
+    monkeypatch.setattr(
+        "app.services.atlas_client_memory_summary.registry.get_active_prompt",
+        lambda db, key: (
+            SimpleNamespace(model="synthetic-summary-model"),
+            SimpleNamespace(version=1),
+            "SYNTHETIC INSTRUCTION",
+        ),
+    )
+    result = AtlasClientMemorySummarizer(FakeModel(output)).generate(
+        object(), generation_input()
+    )
+    assert result.proposed_facts == [{
+        "kind": "ADD_CLIENT_FACT",
+        "label": "Client fact",
+        "value": "accepted",
+        "evidenceMessageIds": ["101"],
+    }]
 
 
 def test_parser_accepts_additions_and_specific_corrections_but_no_replacement_block():

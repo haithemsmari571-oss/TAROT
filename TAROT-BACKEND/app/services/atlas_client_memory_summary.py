@@ -201,6 +201,26 @@ def parse_atlas_summary_output(text: str) -> tuple[str, list[dict[str, Any]]]:
     return narrative, [proposal.model_dump() for proposal in proposals]
 
 
+def _client_evidenced_fact_proposals(
+    proposals: list[dict[str, Any]],
+    transcript: list[AtlasTranscriptLine],
+) -> list[dict[str, Any]]:
+    """Fail closed when the model cites anything other than client speech as fact."""
+    client_message_ids = {
+        line.message_id for line in transcript if line.speaker == "CLIENT"
+    }
+    accepted = []
+    for proposal in proposals:
+        evidence = proposal.get("evidenceMessageIds")
+        if (
+            isinstance(evidence, list)
+            and len(evidence) > 0
+            and all(message_id in client_message_ids for message_id in evidence)
+        ):
+            accepted.append(proposal)
+    return accepted
+
+
 class AtlasClientMemorySummarizer:
     def __init__(self, model: AtlasSummaryModel | None = None):
         self._model = model or AnthropicAtlasSummaryModel()
@@ -221,6 +241,10 @@ class AtlasClientMemorySummarizer:
             max_tokens=ATLAS_CLIENT_MEMORY_MAX_TOKENS,
         )
         narrative, proposed_facts = parse_atlas_summary_output(model_result.text)
+        proposed_facts = _client_evidenced_fact_proposals(
+            proposed_facts,
+            value.transcript,
+        )
         return AtlasSummaryGenerationResult(
             narrative_document=narrative,
             proposed_facts=proposed_facts,

@@ -129,6 +129,7 @@ The document must be readable by a human scanning quickly for one piece of infor
 
 ALSO RETURN, SEPARATELY FROM THE DOCUMENT
 Proposed additions to the facts block: any new person (name, date of birth if stated, relationship to the client) and any new durable client fact revealed this session. Also any proposed CORRECTION to an existing facts-block entry, clearly flagged, with the transcript evidence. Never write a correction directly into the document as if already established.
+Every proposal must cite one or more evidence message IDs, and every cited message must have speaker CLIENT. Cite the client's original statement, never a psychic, operator or system restatement. If no CLIENT message directly supports the proposal, do not propose it.
 
 FINAL RULE
 The summary is not a record of what was said. It is a weapon for the next session. Every line exists to make the next reading sharper, more specific, more continuous, and more impossible to dismiss. If a piece of information does not serve the next reading, it does not survive the summary. If it does serve the next reading, it must be findable in under ten seconds.
