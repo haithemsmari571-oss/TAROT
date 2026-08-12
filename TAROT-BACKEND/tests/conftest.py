@@ -7,6 +7,21 @@ specific concerns (native enum types, ALTER TYPE) live only in the migrations,
 which are reviewed separately.
 """
 
+import os
+import secrets
+
+# Synthetic test defaults must stay above every app import so a clean checkout
+# can collect tests without local secrets; real process environment values win.
+os.environ.setdefault("MAIL_USERNAME", "pytest@example.com")
+os.environ.setdefault("MAIL_PASSWORD", "not-a-real-password")
+os.environ.setdefault("MAIL_FROM", "pytest@example.com")
+os.environ.setdefault("MAIL_PORT", "1025")
+os.environ.setdefault("MAIL_SERVER", "localhost")
+os.environ.setdefault("MAIL_STARTTLS", "false")
+os.environ.setdefault("MAIL_SSL_TLS", "false")
+os.environ.setdefault("MAIL_USE_CREDENTIALS", "false")
+os.environ.setdefault("JWT_SECRET_KEY", secrets.token_urlsafe(48))
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
