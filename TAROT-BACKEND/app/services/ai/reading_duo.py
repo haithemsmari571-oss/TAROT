@@ -63,7 +63,9 @@ def _transcript_excluding(state, trigger_entry):
     return [e for e in state.chat_transcript if e is not trigger_entry]
 
 
-async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id) -> str:
+async def _write_valentina_turn(
+    chat_id, message, trigger_entry, state, user_id, psychic_id=None
+) -> str:
     """NEW turn, step 1: load dossier + DOB, build Valentina's input (with injected numerology),
     run her (Opus 4.6 + gated thinking) to a COMPLETE prose reading. Returns her raw text."""
     from app.database.client import SessionLocal
@@ -87,7 +89,11 @@ async def _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
 
     client_file, dob, steering_notes = await asyncio.to_thread(_load_file_and_dob)
     state.client_file = client_file
-    atlas_memory_text = await _atlas_memory_for_session(state, user_id)
+    atlas_memory_text = (
+        await _atlas_memory_for_session(state, user_id, psychic_id)
+        if psychic_id is not None
+        else await _atlas_memory_for_session(state, user_id)
+    )
     now = datetime.now()
     valentina_input = reading_valentina.build_valentina_input(
         client_message=message,
@@ -145,7 +151,9 @@ async def _sabri_turn(chat_id, message, trigger_entry, state, source_content, is
     return bubbles, reserve
 
 
-async def _duo_generate(chat_id, message, trigger_entry, state, user_id, forced_route=None):
+async def _duo_generate(
+    chat_id, message, trigger_entry, state, user_id, forced_route=None, *, psychic_id=None
+):
     """Route → (Valentina if NEW) → Sabri. Returns (bubbles, reserve, route). Nothing reaches the
     client here. bubbles is the paced-reveal payload (ALWAYS non-empty — Sabri guarantees a
     fallback line, and a failed Valentina write yields one too, so the client never sees dead
@@ -156,7 +164,15 @@ async def _duo_generate(chat_id, message, trigger_entry, state, user_id, forced_
 
     route = forced_route or await _resolve_route(message)
     if route == "new":
-        valentina_text = await _write_valentina_turn(chat_id, message, trigger_entry, state, user_id)
+        valentina_text = (
+            await _write_valentina_turn(
+                chat_id, message, trigger_entry, state, user_id, psychic_id
+            )
+            if psychic_id is not None
+            else await _write_valentina_turn(
+                chat_id, message, trigger_entry, state, user_id
+            )
+        )
         if not valentina_text.strip():
             # Valentina failed — deliver a fallback line and KEEP any prior reserve (don't wipe).
             logger.warning("duo_valentina_empty_fallback", chat_id=chat_id)
@@ -314,7 +330,8 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
                 logger.info("duo_skipped_chat_not_active", chat_id=chat_id)
                 break
             bubbles, reserve, route = await _duo_generate(
-                chat_id, message, trigger_entry, state, user_id, forced_route
+                chat_id, message, trigger_entry, state, user_id, forced_route,
+                psychic_id=psychic_id,
             )
             await _reveal_turn_duo(chat_id, bubbles, psychic_id, state)  # dots stay on into msg 1
             # Reserve persistence: on NEW, replace (fresh content — even empty is a legit full

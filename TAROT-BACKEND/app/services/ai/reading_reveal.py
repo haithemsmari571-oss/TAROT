@@ -54,20 +54,27 @@ def _lock(chat_id: int) -> asyncio.Lock:
     return lock
 
 
-async def _fetch_atlas_memory_text(user_id) -> str:
+async def _fetch_atlas_memory_text(user_id, psychic_id=None) -> str:
     """Fetch Atlas's prompt-ready dossier text once, always failing closed to empty."""
     settings = get_app_settings()
     base_url = str(getattr(settings, "ATLAS_DOSSIER_BASE_URL", "") or "").strip()
     internal_key = str(getattr(settings, "ATLAS_INTERNAL_KEY", "") or "").strip()
     source_user_id = str(user_id or "").strip()
+    source_psychic_id = str(psychic_id or "").strip()
     if not base_url or not internal_key:
         logger.warning("atlas_dossier_fetch_skipped", reason="configuration_missing")
         return ""
     if not source_user_id:
         logger.warning("atlas_dossier_fetch_skipped", reason="source_user_id_missing")
         return ""
+    if not source_psychic_id:
+        logger.warning("atlas_dossier_fetch_skipped", reason="source_psychic_id_missing")
+        return ""
 
-    url = f"{base_url.rstrip('/')}{_ATLAS_DOSSIER_PATH}/{quote(source_user_id, safe='')}"
+    url = (
+        f"{base_url.rstrip('/')}{_ATLAS_DOSSIER_PATH}/"
+        f"{quote(source_user_id, safe='')}/{quote(source_psychic_id, safe='')}"
+    )
 
     async def _request():
         async with httpx.AsyncClient(timeout=_ATLAS_DOSSIER_TIMEOUT_SECONDS) as client:
@@ -115,10 +122,10 @@ async def _fetch_atlas_memory_text(user_id) -> str:
     return text
 
 
-async def _atlas_memory_for_session(state, user_id) -> str:
+async def _atlas_memory_for_session(state, user_id, psychic_id=None) -> str:
     """Return the session's cached Atlas text, including cached empty failures."""
     if state.atlas_memory_text is None:
-        state.atlas_memory_text = await _fetch_atlas_memory_text(user_id)
+        state.atlas_memory_text = await _fetch_atlas_memory_text(user_id, psychic_id)
     return state.atlas_memory_text
 
 
@@ -242,7 +249,7 @@ def _reader_input_for(
     return reader_input
 
 
-async def _generate_turn(chat_id, message, trigger_entry, state, user_id):
+async def _generate_turn(chat_id, message, trigger_entry, state, user_id, psychic_id=None):
     """Generate the FULL reply INVISIBLY: load the dossier + DOB, build the input, run the
     Reader (Opus + gated thinking) to completion, parse bubbles + holds. Nothing reaches
     the client here. Returns (bubbles, holds); bubbles is always non-empty (run_reader_turn
@@ -257,7 +264,7 @@ async def _generate_turn(chat_id, message, trigger_entry, state, user_id):
 
     client_file, dob = await asyncio.to_thread(_load_file_and_dob)
     state.client_file = client_file
-    atlas_memory_text = await _atlas_memory_for_session(state, user_id)
+    atlas_memory_text = await _atlas_memory_for_session(state, user_id, psychic_id)
     reader_input = _reader_input_for(
         message,
         trigger_entry,
@@ -404,7 +411,9 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
             if not await _chat_active(chat_id):
                 logger.info("reveal_skipped_chat_not_active", chat_id=chat_id)
                 break
-            bubbles, holds = await _generate_turn(chat_id, message, trigger_entry, state, user_id)
+            bubbles, holds = await _generate_turn(
+                chat_id, message, trigger_entry, state, user_id, psychic_id
+            )
             sent = await _reveal_turn(chat_id, bubbles, psychic_id, state)  # dots stay on into bubble 1
             _merge_reader_holds(state, sent, holds)
             store.put(state)

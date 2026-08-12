@@ -121,7 +121,9 @@ def _install_fakes(monkeypatch, routes, sabri_returns, sabri_seen):
     `sabri_returns` and records the source it was handed into `sabri_seen`. Reveal is a no-op."""
     r = {"i": 0}
 
-    async def fake_generate(chat_id, message, entry, state, user_id, forced_route=None):
+    async def fake_generate(
+        chat_id, message, entry, state, user_id, forced_route=None, *, psychic_id=None
+    ):
         route = forced_route or routes[r["i"]]
         if route == "new":
             src = f"VALENTINA::{message}"
@@ -216,7 +218,9 @@ def test_continue_glue_reply_keeps_prior_reserve(monkeypatch):
 
 # ── mid-reveal: continuer ignored, redirect queued after the current reveal ──
 def _midreveal_fakes(gen_calls, started, release):
-    async def fake_generate(chat_id, message, entry, state, user_id, forced_route=None):
+    async def fake_generate(
+        chat_id, message, entry, state, user_id, forced_route=None, *, psychic_id=None
+    ):
         gen_calls.append(message)
         return ([f"b::{message}"], "RES", "new")
 
@@ -306,7 +310,9 @@ def test_typing_shown_before_and_through_generation(monkeypatch):
     async def rec_typing(cid, on, sid):
         order.append(("typing", on))
 
-    async def fake_generate(cid, message, entry, state, user_id, forced_route=None):
+    async def fake_generate(
+        cid, message, entry, state, user_id, forced_route=None, *, psychic_id=None
+    ):
         order.append(("generate", message))
         return (["b1"], "RES", "new")
 

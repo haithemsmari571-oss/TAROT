@@ -92,7 +92,7 @@ def test_reader_input_excludes_trigger_and_reflects_turn():
 
 # ── mid-reveal behaviour: continuer vs redirect ───────────────────────────────
 def _fakes(gen_calls, reveal_started, reveal_release):
-    async def fake_generate(cid, message, entry, state, user_id):
+    async def fake_generate(cid, message, entry, state, user_id, psychic_id=None):
         gen_calls.append(message)
         return ([f"bubble::{message}"], [])
 
@@ -180,7 +180,7 @@ def test_typing_shown_before_and_through_generation(monkeypatch):
     async def rec_typing(cid, on, sid):
         order.append(("typing", on))
 
-    async def fake_generate(cid, message, entry, state, user_id):
+    async def fake_generate(cid, message, entry, state, user_id, psychic_id=None):
         order.append(("generate", message))
         return (["b1"], [])
 

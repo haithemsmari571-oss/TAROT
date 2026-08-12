@@ -8,7 +8,7 @@ import asyncio
 import sys
 import time
 import types
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import httpx
@@ -84,7 +84,9 @@ def _reader_input(state, message, trigger, memory):
     )
 
 
-def _install_duo_writer(monkeypatch, model_inputs, output="synthetic Valentina draft"):
+def _install_duo_writer(
+    monkeypatch, model_inputs, output="synthetic Valentina draft", account_dob=None
+):
     from app.database import client as database_client
     from app.services import client_dossier
     from app.services.ai import (
@@ -105,7 +107,9 @@ def _install_duo_writer(monkeypatch, model_inputs, output="synthetic Valentina d
     monkeypatch.setattr(
         reading_assistant, "build_client_file", lambda _db, _user_id: "LEGACY CLIENT FILE"
     )
-    monkeypatch.setattr(client_dossier, "get_client_dob", lambda _db, _user_id: None)
+    monkeypatch.setattr(
+        client_dossier, "get_client_dob", lambda _db, _user_id: account_dob
+    )
     monkeypatch.setattr(
         reading_steering, "get_active_notes", lambda _db, _chat_id: []
     )
@@ -122,12 +126,12 @@ def _install_duo_writer(monkeypatch, model_inputs, output="synthetic Valentina d
     monkeypatch.setattr(reading_valentina, "write_valentina", fake_write)
 
 
-def _write_duo_turn(state, message, user_id):
+def _write_duo_turn(state, message, user_id, psychic_id=301):
     record_client_message(state, message)
     trigger = state.chat_transcript[-1]
     return asyncio.run(
         reading_duo._write_valentina_turn(
-            state.chat_id, message, trigger, state, user_id
+            state.chat_id, message, trigger, state, user_id, psychic_id
         )
     )
 
@@ -190,7 +194,7 @@ def test_first_generation_includes_atlas_text_and_second_turn_reuses_cache(
     first_trigger = state.chat_transcript[-1]
     asyncio.run(
         reading_reveal._generate_turn(
-            91001, "first synthetic question", first_trigger, state, 91
+            91001, "first synthetic question", first_trigger, state, 91, 301
         )
     )
 
@@ -198,13 +202,13 @@ def test_first_generation_includes_atlas_text_and_second_turn_reuses_cache(
     second_trigger = state.chat_transcript[-1]
     asyncio.run(
         reading_reveal._generate_turn(
-            91001, "second synthetic question", second_trigger, state, 91
+            91001, "second synthetic question", second_trigger, state, 91, 301
         )
     )
 
     assert len(calls) == 1
     assert calls[0] == {
-        "url": f"{_BASE_URL}/internal/atlas/dossier/91",
+        "url": f"{_BASE_URL}/internal/atlas/dossier/91/301",
         "headers": {"X-Atlas-Internal-Key": _SYNTHETIC_KEY},
         "timeout": 2.0,
     }
@@ -241,7 +245,7 @@ def test_empty_dossier_text_proceeds_without_memory_section(monkeypatch):
     record_client_message(state, "new synthetic client question")
     trigger = state.chat_transcript[-1]
 
-    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 92))
+    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 92, 302))
     reader_input = _reader_input(state, "new synthetic client question", trigger, memory)
 
     assert memory == ""
@@ -265,7 +269,7 @@ def test_atlas_timeout_is_bounded_warns_and_proceeds(monkeypatch):
     state = create_session_state("chat:91003", client_id=93, chat_id=91003)
 
     started = time.monotonic()
-    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 93))
+    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 93, 303))
     elapsed = time.monotonic() - started
 
     assert memory == ""
@@ -285,7 +289,7 @@ def test_non_200_warns_and_proceeds(monkeypatch):
     )
     state = create_session_state("chat:91004", client_id=94, chat_id=91004)
 
-    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 94))
+    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 94, 304))
 
     assert memory == ""
     assert len(calls) == 1
@@ -312,8 +316,8 @@ def test_unconfigured_base_url_or_key_skips_http_and_caches_empty(monkeypatch):
         monkeypatch.setattr(reading_reveal.httpx, "AsyncClient", forbidden_client)
         state = create_session_state("chat:91005", client_id=95, chat_id=91005)
 
-        assert asyncio.run(reading_reveal._atlas_memory_for_session(state, 95)) == ""
-        assert asyncio.run(reading_reveal._atlas_memory_for_session(state, 95)) == ""
+        assert asyncio.run(reading_reveal._atlas_memory_for_session(state, 95, 305)) == ""
+        assert asyncio.run(reading_reveal._atlas_memory_for_session(state, 95, 305)) == ""
         assert warnings == [
             ("atlas_dossier_fetch_skipped", {"reason": "configuration_missing"})
         ]
@@ -331,7 +335,7 @@ def test_connection_failure_warns_and_proceeds(monkeypatch):
     _install_http_client(monkeypatch, connection_error, calls)
     state = create_session_state("chat:91006", client_id=96, chat_id=91006)
 
-    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 96))
+    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 96, 306))
 
     assert memory == ""
     assert len(calls) == 1
@@ -356,7 +360,7 @@ def test_unparseable_response_warns_and_proceeds(monkeypatch):
     )
     state = create_session_state("chat:91007", client_id=97, chat_id=91007)
 
-    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 97))
+    memory = asyncio.run(reading_reveal._atlas_memory_for_session(state, 97, 307))
 
     assert memory == ""
     assert len(calls) == 1
@@ -420,7 +424,7 @@ def test_single_agent_and_two_role_share_the_same_session_cache(monkeypatch):
     record_client_message(single_first, "single first")
     trigger = single_first.chat_transcript[-1]
     asyncio.run(
-        reading_reveal._generate_turn(92002, "single first", trigger, single_first, 202)
+        reading_reveal._generate_turn(92002, "single first", trigger, single_first, 202, 301)
     )
     assert _write_duo_turn(single_first, "duo second", 202) == "synthetic Valentina draft"
 
@@ -429,7 +433,7 @@ def test_single_agent_and_two_role_share_the_same_session_cache(monkeypatch):
     record_client_message(duo_first, "single second")
     trigger = duo_first.chat_transcript[-1]
     asyncio.run(
-        reading_reveal._generate_turn(92003, "single second", trigger, duo_first, 203)
+        reading_reveal._generate_turn(92003, "single second", trigger, duo_first, 203, 301)
     )
 
     assert len(calls) == 2
@@ -471,6 +475,7 @@ def test_two_role_atlas_connection_failure_warns_and_still_completes(monkeypatch
             state,
             204,
             forced_route="new",
+            psychic_id=301,
         )
     )
 
@@ -595,9 +600,44 @@ def test_sabri_receives_only_valentina_prose_never_raw_atlas_memory(monkeypatch)
             state,
             208,
             forced_route="new",
+            psychic_id=301,
         )
     )
 
     assert memory_text in model_inputs[0]
     assert sabri_sources == [valentina_output]
     assert memory_text not in sabri_sources[0]
+
+
+def test_pair_siloing_keeps_account_dob_numerology_shared(monkeypatch):
+    calls = []
+    model_inputs = []
+    pair_memory = "VALENTINA_ONLY_PAIR_MEMORY"
+    monkeypatch.setattr(reading_reveal, "get_app_settings", lambda: _settings())
+
+    def pair_response(url, _headers):
+        text = pair_memory if url.endswith("/301") else ""
+        return _FakeResponse(payload={"dossier": {}, "text": text})
+
+    _install_http_client(monkeypatch, pair_response, calls)
+    _install_duo_writer(
+        monkeypatch,
+        model_inputs,
+        account_dob=date(1990, 5, 14),
+    )
+
+    valentina_state = create_session_state("chat:92009", client_id=209, chat_id=92009)
+    stranger_state = create_session_state("chat:92010", client_id=209, chat_id=92010)
+    _write_duo_turn(valentina_state, "same client with Valentina", 209, psychic_id=301)
+    _write_duo_turn(stranger_state, "same client with Sophie", 209, psychic_id=302)
+
+    assert [call["url"] for call in calls] == [
+        f"{_BASE_URL}/internal/atlas/dossier/209/301",
+        f"{_BASE_URL}/internal/atlas/dossier/209/302",
+    ]
+    assert pair_memory in model_inputs[0]
+    assert pair_memory not in model_inputs[1]
+    assert "KNOWN NUMEROLOGY" in model_inputs[0]
+    assert "Life Path: 11" in model_inputs[0]
+    assert "KNOWN NUMEROLOGY" in model_inputs[1]
+    assert "Life Path: 11" in model_inputs[1]
