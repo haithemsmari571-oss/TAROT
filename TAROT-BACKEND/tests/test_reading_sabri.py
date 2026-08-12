@@ -344,6 +344,56 @@ def test_sabri_source_preserving_fallback_when_every_attempt_drops_a_literal():
     assert "before the end of summer" in combined
 
 
+def test_sabri_holds_long_remainder_in_code_and_only_rewrites_next_slice():
+    source = (
+        "Daniel feels the distance. The Moon names the uncertainty. "
+        "Contact comes before the end of summer. This fourth sentence must stay exact. "
+        "This fifth sentence must also stay exact."
+    )
+    sabri_input = S.build_sabri_input(
+        client_message="what do you see?", chat_transcript=[], source_content=source,
+        is_new=True, turn_target=4,
+    )
+    seen = {}
+
+    def rewritten(shielded_input):
+        seen["input"] = shielded_input
+        tokens = re.findall(r"\[\[KEEP_\d{4}\]\]", shielded_input)
+        return "ngl the distance is real, and " + " ".join(dict.fromkeys(tokens))
+
+    bubbles, reserve = S.sabri_deliver(
+        sabri_input, source_content=source, sabri_call=rewritten, max_attempts=1,
+        names=("Daniel",),
+    )
+    assert "This fourth sentence must stay exact." not in seen["input"]
+    assert reserve == (
+        "This fourth sentence must stay exact. This fifth sentence must also stay exact."
+    )
+    assert "Daniel" in " ".join(bubbles)
+    assert "The Moon" in " ".join(bubbles)
+    assert "before the end of summer" in " ".join(bubbles)
+
+
+def test_sabri_canonicalizes_an_extra_lowercase_proper_name_mention():
+    source = "Maya feels the distance. The Moon names it. Contact comes in July."
+    sabri_input = S.build_sabri_input(
+        client_message="Maya asks about it", chat_transcript=[], source_content=source,
+        is_new=True, turn_target=4,
+    )
+
+    def rewritten(shielded_input):
+        tokens = re.findall(r"\[\[KEEP_\d{4}\]\]", shielded_input)
+        return "maya, this is heavy, " + " ".join(dict.fromkeys(tokens))
+
+    bubbles, _ = S.sabri_deliver(
+        sabri_input, source_content=source, sabri_call=rewritten, max_attempts=1,
+        names=("Maya",),
+    )
+    delivered = " ".join(bubbles)
+    assert "maya" not in delivered
+    assert delivered.count("Maya") == 2
+
+
 def test_sabri_deterministic_ai_tell_cleanup():
     raw = (
         "### Here's the thing: **he is frozen** — but not gone\n\n"

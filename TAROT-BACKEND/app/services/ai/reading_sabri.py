@@ -362,6 +362,25 @@ def _restore_protected_literals(text: str, mapping) -> str:
     return restored
 
 
+def _canonicalize_protected_literals(text: str, mapping, *, source_content: str = "", names=()):
+    """Restore canonical spelling/capitalisation if Sabri independently repeats a protected fact."""
+    canonical = set(mapping.values())
+    canonical.update(str(name) for name in names or () if str(name).strip())
+    for match in re.finditer(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*\b", source_content or ""):
+        words = match.group(0).lower().split()
+        if any(word not in _NON_NAME_WORDS for word in words):
+            canonical.add(match.group(0))
+    result = text or ""
+    for literal in sorted(canonical, key=len, reverse=True):
+        result = re.sub(
+            r"(?<!\w)" + re.escape(literal) + r"(?!\w)",
+            lambda _match, exact=literal: exact,
+            result,
+            flags=re.IGNORECASE,
+        )
+    return result
+
+
 def _tokens_preserved_once(text: str, mapping) -> bool:
     return all((text or "").count(token) == 1 for token in mapping)
 
@@ -389,6 +408,26 @@ def _source_preserving_fallback(source_content: str, max_words: int):
     first = sanitize_delivery_text(source[:cut].strip())
     reserve = source[cut:].strip()
     return chunk_message(first, max_words), reserve
+
+
+def _next_delivery_slice(source_content: str, sentence_limit: int = 3):
+    """Take the next small, ordered source slice and retain the exact remainder in code.
+
+    Sabri only has to rewrite the slice.  The model is never responsible for copying a long
+    reserve verbatim, which keeps protected-literal enforcement reliable on full readings.
+    """
+    source = (source_content or "").strip()
+    if not source:
+        return "", ""
+    matches = list(re.finditer(r"[.!?…](?:\s+|$)", source))
+    if len(matches) < sentence_limit:
+        return source, ""
+    cut = matches[sentence_limit - 1].end()
+    return source[:cut].strip(), source[cut:].strip()
+
+
+def _append_reserve(model_reserve: str, held_reserve: str) -> str:
+    return "\n\n".join(part for part in (model_reserve.strip(), held_reserve.strip()) if part)
 
 
 def _number_counts(text: str) -> Counter:
@@ -468,7 +507,8 @@ def sabri_deliver(
 ):
     """Run one Sabri turn end-to-end → (bubbles, reserve).
 
-    shield protected literals → call → validate/restore literals → parse → strip return-acks →
+    take the next source slice → shield protected literals → call → validate/restore
+    literals → parse → strip return-acks →
     remove deterministic AI tells → validate facts → chunk. Missing literals, fact drift, or an
     empty turn receives a bounded retry. If all attempts fail and source exists, one exact source
     sentence is delivered and the untouched remainder is retained; otherwise the normal non-empty
@@ -478,8 +518,21 @@ def sabri_deliver(
     s = get_app_settings()
     attempts = max_attempts or s.SABRI_DELIVERY_MAX_ATTEMPTS
     call = sabri_call or run_sabri
+    delivery_source, held_reserve = _next_delivery_slice(source_content)
+    active_input = sabri_input
+    full_source = (source_content or "").strip()
+    if held_reserve and full_source:
+        source_start = active_input.rfind(full_source)
+        if source_start >= 0:
+            active_input = (
+                active_input[:source_start]
+                + delivery_source
+                + active_input[source_start + len(full_source):]
+                + "\n\nSYSTEM DELIVERY BOUNDARY: Rewrite every part of the source slice above now. "
+                  "Do not output @@RESERVE@@; the untouched remainder is retained by code."
+            )
     shielded_input, protected = shield_protected_literals(
-        sabri_input, source_content, names=names
+        active_input, delivery_source, names=names
     )
 
     for attempt in range(1, attempts + 1):
@@ -496,7 +549,12 @@ def sabri_deliver(
                 chat_id, turn_number, attempt, raw, [], miss, delivered=False
             )
             continue
-        restored_raw = _restore_protected_literals(raw, protected)
+        restored_raw = _canonicalize_protected_literals(
+            _restore_protected_literals(raw, protected),
+            protected,
+            source_content=source_content,
+            names=names,
+        )
         bubbles, reserve = parse_sabri_output(restored_raw)
         # Strip return-acks on the UN-chunked messages FIRST — a multi-word ack phrase ("since we
         # last spoke") must be matched whole, before the length backstop could split it across a
@@ -508,8 +566,8 @@ def sabri_deliver(
         if dropped:
             logger.warning("sabri_dropped_return_acks", count=len(dropped), dropped=dropped)
         miss = (
-            missing_facts(source_content, " ".join(bubbles) + " " + reserve, names=names)
-            if (bubbles and source_content) else None
+            missing_facts(delivery_source, " ".join(bubbles) + " " + reserve, names=names)
+            if (bubbles and delivery_source) else None
         )
         if miss and has_missing_facts(miss):
             logger.warning("sabri_fact_drift", attempt=attempt, **miss)
@@ -521,16 +579,17 @@ def sabri_deliver(
             chat_id, turn_number, attempt, restored_raw, dropped, miss, delivered=bool(bubbles)
         )
         if bubbles:
+            reserve = _append_reserve(reserve, held_reserve)
             logger.info("sabri_turn_ready", bubbles=len(bubbles), reserve_chars=len(reserve),
                         attempt=attempt)
             return bubbles, reserve
         logger.warning("sabri_turn_empty_retrying", attempt=attempt)
 
     source_bubbles, source_reserve = _source_preserving_fallback(
-        source_content, s.SABRI_MAX_MESSAGE_WORDS
+        delivery_source, s.SABRI_MAX_MESSAGE_WORDS
     )
     if source_bubbles:
         logger.warning("sabri_turn_source_preserving_fallback")
-        return source_bubbles, source_reserve
+        return source_bubbles, _append_reserve(source_reserve, held_reserve)
     logger.warning("sabri_turn_fallback")
     return [fallback_message], ""
