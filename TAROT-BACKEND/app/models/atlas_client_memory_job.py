@@ -14,6 +14,10 @@ class AtlasClientMemoryJob(Base):
             name="ck_atlas_memory_job_status",
         ),
         CheckConstraint("attempts >= 0 AND attempts <= 2", name="ck_atlas_memory_job_attempts"),
+        CheckConstraint(
+            "recovery_cycles >= 0 AND recovery_cycles <= 3",
+            name="ck_atlas_memory_job_recovery_cycles",
+        ),
     )
 
     chat_session_id: Mapped[int] = mapped_column(
@@ -21,6 +25,8 @@ class AtlasClientMemoryJob(Base):
     )
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recovery_cycles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

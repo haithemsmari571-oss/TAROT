@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
 import httpx
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.config import get_app_settings
@@ -32,6 +32,8 @@ logger = get_logger(__name__)
 ATLAS_CLIENT_MEMORY_TIMEOUT_SECONDS = 5.0
 ATLAS_CLIENT_MEMORY_STALE_PROCESSING_MINUTES = 60
 ATLAS_CLIENT_MEMORY_SWEEP_LIMIT = 20
+ATLAS_CLIENT_MEMORY_MAX_RECOVERY_CYCLES = 3
+ATLAS_CLIENT_MEMORY_RECOVERY_DELAYS_MINUTES = (15, 60, 360)
 _active_tasks: dict[int, asyncio.Task] = {}
 
 
@@ -228,8 +230,22 @@ def _claim_job(db: Session, chat_session_id: int, now: datetime) -> AtlasClientM
         .with_for_update()
         .first()
     )
-    if job is None or job.status in ("COMPLETED", "FAILED"):
+    if job is None or job.status == "COMPLETED":
         return None
+    if job.status == "FAILED":
+        retry_at = _aware(job.next_retry_at) if job.next_retry_at is not None else None
+        if (
+            job.recovery_cycles >= ATLAS_CLIENT_MEMORY_MAX_RECOVERY_CYCLES
+            or retry_at is None
+            or retry_at > _aware(now)
+        ):
+            return None
+        job.status = "RETRY_PENDING"
+        job.attempts = 0
+        job.recovery_cycles += 1
+        job.next_retry_at = None
+        db.commit()
+        db.refresh(job)
     stale_before = now - timedelta(minutes=ATLAS_CLIENT_MEMORY_STALE_PROCESSING_MINUTES)
     if (
         job.status == "PROCESSING"
@@ -299,6 +315,7 @@ def process_atlas_client_memory_job_attempt(
         job.completed_at = deps.now()
         job.processing_started_at = None
         job.last_error_code = None
+        job.next_retry_at = None
         job.atlas_version_number = int(stored["current"]["versionNumber"])
         job.input_tokens = summary.input_tokens
         job.output_tokens = summary.output_tokens
@@ -324,6 +341,11 @@ def process_atlas_client_memory_job_attempt(
         job.status = "FAILED" if job.attempts >= 2 else "RETRY_PENDING"
         job.processing_started_at = None
         job.last_error_code = type(error).__name__[:120]
+        if job.status == "FAILED" and job.recovery_cycles < ATLAS_CLIENT_MEMORY_MAX_RECOVERY_CYCLES:
+            delay_minutes = ATLAS_CLIENT_MEMORY_RECOVERY_DELAYS_MINUTES[job.recovery_cycles]
+            job.next_retry_at = deps.now() + timedelta(minutes=delay_minutes)
+        elif job.status == "FAILED":
+            job.next_retry_at = None
         db.commit()
         logger.warning(
             "atlas_client_memory_job_failed",
@@ -369,15 +391,25 @@ def pending_atlas_client_memory_job_ids(
     rows = (
         db.query(AtlasClientMemoryJob)
         .filter(
-            AtlasClientMemoryJob.attempts < 2,
             or_(
-                AtlasClientMemoryJob.status.in_(("PENDING", "RETRY_PENDING")),
-                (
-                    (AtlasClientMemoryJob.status == "PROCESSING")
-                    & or_(
-                        AtlasClientMemoryJob.processing_started_at.is_(None),
-                        AtlasClientMemoryJob.processing_started_at <= stale_before,
-                    )
+                and_(
+                    AtlasClientMemoryJob.attempts < 2,
+                    or_(
+                        AtlasClientMemoryJob.status.in_(("PENDING", "RETRY_PENDING")),
+                        (
+                            (AtlasClientMemoryJob.status == "PROCESSING")
+                            & or_(
+                                AtlasClientMemoryJob.processing_started_at.is_(None),
+                                AtlasClientMemoryJob.processing_started_at <= stale_before,
+                            )
+                        ),
+                    ),
+                ),
+                and_(
+                    AtlasClientMemoryJob.status == "FAILED",
+                    AtlasClientMemoryJob.recovery_cycles < ATLAS_CLIENT_MEMORY_MAX_RECOVERY_CYCLES,
+                    AtlasClientMemoryJob.next_retry_at.is_not(None),
+                    AtlasClientMemoryJob.next_retry_at <= _for_column(db, current),
                 ),
             ),
         )

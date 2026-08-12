@@ -177,6 +177,7 @@ def test_failure_retries_once_then_moves_on_without_transcript_in_error(db, make
     job = db.get(AtlasClientMemoryJob, session_id)
     assert (job.attempts, job.last_error_code) == (2, "RuntimeError")
     assert "Synthetic client statement" not in job.last_error_code
+    assert job.next_retry_at is not None
 
 
 def test_sweep_only_finds_feature_jobs_and_never_backfills_completed_sessions(db, make_user):
@@ -188,6 +189,33 @@ def test_sweep_only_finds_feature_jobs_and_never_backfills_completed_sessions(db
         db,
         datetime(2042, 1, 10, tzinfo=timezone.utc),
     ) == [pending_id]
+
+
+def test_sweep_recovers_a_failed_summary_after_bounded_backoff(db, make_user):
+    session_id, _, _ = create_finished_session(db, make_user, suffix=6)
+    failed_at = datetime(2042, 1, 6, 12, 0, tzinfo=timezone.utc)
+    job = db.get(AtlasClientMemoryJob, session_id)
+    job.status = "FAILED"
+    job.attempts = 2
+    job.recovery_cycles = 0
+    job.next_retry_at = failed_at + timedelta(minutes=15)
+    db.commit()
+
+    assert pending_atlas_client_memory_job_ids(db, failed_at + timedelta(minutes=14)) == []
+    assert pending_atlas_client_memory_job_ids(db, failed_at + timedelta(minutes=15)) == [session_id]
+
+    dependencies = AtlasClientMemoryJobDependencies(
+        atlas=FakeAtlas(),
+        summarizer=FakeSummarizer(),
+        now=lambda: failed_at + timedelta(minutes=15),
+    )
+    assert process_atlas_client_memory_job_attempt(
+        session_id, dependencies, factory_for(db)
+    ) == "COMPLETED"
+    db.expire_all()
+    recovered = db.get(AtlasClientMemoryJob, session_id)
+    assert (recovered.attempts, recovered.recovery_cycles) == (1, 1)
+    assert recovered.next_retry_at is None
 
 
 def test_unprotected_session_end_enqueues_before_commit_and_schedules_after_commit():
@@ -209,3 +237,15 @@ def test_job_migration_is_the_direct_successor_to_existing_memory_summary_migrat
     spec.loader.exec_module(migration)
     assert migration.revision == "f8a9b0c1d2e3"
     assert migration.down_revision == "e6a7b8c9d0e1"
+
+
+def test_failed_job_recovery_migration_follows_the_job_table():
+    import importlib.util
+    from pathlib import Path
+
+    migration_path = Path(__file__).parents[1] / "alembic" / "versions" / "0a1b2c3d4e5f_recover_failed_atlas_memory_jobs.py"
+    spec = importlib.util.spec_from_file_location("atlas_memory_recovery_migration", migration_path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "0a1b2c3d4e5f"
+    assert migration.down_revision == "f8a9b0c1d2e3"

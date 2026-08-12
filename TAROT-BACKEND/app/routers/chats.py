@@ -1308,6 +1308,16 @@ async def join_chat_endpoint(
     session_mgr = get_session_manager()
     try:
         info = await session_mgr.mark_client_joined(chat_id)
+        if info.client_joined_now:
+            # One greeting per new paid ChatSession. mark_client_joined() returns
+            # False for repeat mounts and ordinary WebSocket reconnects.
+            from app.services.chats import broadcast_ai_message
+
+            await broadcast_ai_message(
+                db,
+                chat,
+                "hi lovely, i'm here and ready when you are.",
+            )
         return JSONResponse(
             content={
                 "chat_id": info.chat_id,

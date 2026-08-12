@@ -88,6 +88,10 @@ class SessionInfo:
     # Grace/top-up state (only meaningful while session_status == "GRACE").
     grace_seconds_left: int = 0  # countdown before the session auto-ends
     is_topping_up: bool = False
+    # True only for the first successful client-join transition of this paid
+    # ChatSession. The join route uses it to send one reader greeting; ordinary
+    # mounts and WebSocket reconnects receive False.
+    client_joined_now: bool = False
 
 
 @dataclass
@@ -546,14 +550,19 @@ class SessionManager:
                         session_state.minutes_charged = 1
                     except TxnInsufficientBalanceError:
                         await self._enter_grace(chat_id, session_state)
-                        return self.get_session_info(chat_id) or self._calculate_session_info(
+                        info = self.get_session_info(chat_id) or self._calculate_session_info(
                             session_state, db
                         )
+                        info.client_joined_now = True
+                        return info
                 else:
                     await self._enter_grace(chat_id, session_state)
-                    return self._calculate_session_info(session_state, db)
+                    info = self._calculate_session_info(session_state, db)
+                    info.client_joined_now = True
+                    return info
 
             info = self._calculate_session_info(session_state, db)
+            info.client_joined_now = True
 
             logger.info(
                 "client_joined_session_timer_anchored",
