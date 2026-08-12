@@ -3,8 +3,10 @@ decision to call Valentina vs work from reserve, the reserve hold-and-release ac
 mid-reveal continue/redirect handling. No real model or DB — the generate/reveal seams are injected."""
 
 import asyncio
+from datetime import date
 
 from app.services.ai import reading_duo
+from app.services.ai import reading_valentina
 from app.services.ai.reading_session import get_session_store
 
 
@@ -23,6 +25,31 @@ def test_resolve_route():
         "so my sister told me he was seen with his ex last night")) == "new"
     assert asyncio.run(reading_duo._resolve_route("okay")) == "continue"
     assert asyncio.run(reading_duo._resolve_route("wow youre good")) == "continue"
+
+
+def test_valentina_receives_verified_numerology_or_explicit_not_available_signal():
+    present = reading_valentina.build_valentina_input(
+        client_message="Synthetic question",
+        chat_transcript=[],
+        client_file="Synthetic client",
+        session_metadata={},
+        date_of_birth=date(2002, 12, 1),
+        current_year=2026,
+    )
+    assert "Life Path: 8" in present
+    assert "Personal Year (2026): 5" in present
+
+    absent = reading_valentina.build_valentina_input(
+        client_message="Synthetic question",
+        chat_transcript=[],
+        client_file="Synthetic client",
+        session_metadata={},
+        date_of_birth=None,
+        current_year=2026,
+    )
+    assert "KNOWN NUMEROLOGY" not in absent
+    assert "explicitly NOT AVAILABLE" in reading_valentina.VALENTINA_SYSTEM_PROMPT
+    assert "client or any third party" in reading_valentina.VALENTINA_SYSTEM_PROMPT
 
 
 # ── decision: NEW calls Valentina; CONTINUE works from reserve (no Valentina) ─
