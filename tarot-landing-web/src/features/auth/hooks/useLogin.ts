@@ -45,7 +45,9 @@ export const useLogin = () => {
       if (data.role === UserRole.PSYCHIC) {
         console.log("Redirecting to /admin/earnings");
         navigate("/admin/earnings");
-      } else if (data.role === UserRole.ADMIN || data.role === UserRole.SUPERADMIN) {
+      } else if (data.role === UserRole.SUPERADMIN) {
+        window.location.assign("/crm/#/control");
+      } else if (data.role === UserRole.ADMIN) {
         console.log("Redirecting to /admin/chats");
         navigate("/admin/chats");
       } else if (data.role === UserRole.USER) {

@@ -20,6 +20,26 @@ function useScrollToTop() {
   }, [pathname]);
 }
 
+export function crmDestinationForAdminPath(pathname: string): string {
+  if (/^\/admin\/(?:chats|notifications)(?:\/|$)/.test(pathname)) return "/crm/#/agent/valentina";
+  if (/^\/admin\/(?:users|clients|psychics)(?:\/|$)/.test(pathname)) return "/crm/#/clients-and-psychics";
+  if (/^\/admin\/(?:reader-activity|ledger)(?:\/|$)/.test(pathname)) return "/crm/#/money-and-stats";
+  if (/^\/admin\/(?:categories|buy-options|landing|lifepath|life-path|zodiac|tasks|claims|ai-prompts|onboarding|rituals-settings|settings)(?:\/|$)/.test(pathname)) {
+    return "/crm/#/agent/vulcan";
+  }
+  return "/crm/#/control";
+}
+
+function AdminCrmRedirect() {
+  const location = useLocation();
+
+  useEffect(() => {
+    window.location.replace(crmDestinationForAdminPath(location.pathname));
+  }, [location.pathname]);
+
+  return <BrandedLoader fullscreen label="Opening the CRM…" />;
+}
+
 // --- ROUTE GUARD ---
 function RouteGuard({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -114,25 +134,19 @@ export default function App() {
         })}
       </Route>
 
-      {/* /admin/life-path is a stale link — the real route is /admin/lifepath. */}
-      <Route path="/admin/life-path" element={<Navigate to="/admin/lifepath" replace />} />
+      {/* The old admin components remain in source for one-commit rollback, but
+          every old /admin URL now leaves this app and opens the matching CRM room. */}
+      <Route path="/admin/*" element={<AdminCrmRedirect />} />
 
-      {/* Private / Admin Layout Routes. The whole /admin shell is gated to the
-          admin family — a plain USER who reaches /admin is sent back to browse
-          (previously they landed on the shell with an empty sidebar). */}
+      {/* Non-admin private routes keep their existing customer layout. */}
       <Route
         element={
           <ProtectedRoute>
-            <RoleProtectedRoute
-              allowedRoles={[UserRole.PSYCHIC, UserRole.ADMIN, UserRole.SUPERADMIN]}
-              redirectTo="/psychics-browse"
-            >
-              <AdminLayout />
-            </RoleProtectedRoute>
+            <AdminLayout />
           </ProtectedRoute>
         }
       >
-        {privateRoutes.map((r: RouteConfig) => {
+        {privateRoutes.filter((r) => !r.path.startsWith("/admin/")).map((r: RouteConfig) => {
           if (r.allowedRoles && r.allowedRoles.length > 0) {
             return (
               <Route
