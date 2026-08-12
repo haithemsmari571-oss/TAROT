@@ -2,6 +2,8 @@
 fact-preservation check (never alter/drop a number/name/card), the input builder, and the
 end-to-end sabri_deliver (return-ack strip + empty-retry). No real model — the call is injected."""
 
+import re
+
 from app.services.ai import reading_sabri as S
 from app.services.ai.reading_llm import FALLBACK_MESSAGE
 
@@ -266,3 +268,101 @@ def test_sabri_deliver_preserves_reserve_verbatim():
     # nothing dropped: pisces sent, life path 7 held — combined preserves both
     assert not S.has_missing_facts(S.missing_facts(src, "\n".join(bubbles) + "\n" + reserve))
     assert reserve == "life path 7 is why he retreats"
+
+
+def test_sabri_rewrites_around_card_date_and_timing_claim_but_preserves_them_verbatim():
+    source = (
+        "Daniel was born 14 August 1992. The Five of Pentacles shows the fear, "
+        "and contact comes before the end of summer."
+    )
+    sabri_input = S.build_sabri_input(
+        client_message="will he reach out?", chat_transcript=[], source_content=source,
+        is_new=True, turn_target=8,
+    )
+    shielded, mapping = S.shield_protected_literals(sabri_input, source)
+    token_for = {literal: token for token, literal in mapping.items()}
+
+    def rewritten(_input):
+        assert _input == shielded
+        return (
+            f"ngl {token_for['Daniel']} has that fear sitting heavy. "
+            f"{token_for['Five of Pentacles']} is the anchor here\n\n"
+            f"his dob stays {token_for['14 August 1992']} and the contact window is "
+            f"{token_for['before the end of summer']}"
+        )
+
+    bubbles, reserve = S.sabri_deliver(
+        sabri_input, source_content=source, sabri_call=rewritten, max_attempts=1
+    )
+    delivered = "\n".join(bubbles) + reserve
+    assert "Five of Pentacles" in delivered
+    assert "14 August 1992" in delivered
+    assert "before the end of summer" in delivered
+    assert "Daniel" in delivered
+    assert "Daniel was born 14 August 1992" not in delivered  # surrounding prose was rewritten
+
+
+def test_sabri_retries_when_a_protected_literal_token_is_missing():
+    source = "The Five of Pentacles points to contact before the end of summer."
+    sabri_input = S.build_sabri_input(
+        client_message="when?", chat_transcript=[], source_content=source,
+        is_new=True, turn_target=8,
+    )
+    calls = {"n": 0}
+
+    def drifting(shielded_input):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "a card about scarcity says it should happen soon"
+        tokens = re.findall(r"\[\[KEEP_\d{4}\]\]", shielded_input)
+        return "the exact read is " + " ".join(dict.fromkeys(tokens))
+
+    bubbles, _ = S.sabri_deliver(
+        sabri_input, source_content=source, sabri_call=drifting, max_attempts=2
+    )
+    assert calls["n"] == 2
+    assert "Five of Pentacles" in " ".join(bubbles)
+    assert "before the end of summer" in " ".join(bubbles)
+
+
+def test_sabri_source_preserving_fallback_when_every_attempt_drops_a_literal():
+    source = (
+        "The Five of Pentacles marks 14 August 1992. "
+        "The timing stays before the end of summer."
+    )
+    sabri_input = S.build_sabri_input(
+        client_message="when?", chat_transcript=[], source_content=source,
+        is_new=True, turn_target=8,
+    )
+    bubbles, reserve = S.sabri_deliver(
+        sabri_input, source_content=source,
+        sabri_call=lambda _input: "a vague card means soon", max_attempts=2,
+    )
+    combined = " ".join(bubbles) + " " + reserve
+    assert "Five of Pentacles" in combined
+    assert "14 August 1992" in combined
+    assert "before the end of summer" in combined
+
+
+def test_sabri_deterministic_ai_tell_cleanup():
+    raw = (
+        "### Here's the thing: **he is frozen** — but not gone\n\n"
+        "1. what I’m seeing is `the contact window` – late summer\u200b"
+    )
+    bubbles, _ = S.sabri_deliver("x", source_content="", sabri_call=lambda _input: raw)
+    delivered = " ".join(bubbles)
+    assert delivered == "he is frozen, but not gone the contact window - late summer"
+    assert "—" not in delivered
+    assert "–" not in delivered
+    assert "**" not in delivered
+    assert "`" not in delivered
+    assert "here's the thing" not in delivered.lower()
+    assert "what i’m seeing is" not in delivered.lower()
+
+
+def test_sabri_prompt_requires_real_rewrite_and_forbids_dashes():
+    assert "MUST genuinely paraphrase" in S.SABRI_SYSTEM_PROMPT
+    assert "Do not merely split" in S.SABRI_SYSTEM_PROMPT
+    assert "an em dash (—)" in S.SABRI_SYSTEM_PROMPT
+    assert "an en dash (–)" in S.SABRI_SYSTEM_PROMPT
+    assert "[[KEEP_0001]]" in S.SABRI_SYSTEM_PROMPT

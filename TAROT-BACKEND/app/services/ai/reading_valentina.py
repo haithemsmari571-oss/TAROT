@@ -18,6 +18,7 @@ NOT shown to the client directly — it is handed to Sabri, who selects, voices,
 from app.config import get_app_settings
 from app.logging_config import get_logger
 from app.services.ai import client as ai_client
+from app.services.ai.runtime_prompts import resolve_runtime_prompt
 from app.services.ai.reading_reader import (
     _numerology_block,          # deterministic Life Path / Personal Year injection (reused verbatim)
     thinking_for_turn,          # gated adaptive-thinking kwargs (reused verbatim)
@@ -180,12 +181,13 @@ def write_valentina(valentina_input: str, *, client_message=None, model=None, ma
     short turns don't). Blocking — call from a thread on the event loop. Returns "" on any SDK
     error (never raises): the coordinator treats an empty Valentina result as a failed NEW turn
     and delivers a fallback line rather than crashing or leaving dead silence. ``system`` overrides
-    the persona (used to A/B prompt variants); defaults to VALENTINA_SYSTEM_PROMPT."""
+    the persona (used to A/B prompt variants); otherwise uses the active owner-editable
+    registry prompt, with the shipped constant as its failure-safe fallback."""
     s = get_app_settings()
     tp = thinking_for_turn(client_message)
     try:
         chunks = ai_client.run_chat_stream(
-            system=system or VALENTINA_SYSTEM_PROMPT,
+            system=system or resolve_runtime_prompt("reading.valentina", VALENTINA_SYSTEM_PROMPT),
             user_content=valentina_input,
             model=model or s.READER_MODEL,
             max_tokens=max_tokens or s.READER_MAX_TOKENS,

@@ -13,6 +13,8 @@ from app.services.atlas_client_memory_prompt import (
     ATLAS_CLIENT_MEMORY_PROMPT_KEY,
     load_shipped_atlas_client_memory_instruction,
 )
+from app.services.ai.reading_sabri import SABRI_SYSTEM_PROMPT
+from app.services.ai.reading_valentina import VALENTINA_SYSTEM_PROMPT
 
 # The 22 Major Arcana (key -> name), matching the optimized card art (0-21).
 MAJOR_ARCANA = {
@@ -27,6 +29,8 @@ MAJOR_ARCANA = {
 # The code contract key for the nightly content prompt.
 DAILY_CONTENT_KEY = "daily_content"
 NUMEROLOGY_FULL_READING_KEY = "numerology.full-reading"
+VALENTINA_READING_KEY = "reading.valentina"
+SABRI_DELIVERY_KEY = "reading.sabri"
 
 # The shipped default prompt — Valentina's voice, ASA-compliant BY CONSTRUCTION,
 # and it asks for strict JSON so the code can parse the five fields reliably.
@@ -141,6 +145,34 @@ def registered_prompts() -> list[dict]:
             "variables": [],
             "output_schema": None,
             "output_schema_version": "atlas-client-memory-transport-v1",
+            "classification": "OWNER_EDITABLE",
+        },
+        {
+            "key": VALENTINA_READING_KEY,
+            "name": "Valentina Reading Writer",
+            "description": (
+                "Writes the complete psychic substance for each live reading turn. "
+                "Sabri or the owner handles the final delivery voice."
+            ),
+            "model": get_app_settings().READER_MODEL,
+            "default_prompt": VALENTINA_SYSTEM_PROMPT,
+            "variables": [],
+            "output_schema": None,
+            "output_schema_version": None,
+            "classification": "OWNER_EDITABLE",
+        },
+        {
+            "key": SABRI_DELIVERY_KEY,
+            "name": "Sabri Delivery Humanizer",
+            "description": (
+                "Rewrites and paces Valentina's supplied text for live chat while "
+                "preserving protected facts verbatim."
+            ),
+            "model": get_app_settings().SABRI_DELIVERY_MODEL,
+            "default_prompt": SABRI_SYSTEM_PROMPT,
+            "variables": [],
+            "output_schema": None,
+            "output_schema_version": None,
             "classification": "OWNER_EDITABLE",
         },
     ]
