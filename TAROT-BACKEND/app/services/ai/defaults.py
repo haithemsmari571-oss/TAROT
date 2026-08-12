@@ -9,6 +9,10 @@ summaries, …) to REGISTERED_PROMPTS and they appear in the admin "AI Prompts".
 from app.config import get_app_settings
 from app.schemas.numerology import NumerologyReport
 from app.services.numerology_config import get_numerology_settings
+from app.services.atlas_client_memory_prompt import (
+    ATLAS_CLIENT_MEMORY_PROMPT_KEY,
+    load_shipped_atlas_client_memory_instruction,
+)
 
 # The 22 Major Arcana (key -> name), matching the optimized card art (0-21).
 MAJOR_ARCANA = {
@@ -123,6 +127,20 @@ def registered_prompts() -> list[dict]:
             "variables": NUMEROLOGY_FULL_READING_VARIABLES,
             "output_schema": NumerologyReport.model_json_schema(),
             "output_schema_version": "numerology-report-1",
+            "classification": "OWNER_EDITABLE",
+        },
+        {
+            "key": ATLAS_CLIENT_MEMORY_PROMPT_KEY,
+            "name": "Atlas Post-Session Client Memory",
+            "description": (
+                "Updates one client/psychic living memory document after a reading "
+                "and proposes additions or explicit corrections to verified facts."
+            ),
+            "model": get_app_settings().READING_DRAFT_MODEL,
+            "default_prompt": load_shipped_atlas_client_memory_instruction(),
+            "variables": [],
+            "output_schema": None,
+            "output_schema_version": "atlas-client-memory-transport-v1",
             "classification": "OWNER_EDITABLE",
         },
     ]
