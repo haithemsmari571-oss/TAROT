@@ -92,8 +92,10 @@ def test_owner_instruction_has_one_standalone_source_file_and_all_sections():
         assert f"{section}. " in instruction
     assert "A read the psychic made is never attributed to the client." in instruction
     assert "every cited message must have speaker CLIENT" in instruction
-    assert "An absent value is NOT AVAILABLE" in instruction
-    assert "client or any third party" in instruction
+    assert "If a client value is absent, it is NOT AVAILABLE" in instruction
+    assert "This restriction does not apply to another person" in instruction
+    assert "record the psychic's third-party numerology and astrology normally" in instruction
+    assert "DOB and astrology from the facts block or as stated by the psychic" in instruction
     assert "File approaching compression threshold." in instruction
     assert instruction.endswith("it must be findable in under ten seconds.")
 

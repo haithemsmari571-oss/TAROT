@@ -276,7 +276,7 @@ def _extract_subject_dobs(text):
 
 
 def _numerology_block(date_of_birth, current_year, client_message=None) -> str:
-    """Deterministic Life Path + Personal Year as authoritative given facts, so the model
+    """Deterministic client zodiac, Life Path + Personal Year as authoritative facts, so the model
     never computes numerology live (a smoke test read Life Path 6 for 22 Jul 1992; correct
     is 5). Covers the CLIENT's own DOB (from the dossier) AND any THIRD PARTY named with a
     DOB in ``client_message`` (an ex/partner) — same calculator, same pattern. Returns ""
@@ -286,14 +286,17 @@ def _numerology_block(date_of_birth, current_year, client_message=None) -> str:
             calculate_life_path_number,
             calculate_personal_year,
         )
+        from app.services.numerology import parse_calendar_date
+        from app.utils.zodiac_calculator import get_zodiac_sign_from_date
     except Exception as e:  # noqa: BLE001
         logger.warning("reader_numerology_skipped", error=str(e))
         return ""
 
     facts = []
-    if date_of_birth:  # the client's own numerology (from the dossier DOB) — unchanged
+    if date_of_birth:  # the client's own astrology/numerology from the account DOB
         try:
-            line = f"Life Path: {calculate_life_path_number(date_of_birth)}"
+            line = f"Zodiac sign: {get_zodiac_sign_from_date(parse_calendar_date(date_of_birth))}"
+            line += f"\nLife Path: {calculate_life_path_number(date_of_birth)}"
             if current_year:
                 line += f"\nPersonal Year ({current_year}): {calculate_personal_year(date_of_birth, current_year)}"
             facts.append(line)
@@ -328,7 +331,7 @@ def build_reader_input(
     current held-back buffer (lines the Reader may deploy now).
 
     ``date_of_birth`` (a date or 'YYYY-MM-DD'/'DD/MM/YYYY' string) + ``current_year``
-    inject the client's Life Path and Personal Year as authoritative given facts, so
+    inject the client's zodiac, Life Path and Personal Year as authoritative given facts, so
     the model is never left to compute numerology live (which it gets wrong). Any third
     party named with a DOB in ``client_message`` is injected the same deterministic way."""
     parts = []

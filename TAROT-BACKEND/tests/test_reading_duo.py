@@ -36,6 +36,7 @@ def test_valentina_receives_verified_numerology_or_explicit_not_available_signal
         date_of_birth=date(2002, 12, 1),
         current_year=2026,
     )
+    assert "Zodiac sign: Sagittarius" in present
     assert "Life Path: 8" in present
     assert "Personal Year (2026): 5" in present
 
@@ -48,8 +49,10 @@ def test_valentina_receives_verified_numerology_or_explicit_not_available_signal
         current_year=2026,
     )
     assert "KNOWN NUMEROLOGY" not in absent
-    assert "explicitly NOT AVAILABLE" in reading_valentina.VALENTINA_SYSTEM_PROMPT
-    assert "client or any third party" in reading_valentina.VALENTINA_SYSTEM_PROMPT
+    assert "client value not supplied as verified system data is explicitly NOT AVAILABLE" in reading_valentina.VALENTINA_SYSTEM_PROMPT
+    assert "This restriction applies only to the client" in reading_valentina.VALENTINA_SYSTEM_PROMPT
+    assert "For any OTHER person" in reading_valentina.VALENTINA_SYSTEM_PROMPT
+    assert "calculate and discuss their numerology and astrology normally" in reading_valentina.VALENTINA_SYSTEM_PROMPT
 
 
 # ── decision: NEW calls Valentina; CONTINUE works from reserve (no Valentina) ─

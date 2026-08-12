@@ -110,6 +110,7 @@ def test_build_input_injects_authoritative_numerology_when_dob_given():
         date_of_birth=date(1992, 7, 22), current_year=2026,
     )
     assert "KNOWN NUMEROLOGY (authoritative" in out
+    assert "Zodiac sign: Cancer" in out
     assert "Life Path: 5" in out            # NOT 6 (the smoke-test bug)
     assert "Personal Year (2026): 3" in out
 
@@ -120,6 +121,7 @@ def test_build_input_accepts_iso_dob_string_from_dossier():
         session_metadata={}, held_back_buffer=[],
         date_of_birth="1992-07-22", current_year=2026,
     )
+    assert "Zodiac sign: Cancer" in out
     assert "Life Path: 5" in out
     assert "Personal Year (2026): 3" in out
 
