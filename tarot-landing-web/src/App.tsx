@@ -10,6 +10,9 @@ import { ProtectedRoute, RoleProtectedRoute } from "./features/auth/components";
 import { useAuth } from "./features/auth/hooks";
 import { UserRole } from "./features/auth/types/auth.types";
 import BrandedLoader from "./components/motion/BrandedLoader";
+import { crmDestinationForAdminPath } from "./admin-crm-routes";
+
+export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -18,16 +21,6 @@ function useScrollToTop() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
-}
-
-export function crmDestinationForAdminPath(pathname: string): string {
-  if (/^\/admin\/(?:chats|notifications)(?:\/|$)/.test(pathname)) return "/crm/#/agent/valentina";
-  if (/^\/admin\/(?:users|clients|psychics)(?:\/|$)/.test(pathname)) return "/crm/#/clients-and-psychics";
-  if (/^\/admin\/(?:reader-activity|ledger)(?:\/|$)/.test(pathname)) return "/crm/#/money-and-stats";
-  if (/^\/admin\/(?:categories|buy-options|landing|lifepath|life-path|zodiac|tasks|claims|ai-prompts|onboarding|rituals-settings|settings)(?:\/|$)/.test(pathname)) {
-    return "/crm/#/agent/vulcan";
-  }
-  return "/crm/#/control";
 }
 
 function AdminCrmRedirect() {
