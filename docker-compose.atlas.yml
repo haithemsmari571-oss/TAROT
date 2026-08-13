@@ -25,6 +25,7 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env.atlas
+      - ./.env.crm-providers.local
     environment:
       CRM_HOST: "0.0.0.0"
       ATLAS_DATABASE_MODE: "deployment"
