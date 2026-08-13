@@ -180,7 +180,9 @@ def test_migration_up_down_on_sqlite(tmp_path):
 
     # Step back over the siloing migration only: the table survives, in the old
     # one-row-per-client shape.
-    down_one = _alembic(env, "downgrade", "-1")
+    # The Articles foundation now follows the silo migration at head. Step
+    # explicitly to the pre-silo revision rather than assuming silo is head.
+    down_one = _alembic(env, "downgrade", "a9b8c7d6e5f4")
     assert down_one.returncode == 0, down_one.stderr
     connection = sqlite3.connect(db_path)
     situation_columns = {

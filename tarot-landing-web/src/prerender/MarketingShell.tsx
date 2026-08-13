@@ -19,6 +19,9 @@ export default function MarketingShell({ children }: { children: React.ReactNode
           <Link to="/psychics-browse" style={{ color: COLORS.neutralGray }}>
             Readers
           </Link>
+          <Link to="/articles/" style={{ color: COLORS.neutralGray }}>
+            Articles
+          </Link>
           <Link to="/does-he-miss-me" style={{ color: COLORS.neutralGray }}>
             Does He Miss Me?
           </Link>
@@ -40,6 +43,7 @@ export default function MarketingShell({ children }: { children: React.ReactNode
         <nav className="flex flex-wrap gap-6 mb-4">
           <Link to="/" style={{ color: COLORS.neutralGray }}>Home</Link>
           <Link to="/psychics-browse" style={{ color: COLORS.neutralGray }}>Readers</Link>
+          <Link to="/articles/" style={{ color: COLORS.neutralGray }}>Articles</Link>
           <Link to="/does-he-miss-me" style={{ color: COLORS.neutralGray }}>Does He Miss Me?</Link>
           <Link to="/will-my-ex-come-back" style={{ color: COLORS.neutralGray }}>Will My Ex Come Back?</Link>
           <Link to="/about" style={{ color: COLORS.neutralGray }}>About</Link>

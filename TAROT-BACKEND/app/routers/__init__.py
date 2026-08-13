@@ -26,8 +26,15 @@ from .admin_content import router as admin_content_router
 from .reading_ai import router as reading_ai_router
 from .second_brain_readonly import router as second_brain_readonly_router
 from .second_brain_situation import router as second_brain_situation_router
+from .admin_onboarding import router as admin_onboarding_router
+from .articles import public_router as articles_router, admin_router as admin_articles_router
+from .public_seo import router as public_seo_router
 
 __all__ = [
+    "admin_onboarding_router",
+    "articles_router",
+    "admin_articles_router",
+    "public_seo_router",
     "auth_router",
     "psychic_router",
     "categories_router",

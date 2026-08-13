@@ -21,6 +21,9 @@ from app.routers import (
     profile_router,
     zodiac_router,
     admin_zodiac_router,
+    articles_router,
+    admin_articles_router,
+    public_seo_router,
     review_router,
     settings_router,
     notification_router,
@@ -37,6 +40,7 @@ from app.routers import (
     reading_ai_router,
     second_brain_readonly_router,
     second_brain_situation_router,
+    admin_onboarding_router,
 )
 import app.models
 
@@ -194,6 +198,9 @@ app.include_router(
     prefix="/api/zodiac",
     tags=["Zodiac & Life Path"],
 )
+app.include_router(articles_router, prefix="/api/articles", tags=["Articles"])
+app.include_router(admin_articles_router, prefix="/api/admin/articles", tags=["Admin Articles"])
+app.include_router(public_seo_router, tags=["Public SEO"])
 
 app.include_router(
     admin_zodiac_router,
@@ -295,6 +302,12 @@ app.include_router(
     second_brain_situation_router,
     prefix="/api/integrations/second-brain/valentina/v2",
     tags=["Second Brain - Situation Records (Read Only)"],
+)
+
+app.include_router(
+    admin_onboarding_router,
+    prefix="/api/admin",
+    tags=["Admin - Psychic Onboarding"],
 )
 
 

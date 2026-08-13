@@ -19,6 +19,10 @@ export interface SeoMeta {
   description: string;
   /** Path only, e.g. "/does-he-miss-me". Canonical is SITE_URL + path. */
   path: string;
+  /** Absolute override for editorial pages; normally derived from path. */
+  canonical?: string;
+  /** Defaults to index,follow. Loading/missing/private states use noindex. */
+  robots?: string;
   /** Absolute Open Graph image URL. Falls back to DEFAULT_OG_IMAGE. */
   ogImage?: string;
   ogType?: "website" | "article";
@@ -178,6 +182,13 @@ export const SEO: Record<string, SeoMeta> = {
         ],
       },
     ],
+  },
+  "/articles": {
+    path: "/articles",
+    canonical: `${SITE_URL}/articles/`,
+    title: "Articles | Ask Valentina",
+    description:
+      "Read Ask Valentina articles about numerology, tarot, love and relationships, and psychic guidance.",
   },
 };
 

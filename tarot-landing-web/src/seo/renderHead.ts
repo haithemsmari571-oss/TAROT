@@ -10,13 +10,14 @@ const escapeHtml = (s: string): string =>
     .replace(/"/g, "&quot;");
 
 export function renderHeadTags(meta: SeoMeta): string {
-  const canonical = canonicalUrl(meta.path);
+  const canonical = meta.canonical ?? canonicalUrl(meta.path);
   const ogImage = meta.ogImage ?? DEFAULT_OG_IMAGE;
   const ogType = meta.ogType ?? "website";
 
   const tags: string[] = [
     `<title>${escapeHtml(meta.title)}</title>`,
     `<meta name="description" content="${escapeHtml(meta.description)}" />`,
+    `<meta name="robots" content="${escapeHtml(meta.robots ?? "index,follow")}" />`,
     `<link rel="canonical" href="${canonical}" />`,
     `<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />`,
     `<meta property="og:type" content="${ogType}" />`,

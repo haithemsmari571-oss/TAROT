@@ -24,4 +24,5 @@
           <changefreq>weekly</changefreq>
           <priority>0.8</priority>
     </url>
+    <url><loc>https://askvalentina.co.uk/articles/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
 </urlset>

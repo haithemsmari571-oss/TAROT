@@ -86,6 +86,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
       location.pathname === "/about" ||
       location.pathname === "/privacy" ||
       location.pathname === "/terms" ||
+      location.pathname.startsWith("/articles/") ||
       location.pathname === "/does-he-miss-me" ||
       location.pathname === "/will-my-ex-come-back" ||
       location.pathname.startsWith("/psychics/");

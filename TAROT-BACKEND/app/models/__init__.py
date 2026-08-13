@@ -8,6 +8,7 @@ from .chat_session import ChatSession
 from .session_intervals import SessionInterval
 from .settings import Settings
 from .transaction import Transaction
+from .psychic_onboarding_draft import PsychicOnboardingDraft
 from .zodiac_sign import ZodiacSign
 from .zodiac_compatibility import ZodiacCompatibility
 from .life_path_number import LifePathNumber
@@ -19,6 +20,7 @@ from .landing_content import LandingContent
 from .client_memory_summary import ClientMemorySummary
 from .client_note import ClientNote
 from .client_situation_record import ClientSituationRecord
+from .article import Article, ArticleVersion, ArticleAuditEvent, ArticleSlugRedirect
 from .stardust_lot import StardustLot
 from .task import Task
 from .claim import Claim

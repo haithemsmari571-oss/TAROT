@@ -37,12 +37,13 @@ function upsertLink(rel: string, href: string) {
 }
 
 function applySeo(meta: SeoMeta) {
-  const canonical = canonicalUrl(meta.path);
+  const canonical = meta.canonical ?? canonicalUrl(meta.path);
   const ogImage = meta.ogImage ?? DEFAULT_OG_IMAGE;
   const ogType = meta.ogType ?? "website";
 
   document.title = meta.title;
   upsertMeta('meta[name="description"]', "name", "description", meta.description);
+  upsertMeta('meta[name="robots"]', "name", "robots", meta.robots ?? "index,follow");
   upsertLink("canonical", canonical);
 
   upsertMeta('meta[property="og:site_name"]', "property", "og:site_name", SITE_NAME);
@@ -80,9 +81,10 @@ interface SeoProps {
 
 export default function Seo({ path, meta }: SeoProps) {
   const resolved = meta ?? getSeo(path ?? "/");
+  const signature = JSON.stringify(resolved);
   useEffect(() => {
     applySeo(resolved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved.path, resolved.title, resolved.description]);
+  }, [signature]);
   return null;
 }

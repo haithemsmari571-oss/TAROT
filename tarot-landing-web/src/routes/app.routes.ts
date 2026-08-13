@@ -23,11 +23,13 @@ import psychicProfileRoutes from "./psychic-profile.routes";
 import { notificationRoutes } from "./notification.routes";
 import buyOptionsRoutes from "./buy-options.routes";
 import categoriesRoutes from "./categories.routes";
+import onboardingRoutes from "./onboarding.routes";
 import landingEditorRoutes from "./landing-editor.routes";
 import aboutRoutes from "./about.routes";
 import privacyRoutes from "./privacy.routes";
 import termsRoutes from "./terms.routes";
 import seoRoutes from "./seo.routes";
+import articlesRoutes from "./articles.routes";
 import { UserRole } from "../features/auth/types/auth.types";
 
 
@@ -75,11 +77,13 @@ const routes: RouteConfig[] = [
 ...notificationRoutes,
 ...buyOptionsRoutes,
 ...categoriesRoutes,
+  ...onboardingRoutes,
 ...landingEditorRoutes,
 ...aboutRoutes,
 ...privacyRoutes,
 ...termsRoutes,
 ...seoRoutes,
+...articlesRoutes,
 
 ];
 
