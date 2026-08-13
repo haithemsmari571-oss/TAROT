@@ -74,7 +74,7 @@ def test_reader_logs_every_attempt_delivered_on_the_returned_one(monkeypatch):
 def test_sabri_delivery_logged_with_fact_drift_notes(monkeypatch):
     factory = _install_test_log(monkeypatch)
     # Valentina's draft carries "life path 7"; Sabri's delivery omits the 7 -> fact-drift note.
-    reading_sabri.sabri_deliver(
+    bubbles, reserve = reading_sabri.sabri_deliver(
         "SABRI INPUT", source_content="he is a pisces with a life path 7",
         sabri_call=lambda _i: "he loves you\n\ngive it two weeks",
         max_attempts=1, chat_id=77, turn_number=4,
@@ -83,9 +83,11 @@ def test_sabri_delivery_logged_with_fact_drift_notes(monkeypatch):
     assert len(rows) == 1
     r = rows[0]
     assert r.engine == "two_role" and r.stage == "sabri_delivery"
-    assert r.turn_number == 4 and r.attempt_number == 1 and r.is_delivered is True
+    assert r.turn_number == 4 and r.attempt_number == 1 and r.is_delivered is False
     assert "he loves you" in r.raw_content
     assert "7" in json.loads(r.notes)["fact_drift"]["numbers"]  # Sabri dropped Valentina's life path 7
+    assert bubbles == ["he is a pisces with a life path 7"]
+    assert reserve == ""
 
 
 # ── two_role: reading_duo._write_valentina_turn -> valentina_draft ───────────

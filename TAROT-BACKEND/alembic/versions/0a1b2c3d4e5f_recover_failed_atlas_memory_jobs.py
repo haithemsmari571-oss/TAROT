@@ -14,7 +14,16 @@ branch_labels = None
 depends_on = None
 
 
+def _tables() -> set[str]:
+    return set(sa.inspect(op.get_bind()).get_table_names())
+
+
 def upgrade() -> None:
+    # The parent migration deliberately skips this table for narrow migration
+    # tests stamped over a minimal schema. Preserve that compatibility boundary
+    # instead of trying to alter a table that the parent did not create.
+    if "atlas_client_memory_jobs" not in _tables():
+        return
     op.add_column(
         "atlas_client_memory_jobs",
         sa.Column("recovery_cycles", sa.Integer(), nullable=False, server_default="0"),
@@ -36,6 +45,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if "atlas_client_memory_jobs" not in _tables():
+        return
     op.drop_index("ix_atlas_memory_jobs_failed_retry", table_name="atlas_client_memory_jobs")
     op.drop_constraint(
         "ck_atlas_memory_job_recovery_cycles",

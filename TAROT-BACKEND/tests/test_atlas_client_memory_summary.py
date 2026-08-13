@@ -97,6 +97,8 @@ def test_owner_instruction_has_one_standalone_source_file_and_all_sections():
     assert "record the psychic's third-party numerology and astrology normally" in instruction
     assert "DOB and astrology from the facts block or as stated by the psychic" in instruction
     assert "File approaching compression threshold." in instruction
+    assert "exceeds 1,000 lines" in instruction
+    assert "exceeds 300 lines" not in instruction
     assert instruction.endswith("it must be findable in under ten seconds.")
 
 
@@ -106,7 +108,12 @@ def test_registry_exposes_the_standalone_instruction_as_owner_editable(monkeypat
     monkeypatch.setattr(
         defaults,
         "get_app_settings",
-        lambda: SimpleNamespace(CONTENT_MODEL="synthetic-content", READING_DRAFT_MODEL="synthetic-summary"),
+        lambda: SimpleNamespace(
+            CONTENT_MODEL="synthetic-content",
+            READING_DRAFT_MODEL="synthetic-summary",
+            READER_MODEL="synthetic-valentina",
+            SABRI_DELIVERY_MODEL="synthetic-sabri",
+        ),
     )
     specs = defaults.registered_prompts()
     summary = next(item for item in specs if item["key"] == ATLAS_CLIENT_MEMORY_PROMPT_KEY)
