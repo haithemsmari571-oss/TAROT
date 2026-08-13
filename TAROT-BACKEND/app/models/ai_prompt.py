@@ -22,6 +22,7 @@ class AiPrompt(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str] = mapped_column(String(64), nullable=False)
+    default_model: Mapped[str] = mapped_column(String(64), nullable=False)
 
     # Current (editable) text, and the shipped default kept permanently as a
     # known-good fallback the owner can always restore.
@@ -76,6 +77,7 @@ class AiPromptVersion(Base):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="ACTIVE", server_default="ACTIVE"
     )

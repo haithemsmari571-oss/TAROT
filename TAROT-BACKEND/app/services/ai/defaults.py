@@ -6,6 +6,8 @@ owner can always restore). Add future prompts (support drafts, reading
 summaries, …) to REGISTERED_PROMPTS and they appear in the admin "AI Prompts".
 """
 
+from functools import lru_cache
+
 from app.config import get_app_settings
 from app.schemas.numerology import NumerologyReport
 from app.services.numerology_config import get_numerology_settings
@@ -176,3 +178,15 @@ def registered_prompts() -> list[dict]:
             "classification": "OWNER_EDITABLE",
         },
     ]
+
+
+@lru_cache(maxsize=1)
+def configured_models() -> tuple[str, ...]:
+    """Models this registry can run, sourced only from live configuration."""
+    return tuple(sorted(
+        {
+            str(spec["model"]).strip()
+            for spec in registered_prompts()
+            if str(spec.get("model") or "").strip()
+        }
+    ))

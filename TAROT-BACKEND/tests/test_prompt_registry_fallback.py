@@ -43,6 +43,7 @@ def _seed(db: Session, *, key="t.prompt", text="SHIPPED TEXT", classification="O
         name="Test prompt",
         description="fixture",
         model="claude-haiku-4-5-20251001",
+        default_model="claude-haiku-4-5-20251001",
         prompt=text,
         default_prompt=text,
         variables=[],
@@ -59,6 +60,7 @@ def _seed(db: Session, *, key="t.prompt", text="SHIPPED TEXT", classification="O
             prompt_id=row.id,
             version=1,
             text=text,
+            model=row.model,
             state="ACTIVE",
             activated_at=datetime.now(timezone.utc),
         )
@@ -141,6 +143,42 @@ class TestEditableAndRestorable:
             registry.restore_default(db, "t.prompt")
         assert registry.get_prompt_text(db, "t.prompt") == "SHIPPED"
 
+    def test_model_is_versioned_through_draft_activation_and_rollback(self, db, monkeypatch):
+        row = _seed(db, text="SHIPPED")
+        monkeypatch.setattr(
+            registry,
+            "configured_models",
+            lambda: ["configured-a", "configured-b"],
+        )
+        row.model = "configured-a"
+        row.default_model = "configured-a"
+        row.versions[0].model = "configured-a"
+        db.commit()
+
+        draft = registry.save_draft(db, "t.prompt", "DRAFT TEXT", "configured-b")
+        assert (draft.text, draft.model, draft.state) == (
+            "DRAFT TEXT",
+            "configured-b",
+            "DRAFT",
+        )
+        activated = registry.activate_draft(db, "t.prompt", draft.version)
+        assert (activated.prompt, activated.model) == ("DRAFT TEXT", "configured-b")
+
+        rolled_back = registry.rollback_to_version(db, "t.prompt", 1)
+        assert (rolled_back.prompt, rolled_back.model) == ("SHIPPED", "configured-a")
+        active = registry.get_versions(db, "t.prompt")[0]
+        assert (active.text, active.model, active.state) == (
+            "SHIPPED",
+            "configured-a",
+            "ACTIVE",
+        )
+
+    def test_model_must_come_from_configuration(self, db, monkeypatch):
+        _seed(db)
+        monkeypatch.setattr(registry, "configured_models", lambda: ["configured-a"])
+        with pytest.raises(registry.PromptValidationError, match="not enabled"):
+            registry.save_prompt(db, "t.prompt", "EDITED", "invented-model")
+
 
 class TestNoSplitBrain:
     """get_active_prompt must hand back the SAME text get_prompt_text resolves.
@@ -193,3 +231,82 @@ class TestSeededDefaultsAreByteIdentical:
             rendered = registry.get_prompt_text(db, spec["key"])
             assert rendered == spec["default_prompt"], f"{spec['key']} drifted from its constant"
             assert registry.get_prompt(db, spec["key"]).is_default == 1
+
+    def test_startup_preserves_an_owner_selected_model(self, db, monkeypatch):
+        models = registry.configured_models()
+        assert len(models) >= 2
+        row = _seed(db, text="SHIPPED")
+        row.model = models[-1]
+        row.default_model = models[0]
+        row.prompt = "OWNER TEXT"
+        row.is_default = 0
+        row.versions[0].model = models[-1]
+        db.commit()
+        monkeypatch.setattr(
+            registry.ai_defaults,
+            "registered_prompts",
+            lambda: [{
+                "key": "t.prompt",
+                "name": "Test prompt",
+                "description": "updated metadata",
+                "model": models[0],
+                "default_prompt": "NEW SHIPPED",
+                "variables": [],
+                "output_schema": None,
+                "output_schema_version": None,
+                "classification": "OWNER_EDITABLE",
+            }],
+        )
+
+        registry.seed_prompts(db)
+
+        preserved = registry.get_prompt(db, "t.prompt")
+        assert (preserved.prompt, preserved.model, preserved.is_default) == (
+            "OWNER TEXT",
+            models[-1],
+            0,
+        )
+        assert (preserved.default_prompt, preserved.default_model) == (
+            "NEW SHIPPED",
+            models[0],
+        )
+
+    def test_changed_configured_default_creates_an_exact_new_version(self, db, monkeypatch):
+        models = registry.configured_models()
+        assert len(models) >= 2
+        row = _seed(db, text="SHIPPED")
+        row.model = models[0]
+        row.default_model = models[0]
+        row.versions[0].model = models[0]
+        db.commit()
+        monkeypatch.setattr(
+            registry.ai_defaults,
+            "registered_prompts",
+            lambda: [{
+                "key": "t.prompt",
+                "name": "Test prompt",
+                "description": "updated metadata",
+                "model": models[-1],
+                "default_prompt": "NEW SHIPPED",
+                "variables": [],
+                "output_schema": None,
+                "output_schema_version": None,
+                "classification": "OWNER_EDITABLE",
+            }],
+        )
+
+        registry.seed_prompts(db)
+
+        updated = registry.get_prompt(db, "t.prompt")
+        assert (updated.prompt, updated.model, updated.active_version, updated.is_default) == (
+            "NEW SHIPPED",
+            models[-1],
+            2,
+            1,
+        )
+        active = registry.get_versions(db, "t.prompt")[0]
+        assert (active.text, active.model, active.state) == (
+            "NEW SHIPPED",
+            models[-1],
+            "ACTIVE",
+        )

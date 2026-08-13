@@ -18,7 +18,7 @@ NOT shown to the client directly — it is handed to Sabri, who selects, voices,
 from app.config import get_app_settings
 from app.logging_config import get_logger
 from app.services.ai import client as ai_client
-from app.services.ai.runtime_prompts import resolve_runtime_prompt
+from app.services.ai.runtime_prompts import resolve_runtime_prompt_and_model
 from app.services.ai.reading_reader import (
     _numerology_block,          # deterministic Life Path / Personal Year injection (reused verbatim)
     thinking_for_turn,          # gated adaptive-thinking kwargs (reused verbatim)
@@ -185,11 +185,14 @@ def write_valentina(valentina_input: str, *, client_message=None, model=None, ma
     registry prompt, with the shipped constant as its failure-safe fallback."""
     s = get_app_settings()
     tp = thinking_for_turn(client_message)
+    runtime_prompt, runtime_model = resolve_runtime_prompt_and_model(
+        "reading.valentina", VALENTINA_SYSTEM_PROMPT, s.READER_MODEL
+    )
     try:
         chunks = ai_client.run_chat_stream(
-            system=system or resolve_runtime_prompt("reading.valentina", VALENTINA_SYSTEM_PROMPT),
+            system=system or runtime_prompt,
             user_content=valentina_input,
-            model=model or s.READER_MODEL,
+            model=model or runtime_model,
             max_tokens=max_tokens or s.READER_MAX_TOKENS,
             thinking=tp["thinking"],
             effort=tp["effort"],

@@ -29,7 +29,7 @@ from app.config import get_app_settings
 from app.logging_config import get_logger
 from app.services.ai import client as ai_client
 from app.services.ai.reading_llm import FALLBACK_MESSAGE
-from app.services.ai.runtime_prompts import resolve_runtime_prompt
+from app.services.ai.runtime_prompts import resolve_runtime_prompt_and_model
 
 logger = get_logger(__name__)
 
@@ -130,10 +130,13 @@ def run_sabri(sabri_input: str, *, model=None, max_tokens=None) -> str:
     """One Sabri delivery call → his raw plain-text output (bubbles + optional @@RESERVE@@).
     Blocking — call from a thread on the event loop. Raises on SDK error for the caller."""
     s = get_app_settings()
+    runtime_prompt, runtime_model = resolve_runtime_prompt_and_model(
+        "reading.sabri", SABRI_SYSTEM_PROMPT, s.SABRI_DELIVERY_MODEL
+    )
     result = ai_client.run_chat(
-        system=resolve_runtime_prompt("reading.sabri", SABRI_SYSTEM_PROMPT),
+        system=runtime_prompt,
         user_content=sabri_input,
-        model=model or s.SABRI_DELIVERY_MODEL,
+        model=model or runtime_model,
         max_tokens=max_tokens or s.SABRI_DELIVERY_MAX_TOKENS,
     )
     return result.get("text") or ""
