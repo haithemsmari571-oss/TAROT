@@ -100,6 +100,14 @@ export async function joinChat(chatId: number): Promise<JoinChatResult> {
 }
 
 /**
+ * Tell the backend that checkout has started for a live reading. During GRACE,
+ * this extends the server-side hold before the website billing page is opened.
+ */
+export async function startChatTopUp(chatId: number): Promise<void> {
+  await api.post(`/api/chat/${chatId}/topup`);
+}
+
+/**
  * Fetch messages for a chat. A negative offset returns the last abs(offset)
  * messages (newest window), oldest-first — matches how the web loads history.
  */

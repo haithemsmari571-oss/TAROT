@@ -35,6 +35,7 @@ import {
   getSessionTime,
   joinChat,
   requestChat,
+  startChatTopUp,
   type ChatMessage,
 } from "../../src/api/chat";
 import { getMyBalance } from "../../src/api/payment";
@@ -303,15 +304,21 @@ export default function ChatScreen() {
     };
   }, [paused, chatId]);
 
-  // Open the website billing page; on return re-anchor the timer to the live
-  // server balance (session-time reads the DB, so added funds extend the
-  // countdown; a GRACE pause is auto-resumed by the payment webhook).
+  // During GRACE, tell the backend checkout is starting before opening billing.
+  // That extends the server hold from 60s to 5 minutes; the payment webhook
+  // resumes the reading after crediting the balance.
   const onTopUp = useCallback(async () => {
     setToppingUp(true);
-    await openBillingPage();
-    await timer.refresh();
-    setToppingUp(false);
-  }, [timer]);
+    try {
+      if (sessionStatus === "GRACE") {
+        await startChatTopUp(chatId);
+      }
+      await openBillingPage();
+      await timer.refresh();
+    } finally {
+      setToppingUp(false);
+    }
+  }, [chatId, sessionStatus, timer]);
 
   // From the "session ended" sheet: top up, then either the webhook has already
   // revived the held session (best case) or we request a fresh reading with the
