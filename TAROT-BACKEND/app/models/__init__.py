@@ -35,6 +35,7 @@ from .reading_session_state import ReadingSessionStateRow
 from .reading_draft_attempt import ReadingDraftAttempt
 from .client_record_mapping import ClientRecordMapping
 from .reading_steering_note import ReadingSteeringNote
+from .atlas_client_memory_job import AtlasClientMemoryJob
 
 __all__ = [
     "User",
@@ -72,4 +73,5 @@ __all__ = [
     "ReadingDraftAttempt",
     "ClientRecordMapping",
     "ReadingSteeringNote",
+    "AtlasClientMemoryJob",
 ]

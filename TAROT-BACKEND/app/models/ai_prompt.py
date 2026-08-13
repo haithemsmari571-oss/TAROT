@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -70,6 +70,13 @@ class AiPromptVersion(Base):
     edit is never lost and any version can be restored with one tap."""
 
     __tablename__ = "ai_prompt_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "prompt_id",
+            "version",
+            name="uq_ai_prompt_versions_prompt_version",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     prompt_id: Mapped[int] = mapped_column(

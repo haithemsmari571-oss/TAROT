@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -17,6 +17,18 @@ class AtlasClientMemoryJob(Base):
         CheckConstraint(
             "recovery_cycles >= 0 AND recovery_cycles <= 3",
             name="ck_atlas_memory_job_recovery_cycles",
+        ),
+        Index(
+            "ix_atlas_memory_jobs_sweep",
+            "status",
+            "processing_started_at",
+            "created_at",
+        ),
+        Index(
+            "ix_atlas_memory_jobs_failed_retry",
+            "status",
+            "next_retry_at",
+            "recovery_cycles",
         ),
     )
 

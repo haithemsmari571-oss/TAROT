@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -32,14 +32,16 @@ class ClientMemorySummary(Base):
     __tablename__ = "client_memory_summaries"
     __table_args__ = (
         UniqueConstraint("client_id", "psychic_id", name="uq_client_memory_client_psychic"),
+        Index("ix_client_memory_client", "client_id"),
+        Index("ix_client_memory_psychic", "psychic_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     client_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     psychic_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
     # The single current summary. NULL means "no memory": either nothing has been

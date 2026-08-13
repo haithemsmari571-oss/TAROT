@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -9,8 +9,12 @@ from app.models.base import Base
 
 class Article(Base):
     __tablename__ = "articles"
+    __table_args__ = (
+        UniqueConstraint("slug", name="articles_slug_key"),
+        Index("ix_articles_slug", "slug", unique=True),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
-    slug: Mapped[str] = mapped_column(String(180), unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(180))
     category: Mapped[str] = mapped_column(String(60), index=True)
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     featured: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -55,9 +59,13 @@ class ArticleVersion(Base):
 
 class ArticleSlugRedirect(Base):
     __tablename__ = "article_slug_redirects"
+    __table_args__ = (
+        UniqueConstraint("old_slug", name="uq_article_slug_redirect_old_slug"),
+        Index("ix_article_slug_redirects_old_slug", "old_slug", unique=True),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"), index=True)
-    old_slug: Mapped[str] = mapped_column(String(180), unique=True, index=True)
+    old_slug: Mapped[str] = mapped_column(String(180))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

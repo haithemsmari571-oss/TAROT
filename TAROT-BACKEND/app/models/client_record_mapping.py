@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.enums.client_record_mapping_status import ClientRecordMappingStatus
@@ -26,9 +26,13 @@ class ClientRecordMapping(Base):
     """
 
     __tablename__ = "client_record_mappings"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_client_record_mappings_user_id"),
+        Index("ix_client_record_mappings_user_id", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     vault_filename: Mapped[str] = mapped_column(Text, nullable=False)   # e.g. "christine.md"
     vault_client_uid: Mapped[str] = mapped_column(Text, nullable=False)
     vault_dob: Mapped[Optional[object]] = mapped_column(Date, nullable=True)

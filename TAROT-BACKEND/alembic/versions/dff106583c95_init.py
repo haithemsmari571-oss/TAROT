@@ -609,4 +609,20 @@ def downgrade() -> None:
     op.drop_table("landing_content")
     op.drop_table("categories")
     op.drop_table("buy_options")
+    # PostgreSQL enum types are schema objects independent of their columns.
+    # Dropping every table therefore is not a complete downgrade: a later
+    # re-upgrade would fail when it tried to create the same named types again.
+    for enum_name in (
+        "role",
+        "userstatus",
+        "chatstatus",
+        "notificationtype",
+        "chatsessionstatus",
+        "messagestatus",
+        "chatsessiontrigger",
+        "chatterminationreason",
+        "transactiontype",
+        "transactionstatus",
+    ):
+        op.execute(sa.text(f'DROP TYPE IF EXISTS "{enum_name}"'))
     # ### end Alembic commands ###
