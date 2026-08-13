@@ -12,6 +12,9 @@ class Message(Base):
     __tablename__ = "messages"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"))
+    chat_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("chat_sessions.id"), nullable=True, index=True
+    )
     sender_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
@@ -27,3 +30,6 @@ class Message(Base):
     )
 
     sender: Mapped[Optional["User"]] = relationship("User", back_populates="messages")
+    chat_session: Mapped[Optional["ChatSession"]] = relationship(
+        "ChatSession", back_populates="messages"
+    )

@@ -7,10 +7,10 @@ caller can accidentally leak a note where it must not go:
      call time and returns [] for anything but HYBRID. A session switched to
      Automatic mid-conversation gets zero influence from earlier notes, even
      though the rows still exist for the audit trail.
-  2. SESSION-SCOPED: only notes bound to the chat's CURRENT session (the
-     latest chat_sessions row that is not COMPLETED — a DISCONNECTED session
-     is interrupted, not over) are returned. When the session completes, its
-     notes expire with it; a brand-new session starts with none.
+  2. SESSION-SCOPED: only notes bound to the chat's CURRENT active or
+     disconnected session are returned. Requested and cancelled sessions are
+     not readings. When the session completes, its notes expire with it; a
+     brand-new session starts with none.
 """
 
 from __future__ import annotations
@@ -32,12 +32,14 @@ logger = get_logger(__name__)
 
 
 def current_session(db: Session, chat_id: int) -> Optional[ChatSession]:
-    """The chat's current (not-yet-completed) session, or None."""
+    """The chat's current active or temporarily disconnected session."""
     return (
         db.query(ChatSession)
         .filter(
             ChatSession.chat_id == chat_id,
-            ChatSession.status != ChatSessionStatus.COMPLETED,
+            ChatSession.status.in_(
+                [ChatSessionStatus.ACTIVE, ChatSessionStatus.DISCONNECTED]
+            ),
         )
         .order_by(desc(ChatSession.id))
         .first()

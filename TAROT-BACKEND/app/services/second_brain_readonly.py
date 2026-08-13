@@ -33,10 +33,7 @@ from app.schemas.second_brain_readonly import (
 MAX_PAGE_SIZE = 50
 DEFAULT_PAGE_SIZE = 25
 STALE_AFTER_MS = 300_000
-SCHEMA_LIMITATION_REASON = (
-    "schema_limitation:messages_have_no_chat_session_id;"
-    "reserved_unassigned_sessions_used"
-)
+LEGACY_UNASSIGNED_REASON = "legacy_messages_without_reading_session"
 
 _CURSOR_VERSION = 1
 _MAX_CURSOR_LENGTH = 512
@@ -63,6 +60,7 @@ class _Cursor:
 class _MessageProjection:
     message_id: int
     message_chat_id: int
+    message_session_id: int | None
     sender_id: int | None
     content: str
     message_status: Any
@@ -161,7 +159,11 @@ def project_valentina_readonly_snapshot(
         connection=ValentinaReadonlySourceConnection(
             reported_connected=True,
             checked_at=refreshed_iso,
-            reason=SCHEMA_LIMITATION_REASON,
+            reason=(
+                LEGACY_UNASSIGNED_REASON
+                if any(row.message_session_id is None for row in page_rows)
+                else None
+            ),
         ),
         conversations=conversations,
     )
@@ -236,6 +238,7 @@ def _read_message_page(
         select(
             Message.id.label("message_id"),
             Message.chat_id.label("message_chat_id"),
+            Message.chat_session_id.label("message_session_id"),
             Message.sender_id.label("sender_id"),
             Message.content.label("content"),
             Message.status.label("message_status"),
@@ -247,7 +250,10 @@ def _read_message_page(
             .over(partition_by=Message.chat_id)
             .label("chat_message_updated_at"),
             func.row_number()
-            .over(order_by=(Message.created_at.asc(), Message.id.asc()))
+            .over(
+                partition_by=(Message.chat_id, Message.chat_session_id),
+                order_by=(Message.created_at.asc(), Message.id.asc()),
+            )
             .label("message_sequence"),
             Chat.id.label("chat_id"),
             Chat.user_id.label("client_id"),
@@ -360,24 +366,51 @@ def _build_conversations(
         rows = rows_by_chat[chat_id]
         first = rows[0]
         conversation_id = f"chat:{chat_id}"
+        session_rows_for_chat = sessions_by_chat.get(chat_id, [])
+        known_session_ids = {
+            int(session_row["session_id"]) for session_row in session_rows_for_chat
+        }
+        linked_rows: dict[int, list[_MessageProjection]] = {
+            session_id: [] for session_id in known_session_ids
+        }
+        legacy_rows: list[_MessageProjection] = []
+        for row in rows:
+            if row.message_session_id is None:
+                legacy_rows.append(row)
+                continue
+            if row.message_session_id not in known_session_ids:
+                raise SecondBrainReadonlyProjectionInvariantError(
+                    "A message referenced a missing reading session."
+                )
+            linked_rows[row.message_session_id].append(row)
+
         sessions = [
-            _build_persistent_session(conversation_id, row)
-            for row in sessions_by_chat.get(chat_id, [])
-        ]
-        messages = [
-            _build_unassigned_message(conversation_id, row) for row in rows
-        ]
-        sessions.append(
-            ValentinaReadonlyReadingSession(
-                external_conversation_id=conversation_id,
-                external_reading_session_id=_unassigned_session_id(chat_id),
-                revision=_revision(first.chat_message_updated_at),
-                status="pending",
-                started_at=None,
-                ended_at=None,
-                messages=messages,
+            _build_persistent_session(
+                conversation_id,
+                session_row,
+                linked_rows[int(session_row["session_id"])],
             )
-        )
+            for session_row in session_rows_for_chat
+        ]
+        if legacy_rows:
+            sessions.append(
+                ValentinaReadonlyReadingSession(
+                    external_conversation_id=conversation_id,
+                    external_reading_session_id=_unassigned_session_id(chat_id),
+                    revision=_revision(first.chat_message_updated_at),
+                    status="pending",
+                    started_at=None,
+                    ended_at=None,
+                    messages=[
+                        _build_message(
+                            conversation_id,
+                            _unassigned_session_id(chat_id),
+                            row,
+                        )
+                        for row in legacy_rows
+                    ],
+                )
+            )
         session_revisions = [session.revision for session in sessions]
         conversation_updated_at = max(
             [first.chat_updated_at]
@@ -415,26 +448,33 @@ def _build_conversations(
 def _build_persistent_session(
     conversation_id: str,
     row: Mapping[str, Any],
+    message_rows: list[_MessageProjection],
 ) -> ValentinaReadonlyReadingSession:
+    session_id = f"chat-session:{int(row['session_id'])}"
+    terminal = _enum_value(row["session_status"]) in {"COMPLETED", "CANCELLED"}
     return ValentinaReadonlyReadingSession(
         external_conversation_id=conversation_id,
-        external_reading_session_id=f"chat-session:{int(row['session_id'])}",
+        external_reading_session_id=session_id,
         revision=_revision(row["session_updated_at"]),
         status=_session_status(row["session_status"]),
         started_at=_iso(row["session_created_at"]),
-        ended_at=None,
-        messages=[],
+        ended_at=_iso(row["session_updated_at"]) if terminal else None,
+        messages=[
+            _build_message(conversation_id, session_id, message)
+            for message in message_rows
+        ],
     )
 
 
-def _build_unassigned_message(
+def _build_message(
     conversation_id: str,
+    session_id: str,
     row: _MessageProjection,
 ) -> ValentinaReadonlyMessage:
     author, direction = _message_author(row)
     return ValentinaReadonlyMessage(
         external_conversation_id=conversation_id,
-        external_reading_session_id=_unassigned_session_id(row.chat_id),
+        external_reading_session_id=session_id,
         external_message_id=f"message:{row.message_id}",
         revision=_revision(row.message_updated_at),
         sequence=row.message_sequence,
@@ -517,7 +557,13 @@ def _session_status(value: Any) -> str:
     # Locked v1 has no "disconnected" value; it is represented as inactive/paused.
     return _map_enum(
         value,
-        {"ACTIVE": "active", "DISCONNECTED": "paused", "COMPLETED": "completed"},
+        {
+            "REQUESTED": "pending",
+            "ACTIVE": "active",
+            "DISCONNECTED": "paused",
+            "COMPLETED": "completed",
+            "CANCELLED": "cancelled",
+        },
         "session status",
     )
 
@@ -551,8 +597,7 @@ def _enum_value(value: Any) -> str:
 
 
 def _unassigned_session_id(chat_id: int) -> str:
-    # Message has no ChatSession foreign key. This reserved, nonpersistent bucket
-    # keeps v1 syntactically valid without claiming a real reading-session match.
+    # Pre-migration rows stay explicit rather than being guessed into a session.
     return f"unassigned:chat:{chat_id}"
 
 

@@ -39,6 +39,36 @@ def _validate_start_chat(db: Session, user_id: int, psychic_id: int):
     return
 
 
+def _requested_chat_session(db: Session, chat_id: int) -> ChatSession:
+    session = (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.chat_id == chat_id,
+            ChatSession.status == ChatSessionStatus.REQUESTED,
+        )
+        .order_by(ChatSession.id.desc())
+        .first()
+    )
+    if session is None:
+        session = ChatSession(
+            chat_id=chat_id,
+            status=ChatSessionStatus.REQUESTED,
+        )
+        db.add(session)
+        db.flush()
+    return session
+
+
+def _latest_message_session_id(db: Session, chat_id: int) -> int | None:
+    session = (
+        db.query(ChatSession.id)
+        .filter(ChatSession.chat_id == chat_id)
+        .order_by(ChatSession.id.desc())
+        .first()
+    )
+    return int(session[0]) if session is not None else None
+
+
 def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
     """Request a chat and return the chat_id"""
     _validate_start_chat(db, user_id, chat_data.psychic_id)
@@ -53,9 +83,13 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
     if existing_chat:
         # If chat exists, update its status to REQUESTED and add the new message
         existing_chat.status = ChatStatus.REQUESTED
+        requested_session = _requested_chat_session(db, existing_chat.id)
 
         msg_req = Message(
-            sender_id=user_id, chat_id=existing_chat.id, content=chat_data.message
+            sender_id=user_id,
+            chat_id=existing_chat.id,
+            chat_session_id=requested_session.id,
+            content=chat_data.message,
         )
         db.add(msg_req)
         db.commit()
@@ -71,7 +105,13 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
         db.add(chat)
         db.flush()
 
-        msg_req = Message(sender_id=user_id, chat_id=chat.id, content=chat_data.message)
+        requested_session = _requested_chat_session(db, chat.id)
+        msg_req = Message(
+            sender_id=user_id,
+            chat_id=chat.id,
+            chat_session_id=requested_session.id,
+            content=chat_data.message,
+        )
         db.add(msg_req)
 
         db.commit()
@@ -86,8 +126,12 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
         )
         if existing_chat:
             existing_chat.status = ChatStatus.REQUESTED
+            requested_session = _requested_chat_session(db, existing_chat.id)
             msg_req = Message(
-                sender_id=user_id, chat_id=existing_chat.id, content=chat_data.message
+                sender_id=user_id,
+                chat_id=existing_chat.id,
+                chat_session_id=requested_session.id,
+                content=chat_data.message,
             )
             db.add(msg_req)
             db.commit()
@@ -193,7 +237,10 @@ def update_chat_status(db: Session, chat_id: int, status: ChatStatus):
             .first()
         )
 
-        if session:
+        if session and session.status == ChatSessionStatus.REQUESTED:
+            session.status = ChatSessionStatus.CANCELLED
+            db.commit()
+        elif session:
             # There's an active session, end it properly
             end_chat_session(
                 db=db,
@@ -212,9 +259,8 @@ def update_chat_status(db: Session, chat_id: int, status: ChatStatus):
 
 def start_new_chat_session(db: Session, chat_id: int) -> ChatSession:
     """Creates the main session and the first billable interval."""
-    chat_session = ChatSession(chat_id=chat_id, status=ChatStatus.ACTIVE)
-    db.add(chat_session)
-    db.flush()
+    chat_session = _requested_chat_session(db, chat_id)
+    chat_session.status = ChatSessionStatus.ACTIVE
 
     add_session_interval(
         db, session=chat_session, trigger=ChatSessionTrigger.INITIAL_START
@@ -309,7 +355,12 @@ def end_chat_session(
 
 
 async def save_message(db: Session, data: dict, user: User, chat: Chat) -> Message:
-    message = Message(chat_id=chat.id, sender_id=user.id, content=data["content"])
+    message = Message(
+        chat_id=chat.id,
+        chat_session_id=_latest_message_session_id(db, chat.id),
+        sender_id=user.id,
+        content=data["content"],
+    )
     db.add(message)
     db.commit()
     return message
@@ -321,6 +372,7 @@ def save_system_message(db: Session, chat_id: int, content: str) -> Message:
 
     message = Message(
         chat_id=chat_id,
+        chat_session_id=_latest_message_session_id(db, chat_id),
         content=content,
         is_system=True,
         author_type=AuthorType.SYSTEM,
@@ -340,6 +392,7 @@ def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
 
     message = Message(
         chat_id=chat.id,
+        chat_session_id=_latest_message_session_id(db, chat.id),
         sender_id=chat.psychic_id,
         content=content,
         author_type=AuthorType.AI_DRAFTED,

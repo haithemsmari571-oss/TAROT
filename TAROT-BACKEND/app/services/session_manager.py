@@ -371,14 +371,29 @@ class SessionManager:
                     f"Minimum {min_required} points required ({settings.SESSION_MINIMUM_BALANCE_SECONDS} seconds)"
                 )
 
-            # Create ChatSession
-            chat_session = ChatSession(
-                chat_id=chat_id,
-                status=ChatSessionStatus.ACTIVE,
-                created_at=datetime.now(),
+            # Promote the durable request session so its initial request message
+            # and every live message share one exact reading-session identity.
+            chat_session = (
+                db.query(ChatSession)
+                .filter(
+                    ChatSession.chat_id == chat_id,
+                    ChatSession.status == ChatSessionStatus.REQUESTED,
+                )
+                .order_by(ChatSession.id.desc())
+                .first()
             )
-            db.add(chat_session)
-            db.flush()
+            if chat_session is None:
+                # Compatibility for requests created before exact message/session
+                # linking was deployed.
+                chat_session = ChatSession(
+                    chat_id=chat_id,
+                    status=ChatSessionStatus.ACTIVE,
+                    created_at=datetime.now(),
+                )
+                db.add(chat_session)
+                db.flush()
+            else:
+                chat_session.status = ChatSessionStatus.ACTIVE
 
             # Create SessionInterval. is_billed=True: the per-minute prepaid
             # engine debits money directly (one DEBIT per minute), so intervals
@@ -2082,6 +2097,17 @@ class SessionManager:
                 return
 
             chat.status = ChatStatus.ENDED
+            requested_session = (
+                db.query(ChatSession)
+                .filter(
+                    ChatSession.chat_id == chat_id,
+                    ChatSession.status == ChatSessionStatus.REQUESTED,
+                )
+                .order_by(ChatSession.id.desc())
+                .first()
+            )
+            if requested_session is not None:
+                requested_session.status = ChatSessionStatus.CANCELLED
             db.commit()
 
             logger.info(

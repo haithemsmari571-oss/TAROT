@@ -21,3 +21,7 @@ class ChatSession(Base):
     intervals: Mapped[List["SessionInterval"]] = relationship(
         "SessionInterval", back_populates="session"
     )
+
+    messages: Mapped[List["Message"]] = relationship(
+        "Message", back_populates="chat_session"
+    )

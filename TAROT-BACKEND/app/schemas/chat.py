@@ -51,6 +51,7 @@ class SocketMessageData(SocketBase):
 class MessageOut(BaseModel):
     id: int
     chat_id: int
+    chat_session_id: int | None = None
     sender_id: int | None = None
     content: str
     is_system: bool = False

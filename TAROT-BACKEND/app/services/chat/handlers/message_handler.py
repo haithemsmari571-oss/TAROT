@@ -31,16 +31,19 @@ def _client_in_live_session(chat: Chat) -> bool:
 
 def _chat_ever_accepted(db, chat: Chat) -> bool:
     """Request-phase messages are free (owner decision): the fee applies only
-    once the chat has been accepted at least once. A ChatSession row is created
-    exactly at accept, so its existence is the accept marker — this also keeps
+    once the chat has been accepted at least once. A billable SessionInterval is
+    created exactly at accept, so its existence is the accept marker — this keeps
     a rejected request (REQUESTED → ENDED, never accepted) fee-free."""
     from app.enums.chat_status import ChatStatus
-    from app.models import ChatSession
+    from app.models import ChatSession, SessionInterval
 
     if chat.status == ChatStatus.REQUESTED:
         return False
     return (
-        db.query(ChatSession.id).filter(ChatSession.chat_id == chat.id).first()
+        db.query(SessionInterval.id)
+        .join(ChatSession, ChatSession.id == SessionInterval.session_id)
+        .filter(ChatSession.chat_id == chat.id)
+        .first()
         is not None
     )
 
