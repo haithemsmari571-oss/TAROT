@@ -267,20 +267,28 @@ class MessageHandler(BaseEventHandler):
                     "manual_message_memory_record_failed", chat_id=self.chat_id
                 )
 
-        # ── AI reading pipeline (Valentina drafts, Sabri checks) ───────────────
-        # Only a CLIENT message on an ACTIVE reading triggers a reader reply. A HYBRID
-        # chat (two_role engine) is intercepted FIRST: Sabri is skipped outright and
-        # Valentina's raw draft goes to the ai_drafts review panel instead of auto-
-        # sending — see reading_hybrid. Every other chat (SABRI, HUMAN, other engines)
-        # flows through the auto pipeline exactly as before (response_mode and the
-        # master switch are enforced inside the launcher). Both launchers are
-        # fire-and-forget and never block or affect the client's own message.
+        # ── Session-scoped Valentina turn boundary ────────────────────────────
+        # The canonical Message row above remains one row per client send. Active
+        # reading messages only notify the durable burst coordinator: it waits for
+        # six seconds of silence (and client typing to stop), fences concurrent
+        # workers/restarts, then creates one Hybrid draft or one Automatic response.
+        # A human reader message closes the client messages that preceded it so a
+        # later mode switch cannot answer an already-manually-answered turn.
         from app.enums.chat_status import ChatStatus
 
-        if sender_is_paying_client and chat.status == ChatStatus.ACTIVE:
-            from app.services.ai.reading_hybrid import maybe_launch_hybrid
+        if chat.status == ChatStatus.ACTIVE:
+            try:
+                from app.services.ai import reading_burst
 
-            if not maybe_launch_hybrid(self.chat_id, db_message.id, content, chat):
-                from app.services.ai.reading_pipeline import maybe_launch_pipeline
-
-                maybe_launch_pipeline(self.chat_id, db_message.id, content)
+                if sender_is_paying_client:
+                    await reading_burst.note_client_message(
+                        self.chat_id, db_message.chat_session_id, db_message.id
+                    )
+                elif user.id != chat.user_id:
+                    await reading_burst.note_reader_message(
+                        self.chat_id, db_message.chat_session_id, db_message.id
+                    )
+            except Exception:  # noqa: BLE001 — coordination never breaks storage
+                logger.exception(
+                    "reading_burst_notification_failed", chat_id=self.chat_id
+                )

@@ -383,12 +383,17 @@ def save_system_message(db: Session, chat_id: int, content: str) -> Message:
     return message
 
 
-def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
-    """Store an AI-drafted reply as the reader (sender = the psychic), tagged
-    author_type = AI_DRAFTED. Pure DB, no WebSocket — the broadcaster delivers it.
+def prepare_ai_message(db: Session, chat: Chat, content: str) -> Message:
+    """Stage one AI reader message without committing it.
+
+    Burst delivery uses this seam to advance its durable delivery position in
+    the same transaction as the Message row. Existing callers retain the
+    commit-on-call contract through ``persist_ai_message`` below.
     """
     from app.enums.author_type import AuthorType
     from app.enums.message_status import MessageStatus
+    from app.manager import manager
+    from app.notification_manager import notification_manager
 
     message = Message(
         chat_id=chat.id,
@@ -396,37 +401,32 @@ def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
         sender_id=chat.psychic_id,
         content=content,
         author_type=AuthorType.AI_DRAFTED,
-        status=MessageStatus.SENT,
     )
+    if chat.user_id in manager.users_in_chat(str(chat.id)):
+        message.status = MessageStatus.READ
+    elif notification_manager.is_user_connected(chat.user_id):
+        message.status = MessageStatus.DELIVERED
+    else:
+        message.status = MessageStatus.SENT
     db.add(message)
+    db.flush()
+    return message
+
+
+def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
+    """Store an AI-drafted reply as the reader and commit it."""
+    message = prepare_ai_message(db, chat, content)
     db.commit()
     db.refresh(message)
     return message
 
 
-async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message:
-    """Deliver a single AI message to the client as the reader: persist it
-    (tagged AI_DRAFTED), set the read-receipt status from live presence, broadcast
-    over the chat WebSocket, and push if the client is offline. Mirrors the human
-    message path. (Timed delivery of a full DeliveryPlan is the later real-time
-    execution phase; today the only caller is the admin draft-review send.)
-    """
+async def broadcast_persisted_ai_message(
+    db: Session, chat: Chat, message: Message
+) -> None:
+    """Broadcast/push an already committed AI reader Message."""
     from app.enums.message_status import MessageStatus
     from app.manager import manager
-    from app.notification_manager import notification_manager
-
-    message = persist_ai_message(db, chat, content)
-
-    # Read-receipt status from live presence (same tiering as human messages).
-    client_id = chat.user_id
-    if client_id in manager.users_in_chat(str(chat.id)):
-        status = MessageStatus.READ
-    elif notification_manager.is_user_connected(client_id):
-        status = MessageStatus.DELIVERED
-    else:
-        status = MessageStatus.SENT
-    message.status = status
-    db.commit()
 
     payload = {
         "id": message.id,
@@ -439,26 +439,36 @@ async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message
         "created_at": message.created_at.isoformat()
         if message.created_at
         else datetime.now().isoformat(),
-        "status": status.value,
+        "status": message.status.value,
         "author_type": message.author_type.value,
     }
     await manager.send_to_chat(message=payload, chat_id=str(chat.id))
 
     # Push the client when they have no live socket (app closed/backgrounded).
-    if status == MessageStatus.SENT:
+    if message.status == MessageStatus.SENT:
         try:
             from app.services.push import notify_user_push
 
-            preview = content if len(content) <= 120 else content[:117] + "…"
+            preview = (
+                message.content
+                if len(message.content) <= 120
+                else message.content[:117] + "…"
+            )
             reader = chat.psychic.username if chat.psychic else "your reader"
             notify_user_push(
-                client_id,
+                chat.user_id,
                 title=f"New message from {reader}",
                 body=preview,
                 data={"type": "new_message", "chat_id": chat.id, "psychic_name": reader},
             )
         except Exception:  # noqa: BLE001 — push failure never breaks delivery
             pass
+
+
+async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message:
+    """Persist and deliver one AI reader message through the existing path."""
+    message = persist_ai_message(db, chat, content)
+    await broadcast_persisted_ai_message(db, chat, message)
 
     return message
 

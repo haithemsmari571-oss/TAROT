@@ -51,6 +51,9 @@ const ClientChat = () => {
   // Local state
   const [selectedChat, setSelectedChat] = useState<number | null>(null);
   const [input, setInput] = useState("");
+  const clientTypingActiveRef = useRef(false);
+  const clientTypingSignalAtRef = useRef(0);
+  const clientTypingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -210,6 +213,40 @@ const ClientChat = () => {
     chatId: selectedChat,
     autoConnect: true,
   });
+
+  const stopClientTyping = useCallback(() => {
+    if (clientTypingStopTimerRef.current) {
+      clearTimeout(clientTypingStopTimerRef.current);
+      clientTypingStopTimerRef.current = null;
+    }
+    if (clientTypingActiveRef.current) {
+      clientTypingActiveRef.current = false;
+      facade?.sendTyping(false);
+    }
+  }, [facade]);
+
+  const handleClientInput = useCallback((value: string) => {
+    setInput(value);
+    if (!isConnected || !facade || !value) {
+      stopClientTyping();
+      return;
+    }
+    const now = Date.now();
+    if (
+      !clientTypingActiveRef.current ||
+      now - clientTypingSignalAtRef.current >= 4000
+    ) {
+      facade.sendTyping(true);
+      clientTypingActiveRef.current = true;
+      clientTypingSignalAtRef.current = now;
+    }
+    if (clientTypingStopTimerRef.current) {
+      clearTimeout(clientTypingStopTimerRef.current);
+    }
+    clientTypingStopTimerRef.current = setTimeout(stopClientTyping, 2000);
+  }, [facade, isConnected, stopClientTyping]);
+
+  useEffect(() => () => stopClientTyping(), [stopClientTyping]);
 
   // Connection status for backward compatibility
   const connectionStatus = isConnected ? "connected" : "disconnected";
@@ -815,6 +852,7 @@ const ClientChat = () => {
     }
 
     try {
+      stopClientTyping();
       await facade.sendMessage(input);
       setInput("");
     } catch (error) {
@@ -1628,7 +1666,8 @@ const ClientChat = () => {
                     <div className="flex-1 relative">
                       <input
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={(e) => handleClientInput(e.target.value)}
+                        onBlur={stopClientTyping}
                         placeholder={
                           !isConnected
                             ? "Connecting..."

@@ -63,6 +63,12 @@ async def lifespan(app: FastAPI):
     await session_manager.start()
     logger.info("session_manager_started")
 
+    # Recover durable client-message silence windows, invalidated generations,
+    # and partially revealed Automatic responses after a process restart.
+    from app.services.ai.reading_burst import start_burst_coordinator
+
+    await start_burst_coordinator()
+
     # Housekeeping: delete evidence files whose claims resolved >60 days ago
     # (Section 6.1). Runs on startup; the nightly job will also call it later.
     try:
@@ -95,6 +101,14 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("application_shutting_down")
+
+    try:
+        from app.services.ai.reading_burst import stop_burst_coordinator
+
+        await stop_burst_coordinator()
+        logger.info("reading_burst_coordinator_stopped")
+    except Exception as e:
+        logger.error("error_stopping_reading_burst_coordinator", error=str(e))
 
     # Cleanup: Stop session manager
     try:

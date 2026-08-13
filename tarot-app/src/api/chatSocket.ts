@@ -147,6 +147,14 @@ export class ChatSocket {
     }
   }
 
+  sendTyping(isTyping: boolean) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({ type: isTyping ? "typing_start" : "typing_stop" })
+      );
+    }
+  }
+
   onMessage(cb: MessageCb) {
     this.onMessageCb = cb;
   }

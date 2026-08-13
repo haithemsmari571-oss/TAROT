@@ -85,11 +85,15 @@ async def set_response_mode(
     from app.services.ai import reading_hybrid
 
     await reading_hybrid.cancel_ai_turns_for_mode_change(chat_id, payload.mode)
-    # Switching TO Automatic takes over the conversation NOW: cancel any in-flight
-    # HYBRID draft generation (it would land as a silent PENDING draft) and, if the
-    # chat is hanging on an unanswered client message, auto-answer it immediately.
+    # Re-evaluate the durable burst after the committed mode change. HUMAN stays
+    # manual; HYBRID/SABRI claim only still-unanswered client messages and retain
+    # the six-second/typing boundary instead of launching the latest row directly.
     if payload.mode == _RM.SABRI:
         await reading_hybrid.handover_to_auto(chat_id, db, chat)
+    else:
+        from app.services.ai.reading_burst import note_mode_change
+
+        await note_mode_change(chat_id, db=db)
     return JSONResponse(
         content={"chat_id": chat_id, "response_mode": payload.mode.value},
         status_code=200,

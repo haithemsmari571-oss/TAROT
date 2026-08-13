@@ -101,6 +101,7 @@ export default function ChatScreen() {
   const {
     messages,
     sendMessage,
+    sendTyping,
     connectionStatus,
     isConnected,
     loadingHistory,
@@ -114,6 +115,9 @@ export default function ChatScreen() {
   } = useChatWebSocket(Number.isFinite(chatId) ? chatId : null);
 
   const [draft, setDraft] = useState("");
+  const clientTypingActiveRef = useRef(false);
+  const clientTypingSignalAtRef = useRef(0);
+  const clientTypingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ended, setEnded] = useState(false);
   const [ending, setEnding] = useState(false);
   // Branded end-session confirm sheet (replaces the old raw Alert).
@@ -359,9 +363,44 @@ export default function ChatScreen() {
     }
   }, [chatId, router, timer]);
 
+  const stopClientTyping = useCallback(() => {
+    if (clientTypingStopTimerRef.current) {
+      clearTimeout(clientTypingStopTimerRef.current);
+      clientTypingStopTimerRef.current = null;
+    }
+    if (clientTypingActiveRef.current) {
+      clientTypingActiveRef.current = false;
+      sendTyping(false);
+    }
+  }, [sendTyping]);
+
+  const onDraftChange = useCallback((value: string) => {
+    setDraft(value);
+    if (!isConnected || !value) {
+      stopClientTyping();
+      return;
+    }
+    const now = Date.now();
+    if (
+      !clientTypingActiveRef.current ||
+      now - clientTypingSignalAtRef.current >= 4000
+    ) {
+      sendTyping(true);
+      clientTypingActiveRef.current = true;
+      clientTypingSignalAtRef.current = now;
+    }
+    if (clientTypingStopTimerRef.current) {
+      clearTimeout(clientTypingStopTimerRef.current);
+    }
+    clientTypingStopTimerRef.current = setTimeout(stopClientTyping, 2000);
+  }, [isConnected, sendTyping, stopClientTyping]);
+
+  useEffect(() => () => stopClientTyping(), [stopClientTyping]);
+
   const onSend = () => {
     const text = draft.trim();
     if (!text) return;
+    stopClientTyping();
     sendMessage(text);
     setDraft("");
   };
@@ -661,7 +700,8 @@ export default function ChatScreen() {
               }
               placeholderTextColor={COLORS.textFaint}
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={onDraftChange}
+              onBlur={stopClientTyping}
               multiline
               onSubmitEditing={onSend}
               editable={

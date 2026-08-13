@@ -1677,6 +1677,14 @@ async def websocket_endpoint(
         await websocket.close(code=4001, reason="Auth timeout")
     except WebSocketDisconnect:
         manager.disconnect(websocket, chat_id)
+        try:
+            from app.services.ai.reading_burst import release_typing_source
+
+            await release_typing_source(
+                int(chat_id), user.id, dispatcher.typing_source_id
+            )
+        except Exception:  # noqa: BLE001 — the persisted lease expires safely
+            pass
         # Freeze any in-flight AI delivery only when the CLIENT has no remaining
         # connection (multi-tab safe), so their place is preserved for reconnect.
         # A psychic/admin drop never stops delivery. disconnect() already ran, so

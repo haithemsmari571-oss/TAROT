@@ -106,6 +106,11 @@ export class ChatFacade {
     console.log('[ChatFacade] Emitting MESSAGE_SENT');
     this.eventBus.emit(ChatEventType.MESSAGE_SENT, { content });
   }
+
+  /** Keep the server's per-socket client-typing lease current. */
+  sendTyping(isTyping: boolean): void {
+    this.websocket?.sendTyping(isTyping);
+  }
   
   /**
    * Subscribe to events with type safety
