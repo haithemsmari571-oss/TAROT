@@ -59,14 +59,18 @@ def _requested_chat_session(db: Session, chat_id: int) -> ChatSession:
     return session
 
 
-def _latest_message_session_id(db: Session, chat_id: int) -> int | None:
-    session = (
-        db.query(ChatSession.id)
+def _latest_message_session_id(
+    db: Session, chat_id: int, *, lock: bool = False
+) -> int | None:
+    query = (
+        db.query(ChatSession)
         .filter(ChatSession.chat_id == chat_id)
         .order_by(ChatSession.id.desc())
-        .first()
     )
-    return int(session[0]) if session is not None else None
+    if lock:
+        query = query.with_for_update()
+    session = query.first()
+    return int(session.id) if session is not None else None
 
 
 def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
@@ -355,9 +359,13 @@ def end_chat_session(
 
 
 async def save_message(db: Session, data: dict, user: User, chat: Chat) -> Message:
+    # Serialize a human/client insert against Hybrid approval, which locks the
+    # same Chat -> current-session order before its final freshness check.
+    db.query(Chat.id).filter(Chat.id == chat.id).with_for_update().first()
+    chat_session_id = _latest_message_session_id(db, chat.id, lock=True)
     message = Message(
         chat_id=chat.id,
-        chat_session_id=_latest_message_session_id(db, chat.id),
+        chat_session_id=chat_session_id,
         sender_id=user.id,
         content=data["content"],
     )
@@ -383,7 +391,13 @@ def save_system_message(db: Session, chat_id: int, content: str) -> Message:
     return message
 
 
-def prepare_ai_message(db: Session, chat: Chat, content: str) -> Message:
+def prepare_ai_message(
+    db: Session,
+    chat: Chat,
+    content: str,
+    *,
+    chat_session_id: int | None = None,
+) -> Message:
     """Stage one AI reader message without committing it.
 
     Burst delivery uses this seam to advance its durable delivery position in
@@ -397,7 +411,11 @@ def prepare_ai_message(db: Session, chat: Chat, content: str) -> Message:
 
     message = Message(
         chat_id=chat.id,
-        chat_session_id=_latest_message_session_id(db, chat.id),
+        chat_session_id=(
+            chat_session_id
+            if chat_session_id is not None
+            else _latest_message_session_id(db, chat.id)
+        ),
         sender_id=chat.psychic_id,
         content=content,
         author_type=AuthorType.AI_DRAFTED,

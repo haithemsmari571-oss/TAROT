@@ -81,6 +81,19 @@ def format_client_turn(contents: list[str]) -> str:
     return separator.join(contents)
 
 
+def _pending_client_turn_is_recorded(state, turn: str) -> bool:
+    """Return whether durable memory already ends on this unanswered turn."""
+    transcript = getattr(state, "chat_transcript", None) or []
+    if not transcript:
+        return False
+    latest = transcript[-1]
+    return bool(
+        isinstance(latest, dict)
+        and latest.get("role") == "client"
+        and latest.get("content") == turn
+    )
+
+
 def is_generating(chat_id: int) -> bool:
     return chat_id in _generating
 
@@ -143,6 +156,81 @@ def _clear_plan(row) -> None:
     row.delivery_position = 0
 
 
+def _legacy_pending_hybrid_boundary(db, row, trigger, client_id: int) -> Optional[int]:
+    """Recognize a D30 pending draft without changing it until owner action.
+
+    D30 marked the triggering client message complete as soon as it drafted.
+    It also persisted the whole coalesced client turn in engine memory. Recover
+    the old boundary only when exactly one ordered message suffix reproduces
+    that final pending transcript entry; otherwise fail closed rather than lose
+    or invent part of the client's turn.
+    """
+    from app.models.message import Message
+    from app.services.ai.reading_session import get_session_store
+
+    if not (
+        row.status == "IDLE"
+        and row.latest_client_message_id == trigger.id
+        and row.completed_client_message_id == trigger.id
+    ):
+        return None
+
+    state = get_session_store().get(f"chat:{row.chat_id}")
+    transcript = getattr(state, "chat_transcript", None) or []
+    if not transcript or not isinstance(transcript[-1], dict):
+        return None
+    pending_entry = transcript[-1]
+    if pending_entry.get("role") != "client":
+        return None
+    persisted_turn = pending_entry.get("content")
+    if not isinstance(persisted_turn, str):
+        return None
+
+    messages = (
+        db.query(Message)
+        .filter(
+            Message.chat_id == row.chat_id,
+            Message.chat_session_id == trigger.chat_session_id,
+            Message.sender_id == client_id,
+            Message.is_system.is_(False),
+            Message.id <= trigger.id,
+        )
+        .order_by(Message.id.asc())
+        .all()
+    )
+    if not messages or messages[-1].id != trigger.id:
+        return None
+
+    matches = [
+        index
+        for index in range(len(messages))
+        if format_client_turn([message.content for message in messages[index:]])
+        == persisted_turn
+    ]
+    if len(matches) != 1:
+        return None
+    start = matches[0]
+    return int(messages[start - 1].id) if start else 0
+
+
+def _discard_pending_hybrid_drafts(db, chat_id: int) -> None:
+    """Invalidate review drafts superseded by a newer client turn.
+
+    A PENDING draft is an unfinished response, not a completed reader turn.  A
+    newly stored client message therefore fences that draft in the same
+    transaction as the durable burst update so it can never be sent stale.
+    """
+    from app.enums.ai_draft_status import AiDraftStatus
+    from app.enums.response_mode import ResponseMode
+    from app.models.ai_draft import AiDraft
+
+    db.query(AiDraft).filter(
+        AiDraft.chat_id == chat_id,
+        AiDraft.mode == ResponseMode.HYBRID,
+        AiDraft.status == AiDraftStatus.PENDING,
+    ).update({AiDraft.status: AiDraftStatus.DISCARDED}, synchronize_session=False)
+
+
 async def note_client_message(
     chat_id: int, chat_session_id: Optional[int], message_id: int
 ) -> None:
@@ -162,6 +250,7 @@ async def note_client_message(
                     db.commit()
                     break
                 now = _now()
+                _discard_pending_hybrid_drafts(db, chat_id)
                 row.latest_client_message_id = message_id
                 row.generation_version += 1
                 row.status = "WAITING"
@@ -191,10 +280,10 @@ async def note_client_message(
 
 async def note_reader_message(
     chat_id: int, chat_session_id: Optional[int], reader_message_id: int
-) -> None:
-    """A human reader response closes only client messages that preceded it."""
+) -> Optional[tuple[str, bool]]:
+    """Close a human-answered turn and say if Automatic already stored it."""
     if chat_session_id is None:
-        return
+        return None
     from app.database.client import SessionLocal
     from app.models.chat import Chat
     from app.models.message import Message
@@ -202,9 +291,11 @@ async def note_reader_message(
     with SessionLocal() as db:
         chat = db.query(Chat).filter(Chat.id == chat_id).first()
         if chat is None:
-            return
+            return None
+        row = _row_for_update(db, chat_session_id, chat_id)
+        automatic_already_recorded = row.status == "DELIVERING"
         latest_client = (
-            db.query(Message.id)
+            db.query(Message)
             .filter(
                 Message.chat_session_id == chat_session_id,
                 Message.sender_id == chat.user_id,
@@ -214,14 +305,32 @@ async def note_reader_message(
             .order_by(desc(Message.id))
             .first()
         )
-        row = _row_for_update(db, chat_session_id, chat_id)
+        client_turn = None
         if latest_client is not None:
-            boundary = int(latest_client[0])
+            boundary = int(latest_client.id)
+            previous = row.completed_client_message_id or 0
             if (
                 row.completed_client_message_id is None
                 or boundary > row.completed_client_message_id
             ):
+                messages = (
+                    db.query(Message)
+                    .filter(
+                        Message.chat_session_id == chat_session_id,
+                        Message.sender_id == chat.user_id,
+                        Message.is_system.is_(False),
+                        Message.id > previous,
+                        Message.id <= boundary,
+                    )
+                    .order_by(Message.id.asc())
+                    .all()
+                )
+                if messages and messages[-1].id == boundary:
+                    client_turn = format_client_turn(
+                        [message.content for message in messages]
+                    )
                 row.completed_client_message_id = boundary
+        _discard_pending_hybrid_drafts(db, chat_id)
         row.generation_version += 1
         _clear_plan(row)
         if row.latest_client_message_id is not None and (
@@ -233,6 +342,9 @@ async def note_reader_message(
             row.status = "IDLE"
         db.commit()
     _wake(chat_session_id)
+    if client_turn is None:
+        return None
+    return client_turn, automatic_already_recorded
 
 
 async def note_client_typing(
@@ -303,6 +415,7 @@ async def note_mode_change(chat_id: int, db=None) -> None:
             .first()
         )
         row = _row_for_update(working_db, session.id, chat_id)
+        _discard_pending_hybrid_drafts(working_db, chat_id)
         row.generation_version += 1
         _clear_plan(row)
         if latest is not None:
@@ -349,9 +462,11 @@ class _Next:
 
 def _claim_or_delay(chat_session_id: int) -> _Next:
     from app.database.client import SessionLocal
+    from app.enums.chat_session_status import ChatSessionStatus
     from app.enums.chat_status import ChatStatus
     from app.enums.response_mode import ResponseMode
     from app.models.chat import Chat
+    from app.models.chat_session import ChatSession
     from app.models.message import Message
 
     drafting_enabled, reading_engine = _engine_config()
@@ -364,6 +479,23 @@ def _claim_or_delay(chat_session_id: int) -> _Next:
             row.status = "IDLE"
             db.commit()
             return _Next()
+        current_session = (
+            db.query(ChatSession)
+            .filter(ChatSession.chat_id == chat.id)
+            .order_by(desc(ChatSession.id))
+            .first()
+        )
+        if (
+            current_session is None
+            or current_session.id != chat_session_id
+            or current_session.status != ChatSessionStatus.ACTIVE
+        ):
+            row.status = "IDLE"
+            row.lease_owner = None
+            row.lease_expires_at = None
+            _clear_plan(row)
+            db.commit()
+            return _Next()
         if chat.response_mode == ResponseMode.HUMAN:
             return _Next()
         if not drafting_enabled or reading_engine != "two_role":
@@ -374,6 +506,8 @@ def _claim_or_delay(chat_session_id: int) -> _Next:
             )
             return _Next()
         if row.status == "FAILED":
+            return _Next()
+        if row.status in {"PENDING_REVIEW", "AWAITING_REGEN"}:
             return _Next()
         if (
             row.completed_client_message_id is not None
@@ -549,32 +683,45 @@ def _working_state(claim: _Claim):
         )
     state = copy.deepcopy(state)
     turn = format_client_turn(claim.contents)
-    record_client_message(state, turn)
+    if not _pending_client_turn_is_recorded(state, turn):
+        record_client_message(state, turn)
     return store, state, turn, state.chat_transcript[-1]
 
 
 def _commit_hybrid(claim: _Claim, text: str) -> bool:
     from app.database.client import SessionLocal
     from app.enums.ai_draft_status import AiDraftStatus
+    from app.enums.chat_session_status import ChatSessionStatus
     from app.enums.chat_status import ChatStatus
     from app.enums.response_mode import ResponseMode
     from app.models.ai_draft import AiDraft
     from app.models.chat import Chat
+    from app.models.chat_session import ChatSession
 
     with SessionLocal() as db:
         row = _locked_row(db, claim.chat_session_id)
         chat = db.query(Chat).filter(Chat.id == claim.chat_id).first()
+        current_session = (
+            db.query(ChatSession)
+            .filter(ChatSession.chat_id == claim.chat_id)
+            .order_by(desc(ChatSession.id))
+            .first()
+        )
         if not (
             row
             and chat
             and chat.status == ChatStatus.ACTIVE
             and chat.response_mode == ResponseMode.HYBRID
+            and current_session is not None
+            and current_session.id == claim.chat_session_id
+            and current_session.status == ChatSessionStatus.ACTIVE
             and row.status == "GENERATING"
             and row.lease_owner == claim.owner
             and row.generation_version == claim.version
             and row.latest_client_message_id == claim.through_message_id
         ):
             return False
+        _discard_pending_hybrid_drafts(db, claim.chat_id)
         db.add(
             AiDraft(
                 chat_id=claim.chat_id,
@@ -587,8 +734,10 @@ def _commit_hybrid(claim: _Claim, text: str) -> bool:
                 status=AiDraftStatus.PENDING,
             )
         )
-        row.completed_client_message_id = claim.through_message_id
-        row.status = "IDLE"
+        # A review draft is not a completed reader response. Keep the client
+        # boundary open until the owner actually sends the draft; rejecting or
+        # superseding it must regenerate from every still-unanswered message.
+        row.status = "PENDING_REVIEW"
         row.lease_owner = None
         row.lease_expires_at = None
         _clear_plan(row)
@@ -599,7 +748,7 @@ def _commit_hybrid(claim: _Claim, text: str) -> bool:
 async def _generate_hybrid(claim: _Claim) -> None:
     from app.services.ai import reading_duo
 
-    store, state, turn, trigger = _working_state(claim)
+    _store, state, turn, trigger = _working_state(claim)
     text = await reading_duo._write_valentina_turn(
         claim.chat_id,
         turn,
@@ -611,12 +760,374 @@ async def _generate_hybrid(claim: _Claim) -> None:
     if not (text or "").strip():
         raise RuntimeError("Valentina returned an empty Hybrid draft")
     if _commit_hybrid(claim, text):
-        store.put(state)
         logger.info(
             "reading_burst_hybrid_completed",
             chat_id=claim.chat_id,
             messages=len(claim.contents),
         )
+
+
+def request_hybrid_regeneration(chat_id: int) -> Optional[bool]:
+    """Queue one explicit owner-requested Hybrid regeneration.
+
+    The coordinator, rather than the legacy latest-message helper, owns this
+    path so the regenerated prompt contains the complete unanswered sequence.
+    """
+    from app.database.client import SessionLocal
+    from app.enums.chat_session_status import ChatSessionStatus
+    from app.enums.chat_status import ChatStatus
+    from app.enums.response_mode import ResponseMode
+    from app.models.chat import Chat
+    from app.models.chat_session import ChatSession
+    from app.models.message import Message
+
+    drafting_enabled, reading_engine = _engine_config()
+    if not drafting_enabled or reading_engine != "two_role":
+        return None
+
+    with SessionLocal() as db:
+        chat = db.query(Chat).filter(Chat.id == chat_id).first()
+        session = (
+            db.query(ChatSession)
+            .filter(
+                ChatSession.chat_id == chat_id,
+                ChatSession.status == ChatSessionStatus.ACTIVE,
+            )
+            .order_by(desc(ChatSession.id))
+            .first()
+        )
+        if (
+            chat is None
+            or session is None
+            or chat.status != ChatStatus.ACTIVE
+            or chat.response_mode != ResponseMode.HYBRID
+        ):
+            return False
+        latest = (
+            db.query(Message)
+            .filter(
+                Message.chat_session_id == session.id,
+                Message.sender_id == chat.user_id,
+                Message.is_system.is_(False),
+            )
+            .order_by(desc(Message.id))
+            .first()
+        )
+        if latest is None:
+            return False
+        row = _row_for_update(db, session.id, chat_id)
+        latest = (
+            db.query(Message)
+            .filter(
+                Message.chat_session_id == session.id,
+                Message.sender_id == chat.user_id,
+                Message.is_system.is_(False),
+            )
+            .order_by(desc(Message.id))
+            .first()
+        )
+        if latest is None:
+            return False
+        if (
+            row.completed_client_message_id is not None
+            and latest.id <= row.completed_client_message_id
+        ):
+            return False
+        if (
+            row.latest_client_message_id == latest.id
+            and row.status in {"WAITING", "GENERATING"}
+        ):
+            if row.status == "WAITING":
+                row.silence_until = _now()
+        else:
+            _discard_pending_hybrid_drafts(db, chat_id)
+            row.latest_client_message_id = latest.id
+            row.generation_version += 1
+            row.status = "WAITING"
+            row.silence_until = _now()
+            row.lease_owner = None
+            row.lease_expires_at = None
+            _clear_plan(row)
+        db.commit()
+        session_id = session.id
+    _wake(session_id)
+    return True
+
+
+def stage_hybrid_draft_send(
+    db, chat, draft_id: int
+) -> Optional[tuple[str, int]]:
+    """Advance the Hybrid boundary inside the caller's delivery transaction.
+
+    Returns the exact ordered client turn for durable AI memory, or ``None``
+    when the draft has become stale and must not be delivered.
+    """
+    from app.enums.ai_draft_status import AiDraftStatus
+    from app.enums.chat_session_status import ChatSessionStatus
+    from app.enums.chat_status import ChatStatus
+    from app.enums.response_mode import ResponseMode
+    from app.models.ai_draft import AiDraft
+    from app.models.chat import Chat
+    from app.models.chat_session import ChatSession
+    from app.models.message import Message
+
+    draft = (
+        db.query(AiDraft)
+        .filter(AiDraft.id == draft_id, AiDraft.chat_id == chat.id)
+        .first()
+    )
+    if draft is None or draft.mode != ResponseMode.HYBRID:
+        return None
+    trigger = (
+        db.get(Message, draft.client_message_id)
+        if draft.client_message_id
+        else None
+    )
+    if trigger is None or trigger.chat_session_id is None:
+        return None
+    current_chat = (
+        db.query(Chat)
+        .filter(Chat.id == chat.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    current_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.chat_id == chat.id)
+        .order_by(desc(ChatSession.id))
+        .with_for_update()
+        .first()
+    )
+    row = _locked_row(db, trigger.chat_session_id)
+    current_draft = (
+        db.query(AiDraft)
+        .filter(AiDraft.id == draft_id, AiDraft.chat_id == chat.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    legacy_boundary = (
+        _legacy_pending_hybrid_boundary(db, row, trigger, current_chat.user_id)
+        if row is not None and current_chat is not None
+        else None
+    )
+    current_boundary = row.completed_client_message_id if row is not None else None
+    valid_review_state = (
+        row is not None
+        and (
+            (
+                row.status == "PENDING_REVIEW"
+                and (
+                    row.completed_client_message_id is None
+                    or row.completed_client_message_id < trigger.id
+                )
+            )
+            or legacy_boundary is not None
+        )
+    )
+    invalid = (
+        row is None
+        or current_chat is None
+        or current_chat.status != ChatStatus.ACTIVE
+        or current_chat.response_mode != ResponseMode.HYBRID
+        or current_session is None
+        or current_session.id != trigger.chat_session_id
+        or current_session.status != ChatSessionStatus.ACTIVE
+        or current_draft is None
+        or current_draft.status != AiDraftStatus.PENDING
+        or current_draft.mode != ResponseMode.HYBRID
+        or current_draft.client_message_id != trigger.id
+        or trigger.chat_id != current_chat.id
+        or trigger.sender_id != current_chat.user_id
+        or trigger.is_system
+        or row.chat_id != current_chat.id
+        or not valid_review_state
+        or row.latest_client_message_id != trigger.id
+    )
+    if invalid:
+        if current_draft is not None and current_draft.status == AiDraftStatus.PENDING:
+            current_draft.status = AiDraftStatus.DISCARDED
+            if (
+                row is not None
+                and row.chat_id == chat.id
+                and row.status == "PENDING_REVIEW"
+                and row.latest_client_message_id == trigger.id
+            ):
+                row.generation_version += 1
+                row.status = (
+                    "AWAITING_REGEN"
+                    if current_chat is not None
+                    and current_chat.status == ChatStatus.ACTIVE
+                    and current_chat.response_mode == ResponseMode.HYBRID
+                    and current_session is not None
+                    and current_session.id == trigger.chat_session_id
+                    and current_session.status == ChatSessionStatus.ACTIVE
+                    else "IDLE"
+                )
+                row.lease_owner = None
+                row.lease_expires_at = None
+                _clear_plan(row)
+        return None
+    latest_non_system = (
+        db.query(Message.id)
+        .filter(
+            Message.chat_session_id == trigger.chat_session_id,
+            Message.is_system.is_(False),
+        )
+        .order_by(desc(Message.id))
+        .first()
+    )
+    if latest_non_system is None or int(latest_non_system[0]) != trigger.id:
+        current_draft.status = AiDraftStatus.DISCARDED
+        row.generation_version += 1
+        row.status = "AWAITING_REGEN"
+        row.lease_owner = None
+        row.lease_expires_at = None
+        _clear_plan(row)
+        return None
+    boundary = (
+        legacy_boundary
+        if legacy_boundary is not None
+        else (current_boundary or 0)
+    )
+    messages = (
+        db.query(Message)
+        .filter(
+            Message.chat_session_id == trigger.chat_session_id,
+            Message.sender_id == chat.user_id,
+            Message.is_system.is_(False),
+            Message.id > boundary,
+            Message.id <= draft.client_message_id,
+        )
+        .order_by(Message.id.asc())
+        .all()
+    )
+    if not messages or messages[-1].id != draft.client_message_id:
+        return None
+    row.completed_client_message_id = draft.client_message_id
+    row.generation_version += 1
+    row.status = "IDLE"
+    row.silence_until = None
+    row.lease_owner = None
+    row.lease_expires_at = None
+    _clear_plan(row)
+    current_draft.status = AiDraftStatus.SENT
+    return (
+        format_client_turn([message.content for message in messages]),
+        int(current_session.id),
+    )
+
+
+def stage_hybrid_draft_discard(db, chat, draft_id: int) -> bool:
+    """Keep an explicitly rejected turn open until owner regeneration/new input."""
+    from app.enums.ai_draft_status import AiDraftStatus
+    from app.enums.chat_session_status import ChatSessionStatus
+    from app.enums.chat_status import ChatStatus
+    from app.enums.response_mode import ResponseMode
+    from app.models.ai_draft import AiDraft
+    from app.models.chat import Chat
+    from app.models.chat_session import ChatSession
+    from app.models.message import Message
+
+    draft = (
+        db.query(AiDraft)
+        .filter(AiDraft.id == draft_id, AiDraft.chat_id == chat.id)
+        .first()
+    )
+    if draft is None or draft.mode != ResponseMode.HYBRID:
+        return False
+    trigger = (
+        db.get(Message, draft.client_message_id)
+        if draft.client_message_id
+        else None
+    )
+    if trigger is None or trigger.chat_session_id is None:
+        return False
+    current_chat = (
+        db.query(Chat)
+        .filter(Chat.id == chat.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    current_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.chat_id == chat.id)
+        .order_by(desc(ChatSession.id))
+        .with_for_update()
+        .first()
+    )
+    row = _locked_row(db, trigger.chat_session_id)
+    current_draft = (
+        db.query(AiDraft)
+        .filter(AiDraft.id == draft_id, AiDraft.chat_id == chat.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if current_draft is None or current_draft.status != AiDraftStatus.PENDING:
+        return False
+    current_draft.status = AiDraftStatus.DISCARDED
+    legacy_boundary = (
+        _legacy_pending_hybrid_boundary(db, row, trigger, current_chat.user_id)
+        if row is not None and current_chat is not None
+        else None
+    )
+    latest_non_system = (
+        db.query(Message.id)
+        .filter(
+            Message.chat_session_id == trigger.chat_session_id,
+            Message.is_system.is_(False),
+        )
+        .order_by(desc(Message.id))
+        .first()
+    )
+    if (
+        row
+        and current_chat is not None
+        and current_chat.status == ChatStatus.ACTIVE
+        and current_chat.response_mode == ResponseMode.HYBRID
+        and current_session is not None
+        and current_session.id == trigger.chat_session_id
+        and current_session.status == ChatSessionStatus.ACTIVE
+        and trigger.chat_id == current_chat.id
+        and trigger.sender_id == current_chat.user_id
+        and not trigger.is_system
+        and row.chat_id == current_chat.id
+        and (row.status == "PENDING_REVIEW" or legacy_boundary is not None)
+        and row.latest_client_message_id == trigger.id
+        and latest_non_system is not None
+        and int(latest_non_system[0]) == trigger.id
+    ):
+        if legacy_boundary is not None:
+            row.completed_client_message_id = legacy_boundary or None
+        row.generation_version += 1
+        row.status = "AWAITING_REGEN"
+        row.lease_owner = None
+        row.lease_expires_at = None
+        _clear_plan(row)
+    elif (
+        row
+        and row.chat_id == chat.id
+        and row.status == "PENDING_REVIEW"
+        and row.latest_client_message_id == trigger.id
+    ):
+        row.generation_version += 1
+        row.status = (
+            "AWAITING_REGEN"
+            if current_chat is not None
+            and current_chat.status == ChatStatus.ACTIVE
+            and current_chat.response_mode == ResponseMode.HYBRID
+            and current_session is not None
+            and current_session.id == trigger.chat_session_id
+            and current_session.status == ChatSessionStatus.ACTIVE
+            else "IDLE"
+        )
+        row.lease_owner = None
+        row.lease_expires_at = None
+        _clear_plan(row)
+    return True
 
 
 def _store_auto_plan(

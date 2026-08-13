@@ -355,13 +355,13 @@ def test_generate_endpoint_launches_regen_for_hybrid(db, make_user, monkeypatch)
     calls = []
     monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: False)
     monkeypatch.setattr(
-        reading_hybrid, "launch_hybrid_regen",
-        lambda cid, mid, content, c: calls.append((cid, content)) or True,
+        "app.services.ai.reading_burst.request_hybrid_regeneration",
+        lambda cid: calls.append(cid) or True,
     )
     resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
     assert resp.status_code == 202
     assert _json.loads(resp.body)["status"] == "generating"
-    assert calls == [(chat.id, "is he coming back?")]  # the client's latest message
+    assert calls == [chat.id]  # the durable coordinator owns the full unanswered turn
 
 
 def test_generate_endpoint_rejects_non_hybrid(db, make_user, monkeypatch):
@@ -372,13 +372,21 @@ def test_generate_endpoint_rejects_non_hybrid(db, make_user, monkeypatch):
     assert resp.status_code == 409
 
 
-def test_generate_endpoint_rejects_when_already_generating(db, make_user, monkeypatch):
+def test_generate_endpoint_delegates_double_click_to_durable_state(
+    db, make_user, monkeypatch
+):
     from app.routers.reading_ai import generate_draft
 
     admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
     monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: True)
+    calls = []
+    monkeypatch.setattr(
+        "app.services.ai.reading_burst.request_hybrid_regeneration",
+        lambda cid: calls.append(cid) or True,
+    )
     resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
-    assert resp.status_code == 409
+    assert resp.status_code == 202  # durable row state makes burst double-click safe
+    assert calls == [chat.id]
 
 
 def test_generate_endpoint_400_without_client_message(db, make_user, monkeypatch):
@@ -399,6 +407,11 @@ def test_generating_endpoint_reports_flag(db, make_user, monkeypatch):
     monkeypatch.setattr("app.services.ai.reading_hybrid.is_generating", lambda cid: True)
     resp = get_draft_generating(chat.id, user=admin, db=db)
     assert resp.status_code == 200
+    assert _json.loads(resp.body) == {"chat_id": chat.id, "generating": True}
+
+    monkeypatch.setattr("app.services.ai.reading_hybrid.is_generating", lambda cid: False)
+    monkeypatch.setattr("app.services.ai.reading_burst.is_generating", lambda cid: True)
+    resp = get_draft_generating(chat.id, user=admin, db=db)
     assert _json.loads(resp.body) == {"chat_id": chat.id, "generating": True}
 
 

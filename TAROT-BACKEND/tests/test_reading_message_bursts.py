@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from app.database import client as database_client
+from app.enums.ai_draft_status import AiDraftStatus
 from app.enums.chat_session_status import ChatSessionStatus
 from app.enums.chat_session_triggers import ChatSessionTrigger
 from app.enums.chat_status import ChatStatus
@@ -64,6 +65,28 @@ def _client_message(db, chat, session, client, content):
     db.commit()
     db.refresh(message)
     return message
+
+
+def _pending_hybrid_draft(db, chat, session, trigger, *, completed_id=None):
+    row = ReadingMessageBurst(
+        chat_session_id=session.id,
+        chat_id=chat.id,
+        latest_client_message_id=trigger.id,
+        completed_client_message_id=completed_id,
+        generation_version=1,
+        status="PENDING_REVIEW",
+    )
+    draft = AiDraft(
+        chat_id=chat.id,
+        client_message_id=trigger.id,
+        mode=ResponseMode.HYBRID,
+        draft_text="pending review draft",
+        status=AiDraftStatus.PENDING,
+    )
+    db.add_all([row, draft])
+    db.commit()
+    db.refresh(draft)
+    return row, draft
 
 
 async def _wait_until(predicate, timeout=2.0):
@@ -357,6 +380,659 @@ def test_manual_hybrid_and_automatic_modes_keep_their_contracts(
     assert (
         db.query(Message).filter(Message.sender_id == automatic.psychic_id).count() == 1
     )
+
+
+def test_hybrid_boundary_completes_only_after_edited_draft_is_sent(
+    db, make_user, monkeypatch
+):
+    factory = _install_db(monkeypatch, db)
+    client, psychic, chat, session, interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    admin = make_user(role=Role.SUPERADMIN)
+    turns = []
+    balances_before = (
+        float(client.balance),
+        float(client.credit_balance),
+        float(psychic.balance),
+        float(psychic.credit_balance),
+    )
+    interval_before = (interval.started_at, interval.ended_at)
+    transaction_count = db.query(Transaction).count()
+
+    async def fake_writer(_chat_id, turn, *_args, **_kwargs):
+        turns.append(turn)
+        return f"review draft {len(turns)}"
+
+    async def no_broadcast(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(reading_duo, "_write_valentina_turn", fake_writer)
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message", no_broadcast
+    )
+
+    async def scenario():
+        original = []
+        for number in range(10):
+            message = _client_message(
+                db, chat, session, client, f"hybrid-message-{number}"
+            )
+            original.append(message)
+            await reading_burst.note_client_message(chat.id, session.id, message.id)
+        await _wait_until(lambda: db.query(AiDraft).count() == 1)
+        db.expire_all()
+        row = db.get(ReadingMessageBurst, session.id)
+        first_draft = db.query(AiDraft).order_by(AiDraft.id).first()
+        assert row.status == "PENDING_REVIEW"
+        assert row.completed_client_message_id is None
+
+        # A new message invalidates the unfinished review draft and regenerates
+        # from all eleven unanswered rows, not merely the latest one.
+        latest = _client_message(db, chat, session, client, "hybrid-message-10")
+        await reading_burst.note_client_message(chat.id, session.id, latest.id)
+        db.expire_all()
+        assert first_draft.status.value == "DISCARDED"
+        await _wait_until(lambda: len(turns) == 2)
+        await _wait_until(
+            lambda: db.query(AiDraft).filter(AiDraft.status == "PENDING").count()
+            == 1
+        )
+        expected_turn = reading_burst.format_client_turn(
+            [f"hybrid-message-{number}" for number in range(11)]
+        )
+        assert turns[1] == expected_turn
+
+        from app.routers.reading_ai import discard_draft, generate_draft, send_draft
+        from app.schemas.reading_ai import DraftSend
+
+        current = db.query(AiDraft).filter(AiDraft.status == "PENDING").one()
+        discarded = discard_draft(chat.id, current.id, user=admin, db=db)
+        assert discarded.status_code == 200
+        db.expire_all()
+        row = db.get(ReadingMessageBurst, session.id)
+        assert row.status == "AWAITING_REGEN"
+        assert row.completed_client_message_id is None
+
+        regenerated = await generate_draft(chat.id, user=admin, db=db)
+        assert regenerated.status_code == 202
+        await _wait_until(lambda: len(turns) == 3)
+        await _wait_until(
+            lambda: db.query(AiDraft).filter(AiDraft.status == "PENDING").count()
+            == 1
+        )
+        await _wait_until(lambda: not reading_burst.is_generating(chat.id))
+        assert turns[2] == turns[1]
+
+        db.expire_all()
+        final_draft = db.query(AiDraft).filter(AiDraft.status == "PENDING").one()
+        row = db.get(ReadingMessageBurst, session.id)
+        current_session = (
+            db.query(ChatSession)
+            .filter(ChatSession.chat_id == chat.id)
+            .order_by(ChatSession.id.desc())
+            .first()
+        )
+        latest_non_system = (
+            db.query(Message)
+            .filter(
+                Message.chat_session_id == session.id,
+                Message.is_system.is_(False),
+            )
+            .order_by(Message.id.desc())
+            .first()
+        )
+        assert (
+            row.status,
+            row.latest_client_message_id,
+            row.completed_client_message_id,
+            final_draft.client_message_id,
+            final_draft.status,
+            final_draft.mode,
+            current_session.id,
+            current_session.status,
+            latest_non_system.id,
+        ) == (
+            "PENDING_REVIEW",
+            latest.id,
+            None,
+            latest.id,
+            AiDraftStatus.PENDING,
+            ResponseMode.HYBRID,
+            session.id,
+            ChatSessionStatus.ACTIVE,
+            latest.id,
+        )
+        sent = await send_draft(
+            chat.id,
+            final_draft.id,
+            DraftSend(content="owner-edited Hybrid response"),
+            user=admin,
+            db=db,
+        )
+        assert sent.status_code == 200, sent.body
+        db.expire_all()
+        row = db.get(ReadingMessageBurst, session.id)
+        assert row.status == "IDLE"
+        assert row.completed_client_message_id == latest.id
+        await reading_burst.stop_burst_coordinator()
+
+    asyncio.run(scenario())
+
+    from app.services.ai.reading_session import get_session_store
+
+    state = get_session_store().get(f"chat:{chat.id}")
+    assert state is not None
+    assert [entry["role"] for entry in state.chat_transcript] == ["client", "logan"]
+    assert state.chat_transcript[0]["content"] == turns[-1]
+    assert state.chat_transcript[1]["content"] == "owner-edited Hybrid response"
+    db.expire_all()
+    client = db.get(type(client), client.id)
+    psychic = db.get(type(psychic), psychic.id)
+    interval = db.get(SessionInterval, interval.id)
+    session = db.get(ChatSession, session.id)
+    chat = db.get(Chat, chat.id)
+    assert (
+        float(client.balance),
+        float(client.credit_balance),
+        float(psychic.balance),
+        float(psychic.credit_balance),
+    ) == balances_before
+    assert (interval.started_at, interval.ended_at) == interval_before
+    assert session.status == ChatSessionStatus.ACTIVE
+    assert chat.status == ChatStatus.ACTIVE
+    assert db.query(Transaction).count() == transaction_count
+    drafts = db.query(AiDraft).filter(AiDraft.chat_id == chat.id).order_by(AiDraft.id).all()
+    assert [draft.status for draft in drafts] == [
+        AiDraftStatus.DISCARDED,
+        AiDraftStatus.DISCARDED,
+        AiDraftStatus.SENT,
+    ]
+    reader_messages = (
+        db.query(Message)
+        .filter(
+            Message.chat_session_id == session.id,
+            Message.sender_id == psychic.id,
+        )
+        .all()
+    )
+    assert [message.content for message in reader_messages] == [
+        "owner-edited Hybrid response"
+    ]
+
+
+def test_hybrid_send_refuses_a_newer_committed_client_message_before_notification(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, _psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    admin = make_user(role=Role.SUPERADMIN)
+    original = _client_message(db, chat, session, client, "original question")
+    row, draft = _pending_hybrid_draft(db, chat, session, original)
+    newer = _client_message(db, chat, session, client, "newer detail")
+
+    async def no_broadcast(*_args, **_kwargs):
+        raise AssertionError("a stale draft must never be broadcast")
+
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message", no_broadcast
+    )
+
+    from app.routers.reading_ai import send_draft
+    from app.schemas.reading_ai import DraftSend
+
+    response = asyncio.run(
+        send_draft(
+            chat.id,
+            draft.id,
+            DraftSend(content="stale reply"),
+            user=admin,
+            db=db,
+        )
+    )
+    assert response.status_code == 409
+    db.expire_all()
+    assert db.get(AiDraft, draft.id).status == AiDraftStatus.DISCARDED
+    assert db.get(ReadingMessageBurst, session.id).status == "AWAITING_REGEN"
+    assert (
+        db.query(Message)
+        .filter(
+            Message.chat_session_id == session.id,
+            Message.sender_id == chat.psychic_id,
+        )
+        .count()
+        == 0
+    )
+    assert newer.id > row.latest_client_message_id
+
+
+def _seed_d30_coalesced_pending_memory(db, chat, session, client, psychic):
+    from app.services.ai.reading_session import (
+        get_session_store,
+        record_client_message,
+        record_sent_message,
+    )
+
+    answered = _client_message(db, chat, session, client, "already answered question")
+    answered_reply = Message(
+        chat_id=chat.id,
+        chat_session_id=session.id,
+        sender_id=psychic.id,
+        content="already delivered answer",
+    )
+    db.add(answered_reply)
+    db.commit()
+    parts = [
+        _client_message(db, chat, session, client, "legacy first part"),
+        _client_message(db, chat, session, client, "legacy second part"),
+        _client_message(db, chat, session, client, "legacy final part"),
+    ]
+    turn = reading_burst.format_client_turn([message.content for message in parts])
+    row, draft = _pending_hybrid_draft(db, chat, session, parts[-1])
+    row.status = "IDLE"
+    row.completed_client_message_id = parts[-1].id
+    db.commit()
+
+    store = get_session_store()
+    state = store.get_or_create(
+        f"chat:{chat.id}", client_id=client.id, chat_id=chat.id
+    )
+    record_client_message(state, answered.content)
+    record_sent_message(state, answered_reply.content)
+    # This is D30's pre-send behavior: generation already persisted the entire
+    # coalesced turn even though its draft was still waiting for owner review.
+    record_client_message(state, turn)
+    store.put(state)
+    return answered, parts, turn, row, draft
+
+
+def test_d30_coalesced_pending_hybrid_draft_sends_without_duplicate_memory(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    admin = make_user(role=Role.SUPERADMIN)
+    _answered, parts, turn, _row, draft = _seed_d30_coalesced_pending_memory(
+        db, chat, session, client, psychic
+    )
+
+    async def no_broadcast(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message", no_broadcast
+    )
+    from app.routers.reading_ai import send_draft
+    from app.schemas.reading_ai import DraftSend
+    from app.services.ai.reading_session import get_session_store
+
+    response = asyncio.run(
+        send_draft(chat.id, draft.id, DraftSend(), user=admin, db=db)
+    )
+    assert response.status_code == 200
+    db.expire_all()
+    row = db.get(ReadingMessageBurst, session.id)
+    assert db.get(AiDraft, draft.id).status == AiDraftStatus.SENT
+    assert row.status == "IDLE"
+    assert row.completed_client_message_id == parts[-1].id
+    state = get_session_store().get(f"chat:{chat.id}")
+    current_entries = [
+        entry
+        for entry in state.chat_transcript
+        if entry.get("role") == "client" and entry.get("content") == turn
+    ]
+    assert len(current_entries) == 1
+    assert state.chat_transcript[-1]["content"] == draft.draft_text
+
+
+def test_d30_coalesced_discard_regenerate_send_keeps_one_client_memory_entry(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    admin = make_user(role=Role.SUPERADMIN)
+    answered, parts, turn, _row, draft = _seed_d30_coalesced_pending_memory(
+        db, chat, session, client, psychic
+    )
+    writer_turns = []
+    writer_client_counts = []
+
+    async def fake_writer(_chat_id, pending_turn, _trigger, state, *_args, **_kwargs):
+        writer_turns.append(pending_turn)
+        writer_client_counts.append(
+            sum(
+                entry.get("role") == "client" and entry.get("content") == turn
+                for entry in state.chat_transcript
+            )
+        )
+        return "regenerated legacy draft"
+
+    async def no_broadcast(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(reading_duo, "_write_valentina_turn", fake_writer)
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message", no_broadcast
+    )
+    from app.routers.reading_ai import discard_draft, generate_draft, send_draft
+    from app.schemas.reading_ai import DraftSend
+    from app.services.ai.reading_session import get_session_store
+
+    async def scenario():
+        discarded = discard_draft(chat.id, draft.id, user=admin, db=db)
+        assert discarded.status_code == 200
+        db.expire_all()
+        row = db.get(ReadingMessageBurst, session.id)
+        assert row.status == "AWAITING_REGEN"
+        assert row.completed_client_message_id == answered.id
+
+        regenerated = await generate_draft(chat.id, user=admin, db=db)
+        assert regenerated.status_code == 202
+        await _wait_until(lambda: len(writer_turns) == 1)
+        await _wait_until(
+            lambda: db.query(AiDraft)
+            .filter(AiDraft.chat_id == chat.id, AiDraft.status == AiDraftStatus.PENDING)
+            .count()
+            == 1
+        )
+        await _wait_until(lambda: not reading_burst.is_generating(chat.id))
+        db.expire_all()
+        fresh = (
+            db.query(AiDraft)
+            .filter(AiDraft.chat_id == chat.id, AiDraft.status == AiDraftStatus.PENDING)
+            .one()
+        )
+        sent = await send_draft(
+            chat.id, fresh.id, DraftSend(), user=admin, db=db
+        )
+        assert sent.status_code == 200
+        await reading_burst.stop_burst_coordinator()
+
+    asyncio.run(scenario())
+    assert writer_turns == [turn]
+    assert writer_client_counts == [1]
+    state = get_session_store().get(f"chat:{chat.id}")
+    current_entries = [
+        entry
+        for entry in state.chat_transcript
+        if entry.get("role") == "client" and entry.get("content") == turn
+    ]
+    assert len(current_entries) == 1
+    assert state.chat_transcript[-1]["content"] == "regenerated legacy draft"
+    db.expire_all()
+    row = db.get(ReadingMessageBurst, session.id)
+    assert row.status == "IDLE"
+    assert row.completed_client_message_id == parts[-1].id
+
+
+def test_manual_reader_reply_discards_pending_hybrid_and_closes_complete_turn(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    first = _client_message(db, chat, session, client, "first question")
+    second = _client_message(db, chat, session, client, "second detail")
+    _row, draft = _pending_hybrid_draft(db, chat, session, second)
+    reply = Message(
+        chat_id=chat.id,
+        chat_session_id=session.id,
+        sender_id=psychic.id,
+        content="manual reader reply",
+    )
+    db.add(reply)
+    db.commit()
+    db.refresh(reply)
+
+    async def scenario():
+        turn = await reading_burst.note_reader_message(chat.id, session.id, reply.id)
+        await reading_burst.stop_burst_coordinator()
+        return turn
+
+    turn, automatic_already_recorded = asyncio.run(scenario())
+    assert automatic_already_recorded is False
+    assert turn == reading_burst.format_client_turn(
+        [first.content, second.content]
+    )
+    db.expire_all()
+    row = db.get(ReadingMessageBurst, session.id)
+    assert row.completed_client_message_id == second.id
+    assert row.status == "IDLE"
+    assert db.get(AiDraft, draft.id).status == AiDraftStatus.DISCARDED
+
+
+def test_mode_change_discards_pending_hybrid_draft(db, make_user, monkeypatch):
+    _install_db(monkeypatch, db)
+    client, _psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    trigger = _client_message(db, chat, session, client, "unanswered")
+    _row, draft = _pending_hybrid_draft(db, chat, session, trigger)
+    chat.response_mode = ResponseMode.HUMAN
+    db.commit()
+
+    async def scenario():
+        await reading_burst.note_mode_change(chat.id, db=db)
+        await reading_burst.stop_burst_coordinator()
+
+    asyncio.run(scenario())
+    db.expire_all()
+    assert db.get(AiDraft, draft.id).status == AiDraftStatus.DISCARDED
+    row = db.get(ReadingMessageBurst, session.id)
+    assert row.completed_client_message_id is None
+    assert row.status == "WAITING"
+
+
+def test_pending_hybrid_review_survives_restart_without_duplicate_generation(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, _psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    trigger = _client_message(db, chat, session, client, "awaiting review")
+    _pending_hybrid_draft(db, chat, session, trigger)
+    calls = []
+
+    async def fake_writer(*_args, **_kwargs):
+        calls.append(True)
+        return "duplicate"
+
+    monkeypatch.setattr(reading_duo, "_write_valentina_turn", fake_writer)
+
+    async def scenario():
+        await reading_burst.start_burst_coordinator()
+        await asyncio.sleep(0.02)
+        await reading_burst.stop_burst_coordinator()
+
+    asyncio.run(scenario())
+    assert calls == []
+    assert db.query(AiDraft).filter(AiDraft.chat_id == chat.id).count() == 1
+
+
+def test_hybrid_send_refuses_a_draft_from_an_old_session(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, _psychic, chat, old_session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    admin = make_user(role=Role.SUPERADMIN)
+    trigger = _client_message(db, chat, old_session, client, "old session question")
+    _row, draft = _pending_hybrid_draft(db, chat, old_session, trigger)
+    old_session.status = ChatSessionStatus.COMPLETED
+    db.add(ChatSession(chat_id=chat.id, status=ChatSessionStatus.ACTIVE))
+    db.commit()
+
+    async def no_broadcast(*_args, **_kwargs):
+        raise AssertionError("an old-session draft must never be broadcast")
+
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message", no_broadcast
+    )
+    from app.routers.reading_ai import send_draft
+    from app.schemas.reading_ai import DraftSend
+
+    response = asyncio.run(
+        send_draft(
+            chat.id,
+            draft.id,
+            DraftSend(content="old reply"),
+            user=admin,
+            db=db,
+        )
+    )
+    assert response.status_code == 409
+    db.expire_all()
+    assert db.get(AiDraft, draft.id).status == AiDraftStatus.DISCARDED
+
+
+def test_double_regeneration_request_is_durably_idempotent(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, _psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.HYBRID
+    )
+    trigger = _client_message(db, chat, session, client, "regenerate once")
+    wakes = []
+    monkeypatch.setattr(reading_burst, "_wake", lambda sid: wakes.append(sid))
+
+    assert reading_burst.request_hybrid_regeneration(chat.id) is True
+    db.expire_all()
+    first_version = db.get(ReadingMessageBurst, session.id).generation_version
+    assert reading_burst.request_hybrid_regeneration(chat.id) is True
+    db.expire_all()
+    row = db.get(ReadingMessageBurst, session.id)
+    assert row.generation_version == first_version
+    assert row.latest_client_message_id == trigger.id
+    assert row.status == "WAITING"
+    assert wakes == [session.id, session.id]
+
+
+def test_sabri_fallback_draft_keeps_legacy_manual_send_path(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, psychic, chat, session, interval = _seed_reading(
+        db, make_user, ResponseMode.SABRI
+    )
+    admin = make_user(role=Role.SUPERADMIN)
+    trigger = _client_message(db, chat, session, client, "fallback question")
+    draft = AiDraft(
+        chat_id=chat.id,
+        client_message_id=trigger.id,
+        mode=ResponseMode.SABRI,
+        draft_text="fallback answer",
+        status=AiDraftStatus.PENDING,
+    )
+    db.add(draft)
+    db.commit()
+    db.refresh(draft)
+    balance_before = (client.balance, client.credit_balance, psychic.balance)
+    interval_before = (interval.started_at, interval.ended_at)
+
+    async def no_broadcast(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message", no_broadcast
+    )
+    from app.routers.reading_ai import send_draft
+    from app.schemas.reading_ai import DraftSend
+
+    response = asyncio.run(
+        send_draft(chat.id, draft.id, DraftSend(), user=admin, db=db)
+    )
+    assert response.status_code == 200
+    db.expire_all()
+    assert db.get(AiDraft, draft.id).status == AiDraftStatus.SENT
+    delivered = (
+        db.query(Message)
+        .filter(
+            Message.chat_session_id == session.id,
+            Message.sender_id == psychic.id,
+        )
+        .one()
+    )
+    assert delivered.content == "fallback answer"
+    assert (client.balance, client.credit_balance, psychic.balance) == balance_before
+    assert (interval.started_at, interval.ended_at) == interval_before
+    assert db.query(Transaction).filter(Transaction.related_chat_id == chat.id).count() == 0
+
+
+def test_manual_reply_during_automatic_reveal_does_not_duplicate_client_memory(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.SABRI
+    )
+    trigger = _client_message(db, chat, session, client, "automatic question")
+    row = ReadingMessageBurst(
+        chat_session_id=session.id,
+        chat_id=chat.id,
+        latest_client_message_id=trigger.id,
+        generation_version=1,
+        status="DELIVERING",
+        response_bubbles='["first bubble", "second bubble"]',
+        delivery_position=1,
+    )
+    db.add(row)
+    db.commit()
+
+    from app.services.ai.reading_session import (
+        get_session_store,
+        record_client_message,
+        record_sent_message,
+    )
+
+    turn = reading_burst.format_client_turn([trigger.content])
+    store = get_session_store()
+    state = store.get_or_create(
+        f"chat:{chat.id}", client_id=client.id, chat_id=chat.id
+    )
+    record_client_message(state, turn)
+    record_sent_message(state, "first bubble")
+    store.put(state)
+
+    from app.routers.chats import manager
+    from app.services.chat.handlers.message_handler import MessageHandler
+
+    async def no_broadcast(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(manager, "send_to_chat", no_broadcast)
+
+    class Socket:
+        async def send_json(self, _payload):
+            return None
+
+    asyncio.run(
+        MessageHandler(Socket(), db, chat.id, psychic.id).handle(
+            {"content": "manual takeover reply"}
+        )
+    )
+    state = store.get(f"chat:{chat.id}")
+    assert [entry["role"] for entry in state.chat_transcript] == [
+        "client",
+        "logan",
+        "logan",
+    ]
+    assert [entry["content"] for entry in state.chat_transcript] == [
+        turn,
+        "first bubble",
+        "manual takeover reply",
+    ]
+    db.expire_all()
+    assert db.get(ReadingMessageBurst, session.id).completed_client_message_id == trigger.id
 
 
 def test_recovery_and_concurrent_wakes_resume_without_duplicate_response(

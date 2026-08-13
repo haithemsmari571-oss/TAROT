@@ -243,30 +243,6 @@ class MessageHandler(BaseEventHandler):
             message_id=db_message.id,
         )
 
-        # Memory: a manually-typed READER-side message (operator/psychic/admin)
-        # is delivered content — record it on the engine's session state so
-        # Valentina's next turn sees it, matching what Automatic reveals and
-        # approved-draft sends record. Only when a state already exists: chats
-        # the AI engine never touched don't grow engine state from human chat.
-        if user.id != chat.user_id:
-            try:
-                from app.services.ai.reading_ledger import record_commitments
-                from app.services.ai.reading_session import (
-                    get_session_store,
-                    record_sent_message,
-                )
-
-                store = get_session_store()
-                state = store.get(f"chat:{self.chat_id}")
-                if state is not None:
-                    record_sent_message(state, content)
-                    record_commitments(state, content)
-                    store.put(state)
-            except Exception:  # noqa: BLE001 — memory must never break a send
-                logger.exception(
-                    "manual_message_memory_record_failed", chat_id=self.chat_id
-                )
-
         # ── Session-scoped Valentina turn boundary ────────────────────────────
         # The canonical Message row above remains one row per client send. Active
         # reading messages only notify the durable burst coordinator: it waits for
@@ -276,6 +252,8 @@ class MessageHandler(BaseEventHandler):
         # later mode switch cannot answer an already-manually-answered turn.
         from app.enums.chat_status import ChatStatus
 
+        answered_client_turn = None
+        automatic_turn_already_recorded = False
         if chat.status == ChatStatus.ACTIVE:
             try:
                 from app.services.ai import reading_burst
@@ -285,10 +263,57 @@ class MessageHandler(BaseEventHandler):
                         self.chat_id, db_message.chat_session_id, db_message.id
                     )
                 elif user.id != chat.user_id:
-                    await reading_burst.note_reader_message(
+                    answered = await reading_burst.note_reader_message(
                         self.chat_id, db_message.chat_session_id, db_message.id
                     )
+                    if answered is not None:
+                        (
+                            answered_client_turn,
+                            automatic_turn_already_recorded,
+                        ) = answered
             except Exception:  # noqa: BLE001 — coordination never breaks storage
                 logger.exception(
                     "reading_burst_notification_failed", chat_id=self.chat_id
+                )
+
+        # A manual reader response closes the same client turn as an approved
+        # Hybrid draft. Record that ordered turn before the delivered reply so
+        # later regeneration never loses the client messages it answered.
+        if user.id != chat.user_id:
+            try:
+                from app.services.ai.reading_ledger import record_commitments
+                from app.services.ai.reading_session import (
+                    get_session_store,
+                    record_client_message,
+                    record_sent_message,
+                )
+
+                store = get_session_store()
+                state = store.get(f"chat:{self.chat_id}")
+                if state is None and answered_client_turn is not None:
+                    state = store.get_or_create(
+                        f"chat:{self.chat_id}",
+                        client_id=chat.user_id,
+                        chat_id=self.chat_id,
+                    )
+                if state is not None:
+                    client_turn_is_present = (
+                        automatic_turn_already_recorded
+                        and any(
+                            entry.get("role") == "client"
+                            and entry.get("content") == answered_client_turn
+                            for entry in reversed(state.chat_transcript)
+                        )
+                    )
+                    if (
+                        answered_client_turn is not None
+                        and not client_turn_is_present
+                    ):
+                        record_client_message(state, answered_client_turn)
+                    record_sent_message(state, content)
+                    record_commitments(state, content)
+                    store.put(state)
+            except Exception:  # noqa: BLE001 — memory must never break a send
+                logger.exception(
+                    "manual_message_memory_record_failed", chat_id=self.chat_id
                 )
