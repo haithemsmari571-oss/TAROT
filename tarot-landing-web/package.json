@@ -11,7 +11,8 @@
     "prerender": "node scripts/prerender.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:admin-crm-routes": "node scripts/test-admin-crm-routes.mts"
+    "test:admin-crm-routes": "node scripts/test-admin-crm-routes.mts",
+    "test:crm-long-video-proxy": "node scripts/test-crm-long-video-upload-proxy.mts"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
