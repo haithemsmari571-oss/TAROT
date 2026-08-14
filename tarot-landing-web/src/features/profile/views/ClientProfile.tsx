@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@iconify/react";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
+import "../../../styles/glass.css";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useCelebrations } from "@/features/celebrations/CelebrationProvider";
 import { constellationApi } from "../api/constellationApi";
@@ -17,7 +17,7 @@ import BrandedLoader from "../../../components/motion/BrandedLoader";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * The Constellation — the client's daily home (Section 3). Mobile-first: a
+ * The Constellation â€” the client's daily home (Section 3). Mobile-first: a
  * single centered phone-width column; desktop simply centers it. Warm, calm,
  * ritual-not-casino tone. DOB is a mandatory signup field, so the birthdate
  * fallback here is only for a rare legacy account.
@@ -87,14 +87,14 @@ const ClientProfile = () => {
       if (result.bonus > 0) {
         celebrate({
           kind: "streak",
-          title: "Seven days of practice ✨",
+          title: "Seven days of practice âœ¨",
           amount: result.bonus,
           message: "Your devotion is seen.",
         });
       }
     } catch (err: any) {
       // Already pulled today (e.g. another tab/device, or a race): this is not an
-      // error — reconcile to the server truth so the card shows face-up.
+      // error â€” reconcile to the server truth so the card shows face-up.
       if (err?.response?.status === 409) {
         await load();
       } else {
@@ -110,7 +110,7 @@ const ClientProfile = () => {
     return (
       <Shell>
         <div className="py-32 flex items-center justify-center">
-          <BrandedLoader label="Reading the stars…" />
+          <BrandedLoader label="Reading the starsâ€¦" />
         </div>
       </Shell>
     );
@@ -120,12 +120,12 @@ const ClientProfile = () => {
     return (
       <Shell>
         <div className="py-32 flex flex-col items-center gap-4 text-center px-6">
-          <Icon icon="solar:moon-stars-bold-duotone" className="text-5xl" style={{ color: COLORS.primary }} />
-          <p className="text-base" style={{ color: COLORS.neutralWhite }}>{error}</p>
+          <Icon icon="solar:moon-stars-bold-duotone" className="text-5xl" style={{ color: "var(--gl-accent)" }} />
+          <p className="text-base" style={{ color: "var(--gl-text)" }}>{error}</p>
           <button
             onClick={() => load()}
             className="rounded-2xl px-8 font-bold text-base"
-            style={{ height: 52, backgroundColor: COLORS.primary, color: COLORS.dark }}
+            style={{ height: 52, backgroundColor: "var(--gl-accent)", color: "var(--gl-base)" }}
           >
             Try again
           </button>
@@ -134,7 +134,7 @@ const ClientProfile = () => {
     );
   }
 
-  // Rare legacy account with no DOB → quiet inline fallback, not a blocking wall.
+  // Rare legacy account with no DOB â†’ quiet inline fallback, not a blocking wall.
   if (!data.dob_set) {
     return (
       <Shell>
@@ -181,16 +181,16 @@ const ClientProfile = () => {
   );
 };
 
-/* ── Layout shell: cosmic background + centered phone-width column ─────────── */
+/* â”€â”€ Layout shell: cosmic background + centered phone-width column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <div
     className="relative min-h-screen w-full pt-24 pb-16"
-    style={{ backgroundColor: COLORS.dark, fontFamily: TYPOGRAPHY.fontFamily.body }}
+    style={{ backgroundColor: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
   >
     <div
       className="fixed inset-0 pointer-events-none"
       style={{
-        background: `radial-gradient(circle at 50% 0%, ${COLORS.primary}12 0%, transparent 55%)`,
+        background: `radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--gl-accent) 7%, transparent) 0%, transparent 55%)`,
       }}
     />
     <div className="relative w-full max-w-md mx-auto px-4">{children}</div>
@@ -201,13 +201,13 @@ const Header = ({ sign }: { sign: string | null }) => (
   <div className="mb-6 text-center">
     <h1
       className="tracking-tight"
-      style={{ ...TYPOGRAPHY.headings.h1, fontSize: "clamp(1.9rem, 8vw, 2.5rem)", color: COLORS.neutralWhite }}
+      style={{ fontFamily: "var(--gl-serif)", fontWeight: 300, lineHeight: 1.05, letterSpacing: "-0.5px", fontSize: "clamp(1.9rem, 8vw, 2.5rem)", color: "var(--gl-text)" }}
     >
-      Your <span style={{ color: COLORS.primary }}>Constellation</span>
+      Your <span style={{ color: "var(--gl-accent)" }}>Constellation</span>
     </h1>
     {sign && (
-      <p className="mt-1 text-base" style={{ color: `${COLORS.neutralWhite}99` }}>
-        {sign} · {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+      <p className="mt-1 text-base" style={{ color: `color-mix(in srgb, var(--gl-text) 60%, transparent)` }}>
+        {sign} Â· {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
       </p>
     )}
   </div>
@@ -218,7 +218,7 @@ const AccountFooter = ({ onLogout }: { onLogout: () => void }) => (
     <button
       onClick={onLogout}
       className="text-base font-semibold flex items-center gap-2 px-6"
-      style={{ height: 48, color: `${COLORS.neutralWhite}88` }}
+      style={{ height: 48, color: `color-mix(in srgb, var(--gl-text) 53%, transparent)` }}
     >
       <Icon icon="solar:logout-3-bold-duotone" className="text-lg" />
       Sign out
@@ -248,12 +248,12 @@ const BirthdateFallback = ({ onSaved }: { onSaved: () => void }) => {
   return (
     <section
       className="rounded-2xl p-6"
-      style={{ backgroundColor: COLORS.surface, border: `1px solid ${COLORS.primary}22` }}
+      style={{ backgroundColor: "var(--gl-glass)", border: `1px solid color-mix(in srgb, var(--gl-accent) 13%, transparent)` }}
     >
-      <p className="text-lg font-bold mb-2" style={{ color: COLORS.neutralWhite }}>
+      <p className="text-lg font-bold mb-2" style={{ color: "var(--gl-text)" }}>
         Add your date of birth
       </p>
-      <p className="text-base mb-4" style={{ color: `${COLORS.neutralWhite}aa` }}>
+      <p className="text-base mb-4" style={{ color: `color-mix(in srgb, var(--gl-text) 67%, transparent)` }}>
         We use it to choose your daily card and reading. Just once.
       </p>
       <input
@@ -263,19 +263,19 @@ const BirthdateFallback = ({ onSaved }: { onSaved: () => void }) => {
         className="w-full rounded-xl px-4 text-base mb-4"
         style={{
           height: 52,
-          backgroundColor: COLORS.dark,
-          color: COLORS.neutralWhite,
-          border: `1px solid ${COLORS.neutralWhite}22`,
+          backgroundColor: "var(--gl-base)",
+          color: "var(--gl-text)",
+          border: `1px solid color-mix(in srgb, var(--gl-text) 13%, transparent)`,
         }}
       />
-      {err && <p className="text-sm mb-3" style={{ color: COLORS.error }}>{err}</p>}
+      {err && <p className="text-sm mb-3" style={{ color: "#c1443a" }}>{err}</p>}
       <button
         onClick={save}
         disabled={!value || saving}
         className="w-full rounded-2xl font-bold text-base disabled:opacity-60"
-        style={{ height: 56, backgroundColor: COLORS.primary, color: COLORS.dark }}
+        style={{ height: 56, backgroundColor: "var(--gl-accent)", color: "var(--gl-base)" }}
       >
-        {saving ? "Saving…" : "Save and continue"}
+        {saving ? "Savingâ€¦" : "Save and continue"}
       </button>
     </section>
   );

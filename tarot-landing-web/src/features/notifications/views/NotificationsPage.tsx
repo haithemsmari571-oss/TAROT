@@ -1,8 +1,8 @@
-import { Icon } from "@iconify/react";
+﻿import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { COLORS, TYPOGRAPHY } from "@/theme";
+import "../../../styles/glass.css";
 import { NotificationType } from "../types/notification.types";
 import PageBackground from "@/components/PageBackground";
 import moonlitBalcony from "@/assets/backgrounds/moonlit-balcony.webp";
@@ -46,9 +46,9 @@ function getNotificationIcon(type: NotificationType) {
 function getNotificationColor(type: NotificationType) {
   switch (type) {
     case NotificationType.CHAT_ACCEPTED:
-      return COLORS.primary;
+      return "var(--gl-accent)";
     case NotificationType.CHAT_REQUESTED:
-      return COLORS.secondary;
+      return "var(--gl-accent)";
     case NotificationType.CHAT_ENDED:
       return "#f59e0b";
     case NotificationType.CHAT_RESUMED:
@@ -64,7 +64,7 @@ function getNotificationColor(type: NotificationType) {
     case NotificationType.RESUME_ERROR_AFTER_PAYMENT:
       return "#ef4444";
     default:
-      return COLORS.primary;
+      return "var(--gl-accent)";
   }
 }
 
@@ -100,7 +100,7 @@ const NotificationsPage = () => {
     if (!notification.is_read) markAsRead(notification.id);
     // Deep-link straight into the specific conversation (not just the list), so a
     // client tapping "chat accepted" lands in the live reading instead of hunting
-    // for it. Route by side: clients → /chats, psychics/admins → /admin/chats.
+    // for it. Route by side: clients â†’ /chats, psychics/admins â†’ /admin/chats.
     const chatId = notification.data?.chat_id;
     if (chatId) {
       const isPsychicSide = ["PSYCHIC", "ADMIN", "SUPERADMIN"].includes(
@@ -114,11 +114,11 @@ const NotificationsPage = () => {
     <div
       className="min-h-screen pt-20 pb-10 px-4 md:px-8"
       style={{
-        fontFamily: TYPOGRAPHY.fontFamily.body,
-        backgroundColor: COLORS.dark,
+        fontFamily: "var(--gl-sans)",
+        backgroundColor: "var(--gl-base)",
       }}
     >
-      {/* Faint dimmed scene — texture only behind the notification list */}
+      {/* Faint dimmed scene â€” texture only behind the notification list */}
       <PageBackground images={moonlitBalcony} variant="faint" />
 
       <div className="relative z-10 max-w-4xl mx-auto">
@@ -131,7 +131,7 @@ const NotificationsPage = () => {
           <div>
             <h1
               className="text-4xl font-bold text-white mb-2"
-              style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}
+              style={{ fontFamily: "var(--gl-serif)" }}
             >
               Notifications
             </h1>
