@@ -12,7 +12,7 @@ import {
   type Transaction,
 } from "../../ledger/types/transaction.types";
 
-// â”€â”€â”€ Constellation data for background patterns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constellation data for background patterns ──────────────────────────────
 const CONSTELLATION_DATA = [
   {
     name: "Ursa Major",
@@ -53,7 +53,7 @@ const CONSTELLATION_DATA = [
   },
 ];
 
-// â”€â”€â”€ Helper: transaction type display config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helper: transaction type display config ──────────────────────────────────
 const getTypeDisplay = (type: TransactionType) => {
   switch (type) {
     case TransactionType.CREDIT:
@@ -95,7 +95,7 @@ const getTypeDisplay = (type: TransactionType) => {
   }
 };
 
-// â”€â”€â”€ Helper: transaction status display config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helper: transaction status display config ────────────────────────────────
 const getStatusDisplay = (status: TransactionStatus) => {
   switch (status) {
     case TransactionStatus.COMPLETED:
@@ -111,7 +111,7 @@ const getStatusDisplay = (status: TransactionStatus) => {
   }
 };
 
-// â”€â”€â”€ Helper: format date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helper: format date ──────────────────────────────────────────────────────
 const formatDate = (dateStr: string) => {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -122,7 +122,7 @@ const formatDate = (dateStr: string) => {
   }).format(new Date(dateStr));
 };
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ────────────────────────────────────────────────────────────────
 const Billing = () => {
   const {
     loading: paymentLoading,
@@ -144,7 +144,7 @@ const Billing = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 });
 
-  // â”€â”€â”€ Stable constellation data (no random on re-render) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Stable constellation data (no random on re-render) ────────────────────
   const constellations = Array.from({ length: 6 }).map((_, i) => {
     const data = CONSTELLATION_DATA[i % CONSTELLATION_DATA.length];
     return {
@@ -157,7 +157,7 @@ const Billing = () => {
     };
   });
 
-  // â”€â”€â”€ Responsive canvas sizing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Responsive canvas sizing ───────────────────────────────────────────────
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
@@ -172,7 +172,7 @@ const Billing = () => {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // â”€â”€â”€ Animated star field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Animated star field ────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -204,7 +204,7 @@ const Billing = () => {
     return () => cancelAnimationFrame(raf);
   }, [windowSize]);
 
-  // â”€â”€â”€ URL status flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── URL status flags ───────────────────────────────────────────────────────
   useEffect(() => {
     const status = searchParams.get("status");
     if (status === "success") {
@@ -216,7 +216,7 @@ const Billing = () => {
     }
   }, [searchParams]);
 
-  // â”€â”€â”€ Initial data fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Initial data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
     fetchMyBalance();
     fetchMyTransactions({ page: currentPage, limit: 10 });
@@ -232,7 +232,7 @@ const Billing = () => {
     navigate(window.location.pathname, { replace: true });
   };
 
-  // â”€â”€â”€ Custom-amount ("glider") purchase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Custom-amount ("glider") purchase ─────────────────────────────────────
   const handleStardustPurchase = async (amountUsd: number) => {
     try {
       const returnUrl = searchParams.get("return_url");
@@ -246,10 +246,10 @@ const Billing = () => {
     }
   };
 
-  // â”€â”€â”€ Derived state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Derived state ───────────────────────────────────────────────────────────
   const transactions = transactionsData?.transactions || [];
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div
       className="relative min-h-screen overflow-hidden px-4 pb-10 pt-8 sm:px-6 md:px-10 md:pt-10"
@@ -260,16 +260,16 @@ const Billing = () => {
         fontFamily: "var(--gl-sans)",
       }}
     >
-      {/* Immersive celestial backdrop â€” identical to the home/Sanctuary page. */}
+      {/* Immersive celestial backdrop — identical to the home/Sanctuary page. */}
       <PageBackground images={celestialPortal} variant="glass" />
 
-      {/* â”€â”€ Animated star canvas â”€â”€ */}
+      {/* ── Animated star canvas ── */}
       <canvas
         ref={canvasRef}
         className="fixed inset-0 pointer-events-none opacity-40 z-0"
       />
 
-      {/* â”€â”€ Constellation layer â”€â”€ */}
+      {/* ── Constellation layer ── */}
       <div className="fixed inset-0 pointer-events-none z-[1] overflow-hidden">
         {constellations.map((con, i) => (
           <svg
@@ -307,7 +307,7 @@ const Billing = () => {
         ))}
       </div>
 
-      {/* â”€â”€ Radial vignette â”€â”€ (softened so the Glider's full-bleed per-tier
+      {/* ── Radial vignette ── (softened so the Glider's full-bleed per-tier
              scene stays visible instead of fading to solid dark) */}
       <div
         className="fixed inset-0 z-[2] pointer-events-none"
@@ -320,9 +320,9 @@ const Billing = () => {
         }}
       />
 
-      {/* â”€â”€ Page content â”€â”€ */}
+      {/* ── Page content ── */}
       <div className="relative z-10 mx-auto max-w-[1280px]">
-        {/* â”€â”€ Stardust glider (custom amount) â€” primary, centered like home â”€â”€ */}
+        {/* ── Stardust glider (custom amount) — primary, centered like home ── */}
         <div className="mx-auto mb-8 max-w-5xl sm:mb-10">
           <StardustGlider
             loading={paymentLoading}
@@ -330,7 +330,7 @@ const Billing = () => {
           />
         </div>
 
-        {/* â”€â”€ Header â”€â”€ */}
+        {/* ── Header ── */}
         <div className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
           <section
             className="relative overflow-hidden rounded-[28px] border p-6 sm:p-8 md:p-10"
@@ -489,7 +489,7 @@ const Billing = () => {
                     Rate
                   </span>
                   <span className="text-sm font-black text-white">
-                    Â£1 = 1 Stardust
+                    £1 = 1 Stardust
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
@@ -508,7 +508,7 @@ const Billing = () => {
           </aside>
         </div>
 
-        {/* â”€â”€ Global error banner â”€â”€ */}
+        {/* ── Global error banner ── */}
         {paymentError && (
           <div
             className="mb-8 rounded-2xl border border-red-500/20 p-5 backdrop-blur-xl"
@@ -527,7 +527,7 @@ const Billing = () => {
           </div>
         )}
 
-        {/* â”€â”€ Transaction history â”€â”€ */}
+        {/* ── Transaction history ── */}
         <div
           className="relative mb-8 overflow-hidden rounded-[28px] border border-white/10 p-5 backdrop-blur-xl sm:mb-12 sm:p-8 md:p-10"
           style={{
@@ -583,7 +583,7 @@ const Billing = () => {
                 className="text-sm opacity-50"
                 style={{ color: "var(--gl-text-dim)" }}
               >
-                Loading transactionsâ€¦
+                Loading transactions…
               </p>
             </div>
           ) : transactions.length === 0 ? (
@@ -751,7 +751,7 @@ const Billing = () => {
                     className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-60 text-center md:text-left"
                     style={{ color: "var(--gl-text-dim)" }}
                   >
-                    Page {currentPage} of {transactionsData.pages} â€¢{" "}
+                    Page {currentPage} of {transactionsData.pages} •{" "}
                     {transactionsData.total} transactions
                   </div>
 
@@ -801,7 +801,7 @@ const Billing = () => {
                                   className="px-1 sm:px-2 text-[10px] sm:text-xs"
                                   style={{ color: "var(--gl-text-dim)" }}
                                 >
-                                  â€¦
+                                  …
                                 </span>
                               )}
                               <button
@@ -853,7 +853,7 @@ const Billing = () => {
         </div>
       </div>
 
-      {/* â”€â”€ Success modal â”€â”€ */}
+      {/* ── Success modal ── */}
       {showSuccessModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -951,7 +951,7 @@ const Billing = () => {
         </div>
       )}
 
-      {/* â”€â”€ Error modal â”€â”€ */}
+      {/* ── Error modal ── */}
       {showErrorModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"

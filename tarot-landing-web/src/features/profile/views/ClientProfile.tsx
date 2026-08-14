@@ -17,7 +17,7 @@ import BrandedLoader from "../../../components/motion/BrandedLoader";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * The Constellation â€” the client's daily home (Section 3). Mobile-first: a
+ * The Constellation — the client's daily home (Section 3). Mobile-first: a
  * single centered phone-width column; desktop simply centers it. Warm, calm,
  * ritual-not-casino tone. DOB is a mandatory signup field, so the birthdate
  * fallback here is only for a rare legacy account.
@@ -87,14 +87,14 @@ const ClientProfile = () => {
       if (result.bonus > 0) {
         celebrate({
           kind: "streak",
-          title: "Seven days of practice âœ¨",
+          title: "Seven days of practice ✨",
           amount: result.bonus,
           message: "Your devotion is seen.",
         });
       }
     } catch (err: any) {
       // Already pulled today (e.g. another tab/device, or a race): this is not an
-      // error â€” reconcile to the server truth so the card shows face-up.
+      // error — reconcile to the server truth so the card shows face-up.
       if (err?.response?.status === 409) {
         await load();
       } else {
@@ -110,7 +110,7 @@ const ClientProfile = () => {
     return (
       <Shell>
         <div className="py-32 flex items-center justify-center">
-          <BrandedLoader label="Reading the starsâ€¦" />
+          <BrandedLoader label="Reading the stars…" />
         </div>
       </Shell>
     );
@@ -134,7 +134,7 @@ const ClientProfile = () => {
     );
   }
 
-  // Rare legacy account with no DOB â†’ quiet inline fallback, not a blocking wall.
+  // Rare legacy account with no DOB → quiet inline fallback, not a blocking wall.
   if (!data.dob_set) {
     return (
       <Shell>
@@ -181,7 +181,7 @@ const ClientProfile = () => {
   );
 };
 
-/* â”€â”€ Layout shell: cosmic background + centered phone-width column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Layout shell: cosmic background + centered phone-width column ─────────── */
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <div
     className="relative min-h-screen w-full pt-24 pb-16"
@@ -207,7 +207,7 @@ const Header = ({ sign }: { sign: string | null }) => (
     </h1>
     {sign && (
       <p className="mt-1 text-base" style={{ color: `color-mix(in srgb, var(--gl-text) 60%, transparent)` }}>
-        {sign} Â· {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+        {sign} · {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
       </p>
     )}
   </div>
@@ -275,7 +275,7 @@ const BirthdateFallback = ({ onSaved }: { onSaved: () => void }) => {
         className="w-full rounded-2xl font-bold text-base disabled:opacity-60"
         style={{ height: 56, backgroundColor: "var(--gl-accent)", color: "var(--gl-base)" }}
       >
-        {saving ? "Savingâ€¦" : "Save and continue"}
+        {saving ? "Saving…" : "Save and continue"}
       </button>
     </section>
   );

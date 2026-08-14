@@ -204,7 +204,7 @@ const ClientChat = () => {
   // State for messages
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  // Reader "typingâ€¦" indicator, driven by backend typing_start/typing_stop events.
+  // Reader "typing…" indicator, driven by backend typing_start/typing_stop events.
   const [isReaderTyping, setIsReaderTyping] = useState(false);
 
   // ChatFacade for WebSocket connection
@@ -284,7 +284,7 @@ const ClientChat = () => {
   // Stable event handlers using useCallback
   const handleMessageReceived = useCallback(({ message }: { message: ChatMessage }) => {
     console.log('[ClientChat] Message received handler called:', message);
-    // A message arrived â†’ stop showing the reader typing indicator.
+    // A message arrived → stop showing the reader typing indicator.
     setIsReaderTyping(false);
     setMessages(prev => {
       // Avoid duplicates
@@ -305,7 +305,7 @@ const ClientChat = () => {
   }, [user]);
   const handleTypingStop = useCallback(() => setIsReaderTyping(false), []);
 
-  // The other party opened the conversation â†’ flip our sent messages to "seen".
+  // The other party opened the conversation → flip our sent messages to "seen".
   const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
     if (!user || readerId === user.id) return;
     setMessages(prev =>
@@ -370,7 +370,7 @@ const ClientChat = () => {
     });
 
     // This handler knows the real end reason (MANUAL_EXIT vs INSUFFICIENT_FUNDS,
-    // etc.), so claim the session-end here â€” the client-side timer-0 fallback
+    // etc.), so claim the session-end here — the client-side timer-0 fallback
     // effect must not override the modal variant it just chose.
     hasHandledSessionEnd.current = true;
 
@@ -451,7 +451,7 @@ const ClientChat = () => {
       remaining_minutes: p.remainingMinutes,
       minutes_charged: p.minutesCharged,
       rate_per_minute: p.ratePerMinute,
-      // session_started only fires once the client has joined â†’ billing ACTIVE.
+      // session_started only fires once the client has joined → billing ACTIVE.
       session_status: (p.sessionStatus as any) ?? 'ACTIVE',
     };
 
@@ -615,7 +615,7 @@ const ClientChat = () => {
   }, [selectedChat]);
 
   // NOTE: billing is anchored ONLY by an explicit click on the global
-  // "Incoming Reading" Join button (IncomingReadingModal â†’ joinChat). It must
+  // "Incoming Reading" Join button (IncomingReadingModal → joinChat). It must
   // NOT be triggered by viewing/rendering this conversation, so there is no
   // join-on-view effect here by design.
 
@@ -657,7 +657,7 @@ const ClientChat = () => {
 
       // Show session summary modal. CHAT_ENDED forces remainingSeconds to 0 for
       // EVERY end (manual or balance), so this fallback must key off the real
-      // end reason â€” not assume "insufficient balance". A voluntary End Chat
+      // end reason — not assume "insufficient balance". A voluntary End Chat
       // carries "user_initiated" and gets the graceful (purple) variant.
       setSessionSummaryData({
         duration: sessionState.elapsedSeconds,
@@ -864,18 +864,18 @@ const ClientChat = () => {
   // In-session "Add Stardust": open the real Stardust Glider (any amount + bonus
   // tiers). We pause the reading only once she commits (onBeforeCheckout), so the
   // clock isn't running during the Stripe round-trip; on return we resume (see the
-  // payment-return effect â€” the glider's webhook credits Stardust but, unlike
+  // payment-return effect — the glider's webhook credits Stardust but, unlike
   // /topup, does not itself resume the paused chat).
   const handleAddStardust = useCallback(() => {
     if (!selectedChat) return;
     const chatId = selectedChat;
     // Already in the out-of-balance GRACE hold? The session is paused, so don't
-    // re-pause â€” instead flag the top-up (/topup â†’ mark_topping_up) to extend the
+    // re-pause — instead flag the top-up (/topup → mark_topping_up) to extend the
     // hold from 60s to the 5-minute cap while checkout completes.
     const inGrace = sessionState.sessionStatus === 'GRACE';
     openTopUp({
       reason:
-        "Add Stardust to keep your reading going â€” we'll pause the clock while you top up.",
+        "Add Stardust to keep your reading going — we'll pause the clock while you top up.",
       returnUrl: `/chats?chat_id=${chatId}&resume=1`,
       onBeforeCheckout: async () => {
         if (inGrace) {
@@ -926,11 +926,11 @@ const ClientChat = () => {
     if (status === 'success') {
       setSelectedChat(chatIdNum);
 
-      // Glider top-up (resume=1): the Stardust webhook only credits balance â€” it
-      // does NOT resume the chat â€” so we resume ourselves, retrying to let the
+      // Glider top-up (resume=1): the Stardust webhook only credits balance — it
+      // does NOT resume the chat — so we resume ourselves, retrying to let the
       // async credit land before /resume's own balance check runs.
       if (searchParams.get('resume') === '1') {
-        toastRef.current.success('Payment received â€” resuming your readingâ€¦');
+        toastRef.current.success('Payment received — resuming your reading…');
         let cancelled = false;
         (async () => {
           for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
@@ -984,7 +984,7 @@ const ClientChat = () => {
       setSelectedChat(chatIdNum);
 
       const timer = setTimeout(async () => {
-        toast.info('Top-up cancelled. Your chat is paused â€” you can top up again or resume if you have balance.');
+        toast.info('Top-up cancelled. Your chat is paused — you can top up again or resume if you have balance.');
 
         // Clean up URL
         navigate(`/chats?chat_id=${chatIdNum}`, { replace: true });
@@ -994,7 +994,7 @@ const ClientChat = () => {
     }
   }, [searchParams, navigate]);
 
-  // â”€â”€ Deep-link: open a specific conversation straight from a notification â”€â”€
+  // ── Deep-link: open a specific conversation straight from a notification ──
   // /chats?chat_id=123 (no payment `status`) selects that chat directly, instead
   // of dropping the client on the list to hunt for it while billing runs.
   useEffect(() => {
@@ -1026,7 +1026,7 @@ const ClientChat = () => {
     return [...olderMessages, ...messages];
   }, [olderMessages, messages]);
 
-  // â”€â”€ LOCAL-ONLY PREVIEW (dev only): /chats?preview=active|lowbalance|paused|ended|ranout
+  // ── LOCAL-ONLY PREVIEW (dev only): /chats?preview=active|lowbalance|paused|ended|ranout
   //    Renders the redesigned session states with mock data so they can be eyeballed
   //    without a live reading. Remove this block (and ChatStatePreview below) before shipping.
   const previewMode = import.meta.env.DEV ? searchParams.get("preview") : null;
@@ -1076,7 +1076,7 @@ const ClientChat = () => {
   const remaining = sessionState.remainingSeconds;
   const isGrace = sessionState.sessionStatus === 'GRACE';
   // Per-minute model: clientBalance is the LIVE balance after each minute's
-  // upfront debit â€” it IS the Stardust left (don't subtract cost again). Keep it
+  // upfront debit — it IS the Stardust left (don't subtract cost again). Keep it
   // EXACT (no floor) so the counter matches the header (9.6, not 9).
   const stardustLeft =
     sessionState.clientBalance == null
@@ -1087,7 +1087,7 @@ const ClientChat = () => {
   const psychicName =
     psychicDetails?.username || selectedChatData?.user_name || "Your reader";
 
-  // Human-friendly "reading time left" for the low-balance banner â€” derived from
+  // Human-friendly "reading time left" for the low-balance banner — derived from
   // the live whole minutes remaining, not hardcoded, so it tracks reality.
   const readingTimeLeftLabel = (() => {
     if (minutesLeft <= 0) {
@@ -1102,7 +1102,7 @@ const ClientChat = () => {
       className="h-[calc(100dvh-80px)] flex gap-2 md:gap-4 p-2 sm:p-3 md:p-4 relative overflow-hidden"
       style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}
     >
-      {/* Faint dimmed scene â€” texture only; kept well below message legibility */}
+      {/* Faint dimmed scene — texture only; kept well below message legibility */}
       <PageBackground images={chatBackground} variant="glass" />
 
       {/* Starfield Background */}
@@ -1269,7 +1269,7 @@ const ClientChat = () => {
                 }
                 return pages.map((p, i) =>
                   typeof p === 'string' ? (
-                    <span key={`e${i}`} className="text-white/30 text-xs px-1">Â·Â·Â·</span>
+                    <span key={`e${i}`} className="text-white/30 text-xs px-1">···</span>
                   ) : (
                     <button
                       key={p}
@@ -1357,7 +1357,7 @@ const ClientChat = () => {
                       ) : isPaused ? (
                         <>
                           <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "var(--gl-accent)" }} />
-                          <span className="text-sm font-medium" style={{ color: "var(--gl-accent)" }}>Reading paused â€” add Stardust to resume</span>
+                          <span className="text-sm font-medium" style={{ color: "var(--gl-accent)" }}>Reading paused — add Stardust to resume</span>
                         </>
                       ) : currentChatStatus === 'ENDED' ? (
                         <>
@@ -1445,7 +1445,7 @@ const ClientChat = () => {
                 )}
               </div>
 
-              {/* â”€â”€ Session status bar â€” Time Left + Stardust lead; tap Stardust to top up â”€â”€ */}
+              {/* ── Session status bar — Time Left + Stardust lead; tap Stardust to top up ── */}
               {(isChatActive || isPaused) && (
                 <SessionBar
                   elapsedSeconds={sessionState.elapsedSeconds}
@@ -1620,7 +1620,7 @@ const ClientChat = () => {
                   </div>
                 )}
 
-                {/* Reader "typingâ€¦" indicator while a message is being delivered */}
+                {/* Reader "typing…" indicator while a message is being delivered */}
                 {isReaderTyping && currentChatStatus === 'ACTIVE' && (
                   <TypingIndicator
                     avatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
@@ -1631,7 +1631,7 @@ const ClientChat = () => {
                 <div ref={scrollRef} />
               </div>
 
-              {/* â”€â”€ Calm low-balance banner (~1 minute of reading time left) â”€â”€ */}
+              {/* ── Calm low-balance banner (~1 minute of reading time left) ── */}
               {isChatActive && sessionState.showCriticalWarning && (
                 <div className="px-3 sm:px-6 pt-3">
                   <div
@@ -1714,7 +1714,7 @@ const ClientChat = () => {
                           {isGrace
                             ? `Not enough Stardust for another minute with ${psychicName}.`
                             : sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
-                              ? 'Your Stardust ran low â€” add more to keep going.'
+                              ? 'Your Stardust ran low — add more to keep going.'
                               : 'Waiting for your reader to resume.'}
                         </p>
                       </div>
@@ -1729,8 +1729,8 @@ const ClientChat = () => {
                     </div>
                     <p className="text-xs text-white/50 mb-4">
                       {isGrace
-                        ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on â€” the reading pauses here until you do, and closes on its own if you don't.`
-                        : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isnâ€™t resumed.'}
+                        ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on — the reading pauses here until you do, and closes on its own if you don't.`
+                        : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn’t resumed.'}
                     </p>
                     <div className="flex gap-2 text-xs text-white/40">
                       <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
@@ -1849,7 +1849,7 @@ const ClientChat = () => {
               ) : null}
             </div>
 
-            {/* RIGHT SIDEBAR â€” desktop only; mobile/tablet use the profile sheet */}
+            {/* RIGHT SIDEBAR — desktop only; mobile/tablet use the profile sheet */}
             {selectedChatData && (
               <div className="hidden lg:flex w-80 border-l border-white/5 flex-col backdrop-blur-xl overflow-y-auto" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
                 <div className="p-6">
@@ -1879,7 +1879,7 @@ const ClientChat = () => {
         )}
       </div>
 
-      {/* Reader profile â€” mobile/tablet bottom sheet (lg shows the sidebar instead) */}
+      {/* Reader profile — mobile/tablet bottom sheet (lg shows the sidebar instead) */}
       {showProfileSheet && selectedChatData && (
         <div
           className="fixed inset-0 z-[120] lg:hidden"
@@ -2038,11 +2038,11 @@ const ClientChat = () => {
   );
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// LOCAL-ONLY PREVIEW HARNESS (dev only) â€” REMOVE BEFORE SHIPPING.
+// ─────────────────────────────────────────────────────────────────────────────
+// LOCAL-ONLY PREVIEW HARNESS (dev only) — REMOVE BEFORE SHIPPING.
 // Eyeball the redesigned session states without a live reading:
 //   /chats?preview=active | lowbalance | paused | ended | ranout
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 const PREVIEW_CFG: Record<
   string,
   { elapsed: number; remaining: number; balance: number; cost: number; status: string; paused: boolean }
@@ -2077,10 +2077,10 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
   const psychicName = "Selene Mare";
 
   const bubbles = [
-    { mine: false, text: "Hello, love. I can feel there's something weighing on your heart today. Take a breath â€” we'll look at it together.", t: "7:41 PM" },
-    { mine: true, text: "Hi Selene. Yesâ€¦ it's about a decision I've been putting off.", t: "7:42 PM" },
-    { mine: false, text: "The cards are showing me a path opening. You already know the answer â€” let's give you the clarity to trust it.", t: "7:42 PM" },
-    { mine: true, text: "That feels right. Thank you ðŸ’œ", t: "7:43 PM" },
+    { mine: false, text: "Hello, love. I can feel there's something weighing on your heart today. Take a breath — we'll look at it together.", t: "7:41 PM" },
+    { mine: true, text: "Hi Selene. Yes… it's about a decision I've been putting off.", t: "7:42 PM" },
+    { mine: false, text: "The cards are showing me a path opening. You already know the answer — let's give you the clarity to trust it.", t: "7:42 PM" },
+    { mine: true, text: "That feels right. Thank you 💜", t: "7:43 PM" },
   ];
   const modes = ["active", "warning", "lowbalance", "paused", "ended", "ranout"];
 
@@ -2120,7 +2120,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isEnded ? "#FF6B6B" : isPaused ? "var(--gl-accent)" : "#22c55e" }} />
               <span className="text-sm font-medium" style={{ color: isEnded ? "#FF6B6B" : isPaused ? "var(--gl-accent)" : "#4ade80" }}>
-                {isEnded ? "Session ended" : isPaused ? "Reading paused â€” add Stardust to resume" : "Active now"}
+                {isEnded ? "Session ended" : isPaused ? "Reading paused — add Stardust to resume" : "Active now"}
               </span>
             </div>
           </div>
@@ -2196,7 +2196,7 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
         ) : (
           <div className="p-4 sm:p-6 border-t border-white/5" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl px-6 py-4 text-white/30 text-sm">{isPaused ? "Reading paused" : "Type your messageâ€¦"}</div>
+              <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl px-6 py-4 text-white/30 text-sm">{isPaused ? "Reading paused" : "Type your message…"}</div>
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}>
                 <Icon icon="solar:plain-2-bold" className="text-xl" />
               </div>

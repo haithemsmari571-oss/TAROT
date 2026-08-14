@@ -100,7 +100,7 @@ const NotificationsPage = () => {
     if (!notification.is_read) markAsRead(notification.id);
     // Deep-link straight into the specific conversation (not just the list), so a
     // client tapping "chat accepted" lands in the live reading instead of hunting
-    // for it. Route by side: clients â†’ /chats, psychics/admins â†’ /admin/chats.
+    // for it. Route by side: clients → /chats, psychics/admins → /admin/chats.
     const chatId = notification.data?.chat_id;
     if (chatId) {
       const isPsychicSide = ["PSYCHIC", "ADMIN", "SUPERADMIN"].includes(
@@ -118,7 +118,7 @@ const NotificationsPage = () => {
         backgroundColor: "var(--gl-base)",
       }}
     >
-      {/* Faint dimmed scene â€” texture only behind the notification list */}
+      {/* Faint dimmed scene — texture only behind the notification list */}
       <PageBackground images={moonlitBalcony} variant="faint" />
 
       <div className="relative z-10 max-w-4xl mx-auto">
