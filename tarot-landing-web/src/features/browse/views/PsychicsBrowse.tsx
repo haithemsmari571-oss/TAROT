@@ -1,7 +1,6 @@
 import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { psychicsApi } from "../api/psychicsApi";
 import { categoriesApi } from "../api/categoriesApi";
 import { Psychic } from "../types/psychic.types";
@@ -11,9 +10,8 @@ import moonlitBalcony from "../../../assets/backgrounds/moonlit-balcony.webp";
 import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
 import { NumericPagination } from "../components/NumericPagination";
 import { PriceRangeFilter } from "../components/PriceRangeFilter";
-import { ToggleSwitch } from "../components/ToggleSwitch";
 import PsychicCard from "../components/PsychicCard";
-import "../../../styles/starfield.css";
+import "../../../styles/glass.css";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -118,6 +116,13 @@ const PsychicsBrowse = () => {
     setCurrentPage(1);
   }, []);
 
+  // The Search pill's button just flushes the debounce — same query semantics,
+  // it only skips the 500ms wait.
+  const applySearchNow = useCallback(() => {
+    setDebouncedSearch(searchQuery);
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   // Check if any filters are active
   const hasActiveFilters = selectedCategories.length > 0 || searchQuery || minPrice !== undefined || maxPrice !== undefined || isOnlineOnly;
 
@@ -135,164 +140,110 @@ const PsychicsBrowse = () => {
   }, [psychics]);
 
   return (
-    <div 
-      className="relative min-h-screen pt-32 pb-20" 
-      style={{ backgroundColor: COLORS.dark }}
-    >
-      {/* Dimmed scene — light enough to read clearly, still protects card legibility */}
-      <PageBackground images={moonlitBalcony} variant="soft" />
-
-      {/* Starfield Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="starfield"></div>
-        <div className="starfield-dense"></div>
-      </div>
+    <div className="relative min-h-screen pb-20">
+      {/* The moonlit scene stays vivid in both moods; the token tint carries mood. */}
+      <PageBackground images={moonlitBalcony} variant="glass" />
 
       {/* Main content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6">
-        {/* HEADER */}
-        <div className="text-center mb-8 sm:mb-12 space-y-3 sm:space-y-4">
-          <h1
-            style={{ ...TYPOGRAPHY.headings.h1, fontSize: "clamp(2.5rem, 6vw, 4rem)" }}
-            className="tracking-tighter leading-[1]"
-          >
-            Explore Our <span style={{ color: COLORS.primary }}>Psychic Readers</span>
+      <div className="relative z-10">
+        {/* HERO */}
+        <section className="gl-hero">
+          <div className="gl-kicker">Private love readings &amp; tarot clarity</div>
+          <h1 className="gl-h1">
+            Someone here already
+            <br />
+            <i>sees what you can't.</i>
           </h1>
-          <p className="text-base opacity-60 max-w-2xl mx-auto" style={{ color: COLORS.neutralWhite }}>
-            Connect with experienced spiritual advisors — your first reading is on us with £15 free credit
+          <p className="gl-sub">
+            {totalCount > 0 ? `${totalCount} intuitive readers` : "Intuitive readers"}, live
+            now. Private, judgment-free readings on love, timing and the unsaid —{" "}
+            <b>your first reading is free with £15 credit.</b>
           </p>
-        </div>
 
-        {/* SEARCH BAR */}
-        <div className="max-w-3xl mx-auto mb-6 sm:mb-8">
-          <div
-            className="relative rounded-2xl overflow-hidden border"
-            style={{
-              backgroundColor: COLORS.surface,
-              borderColor: `${COLORS.neutralWhite}10`,
-            }}
-          >
-            <Icon
-              icon="ph:magnifying-glass"
-              className="absolute left-5 top-1/2 -translate-y-1/2 text-xl"
-              style={{ color: COLORS.neutralWhite + "40" }}
-            />
+          {/* SEARCH PILL */}
+          <div className="gl-search">
             <input
               type="text"
-              placeholder="Search by name or bio..."
+              placeholder="Search by name, gift, or what you need answered…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-3 sm:py-4 pl-12 sm:pl-14 pr-12 sm:pr-14 bg-transparent text-white placeholder-white/40 outline-none"
-              style={{ fontFamily: TYPOGRAPHY.fontFamily.body }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") applySearchNow();
+              }}
             />
             {searchQuery && (
               <button
+                type="button"
+                className="gl-search-clear"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-5 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
+                title="Clear search"
               >
-                <Icon icon="ph:x" className="text-xl" style={{ color: COLORS.neutralWhite + "40" }} />
+                <Icon icon="ph:x" />
               </button>
             )}
+            <button type="button" className="gl-search-btn" onClick={applySearchNow}>
+              Search
+            </button>
           </div>
+        </section>
+
+        {/* FILTER CHIPS */}
+        <div className="gl-filters">
+          <button
+            type="button"
+            className={`gl-fchip ${isOnlineOnly ? "gl-fchip--on" : ""}`}
+            onClick={() => setIsOnlineOnly(!isOnlineOnly)}
+          >
+            <span className="gl-dot" /> Online now
+          </button>
+
+          <SearchableMultiSelect
+            options={categories}
+            selectedIds={selectedCategories}
+            onChange={handleCategoryChange}
+            placeholder="Select categories..."
+            label="Categories"
+            variant="chip"
+          />
+
+          <PriceRangeFilter
+            minPrice={minPrice}
+            maxPrice={maxPrice}
+            onChange={handlePriceChange}
+            label="Price range (per minute)"
+          />
+
+          {hasActiveFilters && (
+            <button type="button" className="gl-fchip" onClick={clearFilters}>
+              <Icon icon="ph:x-circle" className="text-sm" /> Clear all
+            </button>
+          )}
         </div>
 
-        {/* FILTERS SECTION */}
-        <div className="max-w-5xl mx-auto mb-8 sm:mb-12">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
-            {/* Categories Multiselect */}
-            <SearchableMultiSelect
-              options={categories}
-              selectedIds={selectedCategories}
-              onChange={handleCategoryChange}
-              placeholder="Select categories..."
-              label="Categories"
-            />
-
-            {/* Online Status Toggle */}
-            <div className="flex flex-col">
-              <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: COLORS.neutralWhite + "80" }}>
-                Availability
-              </label>
-              <button
-                className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-all"
-                style={{
-                  backgroundColor: `${COLORS.surface}`,
-                  borderColor: isOnlineOnly ? COLORS.primary : `${COLORS.neutralWhite}10`,
-                }}
-                onClick={() => setIsOnlineOnly(!isOnlineOnly)}
-              >
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isOnlineOnly ? 'bg-green-400' : 'bg-white/20'}`} />
-                  <span className="text-sm font-medium" style={{ color: COLORS.neutralWhite }}>
-                    Online Only
-                  </span>
-                </div>
-                <ToggleSwitch
-                  checked={isOnlineOnly}
-                  onChange={setIsOnlineOnly}
-                />
-              </button>
-            </div>
-
-            {/* Price Range Filter */}
-            <PriceRangeFilter
-              minPrice={minPrice}
-              maxPrice={maxPrice}
-              onChange={handlePriceChange}
-              label="Price Range (per minute)"
-            />
+        {/* COUNT LINE */}
+        {!loading && !error && (
+          <div className="gl-count">
+            {totalCount} {totalCount === 1 ? "reader" : "readers"} found
           </div>
-
-          {/* Results Count and Clear Filters */}
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-            {!loading && (
-              <span className="text-sm font-medium" style={{ color: COLORS.neutralWhite }}>
-                <span style={{ color: COLORS.primary }} className="font-bold">{totalCount}</span>{" "}
-                {totalCount === 1 ? "psychic" : "psychics"} found
-              </span>
-            )}
-
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2"
-                style={{
-                  backgroundColor: `${COLORS.neutralWhite}05`,
-                  color: COLORS.primary,
-                  border: `1px solid ${COLORS.primary}40`,
-                }}
-              >
-                <Icon icon="ph:x-circle" className="text-base" />
-                Clear All Filters
-              </button>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* LOADING STATE */}
         {loading && (
-          <div className="text-center py-20">
-            <Icon icon="ph:spinner" className="text-6xl mb-4 animate-spin mx-auto" style={{ color: COLORS.primary }} />
-            <p className="text-lg opacity-60" style={{ color: COLORS.neutralWhite }}>
-              Loading psychics...
-            </p>
+          <div className="gl-state">
+            <Icon icon="ph:spinner" className="gl-acc text-5xl mb-4 animate-spin mx-auto" />
+            <p>Gathering the readers…</p>
           </div>
         )}
 
         {/* ERROR STATE */}
         {error && (
-          <div className="text-center py-20">
-            <Icon icon="ph:warning" className="text-6xl mb-4 mx-auto" style={{ color: COLORS.primary }} />
-            <p className="text-lg opacity-60 mb-4" style={{ color: COLORS.neutralWhite }}>
-              {error}
-            </p>
+          <div className="gl-state">
+            <Icon icon="ph:warning" className="gl-acc text-5xl mb-4 mx-auto" />
+            <p>{error}</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider"
-              style={{
-                backgroundColor: COLORS.primary,
-                color: COLORS.dark,
-              }}
+              className="gl-btn-solid"
             >
               Retry
             </button>
@@ -302,7 +253,7 @@ const PsychicsBrowse = () => {
         {/* PSYCHICS GRID */}
         {!loading && !error && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-12">
+            <div className="gl-grid">
               {sortedPsychics.map((psychic) => (
                 <PsychicCard
                   key={psychic.id}
@@ -314,31 +265,24 @@ const PsychicsBrowse = () => {
 
             {/* PAGINATION */}
             {psychics.length > 0 && totalPages > 1 && (
-              <NumericPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
+              <div className="pb-16 -mt-10">
+                <NumericPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
             )}
           </>
         )}
 
         {/* NO RESULTS */}
         {!loading && !error && psychics.length === 0 && (
-          <div className="text-center py-20">
-            <Icon icon="ph:ghost" className="text-6xl mb-4 mx-auto" style={{ color: COLORS.primary }} />
-            <p className="text-lg opacity-60 mb-4" style={{ color: COLORS.neutralWhite }}>
-              No psychics found matching your criteria
-            </p>
+          <div className="gl-state">
+            <Icon icon="ph:ghost" className="gl-acc text-5xl mb-4 mx-auto" />
+            <p>No readers found matching your criteria</p>
             {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider"
-                style={{
-                  backgroundColor: COLORS.primary,
-                  color: COLORS.dark,
-                }}
-              >
+              <button type="button" onClick={clearFilters} className="gl-btn-solid">
                 Clear Filters
               </button>
             )}

@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 // Pass an array + `rotate` to slowly crossfade through several scenes (used on
 // the reveal flow so it feels alive).
 
-type Variant = "immersive" | "subtle" | "soft" | "faint";
+type Variant = "immersive" | "subtle" | "soft" | "faint" | "glass";
 
 // Scrims are built on the app's base dark (#0D1117) so the fade blends into the
 // page rather than a different black.
@@ -40,6 +40,14 @@ const PRESETS: Record<Variant, { filter: string; scrim: string }> = {
     filter: "brightness(0.3) saturate(0.9) blur(1.5px)",
     scrim:
       "linear-gradient(180deg, rgba(13,17,23,0.86) 0%, rgba(13,17,23,0.8) 50%, rgba(13,17,23,0.9) 100%)",
+  },
+  // Glass design system pages: the artwork stays vivid (no dimming filter) and
+  // the mood tint comes from the token sheet, so it flips with the candlelight/
+  // daylight theme. Content legibility is carried by glass surfaces, not by
+  // washing the scene out.
+  glass: {
+    filter: "saturate(1.05)",
+    scrim: "var(--gl-tint)",
   },
 };
 
@@ -97,7 +105,10 @@ export default function PageBackground({
           />
         </div>
       ))}
-      <div className="absolute inset-0" style={{ background: preset.scrim }} />
+      <div
+        className="absolute inset-0"
+        style={{ background: preset.scrim, transition: "background 0.6s ease" }}
+      />
       {tint && (
         <div
           className="absolute inset-0"

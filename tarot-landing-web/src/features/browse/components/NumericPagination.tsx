@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { COLORS } from "../../../theme";
+import "../../../styles/glass.css";
 
 interface NumericPaginationProps {
   currentPage: number;
@@ -65,32 +65,24 @@ export const NumericPagination = ({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex justify-center items-center gap-2"
+      className="flex justify-center items-center gap-2 flex-wrap"
     >
       {/* Previous Button */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="px-2 sm:px-3 py-2 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
-        style={{
-          backgroundColor: currentPage === 1 ? `${COLORS.neutralWhite}05` : `${COLORS.neutralWhite}10`,
-          color: COLORS.neutralWhite,
-          border: `1px solid ${COLORS.neutralWhite}10`,
-        }}
+        className="gl-page-btn"
+        title="Previous page"
       >
-        <Icon icon="ph:caret-left" className="text-base sm:text-lg" />
+        <Icon icon="ph:caret-left" className="text-base mx-auto" />
       </button>
 
       {/* Page Numbers */}
       {pageNumbers.map((page, index) => {
         if (page === "...") {
           return (
-            <span
-              key={`ellipsis-${index}`}
-              className="px-2 sm:px-3 py-2 text-sm font-bold"
-              style={{ color: COLORS.neutralWhite + "40" }}
-            >
-              ...
+            <span key={`ellipsis-${index}`} className="gl-tf px-2 text-sm">
+              …
             </span>
           );
         }
@@ -104,12 +96,7 @@ export const NumericPagination = ({
             onClick={() => onPageChange(pageNum)}
             whileHover={{ scale: isActive ? 1 : 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all min-w-[36px] sm:min-w-[40px]"
-            style={{
-              backgroundColor: isActive ? COLORS.primary : `${COLORS.neutralWhite}10`,
-              color: isActive ? COLORS.dark : COLORS.neutralWhite,
-              border: `1px solid ${isActive ? COLORS.primary : `${COLORS.neutralWhite}10`}`,
-            }}
+            className={`gl-page-btn ${isActive ? "gl-page-btn--on" : ""}`}
           >
             {pageNum}
           </motion.button>
@@ -120,14 +107,10 @@ export const NumericPagination = ({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="px-2 sm:px-3 py-2 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
-        style={{
-          backgroundColor: currentPage === totalPages ? `${COLORS.neutralWhite}05` : `${COLORS.neutralWhite}10`,
-          color: COLORS.neutralWhite,
-          border: `1px solid ${COLORS.neutralWhite}10`,
-        }}
+        className="gl-page-btn"
+        title="Next page"
       >
-        <Icon icon="ph:caret-right" className="text-base sm:text-lg" />
+        <Icon icon="ph:caret-right" className="text-base mx-auto" />
       </button>
     </motion.div>
   );

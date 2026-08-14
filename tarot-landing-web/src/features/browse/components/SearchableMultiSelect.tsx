@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import "../../../styles/glass.css";
 
 interface Option {
   id: number;
@@ -14,6 +15,9 @@ interface SearchableMultiSelectProps {
   onChange: (selectedIds: number[]) => void;
   placeholder?: string;
   label?: string;
+  /** "panel" keeps the original boxed control (admin forms); "chip" renders the
+   *  glass filter chip + glass popover used on the psychics browse page. */
+  variant?: "panel" | "chip";
 }
 
 export const SearchableMultiSelect = ({
@@ -22,6 +26,7 @@ export const SearchableMultiSelect = ({
   onChange,
   placeholder = "Select options...",
   label = "Categories",
+  variant = "panel",
 }: SearchableMultiSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,6 +63,79 @@ export const SearchableMultiSelect = ({
     onChange([]);
     setSearchQuery("");
   };
+
+  if (variant === "chip") {
+    return (
+      <div ref={dropdownRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`gl-fchip ${isOpen || selectedOptions.length > 0 ? "gl-fchip--on" : ""}`}
+        >
+          {selectedOptions.length > 0
+            ? `${selectedOptions.length} ${selectedOptions.length === 1 ? "category" : "categories"}`
+            : "All categories"}{" "}
+          ▾
+        </button>
+
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="gl-pop"
+            >
+              <div className="p-3" style={{ borderBottom: "1px solid var(--gl-hair-soft)" }}>
+                <input
+                  type="text"
+                  placeholder="Search categories…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="gl-pop-input"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+
+              <div className="max-h-60 overflow-y-auto">
+                {filteredOptions.length > 0 ? (
+                  filteredOptions.map((option) => {
+                    const isSelected = selectedIds.includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => toggleOption(option.id)}
+                        className={`gl-pop-item ${isSelected ? "on" : ""}`}
+                      >
+                        <span>{option.title}</span>
+                        {isSelected && <Icon icon="ph:check-bold" className="text-sm" />}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="gl-tf px-4 py-6 text-center text-sm">No categories found</div>
+                )}
+              </div>
+
+              {selectedOptions.length > 0 && (
+                <div className="p-3" style={{ borderTop: "1px solid var(--gl-hair-soft)" }}>
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="gl-fchip w-full justify-center"
+                  >
+                    Clear all ({selectedOptions.length})
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
 
   return (
     <div ref={dropdownRef} className="relative">
