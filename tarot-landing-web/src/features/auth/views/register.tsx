@@ -1,13 +1,48 @@
-import { useState, useEffect } from "react";
-import { motion, useSpring, useTransform } from "framer-motion";
+import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { Link, useNavigate } from "react-router-dom";
 import backgroundImage from "../../../assets/Cover.png";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
+import PageBackground from "../../../components/PageBackground";
+import { useGlassTheme } from "../../../lib/glassTheme";
 import { useRegister } from "../hooks";
+import "../../../styles/glass.css";
+
+// Glass auth shell — shared inline tokens for the guest screens. Everything
+// draws from the frozen token sheet (src/styles/glass.css); no hardcoded
+// palette except the sanctioned error red #c1443a.
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontFamily: "var(--gl-sans)",
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: "2px",
+  textTransform: "uppercase",
+  color: "var(--gl-text-faint)",
+  margin: "0 2px 8px",
+};
+
+const inputStyle: React.CSSProperties = {
+  padding: "13px 18px",
+  fontSize: 14,
+};
+
+const errorBoxStyle: React.CSSProperties = {
+  border: "1px solid rgba(193, 68, 58, 0.45)",
+  background: "rgba(193, 68, 58, 0.1)",
+  borderRadius: 16,
+  padding: "12px 16px",
+  textAlign: "center",
+};
+
+const errorTextStyle: React.CSSProperties = {
+  fontFamily: "var(--gl-sans)",
+  fontSize: 13,
+  color: "#c1443a",
+  margin: 0,
+};
 
 const RegisterPage = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const { theme } = useGlassTheme(); // stored mood on hard loads + date-picker scheme
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -18,22 +53,6 @@ const RegisterPage = () => {
   const today = new Date().toISOString().split("T")[0];
   const { mutate: register, isPending, error } = useRegister();
   const navigate = useNavigate();
-
-  const mouseX = useSpring(0, { stiffness: 40, damping: 20 });
-  const mouseY = useSpring(0, { stiffness: 40, damping: 20 });
-
-  useEffect(() => {
-    setIsLoaded(true);
-    const handleMouseMove = (e) => {
-      mouseX.set(e.clientX / window.innerWidth - 0.5);
-      mouseY.set(e.clientY / window.innerHeight - 0.5);
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [mouseX, mouseY]);
-
-  const parallaxX = useTransform(mouseX, [-0.5, 0.5], [-20, 20]);
-  const parallaxY = useTransform(mouseY, [-0.5, 0.5], [-20, 20]);
 
   const handleRegister = (e) => {
     e.preventDefault();
@@ -65,216 +84,167 @@ const RegisterPage = () => {
     );
   };
 
-  const inputClasses =
-    `w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/40
-     text-base font-medium focus:outline-none focus:border-primary
-     focus:bg-white/[0.07] focus:ring-1 focus:ring-primary/20 transition-all duration-300`;
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15 },
-    visible: { opacity: 1, y: 0 }
-  };
-
   return (
-    <div className="h-screen w-full flex overflow-hidden font-body" style={{ backgroundColor: COLORS.dark }}>
-      
-      {/* --- LEFT SIDE: REGISTER INTERFACE --- */}
-      <motion.div 
-        initial={{ x: -50, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="w-full lg:w-[450px] xl:w-[550px] h-full flex flex-col justify-center p-8 md:p-12 relative z-20 shadow-2xl border-r border-white/5"
-        style={{ backgroundColor: COLORS.surface }}
-      >
-        <div className="max-w-[380px] w-full mx-auto">
-          <header className="space-y-3 mb-8">
-         
+    <div
+      className="relative min-h-screen w-full flex items-center justify-center px-4 py-10"
+      style={{ backgroundColor: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
+    >
+      {/* The cover art stays vivid in both moods; the token tint carries mood. */}
+      <PageBackground images={backgroundImage} variant="glass" />
 
-            <h1 
-              style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
-              className="text-5xl font-black uppercase leading-none tracking-tighter italic"
-            >
-              Create your <br /> <span style={{ color: COLORS.primary }}>account</span>
+      <div className="relative z-10 w-full" style={{ maxWidth: 440 }}>
+        <div
+          className="gl-hero-panel--solid"
+          style={{ padding: "clamp(30px, 5vw, 44px) clamp(22px, 5vw, 40px)" }}
+        >
+          <header className="text-center" style={{ marginBottom: 26 }}>
+            <div className="gl-kicker">Ask Valentina</div>
+            <h1 className="gl-h2" style={{ marginBottom: 12 }}>
+              Create your <i>account</i>
             </h1>
-            <p className="text-sm font-medium text-white/50 leading-relaxed">
+            <p className="gl-sub" style={{ marginBottom: 10, fontSize: 14 }}>
               Join Ask Valentina to connect with a gifted reader.
             </p>
-            <p className="text-sm font-bold leading-relaxed flex items-center gap-1.5" style={{ color: COLORS.primary }}>
-              <Icon icon="ph:sparkle-fill" style={{ color: COLORS.starGold }} />
+            <p
+              className="flex items-center justify-center gap-1.5"
+              style={{ fontFamily: "var(--gl-sans)", fontSize: 13, fontWeight: 600, color: "var(--gl-accent)", margin: 0 }}
+            >
+              <Icon icon="ph:sparkle-fill" />
               Your first reading is on us — £15 free credit.
             </p>
           </header>
 
-          {(
-            <motion.form
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="space-y-4" 
-              onSubmit={handleRegister}
-            >
-              <motion.div variants={itemVariants} className="space-y-1.5">
-                <label className="text-sm font-semibold text-white/70 ml-1">Username</label>
-                <div className="relative">
-                  <Icon icon="ph:identification-card-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="Your name"
-                    className={`${inputClasses} pl-12`}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
-                </div>
-              </motion.div>
-
-              <motion.div variants={itemVariants} className="space-y-1.5">
-                <label className="text-sm font-semibold text-white/70 ml-1">Email</label>
-                <div className="relative">
-                  <Icon icon="ph:envelope-simple-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg" />
-                  <input 
-                    required
-                    type="email" 
-                    placeholder="you@email.com"
-                    className={`${inputClasses} pl-12`}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-              </motion.div>
-              
-              <motion.div variants={itemVariants} className="space-y-1.5">
-                <label className="text-sm font-semibold text-white/70 ml-1 flex items-center gap-2">
-                  Date of birth
-                  <span className="text-xs font-medium text-primary/70 normal-case">For astrology</span>
-                </label>
-                <div className="relative">
-                  <Icon icon="ph:cake-bold" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg pointer-events-none" />
-                  <input
-                    required
-                    type="date"
-                    max={today}
-                    className={`${inputClasses} pl-12 [color-scheme:dark]`}
-                    value={dateOfBirth}
-                    onChange={(e) => setDateOfBirth(e.target.value)}
-                  />
-                </div>
-              </motion.div>
-
-              <div className="grid grid-cols-2 gap-4">
-                  <motion.div variants={itemVariants} className="space-y-1.5">
-                      <label className="text-sm font-semibold text-white/70 ml-1">Password</label>
-                      <input 
-                        required
-                        type="password" 
-                        placeholder="••••••" 
-                        className={inputClasses}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                  </motion.div>
-                  <motion.div variants={itemVariants} className="space-y-1.5">
-                      <label className="text-sm font-semibold text-white/70 ml-1">Confirm password</label>
-                      <input 
-                        required
-                        type="password" 
-                        placeholder="••••••" 
-                        className={inputClasses}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
-                  </motion.div>
+          <form className="space-y-4" onSubmit={handleRegister}>
+            <div>
+              <label style={labelStyle}>Username</label>
+              <div className="relative">
+                <Icon
+                  icon="ph:identification-card-bold"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-base pointer-events-none"
+                  style={{ color: "var(--gl-text-faint)" }}
+                />
+                <input
+                  required
+                  type="text"
+                  placeholder="Your name"
+                  className="gl-pop-input"
+                  style={{ ...inputStyle, paddingLeft: 46 }}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
               </div>
+            </div>
 
-              {(passwordError || error) && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                  <p className="text-sm font-medium text-red-400">
-                    {passwordError || error?.response?.data?.message}
-                  </p>
-                </div>
+            <div>
+              <label style={labelStyle}>Email</label>
+              <div className="relative">
+                <Icon
+                  icon="ph:envelope-simple-bold"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-base pointer-events-none"
+                  style={{ color: "var(--gl-text-faint)" }}
+                />
+                <input
+                  required
+                  type="email"
+                  placeholder="you@email.com"
+                  className="gl-pop-input"
+                  style={{ ...inputStyle, paddingLeft: 46 }}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-baseline gap-2" style={labelStyle}>
+                Date of birth
+                <span style={{ fontSize: 9.5, letterSpacing: "1px", color: "var(--gl-accent)" }}>
+                  For astrology
+                </span>
+              </label>
+              <div className="relative">
+                <Icon
+                  icon="ph:cake-bold"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-base pointer-events-none"
+                  style={{ color: "var(--gl-text-faint)" }}
+                />
+                <input
+                  required
+                  type="date"
+                  max={today}
+                  className="gl-pop-input"
+                  style={{ ...inputStyle, paddingLeft: 46, colorScheme: theme }}
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label style={labelStyle}>Password</label>
+                <input
+                  required
+                  type="password"
+                  placeholder="••••••"
+                  className="gl-pop-input"
+                  style={inputStyle}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Confirm password</label>
+                <input
+                  required
+                  type="password"
+                  placeholder="••••••"
+                  className="gl-pop-input"
+                  style={inputStyle}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {(passwordError || error) && (
+              <div style={errorBoxStyle}>
+                <p style={errorTextStyle}>
+                  {passwordError || error?.response?.data?.message}
+                </p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isPending}
+              className="gl-btn-solid w-full flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
+              style={{ padding: "15px 24px", fontSize: 13, letterSpacing: "1.4px", textTransform: "uppercase", marginTop: 22 }}
+            >
+              {isPending ? (
+                <>Processing... <Icon icon="ph:spinner-gap-bold" className="animate-spin text-lg" /></>
+              ) : (
+                <>Create account <Icon icon="ph:user-plus-bold" /></>
               )}
+            </button>
+          </form>
 
-              <motion.button
-                type="submit"
-                disabled={isPending}
-                variants={itemVariants}
-                whileHover={{ scale: 1.02, backgroundColor: COLORS.primaryLight }}
-                whileTap={{ scale: 0.98 }}
-                style={{ backgroundColor: COLORS.primary }}
-                className="w-full py-5 rounded-2xl font-black uppercase text-sm tracking-[0.2em] text-black shadow-lg transition-colors mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
-              >
-                {isPending ? (
-                  <>Processing... <Icon icon="ph:spinner-gap-bold" className="animate-spin text-lg" /></>
-                ) : (
-                  <>Create account <Icon icon="ph:user-plus-bold" /></>
-                )}
-              </motion.button>
-            </motion.form>
-          )}
-          
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
-            className="mt-10 pt-6 border-t border-white/5 text-center"
-          >
-            <p className="text-xs tracking-wide text-white/40 font-medium mb-4">
+          <div className="gl-divider" style={{ margin: "28px 0 22px" }} />
+
+          <div className="text-center">
+            <p className="gl-tf" style={{ fontFamily: "var(--gl-sans)", fontSize: 12, letterSpacing: "0.6px", marginBottom: 14 }}>
               Already have an account?
             </p>
             <Link
               to="/login"
-              className="inline-block text-sm font-bold tracking-wide py-3 px-8 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-all"
+              className="gl-btn-ghost inline-block"
+              style={{ textDecoration: "none", padding: "11px 26px" }}
             >
               Sign in
             </Link>
-          </motion.div>
+          </div>
         </div>
-      </motion.div>
-
-      {/* --- RIGHT SIDE: CELESTIAL VISUAL --- */}
-      <div className="hidden lg:block flex-1 relative overflow-hidden bg-black">
-        <motion.div 
-          style={{ x: parallaxX, y: parallaxY, scale: 1.1 }}
-          className="absolute inset-0 z-0 opacity-40 grayscale contrast-125 brightness-50"
-        >
-          <img src={backgroundImage} className="w-full h-full object-cover" alt="Background" />
-        </motion.div>
-
-        <CelestialBackground count={50} springX={parallaxX} springY={parallaxY} />
-
-       
-
-        <div className="absolute inset-0 pointer-events-none" 
-             style={{ background: `linear-gradient(to right, ${COLORS.surface} 0%, transparent 40%)` }} 
-        />
       </div>
-    </div>
-  );
-};
-
-const CelestialBackground = ({ count, springX, springY }) => {
-  const stars = Array.from({ length: count });
-  return (
-    <div className="absolute inset-0 z-1 pointer-events-none">
-      {stars.map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute w-[1.5px] h-[1.5px] bg-white rounded-full"
-          style={{
-            top: `${Math.random() * 100}%`,
-            left: `${Math.random() * 100}%`,
-            x: useTransform(springX, (v) => v * (i % 5 + 1)),
-            y: useTransform(springY, (v) => v * (i % 5 + 1)),
-          }}
-          animate={{ opacity: [0.1, 0.7, 0.1], scale: [1, 1.3, 1] }}
-          transition={{ duration: 2 + Math.random() * 5, repeat: Infinity, ease: "easeInOut" }}
-        />
-      ))}
     </div>
   );
 };
