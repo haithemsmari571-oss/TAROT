@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import axiosClient from "../../../lib/axiosClient";
 import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
 import { DISPLAY_RATINGS, getTier } from "../../../lib/psychicDisplay";
+import { sanitizeClaims } from "../../../lib/copy";
 import "../../../styles/glass.css";
 
 const DEFAULT_PSYCHICS_SECTION = {
@@ -255,7 +256,7 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
         </div>
 
         <p className="gl-spec px-1 mt-4" style={{ minHeight: 0 }}>
-          {psychic.bio || "A gentle guide ready to help you find clarity."}
+          {sanitizeClaims(psychic.bio) || "A gentle guide ready to help you find clarity."}
         </p>
 
         <div className="gl-prow2 mt-auto w-full">

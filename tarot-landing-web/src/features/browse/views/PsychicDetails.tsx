@@ -2,6 +2,7 @@ import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { sanitizeClaims } from "../../../lib/copy";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
 import RequestReadingModal from "@/features/chat/components/RequestReadingModal";
@@ -465,7 +466,7 @@ const PsychicDetails = () => {
             >
               <h2 className="gl-h3 mb-4">About</h2>
               <p className="text-base leading-relaxed opacity-80 italic" style={{ color: "var(--gl-text)" }}>
-                "{psychic.bio}"
+                "{sanitizeClaims(psychic.bio)}"
               </p>
             </div>
 

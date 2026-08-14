@@ -2,6 +2,7 @@ import { Icon } from "@iconify/react";
 import type { Psychic } from "../types/psychic.types";
 import { DISPLAY_RATINGS, getTier } from "../../../lib/psychicDisplay";
 import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { sanitizeClaims } from "../../../lib/copy";
 import "../../../styles/glass.css";
 
 interface PsychicCardProps {
@@ -67,7 +68,7 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
           )}
         </div>
 
-        <div className="gl-spec">{psychic.bio}</div>
+        <div className="gl-spec">{sanitizeClaims(psychic.bio)}</div>
 
         <div className="gl-tags">
           {shownTags.map((cat) => (

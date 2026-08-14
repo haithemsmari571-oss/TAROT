@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { formatPerMinuteGbp } from "../../../lib/currency";
+import { sanitizeClaims } from "../../../lib/copy";
 
 interface Category {
   id: number;
@@ -36,7 +37,7 @@ export const PsychicProfileCard = ({
   pricePerSecond,
 }: PsychicProfileCardProps) => {
   const [expanded, setExpanded] = useState(false);
-  const trimmedBio = (bio || "").trim();
+  const trimmedBio = sanitizeClaims(bio || "").trim();
   const isLong = trimmedBio.length > BIO_LIMIT;
   const shownBio =
     expanded || !isLong
