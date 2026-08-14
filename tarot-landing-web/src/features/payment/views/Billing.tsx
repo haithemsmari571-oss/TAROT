@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
+import "../../../styles/glass.css";
 import { usePayment } from "../hooks/usePayment";
 import StardustGlider from "../components/StardustGlider";
 import PageBackground from "../../../components/PageBackground";
@@ -12,7 +12,7 @@ import {
   type Transaction,
 } from "../../ledger/types/transaction.types";
 
-// ─── Constellation data for background patterns ──────────────────────────────
+// â”€â”€â”€ Constellation data for background patterns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CONSTELLATION_DATA = [
   {
     name: "Ursa Major",
@@ -53,7 +53,7 @@ const CONSTELLATION_DATA = [
   },
 ];
 
-// ─── Helper: transaction type display config ──────────────────────────────────
+// â”€â”€â”€ Helper: transaction type display config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const getTypeDisplay = (type: TransactionType) => {
   switch (type) {
     case TransactionType.CREDIT:
@@ -95,7 +95,7 @@ const getTypeDisplay = (type: TransactionType) => {
   }
 };
 
-// ─── Helper: transaction status display config ────────────────────────────────
+// â”€â”€â”€ Helper: transaction status display config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const getStatusDisplay = (status: TransactionStatus) => {
   switch (status) {
     case TransactionStatus.COMPLETED:
@@ -111,7 +111,7 @@ const getStatusDisplay = (status: TransactionStatus) => {
   }
 };
 
-// ─── Helper: format date ──────────────────────────────────────────────────────
+// â”€â”€â”€ Helper: format date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const formatDate = (dateStr: string) => {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -122,7 +122,7 @@ const formatDate = (dateStr: string) => {
   }).format(new Date(dateStr));
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const Billing = () => {
   const {
     loading: paymentLoading,
@@ -144,7 +144,7 @@ const Billing = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 });
 
-  // ─── Stable constellation data (no random on re-render) ────────────────────
+  // â”€â”€â”€ Stable constellation data (no random on re-render) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const constellations = Array.from({ length: 6 }).map((_, i) => {
     const data = CONSTELLATION_DATA[i % CONSTELLATION_DATA.length];
     return {
@@ -157,7 +157,7 @@ const Billing = () => {
     };
   });
 
-  // ─── Responsive canvas sizing ───────────────────────────────────────────────
+  // â”€â”€â”€ Responsive canvas sizing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
@@ -172,7 +172,7 @@ const Billing = () => {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // ─── Animated star field ────────────────────────────────────────────────────
+  // â”€â”€â”€ Animated star field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -204,7 +204,7 @@ const Billing = () => {
     return () => cancelAnimationFrame(raf);
   }, [windowSize]);
 
-  // ─── URL status flags ───────────────────────────────────────────────────────
+  // â”€â”€â”€ URL status flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const status = searchParams.get("status");
     if (status === "success") {
@@ -216,7 +216,7 @@ const Billing = () => {
     }
   }, [searchParams]);
 
-  // ─── Initial data fetch ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Initial data fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     fetchMyBalance();
     fetchMyTransactions({ page: currentPage, limit: 10 });
@@ -232,7 +232,7 @@ const Billing = () => {
     navigate(window.location.pathname, { replace: true });
   };
 
-  // ─── Custom-amount ("glider") purchase ─────────────────────────────────────
+  // â”€â”€â”€ Custom-amount ("glider") purchase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleStardustPurchase = async (amountUsd: number) => {
     try {
       const returnUrl = searchParams.get("return_url");
@@ -246,10 +246,10 @@ const Billing = () => {
     }
   };
 
-  // ─── Derived state ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Derived state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const transactions = transactionsData?.transactions || [];
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div
       className="relative min-h-screen overflow-hidden px-4 pb-10 pt-8 sm:px-6 md:px-10 md:pt-10"
@@ -257,19 +257,19 @@ const Billing = () => {
         // Transparent so the fixed PageBackground below shows through (the dark
         // base is painted by PublicLayout). An opaque color here occludes it.
         backgroundColor: "transparent",
-        fontFamily: TYPOGRAPHY.fontFamily.body,
+        fontFamily: "var(--gl-sans)",
       }}
     >
-      {/* Immersive celestial backdrop — identical to the home/Sanctuary page. */}
-      <PageBackground images={celestialPortal} variant="immersive" />
+      {/* Immersive celestial backdrop â€” identical to the home/Sanctuary page. */}
+      <PageBackground images={celestialPortal} variant="glass" />
 
-      {/* ── Animated star canvas ── */}
+      {/* â”€â”€ Animated star canvas â”€â”€ */}
       <canvas
         ref={canvasRef}
         className="fixed inset-0 pointer-events-none opacity-40 z-0"
       />
 
-      {/* ── Constellation layer ── */}
+      {/* â”€â”€ Constellation layer â”€â”€ */}
       <div className="fixed inset-0 pointer-events-none z-[1] overflow-hidden">
         {constellations.map((con, i) => (
           <svg
@@ -307,22 +307,22 @@ const Billing = () => {
         ))}
       </div>
 
-      {/* ── Radial vignette ── (softened so the Glider's full-bleed per-tier
+      {/* â”€â”€ Radial vignette â”€â”€ (softened so the Glider's full-bleed per-tier
              scene stays visible instead of fading to solid dark) */}
       <div
         className="fixed inset-0 z-[2] pointer-events-none"
         style={{
           background: `
-            radial-gradient(circle at 15% 10%, ${COLORS.primary}24 0%, transparent 34%),
-            radial-gradient(circle at 85% 20%, ${COLORS.secondary}18 0%, transparent 30%),
-            linear-gradient(180deg, ${COLORS.dark}33 0%, transparent 45%, ${COLORS.dark}b3 100%)
+            radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--gl-accent) 14%, transparent) 0%, transparent 34%),
+            radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--gl-accent) 9%, transparent) 0%, transparent 30%),
+            linear-gradient(180deg, color-mix(in srgb, var(--gl-base) 20%, transparent) 0%, transparent 45%, color-mix(in srgb, var(--gl-base) 70%, transparent) 100%)
           `,
         }}
       />
 
-      {/* ── Page content ── */}
+      {/* â”€â”€ Page content â”€â”€ */}
       <div className="relative z-10 mx-auto max-w-[1280px]">
-        {/* ── Stardust glider (custom amount) — primary, centered like home ── */}
+        {/* â”€â”€ Stardust glider (custom amount) â€” primary, centered like home â”€â”€ */}
         <div className="mx-auto mb-8 max-w-5xl sm:mb-10">
           <StardustGlider
             loading={paymentLoading}
@@ -330,26 +330,26 @@ const Billing = () => {
           />
         </div>
 
-        {/* ── Header ── */}
+        {/* â”€â”€ Header â”€â”€ */}
         <div className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
           <section
             className="relative overflow-hidden rounded-[28px] border p-6 sm:p-8 md:p-10"
             style={{
-              background: `linear-gradient(135deg, ${COLORS.surface}f2 0%, ${COLORS.dark}ee 62%, ${COLORS.surfaceAccent}b8 100%)`,
+              background: `linear-gradient(135deg, color-mix(in srgb, var(--gl-glass) 95%, transparent) 0%, color-mix(in srgb, var(--gl-base) 93%, transparent) 62%, color-mix(in srgb, var(--gl-glass-2) 72%, transparent) 100%)`,
               borderColor: "rgba(255,255,255,0.09)",
               boxShadow: "0 24px 70px rgba(0,0,0,0.42)",
             }}
           >
             <div
               className="absolute -right-24 -top-24 h-72 w-72 rounded-full blur-3xl"
-              style={{ backgroundColor: `${COLORS.primary}18` }}
+              style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 9%, transparent)` }}
             />
             <div className="relative">
               <div className="mb-6 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 backdrop-blur-xl">
                 <Icon
                   icon="ph:sparkle-fill"
                   className="text-sm"
-                  style={{ color: COLORS.primary }}
+                  style={{ color: "var(--gl-accent)" }}
                 />
                 <span className="text-[9px] font-black uppercase tracking-[0.28em] text-white/60">
                   Billing Dashboard
@@ -359,14 +359,14 @@ const Billing = () => {
               <h1
                 className="max-w-3xl text-4xl font-black uppercase leading-[0.92] sm:text-6xl md:text-7xl"
                 style={{
-                  fontFamily: TYPOGRAPHY.fontFamily.heading,
-                  color: COLORS.neutralWhite,
+                  fontFamily: "var(--gl-serif)",
+                  color: "var(--gl-text)",
                 }}
               >
                 Reload your{" "}
                 <span
                   style={{
-                    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                    background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`,
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                     backgroundClip: "text",
@@ -427,14 +427,14 @@ const Billing = () => {
           <aside
             className="relative overflow-hidden rounded-[28px] border p-6 sm:p-8"
             style={{
-              background: `linear-gradient(180deg, ${COLORS.surface}f5 0%, ${COLORS.dark}f2 100%)`,
-              borderColor: `${COLORS.primary}22`,
+              background: `linear-gradient(180deg, color-mix(in srgb, var(--gl-glass) 96%, transparent) 0%, color-mix(in srgb, var(--gl-base) 95%, transparent) 100%)`,
+              borderColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`,
               boxShadow: `0 24px 70px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.06)`,
             }}
           >
             <div
               className="absolute inset-x-8 top-0 h-px"
-              style={{ backgroundColor: COLORS.primary }}
+              style={{ backgroundColor: "var(--gl-accent)" }}
             />
             <div className="relative flex h-full flex-col justify-between">
               <div>
@@ -450,14 +450,14 @@ const Billing = () => {
                   <div
                     className="flex h-12 w-12 items-center justify-center rounded-2xl border"
                     style={{
-                      backgroundColor: `${COLORS.primary}12`,
-                      borderColor: `${COLORS.primary}24`,
+                      backgroundColor: `color-mix(in srgb, var(--gl-accent) 7%, transparent)`,
+                      borderColor: `color-mix(in srgb, var(--gl-accent) 14%, transparent)`,
                     }}
                   >
                     <Icon
                       icon="ph:sparkle-fill"
                       className="text-2xl"
-                      style={{ color: COLORS.primary }}
+                      style={{ color: "var(--gl-accent)" }}
                     />
                   </div>
                 </div>
@@ -466,7 +466,7 @@ const Billing = () => {
                   <span
                     className="text-6xl font-black leading-none sm:text-7xl"
                     style={{
-                      background: `linear-gradient(135deg, #fff 0%, ${COLORS.primary} 100%)`,
+                      background: `linear-gradient(135deg, #fff 0%, var(--gl-accent) 100%)`,
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",
@@ -476,7 +476,7 @@ const Billing = () => {
                   </span>
                   <span
                     className="pb-2 text-sm font-black uppercase tracking-[0.22em]"
-                    style={{ color: COLORS.primary }}
+                    style={{ color: "var(--gl-accent)" }}
                   >
                     Points
                   </span>
@@ -489,7 +489,7 @@ const Billing = () => {
                     Rate
                   </span>
                   <span className="text-sm font-black text-white">
-                    £1 = 1 Stardust
+                    Â£1 = 1 Stardust
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
@@ -498,7 +498,7 @@ const Billing = () => {
                   </span>
                   <span
                     className="text-sm font-black"
-                    style={{ color: COLORS.starGold }}
+                    style={{ color: "var(--gl-accent)" }}
                   >
                     +60% Devotion
                   </span>
@@ -508,7 +508,7 @@ const Billing = () => {
           </aside>
         </div>
 
-        {/* ── Global error banner ── */}
+        {/* â”€â”€ Global error banner â”€â”€ */}
         {paymentError && (
           <div
             className="mb-8 rounded-2xl border border-red-500/20 p-5 backdrop-blur-xl"
@@ -527,11 +527,11 @@ const Billing = () => {
           </div>
         )}
 
-        {/* ── Transaction history ── */}
+        {/* â”€â”€ Transaction history â”€â”€ */}
         <div
           className="relative mb-8 overflow-hidden rounded-[28px] border border-white/10 p-5 backdrop-blur-xl sm:mb-12 sm:p-8 md:p-10"
           style={{
-            background: `linear-gradient(180deg, ${COLORS.surface}e8 0%, ${COLORS.dark}d8 100%)`,
+            background: `linear-gradient(180deg, color-mix(in srgb, var(--gl-glass) 91%, transparent) 0%, color-mix(in srgb, var(--gl-base) 85%, transparent) 100%)`,
             boxShadow: "0 22px 70px rgba(0,0,0,0.34)",
           }}
         >
@@ -541,7 +541,7 @@ const Billing = () => {
               <div className="mb-3 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                 <Icon
                   icon="solar:history-bold-duotone"
-                  style={{ color: COLORS.primary }}
+                  style={{ color: "var(--gl-accent)" }}
                   className="text-base"
                 />
                 <span className="text-[9px] font-black uppercase tracking-[0.24em] text-white/45">
@@ -550,7 +550,7 @@ const Billing = () => {
               </div>
               <h2
                 className="text-3xl font-black uppercase tracking-normal sm:text-4xl"
-                style={{ color: COLORS.neutralWhite }}
+                style={{ color: "var(--gl-text)" }}
               >
                 Transaction History
               </h2>
@@ -563,7 +563,7 @@ const Billing = () => {
               >
                 <span
                   className="text-[9px] font-black uppercase tracking-[0.2em]"
-                  style={{ color: COLORS.primary }}
+                  style={{ color: "var(--gl-accent)" }}
                 >
                   {transactionsData?.total ?? 0} Total
                 </span>
@@ -577,13 +577,13 @@ const Billing = () => {
               <Icon
                 icon="svg-spinners:3-dots-fade"
                 className="text-5xl mb-4"
-                style={{ color: COLORS.primary }}
+                style={{ color: "var(--gl-accent)" }}
               />
               <p
                 className="text-sm opacity-50"
-                style={{ color: COLORS.neutralGray }}
+                style={{ color: "var(--gl-text-dim)" }}
               >
-                Loading transactions…
+                Loading transactionsâ€¦
               </p>
             </div>
           ) : transactions.length === 0 ? (
@@ -598,17 +598,17 @@ const Billing = () => {
               <Icon
                 icon="solar:document-text-bold-duotone"
                 className="text-5xl sm:text-7xl mx-auto mb-4 sm:mb-6 opacity-20"
-                style={{ color: COLORS.neutralGray }}
+                style={{ color: "var(--gl-text-dim)" }}
               />
               <h3
                 className="text-lg sm:text-xl font-black uppercase mb-2"
-                style={{ color: COLORS.neutralGray }}
+                style={{ color: "var(--gl-text-dim)" }}
               >
                 No Transactions Yet
               </h3>
               <p
                 className="text-xs sm:text-sm opacity-50"
-                style={{ color: COLORS.neutralGray }}
+                style={{ color: "var(--gl-text-dim)" }}
               >
                 Your transaction history will appear here
               </p>
@@ -696,7 +696,7 @@ const Billing = () => {
                             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                               <span
                                 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide flex items-center gap-2"
-                                style={{ color: COLORS.neutralGray }}
+                                style={{ color: "var(--gl-text-dim)" }}
                               >
                                 <Icon
                                   icon="solar:calendar-bold-duotone"
@@ -706,7 +706,7 @@ const Billing = () => {
                               </span>
                               <span
                                 className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider opacity-40 flex items-center gap-1"
-                                style={{ color: COLORS.neutralGray }}
+                                style={{ color: "var(--gl-text-dim)" }}
                               >
                                 <Icon
                                   icon="solar:hashtag-bold"
@@ -729,7 +729,7 @@ const Billing = () => {
                           </div>
                           <div
                             className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-50"
-                            style={{ color: COLORS.neutralGray }}
+                            style={{ color: "var(--gl-text-dim)" }}
                           >
                             Balance:{" "}
                             {transaction.balance_after.toLocaleString()}
@@ -745,21 +745,21 @@ const Billing = () => {
               {transactionsData && transactionsData.pages > 1 && (
                 <div
                   className="flex flex-col md:flex-row items-center justify-between mt-8 sm:mt-10 gap-4 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/5 backdrop-blur-xl"
-                  style={{ backgroundColor: `${COLORS.surface}80` }}
+                  style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 50%, transparent)` }}
                 >
                   <div
                     className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-60 text-center md:text-left"
-                    style={{ color: COLORS.neutralGray }}
+                    style={{ color: "var(--gl-text-dim)" }}
                   >
-                    Page {currentPage} of {transactionsData.pages} •{" "}
+                    Page {currentPage} of {transactionsData.pages} â€¢{" "}
                     {transactionsData.total} transactions
                   </div>
 
                   <div
                     className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border backdrop-blur-xl"
                     style={{
-                      backgroundColor: `${COLORS.dark}cc`,
-                      borderColor: `${COLORS.primary}20`,
+                      backgroundColor: `color-mix(in srgb, var(--gl-base) 80%, transparent)`,
+                      borderColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`,
                     }}
                   >
                     {/* Prev */}
@@ -771,7 +771,7 @@ const Billing = () => {
                       <Icon
                         icon="solar:alt-arrow-left-linear"
                         className="text-xl"
-                        style={{ color: COLORS.primary }}
+                        style={{ color: "var(--gl-accent)" }}
                       />
                     </button>
 
@@ -799,9 +799,9 @@ const Billing = () => {
                               {showEllipsis && (
                                 <span
                                   className="px-1 sm:px-2 text-[10px] sm:text-xs"
-                                  style={{ color: COLORS.neutralGray }}
+                                  style={{ color: "var(--gl-text-dim)" }}
                                 >
-                                  …
+                                  â€¦
                                 </span>
                               )}
                               <button
@@ -810,19 +810,19 @@ const Billing = () => {
                                 style={{
                                   backgroundColor:
                                     currentPage === page
-                                      ? COLORS.primary
+                                      ? "var(--gl-accent)"
                                       : "transparent",
                                   color:
                                     currentPage === page
-                                      ? COLORS.dark
-                                      : COLORS.neutralGray,
+                                      ? "var(--gl-base)"
+                                      : "var(--gl-text-dim)",
                                   borderColor:
                                     currentPage === page
-                                      ? COLORS.primary
+                                      ? "var(--gl-accent)"
                                       : "transparent",
                                   boxShadow:
                                     currentPage === page
-                                      ? `0 0 20px ${COLORS.primary}40`
+                                      ? `0 0 20px color-mix(in srgb, var(--gl-accent) 25%, transparent)`
                                       : "none",
                                 }}
                               >
@@ -842,7 +842,7 @@ const Billing = () => {
                       <Icon
                         icon="solar:alt-arrow-right-linear"
                         className="text-xl"
-                        style={{ color: COLORS.primary }}
+                        style={{ color: "var(--gl-accent)" }}
                       />
                     </button>
                   </div>
@@ -853,7 +853,7 @@ const Billing = () => {
         </div>
       </div>
 
-      {/* ── Success modal ── */}
+      {/* â”€â”€ Success modal â”€â”€ */}
       {showSuccessModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -866,9 +866,9 @@ const Billing = () => {
           <div
             className="p-6 sm:p-10 rounded-[24px] sm:rounded-[40px] border max-w-md w-full relative overflow-hidden mx-4 sm:mx-0"
             style={{
-              backgroundColor: `${COLORS.surface}dd`,
-              borderColor: `${COLORS.primary}60`,
-              boxShadow: `0 30px 80px rgba(0,0,0,0.5), 0 0 80px ${COLORS.primary}30`,
+              backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)`,
+              borderColor: `color-mix(in srgb, var(--gl-accent) 38%, transparent)`,
+              boxShadow: `0 30px 80px rgba(0,0,0,0.5), 0 0 80px color-mix(in srgb, var(--gl-accent) 19%, transparent)`,
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -881,7 +881,7 @@ const Billing = () => {
                   style={{
                     left: `${(i * 8) % 100}%`,
                     top: `${(i * 13 + 5) % 100}%`,
-                    backgroundColor: COLORS.primary,
+                    backgroundColor: "var(--gl-accent)",
                     opacity: 0.3,
                   }}
                 />
@@ -892,19 +892,19 @@ const Billing = () => {
               <div
                 className="w-20 h-20 sm:w-28 sm:h-28 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 relative"
                 style={{
-                  backgroundColor: `${COLORS.primary}20`,
-                  border: `3px solid ${COLORS.primary}40`,
+                  backgroundColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`,
+                  border: `3px solid color-mix(in srgb, var(--gl-accent) 25%, transparent)`,
                 }}
               >
                 <Icon
                   icon="solar:check-circle-bold-duotone"
                   className="text-7xl"
-                  style={{ color: COLORS.primary }}
+                  style={{ color: "var(--gl-accent)" }}
                 />
                 <div
                   className="absolute inset-0 rounded-full"
                   style={{
-                    border: `2px solid ${COLORS.primary}`,
+                    border: `2px solid var(--gl-accent)`,
                     opacity: 0.5,
                   }}
                 />
@@ -913,7 +913,7 @@ const Billing = () => {
               <h2
                 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase mb-3 sm:mb-4"
                 style={{
-                  background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                  background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`,
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
@@ -923,7 +923,7 @@ const Billing = () => {
               </h2>
               <p
                 className="text-sm sm:text-base mb-6 sm:mb-8 font-light px-2"
-                style={{ color: COLORS.neutralGray }}
+                style={{ color: "var(--gl-text-dim)" }}
               >
                 Your top-up was successful! Your Stardust has been added to your
                 account.
@@ -933,16 +933,16 @@ const Billing = () => {
                 onClick={closeSuccessModal}
                 className="w-full py-3 sm:py-4 rounded-2xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest transition-all relative overflow-hidden group"
                 style={{
-                  backgroundColor: COLORS.primary,
-                  color: COLORS.dark,
-                  boxShadow: `0 10px 40px ${COLORS.primary}40`,
+                  backgroundColor: "var(--gl-accent)",
+                  color: "var(--gl-base)",
+                  boxShadow: `0 10px 40px color-mix(in srgb, var(--gl-accent) 25%, transparent)`,
                 }}
               >
                 <span className="relative z-10">Continue</span>
                 <div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
-                    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
+                    background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`,
                   }}
                 />
               </button>
@@ -951,7 +951,7 @@ const Billing = () => {
         </div>
       )}
 
-      {/* ── Error modal ── */}
+      {/* â”€â”€ Error modal â”€â”€ */}
       {showErrorModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -964,7 +964,7 @@ const Billing = () => {
           <div
             className="p-6 sm:p-10 rounded-[24px] sm:rounded-[40px] border max-w-md w-full relative overflow-hidden mx-4 sm:mx-0"
             style={{
-              backgroundColor: `${COLORS.surface}dd`,
+              backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)`,
               borderColor: "rgba(248,113,113,0.6)",
               boxShadow:
                 "0 30px 80px rgba(0,0,0,0.5), 0 0 80px rgba(248,113,113,0.2)",
@@ -1014,13 +1014,13 @@ const Billing = () => {
               </h2>
               <p
                 className="text-sm sm:text-base mb-6 sm:mb-8 font-light px-2"
-                style={{ color: COLORS.neutralGray }}
+                style={{ color: "var(--gl-text-dim)" }}
               >
                 Your payment could not be processed. Please try again or{" "}
                 <a
                   href="mailto:support@askvalentina.co.uk"
                   className="underline hover:opacity-80 transition-opacity"
-                  style={{ color: COLORS.primary }}
+                  style={{ color: "var(--gl-accent)" }}
                 >
                   contact support
                 </a>{" "}
@@ -1032,7 +1032,7 @@ const Billing = () => {
                 className="w-full py-3 sm:py-4 rounded-2xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest transition-all relative overflow-hidden group"
                 style={{
                   backgroundColor: "#F87171",
-                  color: COLORS.dark,
+                  color: "var(--gl-base)",
                   boxShadow: "0 10px 40px rgba(248,113,113,0.4)",
                 }}
               >
