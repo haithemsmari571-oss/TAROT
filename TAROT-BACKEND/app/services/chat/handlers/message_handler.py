@@ -31,16 +31,19 @@ def _client_in_live_session(chat: Chat) -> bool:
 
 def _chat_ever_accepted(db, chat: Chat) -> bool:
     """Request-phase messages are free (owner decision): the fee applies only
-    once the chat has been accepted at least once. A ChatSession row is created
-    exactly at accept, so its existence is the accept marker — this also keeps
+    once the chat has been accepted at least once. A billable SessionInterval is
+    created exactly at accept, so its existence is the accept marker — this keeps
     a rejected request (REQUESTED → ENDED, never accepted) fee-free."""
     from app.enums.chat_status import ChatStatus
-    from app.models import ChatSession
+    from app.models import ChatSession, SessionInterval
 
     if chat.status == ChatStatus.REQUESTED:
         return False
     return (
-        db.query(ChatSession.id).filter(ChatSession.chat_id == chat.id).first()
+        db.query(SessionInterval.id)
+        .join(ChatSession, ChatSession.id == SessionInterval.session_id)
+        .filter(ChatSession.chat_id == chat.id)
+        .first()
         is not None
     )
 
@@ -49,6 +52,13 @@ class MessageHandler(BaseEventHandler):
     """Handles message sending/receiving"""
 
     async def handle(self, event_data: Dict[str, Any]) -> None:
+        """Keep one chat's commit and notification order causal."""
+        from app.services.ai.reading_burst import message_flow_lock
+
+        async with message_flow_lock(self.chat_id):
+            await self._handle_serialized(event_data)
+
+    async def _handle_serialized(self, event_data: Dict[str, Any]) -> None:
         """Save message and broadcast to chat participants"""
         from app.routers.chats import manager  # Import here to avoid circular
 
@@ -240,22 +250,73 @@ class MessageHandler(BaseEventHandler):
             message_id=db_message.id,
         )
 
-        # Memory: a manually-typed READER-side message (operator/psychic/admin)
-        # is delivered content — record it on the engine's session state so
-        # Valentina's next turn sees it, matching what Automatic reveals and
-        # approved-draft sends record. Only when a state already exists: chats
-        # the AI engine never touched don't grow engine state from human chat.
+        # ── Session-scoped Valentina turn boundary ────────────────────────────
+        # The canonical Message row above remains one row per client send. Active
+        # reading messages only notify the durable burst coordinator: it waits for
+        # six seconds of silence (and client typing to stop), fences concurrent
+        # workers/restarts, then creates one Hybrid draft or one Automatic response.
+        # A human reader message closes the client messages that preceded it so a
+        # later mode switch cannot answer an already-manually-answered turn.
+        from app.enums.chat_status import ChatStatus
+
+        answered_client_turn = None
+        automatic_turn_already_recorded = False
+        if chat.status == ChatStatus.ACTIVE:
+            try:
+                from app.services.ai import reading_burst
+
+                if sender_is_paying_client:
+                    await reading_burst.note_client_message(
+                        self.chat_id, db_message.chat_session_id, db_message.id
+                    )
+                elif user.id != chat.user_id:
+                    answered = await reading_burst.note_reader_message(
+                        self.chat_id, db_message.chat_session_id, db_message.id
+                    )
+                    if answered is not None:
+                        (
+                            answered_client_turn,
+                            automatic_turn_already_recorded,
+                        ) = answered
+            except Exception:  # noqa: BLE001 — coordination never breaks storage
+                logger.exception(
+                    "reading_burst_notification_failed", chat_id=self.chat_id
+                )
+
+        # A manual reader response closes the same client turn as an approved
+        # Hybrid draft. Record that ordered turn before the delivered reply so
+        # later regeneration never loses the client messages it answered.
         if user.id != chat.user_id:
             try:
                 from app.services.ai.reading_ledger import record_commitments
                 from app.services.ai.reading_session import (
                     get_session_store,
+                    record_client_message,
                     record_sent_message,
                 )
 
                 store = get_session_store()
                 state = store.get(f"chat:{self.chat_id}")
+                if state is None and answered_client_turn is not None:
+                    state = store.get_or_create(
+                        f"chat:{self.chat_id}",
+                        client_id=chat.user_id,
+                        chat_id=self.chat_id,
+                    )
                 if state is not None:
+                    client_turn_is_present = (
+                        automatic_turn_already_recorded
+                        and any(
+                            entry.get("role") == "client"
+                            and entry.get("content") == answered_client_turn
+                            for entry in reversed(state.chat_transcript)
+                        )
+                    )
+                    if (
+                        answered_client_turn is not None
+                        and not client_turn_is_present
+                    ):
+                        record_client_message(state, answered_client_turn)
                     record_sent_message(state, content)
                     record_commitments(state, content)
                     store.put(state)
@@ -263,21 +324,3 @@ class MessageHandler(BaseEventHandler):
                 logger.exception(
                     "manual_message_memory_record_failed", chat_id=self.chat_id
                 )
-
-        # ── AI reading pipeline (Valentina drafts, Sabri checks) ───────────────
-        # Only a CLIENT message on an ACTIVE reading triggers a reader reply. A HYBRID
-        # chat (two_role engine) is intercepted FIRST: Sabri is skipped outright and
-        # Valentina's raw draft goes to the ai_drafts review panel instead of auto-
-        # sending — see reading_hybrid. Every other chat (SABRI, HUMAN, other engines)
-        # flows through the auto pipeline exactly as before (response_mode and the
-        # master switch are enforced inside the launcher). Both launchers are
-        # fire-and-forget and never block or affect the client's own message.
-        from app.enums.chat_status import ChatStatus
-
-        if sender_is_paying_client and chat.status == ChatStatus.ACTIVE:
-            from app.services.ai.reading_hybrid import maybe_launch_hybrid
-
-            if not maybe_launch_hybrid(self.chat_id, db_message.id, content, chat):
-                from app.services.ai.reading_pipeline import maybe_launch_pipeline
-
-                maybe_launch_pipeline(self.chat_id, db_message.id, content)

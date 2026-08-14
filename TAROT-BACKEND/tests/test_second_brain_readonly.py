@@ -165,9 +165,8 @@ def projection_data(db, make_user):
     db.add_all([chat, excluded_chat])
     db.flush()
 
-    # Two durable reading sessions deliberately surround message timestamps.
-    # The projection must still leave every message unassigned because Message
-    # has no ChatSession foreign key.
+    # Two durable reading sessions own linked messages. One deliberately legacy
+    # row remains unassigned so the compatibility bucket is also exercised.
     sessions = [
         ChatSession(
             chat_id=chat.id,
@@ -189,6 +188,7 @@ def projection_data(db, make_user):
     messages = [
         Message(
             chat_id=chat.id,
+            chat_session=sessions[1],
             sender_id=psychic.id,
             content="synthetic-late-reader-message",
             status=MessageStatus.DELIVERED,
@@ -198,6 +198,7 @@ def projection_data(db, make_user):
         ),
         Message(
             chat_id=chat.id,
+            chat_session=sessions[0],
             sender_id=client.id,
             content="synthetic-early-client-message",
             status=MessageStatus.READ,
@@ -207,6 +208,7 @@ def projection_data(db, make_user):
         ),
         Message(
             chat_id=chat.id,
+            chat_session=sessions[1],
             sender_id=client.id,
             content="synthetic-tied-client-message",
             status=MessageStatus.SENT,
@@ -216,6 +218,7 @@ def projection_data(db, make_user):
         ),
         Message(
             chat_id=chat.id,
+            chat_session=sessions[1],
             sender_id=psychic.id,
             content="synthetic-tied-reader-message",
             status=MessageStatus.FAILED,
@@ -409,7 +412,7 @@ def test_valid_get_matches_locked_v1_source_shape_and_keeps_clients_isolated(
         "reason",
     }
     assert payload["connection"]["reportedConnected"] is True
-    assert "messages_have_no_chat_session_id" in payload["connection"]["reason"]
+    assert payload["connection"]["reason"] == "legacy_messages_without_reading_session"
 
     assert len(payload["conversations"]) == 1
     conversation = payload["conversations"][0]
@@ -436,11 +439,11 @@ def test_valid_get_matches_locked_v1_source_shape_and_keeps_clients_isolated(
         if session["externalReadingSessionId"].startswith("unassigned:chat:")
     ]
     assert len(persistent_sessions) == 2
-    assert all(session["messages"] == [] for session in persistent_sessions)
+    assert [len(session["messages"]) for session in persistent_sessions] == [1, 3]
     assert len(unassigned_sessions) == 1
     assert unassigned_sessions[0]["startedAt"] is None
     assert unassigned_sessions[0]["endedAt"] is None
-    assert len(unassigned_sessions[0]["messages"]) == 5
+    assert len(unassigned_sessions[0]["messages"]) == 1
     assert all(
         message["externalReadingSessionId"]
         == unassigned_sessions[0]["externalReadingSessionId"]
@@ -451,7 +454,7 @@ def test_valid_get_matches_locked_v1_source_shape_and_keeps_clients_isolated(
     assert [message["externalMessageId"] for message in flattened] == [
         f"message:{message.id}" for message in projection_data["allowed_messages"]
     ]
-    assert [message["sequence"] for message in flattened] == list(range(1, 6))
+    assert [message["sequence"] for message in flattened] == [1, 1, 2, 3, 1]
     assert [message["direction"] for message in flattened] == [
         "inbound",
         "inbound",

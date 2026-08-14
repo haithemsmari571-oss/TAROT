@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -22,6 +22,7 @@ class AiPrompt(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str] = mapped_column(String(64), nullable=False)
+    default_model: Mapped[str] = mapped_column(String(64), nullable=False)
 
     # Current (editable) text, and the shipped default kept permanently as a
     # known-good fallback the owner can always restore.
@@ -69,6 +70,13 @@ class AiPromptVersion(Base):
     edit is never lost and any version can be restored with one tap."""
 
     __tablename__ = "ai_prompt_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "prompt_id",
+            "version",
+            name="uq_ai_prompt_versions_prompt_version",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     prompt_id: Mapped[int] = mapped_column(
@@ -76,6 +84,7 @@ class AiPromptVersion(Base):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="ACTIVE", server_default="ACTIVE"
     )

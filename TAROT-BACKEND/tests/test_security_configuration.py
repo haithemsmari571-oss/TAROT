@@ -261,6 +261,21 @@ def test_production_compose_requires_non_mailpit_environment_configuration():
     assert environment["MAIL_SERVER"] != "mailpit"
 
 
+def test_atlas_compose_loads_the_ignored_crm_provider_environment():
+    lines = (PROJECT_ROOT / "docker-compose.atlas.yml").read_text(encoding="utf-8").splitlines()
+    atlas_start = lines.index("  atlas:")
+    atlas_lines = lines[atlas_start + 1:]
+    atlas_end = next(
+        (index for index, line in enumerate(atlas_lines) if line.startswith("  ") and not line.startswith("    ")),
+        len(atlas_lines),
+    )
+    atlas_block = atlas_lines[:atlas_end]
+
+    assert "      - ./.env.atlas" in atlas_block
+    assert "      - ./.env.crm-providers.local" in atlas_block
+    assert ".env.*.local" in (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
 @pytest.mark.parametrize(
     "relative_path",
     [

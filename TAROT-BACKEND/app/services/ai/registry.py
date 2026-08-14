@@ -51,6 +51,21 @@ def validate_prompt_text(row: AiPrompt, text: str) -> None:
         )
 
 
+def configured_models() -> list[str]:
+    return list(ai_defaults.configured_models())
+
+
+def validate_prompt_model(model: str) -> str:
+    selected = str(model or "").strip()
+    if not selected:
+        raise PromptValidationError("Model cannot be empty.")
+    if selected not in configured_models():
+        raise PromptValidationError(
+            "That model is not enabled by the current production configuration."
+        )
+    return selected
+
+
 EDITABLE_CLASSIFICATIONS = ("OWNER_EDITABLE", "APPROVAL_EDITABLE")
 
 
@@ -77,6 +92,10 @@ def _ensure_owner_editable(row: AiPrompt) -> None:
         )
 
 
+def is_prompt_editable(row: AiPrompt) -> bool:
+    return row.classification in EDITABLE_CLASSIFICATIONS
+
+
 def _next_version(db: Session, prompt_id: int) -> int:
     latest = (
         db.query(func.max(AiPromptVersion.version))
@@ -87,9 +106,7 @@ def _next_version(db: Session, prompt_id: int) -> int:
 
 
 def seed_prompts(db: Session) -> None:
-    """Ensure every shipped prompt exists in the DB. Keeps ``default_prompt``,
-    model and description in sync with code, but NEVER overwrites the owner's
-    edited ``prompt`` text."""
+    """Seed configured defaults without overwriting an owner-selected version."""
     for spec in ai_defaults.registered_prompts():
         row = db.query(AiPrompt).filter(AiPrompt.key == spec["key"]).first()
         if row is None:
@@ -98,6 +115,7 @@ def seed_prompts(db: Session) -> None:
                 name=spec["name"],
                 description=spec["description"],
                 model=spec["model"],
+                default_model=spec["model"],
                 prompt=spec["default_prompt"],
                 default_prompt=spec["default_prompt"],
                 variables=spec["variables"],
@@ -114,27 +132,57 @@ def seed_prompts(db: Session) -> None:
                     prompt_id=row.id,
                     version=1,
                     text=row.prompt,
+                    model=row.model,
                     state="ACTIVE",
                     activated_at=datetime.now(timezone.utc),
                 )
             )
         else:
-            # Keep metadata + the shipped default current; leave live prompt alone.
+            previous_default_text = row.default_prompt
+            previous_default_model = row.default_model
             row.name = spec["name"]
             row.description = spec["description"]
-            row.model = spec["model"]
             row.default_prompt = spec["default_prompt"]
+            row.default_model = spec["model"]
             row.variables = spec["variables"]
             row.output_schema = spec.get("output_schema")
             row.output_schema_version = spec.get("output_schema_version")
             row.classification = spec.get("classification", "PROTECTED")
+            default_changed = (
+                previous_default_text != row.default_prompt
+                or previous_default_model != row.default_model
+            )
+            if row.is_default and default_changed and row.versions:
+                for version in row.versions:
+                    if version.state == "ACTIVE":
+                        version.state = "SUPERSEDED"
+                row.prompt = row.default_prompt
+                row.model = row.default_model
+                row.active_version = _next_version(db, row.id)
+                row.draft_version = None
+                db.add(
+                    AiPromptVersion(
+                        prompt_id=row.id,
+                        version=row.active_version,
+                        text=row.prompt,
+                        model=row.model,
+                        state="ACTIVE",
+                        activated_at=datetime.now(timezone.utc),
+                    )
+                )
+                db.flush()
+                _trim_versions(db, row.id)
             if not row.versions:
+                if row.is_default:
+                    row.prompt = row.default_prompt
+                    row.model = row.default_model
                 row.active_version = 1
                 db.add(
                     AiPromptVersion(
                         prompt_id=row.id,
                         version=1,
                         text=row.prompt,
+                        model=row.model,
                         state="ACTIVE",
                         activated_at=datetime.now(timezone.utc),
                     )
@@ -201,18 +249,21 @@ def list_prompts(db: Session) -> list[AiPrompt]:
     return db.query(AiPrompt).order_by(AiPrompt.name.asc()).all()
 
 
-def save_prompt(db: Session, key: str, new_text: str) -> AiPrompt:
-    """Save new prompt text: snapshot it as a version (keeping the last 10),
-    update the live prompt, and bust the cache so callers pick it up at once."""
+def save_prompt(
+    db: Session, key: str, new_text: str, new_model: str | None = None
+) -> AiPrompt:
+    """Save prompt text and model as one active, rollback-safe version."""
     row = get_prompt(db, key)
     _ensure_editable(row)
     validate_prompt_text(row, new_text)
+    selected_model = validate_prompt_model(row.model if new_model is None else new_model)
     now = datetime.now(timezone.utc)
     for version in row.versions:
         if version.state == "ACTIVE":
             version.state = "SUPERSEDED"
     next_version = _next_version(db, row.id)
     row.prompt = new_text
+    row.model = selected_model
     row.active_version = next_version
     row.draft_version = None
     # An explicit save is the moment the row stops tracking the shipped default.
@@ -222,6 +273,7 @@ def save_prompt(db: Session, key: str, new_text: str) -> AiPrompt:
             prompt_id=row.id,
             version=next_version,
             text=new_text,
+            model=selected_model,
             state="ACTIVE",
             activated_at=now,
         )
@@ -235,10 +287,13 @@ def save_prompt(db: Session, key: str, new_text: str) -> AiPrompt:
     return row
 
 
-def save_draft(db: Session, key: str, new_text: str) -> AiPromptVersion:
+def save_draft(
+    db: Session, key: str, new_text: str, new_model: str | None = None
+) -> AiPromptVersion:
     row = get_prompt(db, key)
     _ensure_owner_editable(row)
     validate_prompt_text(row, new_text)
+    selected_model = validate_prompt_model(row.model if new_model is None else new_model)
     for version in row.versions:
         if version.state == "DRAFT":
             version.state = "SUPERSEDED"
@@ -247,6 +302,7 @@ def save_draft(db: Session, key: str, new_text: str) -> AiPromptVersion:
         prompt_id=row.id,
         version=next_version,
         text=new_text,
+        model=selected_model,
         state="DRAFT",
     )
     row.draft_version = next_version
@@ -279,12 +335,14 @@ def activate_draft(
     if version is None:
         raise PromptNotFound(f"draft version {selected}")
     validate_prompt_text(row, version.text)
+    validate_prompt_model(version.model)
     for existing in row.versions:
         if existing.state == "ACTIVE":
             existing.state = "SUPERSEDED"
     version.state = "ACTIVE"
     version.activated_at = datetime.now(timezone.utc)
     row.prompt = version.text
+    row.model = version.model
     row.active_version = version.version
     row.draft_version = None
     row.is_default = 0
@@ -309,6 +367,7 @@ def rollback_to_version(db: Session, key: str, version_number: int) -> AiPrompt:
     if source is None:
         raise PromptNotFound(f"version {version_number}")
     validate_prompt_text(row, source.text)
+    validate_prompt_model(source.model)
     for existing in row.versions:
         if existing.state == "ACTIVE":
             existing.state = "SUPERSEDED"
@@ -319,11 +378,13 @@ def rollback_to_version(db: Session, key: str, version_number: int) -> AiPrompt:
         prompt_id=row.id,
         version=next_version,
         text=source.text,
+        model=source.model,
         state="ACTIVE",
         activated_at=datetime.now(timezone.utc),
     )
     db.add(restored)
     row.prompt = source.text
+    row.model = source.model
     row.active_version = next_version
     row.draft_version = None
     row.is_default = 0
@@ -361,7 +422,7 @@ def restore_default(db: Session, key: str) -> AiPrompt:
     reaches the model instead of being pinned to today's wording.
     """
     row = get_prompt(db, key)
-    restored = save_prompt(db, key, row.default_prompt)
+    restored = save_prompt(db, key, row.default_prompt, row.default_model)
     restored.is_default = 1
     db.commit()
     db.refresh(restored)
@@ -390,7 +451,7 @@ def restore_version(db: Session, key: str, version_id: int) -> AiPrompt:
     )
     if version is None:
         raise PromptNotFound(f"version {version_id}")
-    return save_prompt(db, key, version.text)
+    return save_prompt(db, key, version.text, version.model)
 
 
 def get_active_prompt(db: Session, key: str) -> tuple[AiPrompt, AiPromptVersion, str]:
@@ -417,6 +478,9 @@ def get_active_prompt(db: Session, key: str) -> tuple[AiPrompt, AiPromptVersion,
         raise PromptNotFound(f"active version for {key}")
     text = resolve_prompt_text(row)
     validate_prompt_text(row, text)
+    validate_prompt_model(row.model)
+    if version.model != row.model:
+        raise PromptValidationError("The active prompt version and model are out of sync.")
     return row, version, text
 
 

@@ -275,6 +275,37 @@ def get_chat_details_endpoint(
     psychic = db.query(User).filter(User.id == chat.psychic_id).first()
     client = db.query(User).filter(User.id == chat.user_id).first()
 
+    reading_sessions = []
+    for reading_session in (
+        db.query(ChatSession)
+        .filter(ChatSession.chat_id == chat.id)
+        .order_by(ChatSession.created_at.asc(), ChatSession.id.asc())
+        .all()
+    ):
+        intervals = (
+            db.query(SessionInterval)
+            .filter(SessionInterval.session_id == reading_session.id)
+            .order_by(SessionInterval.started_at.asc(), SessionInterval.id.asc())
+            .all()
+        )
+        started_at = intervals[0].started_at if intervals else reading_session.created_at
+        ended_at = intervals[-1].ended_at if intervals else None
+        if ended_at is None and reading_session.status.value in {
+            "COMPLETED",
+            "CANCELLED",
+        }:
+            ended_at = reading_session.updated_at
+        reading_sessions.append(
+            {
+                "id": reading_session.id,
+                "status": reading_session.status.value,
+                "created_at": reading_session.created_at.isoformat(),
+                "updated_at": reading_session.updated_at.isoformat(),
+                "started_at": started_at.isoformat() if started_at else None,
+                "ended_at": ended_at.isoformat() if ended_at else None,
+            }
+        )
+
     # Generate JWT token for the psychic (for admin to connect as psychic)
     psychic_token = None
     if user.role in [Role.ADMIN, Role.SUPERADMIN] and psychic:
@@ -321,6 +352,7 @@ def get_chat_details_endpoint(
         if client
         else None,
         "psychic_token": psychic_token,
+        "sessions": reading_sessions,
     }
 
     return JSONResponse(content=chat_details, status_code=200)
@@ -1645,6 +1677,14 @@ async def websocket_endpoint(
         await websocket.close(code=4001, reason="Auth timeout")
     except WebSocketDisconnect:
         manager.disconnect(websocket, chat_id)
+        try:
+            from app.services.ai.reading_burst import release_typing_source
+
+            await release_typing_source(
+                int(chat_id), user.id, dispatcher.typing_source_id
+            )
+        except Exception:  # noqa: BLE001 — the persisted lease expires safely
+            pass
         # Freeze any in-flight AI delivery only when the CLIENT has no remaining
         # connection (multi-tab safe), so their place is preserved for reconnect.
         # A psychic/admin drop never stops delivery. disconnect() already ran, so

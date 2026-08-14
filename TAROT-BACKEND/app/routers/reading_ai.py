@@ -40,6 +40,29 @@ def _authorize(user: User, chat: Chat) -> bool:
     return user.id == chat.psychic_id
 
 
+def _stage_fallback_draft_decision(
+    db: Session, chat_id: int, draft_id: int, status: AiDraftStatus
+) -> bool:
+    """Serialize manual decisions for legacy SABRI fallback drafts."""
+    from app.enums.response_mode import ResponseMode
+
+    current = (
+        db.query(AiDraft)
+        .filter(AiDraft.id == draft_id, AiDraft.chat_id == chat_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if (
+        current is None
+        or current.mode == ResponseMode.HYBRID
+        or current.status != AiDraftStatus.PENDING
+    ):
+        return False
+    current.status = status
+    return True
+
+
 def _draft_out(d: AiDraft) -> dict:
     try:
         flags = json.loads(d.sabri_flags) if d.sabri_flags else []
@@ -85,11 +108,15 @@ async def set_response_mode(
     from app.services.ai import reading_hybrid
 
     await reading_hybrid.cancel_ai_turns_for_mode_change(chat_id, payload.mode)
-    # Switching TO Automatic takes over the conversation NOW: cancel any in-flight
-    # HYBRID draft generation (it would land as a silent PENDING draft) and, if the
-    # chat is hanging on an unanswered client message, auto-answer it immediately.
+    # Re-evaluate the durable burst after the committed mode change. HUMAN stays
+    # manual; HYBRID/SABRI claim only still-unanswered client messages and retain
+    # the six-second/typing boundary instead of launching the latest row directly.
     if payload.mode == _RM.SABRI:
         await reading_hybrid.handover_to_auto(chat_id, db, chat)
+    else:
+        from app.services.ai.reading_burst import note_mode_change
+
+        await note_mode_change(chat_id, db=db)
     return JSONResponse(
         content={"chat_id": chat_id, "response_mode": payload.mode.value},
         status_code=200,
@@ -157,10 +184,14 @@ def get_draft_generating(
     if not _authorize(user, chat):
         return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
 
+    from app.services.ai.reading_burst import is_generating as burst_is_generating
     from app.services.ai.reading_hybrid import is_generating
 
     return JSONResponse(
-        content={"chat_id": chat_id, "generating": is_generating(chat_id)},
+        content={
+            "chat_id": chat_id,
+            "generating": is_generating(chat_id) or burst_is_generating(chat_id),
+        },
         status_code=200,
     )
 
@@ -171,13 +202,11 @@ async def generate_draft(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Manual "Generate new reply" (Hybrid only): force a fresh Valentina draft for the
-    client's LATEST message on demand — the exact same turn the automatic per-message
-    trigger runs, via reading_hybrid.launch_hybrid_regen (no second code path)."""
+    """Queue one fresh Hybrid draft for the complete unanswered client turn."""
     from app.enums.chat_status import ChatStatus
     from app.enums.response_mode import ResponseMode
     from app.models.message import Message
-    from app.services.ai import reading_hybrid
+    from app.services.ai import reading_burst
 
     chat = db.query(Chat).filter(Chat.id == chat_id).first()
     if not chat:
@@ -190,11 +219,6 @@ async def generate_draft(
         )
     if chat.status != ChatStatus.ACTIVE:
         return JSONResponse(content={"detail": "Chat is not active"}, status_code=409)
-    if reading_hybrid.is_generating(chat_id):
-        return JSONResponse(
-            content={"detail": "A draft is already generating"}, status_code=409
-        )
-
     latest = (
         db.query(Message)
         .filter(
@@ -210,10 +234,15 @@ async def generate_draft(
             content={"detail": "No client message to reply to"}, status_code=400
         )
 
-    launched = reading_hybrid.launch_hybrid_regen(chat_id, latest.id, latest.content, chat)
-    if not launched:
+    launched = reading_burst.request_hybrid_regeneration(chat_id)
+    if launched is None:
         return JSONResponse(
             content={"detail": "Hybrid generation is unavailable for this engine"},
+            status_code=409,
+        )
+    if not launched:
+        return JSONResponse(
+            content={"detail": "There are no unanswered client messages"},
             status_code=409,
         )
     logger.info("hybrid_regen_requested", chat_id=chat_id, by=user.id, message_id=latest.id)
@@ -253,13 +282,68 @@ async def send_draft(
     if not content:
         return JSONResponse(content={"detail": "Empty message"}, status_code=400)
 
-    # Deliver as the reader, tagged AI_DRAFTED (an admin approved this AI draft).
-    from app.services.chats import broadcast_ai_message
+    # Advance a Hybrid unanswered-message boundary in the SAME transaction as
+    # delivery. SABRI fallback drafts retain their established manual-send path.
+    from app.enums.response_mode import ResponseMode
+    from app.services.chats import (
+        broadcast_persisted_ai_message,
+        prepare_ai_message,
+    )
 
-    message = await broadcast_ai_message(db, chat, content)
+    client_turn = None
+    exact_session_id = None
+    if draft.mode == ResponseMode.HYBRID:
+        from app.services.ai.reading_burst import stage_hybrid_draft_send
 
-    draft.status = AiDraftStatus.SENT
+        staged = stage_hybrid_draft_send(db, chat, draft.id)
+        if staged is None:
+            if draft.status == AiDraftStatus.DISCARDED:
+                db.commit()
+                return JSONResponse(
+                    content={
+                        "detail": "This draft is no longer current. Generate a fresh reply."
+                    },
+                    status_code=409,
+                )
+            db.rollback()
+            current = db.get(AiDraft, draft.id)
+            if current is not None and current.status != AiDraftStatus.PENDING:
+                return JSONResponse(
+                    content={
+                        "detail": f"Draft already {current.status.value.lower()}"
+                    },
+                    status_code=400,
+                )
+            return JSONResponse(
+                content={
+                    "detail": "This draft is no longer current. Generate a fresh reply."
+                },
+                status_code=409,
+            )
+        client_turn, exact_session_id = staged
+    else:
+        if not _stage_fallback_draft_decision(
+            db, chat.id, draft.id, AiDraftStatus.SENT
+        ):
+            db.rollback()
+            current = db.get(AiDraft, draft.id)
+            return JSONResponse(
+                content={
+                    "detail": (
+                        f"Draft already {current.status.value.lower()}"
+                        if current is not None
+                        else "Draft not found"
+                    )
+                },
+                status_code=400 if current is not None else 404,
+            )
+
+    message = prepare_ai_message(
+        db, chat, content, chat_session_id=exact_session_id
+    )
     db.commit()
+    db.refresh(message)
+    await broadcast_persisted_ai_message(db, chat, message)
 
     # Memory: the APPROVED text (operator edits included) is delivered content,
     # so record it on the engine's session state — Valentina's next turn must
@@ -270,6 +354,7 @@ async def send_draft(
         from app.services.ai.reading_ledger import record_commitments
         from app.services.ai.reading_session import (
             get_session_store,
+            record_client_message,
             record_sent_message,
         )
 
@@ -281,6 +366,16 @@ async def send_draft(
         state = store.get_or_create(
             f"chat:{chat_id}", client_id=chat.user_id, chat_id=chat_id
         )
+        transcript = getattr(state, "chat_transcript", None) or []
+        client_turn_already_recorded = bool(
+            client_turn is not None
+            and transcript
+            and isinstance(transcript[-1], dict)
+            and transcript[-1].get("role") == "client"
+            and transcript[-1].get("content") == client_turn
+        )
+        if client_turn is not None and not client_turn_already_recorded:
+            record_client_message(state, client_turn)
         record_sent_message(state, content)
         record_commitments(state, content)
         store.put(state)
@@ -314,9 +409,48 @@ def discard_draft(
     )
     if not draft:
         return JSONResponse(content={"detail": "Draft not found"}, status_code=404)
-    if draft.status == AiDraftStatus.PENDING:
-        draft.status = AiDraftStatus.DISCARDED
-        db.commit()
+    if draft.status != AiDraftStatus.PENDING:
+        return JSONResponse(
+            content={"detail": f"Draft already {draft.status.value.lower()}"},
+            status_code=400,
+        )
+
+    from app.enums.response_mode import ResponseMode
+
+    if draft.mode == ResponseMode.HYBRID:
+        from app.services.ai.reading_burst import stage_hybrid_draft_discard
+
+        if not stage_hybrid_draft_discard(db, chat, draft.id):
+            db.rollback()
+            current = db.get(AiDraft, draft.id)
+            if current is not None and current.status != AiDraftStatus.PENDING:
+                return JSONResponse(
+                    content={
+                        "detail": f"Draft already {current.status.value.lower()}"
+                    },
+                    status_code=400,
+                )
+            return JSONResponse(
+                content={"detail": "This draft is no longer current."},
+                status_code=409,
+            )
+    else:
+        if not _stage_fallback_draft_decision(
+            db, chat.id, draft.id, AiDraftStatus.DISCARDED
+        ):
+            db.rollback()
+            current = db.get(AiDraft, draft.id)
+            return JSONResponse(
+                content={
+                    "detail": (
+                        f"Draft already {current.status.value.lower()}"
+                        if current is not None
+                        else "Draft not found"
+                    )
+                },
+                status_code=400 if current is not None else 404,
+            )
+    db.commit()
     logger.info("ai_draft_discarded", chat_id=chat_id, draft_id=draft_id, by=user.id)
     return JSONResponse(content={"draft_id": draft_id, "status": "DISCARDED"}, status_code=200)
 

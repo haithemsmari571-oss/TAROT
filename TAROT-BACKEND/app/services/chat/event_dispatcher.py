@@ -1,6 +1,7 @@
 """Event dispatcher for routing chat events to handlers"""
 
 from typing import Dict, Any
+from uuid import uuid4
 from fastapi import WebSocket
 from sqlalchemy.orm import Session
 from app.services.chat.handlers.message_handler import MessageHandler
@@ -20,6 +21,9 @@ class EventDispatcher:
         self.db = db
         self.chat_id = chat_id
         self.user_id = user_id
+        # Typing is leased per socket so one tab's typing_stop cannot clear a
+        # second active tab. The opaque id never leaves server memory/logs.
+        self.typing_source_id = uuid4().hex
 
         # Initialize handlers
         self.message_handler = MessageHandler(websocket, db, chat_id, user_id)
@@ -40,6 +44,20 @@ class EventDispatcher:
             # Map event types to handler methods
             if event_type == ChatEventType.MESSAGE_SEND or event_type == "message":
                 await self.message_handler.handle(event_data)
+
+            elif event_type in (ChatEventType.TYPING_START, "typing_start"):
+                from app.services.ai.reading_burst import note_client_typing
+
+                await note_client_typing(
+                    self.chat_id, self.user_id, self.typing_source_id, True
+                )
+
+            elif event_type in (ChatEventType.TYPING_STOP, "typing_stop"):
+                from app.services.ai.reading_burst import note_client_typing
+
+                await note_client_typing(
+                    self.chat_id, self.user_id, self.typing_source_id, False
+                )
 
             elif (
                 event_type == ChatEventType.BALANCE_WARNING

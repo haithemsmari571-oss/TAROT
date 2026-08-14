@@ -500,6 +500,9 @@ async def gift_user_balance(
     )
 
     db.refresh(user)
+    paid_balance = float(user.balance or 0)
+    credit_balance = float(user.credit_balance or 0)
+    total_balance = user.total_balance
 
     # Create persisted notification
     notification_message = (
@@ -513,7 +516,7 @@ async def gift_user_balance(
         message=notification_message,
         data={
             "amount": gift_data.amount,
-            "new_balance": user.balance,
+            "new_balance": total_balance,
             # Raw personal note, shown hand-written in the celebration.
             "message": gift_data.message or None,
             "from": "Valentina",
@@ -533,7 +536,7 @@ async def gift_user_balance(
         "message": notification_message,
         "data": {
             "amount": gift_data.amount,
-            "new_balance": user.balance,
+            "new_balance": total_balance,
         },
         "timestamp": datetime.now().isoformat(),
     }
@@ -553,7 +556,10 @@ async def gift_user_balance(
         "transaction_id": transaction.id,
         "user_id": user_id,
         "amount": gift_data.amount,
-        "new_balance": user.balance,
+        "new_balance": total_balance,
+        "paid_balance": paid_balance,
+        "credit_balance": credit_balance,
+        "total_balance": total_balance,
         "message": gift_data.message,
         "status": "success",
     }

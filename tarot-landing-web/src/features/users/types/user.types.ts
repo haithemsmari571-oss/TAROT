@@ -19,6 +19,8 @@ export interface AdminUserListItem {
   email: string;
   role: Role;
   balance: number;
+  credit_balance: number;
+  total_balance: number;
   is_verified: boolean;
   is_online: boolean;
   status: UserStatus;

@@ -35,6 +35,7 @@ import {
   getSessionTime,
   joinChat,
   requestChat,
+  startChatTopUp,
   type ChatMessage,
 } from "../../src/api/chat";
 import { getMyBalance } from "../../src/api/payment";
@@ -100,6 +101,7 @@ export default function ChatScreen() {
   const {
     messages,
     sendMessage,
+    sendTyping,
     connectionStatus,
     isConnected,
     loadingHistory,
@@ -113,6 +115,9 @@ export default function ChatScreen() {
   } = useChatWebSocket(Number.isFinite(chatId) ? chatId : null);
 
   const [draft, setDraft] = useState("");
+  const clientTypingActiveRef = useRef(false);
+  const clientTypingSignalAtRef = useRef(0);
+  const clientTypingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ended, setEnded] = useState(false);
   const [ending, setEnding] = useState(false);
   // Branded end-session confirm sheet (replaces the old raw Alert).
@@ -303,15 +308,21 @@ export default function ChatScreen() {
     };
   }, [paused, chatId]);
 
-  // Open the website billing page; on return re-anchor the timer to the live
-  // server balance (session-time reads the DB, so added funds extend the
-  // countdown; a GRACE pause is auto-resumed by the payment webhook).
+  // During GRACE, tell the backend checkout is starting before opening billing.
+  // That extends the server hold from 60s to 5 minutes; the payment webhook
+  // resumes the reading after crediting the balance.
   const onTopUp = useCallback(async () => {
     setToppingUp(true);
-    await openBillingPage();
-    await timer.refresh();
-    setToppingUp(false);
-  }, [timer]);
+    try {
+      if (sessionStatus === "GRACE") {
+        await startChatTopUp(chatId);
+      }
+      await openBillingPage();
+      await timer.refresh();
+    } finally {
+      setToppingUp(false);
+    }
+  }, [chatId, sessionStatus, timer]);
 
   // From the "session ended" sheet: top up, then either the webhook has already
   // revived the held session (best case) or we request a fresh reading with the
@@ -352,9 +363,44 @@ export default function ChatScreen() {
     }
   }, [chatId, router, timer]);
 
+  const stopClientTyping = useCallback(() => {
+    if (clientTypingStopTimerRef.current) {
+      clearTimeout(clientTypingStopTimerRef.current);
+      clientTypingStopTimerRef.current = null;
+    }
+    if (clientTypingActiveRef.current) {
+      clientTypingActiveRef.current = false;
+      sendTyping(false);
+    }
+  }, [sendTyping]);
+
+  const onDraftChange = useCallback((value: string) => {
+    setDraft(value);
+    if (!isConnected || !value) {
+      stopClientTyping();
+      return;
+    }
+    const now = Date.now();
+    if (
+      !clientTypingActiveRef.current ||
+      now - clientTypingSignalAtRef.current >= 4000
+    ) {
+      sendTyping(true);
+      clientTypingActiveRef.current = true;
+      clientTypingSignalAtRef.current = now;
+    }
+    if (clientTypingStopTimerRef.current) {
+      clearTimeout(clientTypingStopTimerRef.current);
+    }
+    clientTypingStopTimerRef.current = setTimeout(stopClientTyping, 2000);
+  }, [isConnected, sendTyping, stopClientTyping]);
+
+  useEffect(() => () => stopClientTyping(), [stopClientTyping]);
+
   const onSend = () => {
     const text = draft.trim();
     if (!text) return;
+    stopClientTyping();
     sendMessage(text);
     setDraft("");
   };
@@ -654,7 +700,8 @@ export default function ChatScreen() {
               }
               placeholderTextColor={COLORS.textFaint}
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={onDraftChange}
+              onBlur={stopClientTyping}
               multiline
               onSubmitEditing={onSend}
               editable={

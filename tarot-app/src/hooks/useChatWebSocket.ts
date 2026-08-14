@@ -16,6 +16,7 @@ export type ConnectionStatus =
 interface UseChatWebSocket {
   messages: ChatMessage[];
   sendMessage: (content: string) => void;
+  sendTyping: (isTyping: boolean) => void;
   isConnected: boolean;
   connectionStatus: ConnectionStatus;
   loadingHistory: boolean;
@@ -202,10 +203,14 @@ export function useChatWebSocket(chatId: number | null): UseChatWebSocket {
   );
 
   const clearRejection = useCallback(() => setFeeRejection(null), []);
+  const sendTyping = useCallback((isTyping: boolean) => {
+    socketRef.current?.sendTyping(isTyping);
+  }, []);
 
   return {
     messages,
     sendMessage,
+    sendTyping,
     isConnected,
     connectionStatus,
     loadingHistory,

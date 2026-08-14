@@ -39,6 +39,40 @@ def _validate_start_chat(db: Session, user_id: int, psychic_id: int):
     return
 
 
+def _requested_chat_session(db: Session, chat_id: int) -> ChatSession:
+    session = (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.chat_id == chat_id,
+            ChatSession.status == ChatSessionStatus.REQUESTED,
+        )
+        .order_by(ChatSession.id.desc())
+        .first()
+    )
+    if session is None:
+        session = ChatSession(
+            chat_id=chat_id,
+            status=ChatSessionStatus.REQUESTED,
+        )
+        db.add(session)
+        db.flush()
+    return session
+
+
+def _latest_message_session_id(
+    db: Session, chat_id: int, *, lock: bool = False
+) -> int | None:
+    query = (
+        db.query(ChatSession)
+        .filter(ChatSession.chat_id == chat_id)
+        .order_by(ChatSession.id.desc())
+    )
+    if lock:
+        query = query.with_for_update()
+    session = query.first()
+    return int(session.id) if session is not None else None
+
+
 def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
     """Request a chat and return the chat_id"""
     _validate_start_chat(db, user_id, chat_data.psychic_id)
@@ -53,9 +87,13 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
     if existing_chat:
         # If chat exists, update its status to REQUESTED and add the new message
         existing_chat.status = ChatStatus.REQUESTED
+        requested_session = _requested_chat_session(db, existing_chat.id)
 
         msg_req = Message(
-            sender_id=user_id, chat_id=existing_chat.id, content=chat_data.message
+            sender_id=user_id,
+            chat_id=existing_chat.id,
+            chat_session_id=requested_session.id,
+            content=chat_data.message,
         )
         db.add(msg_req)
         db.commit()
@@ -71,7 +109,13 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
         db.add(chat)
         db.flush()
 
-        msg_req = Message(sender_id=user_id, chat_id=chat.id, content=chat_data.message)
+        requested_session = _requested_chat_session(db, chat.id)
+        msg_req = Message(
+            sender_id=user_id,
+            chat_id=chat.id,
+            chat_session_id=requested_session.id,
+            content=chat_data.message,
+        )
         db.add(msg_req)
 
         db.commit()
@@ -86,8 +130,12 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
         )
         if existing_chat:
             existing_chat.status = ChatStatus.REQUESTED
+            requested_session = _requested_chat_session(db, existing_chat.id)
             msg_req = Message(
-                sender_id=user_id, chat_id=existing_chat.id, content=chat_data.message
+                sender_id=user_id,
+                chat_id=existing_chat.id,
+                chat_session_id=requested_session.id,
+                content=chat_data.message,
             )
             db.add(msg_req)
             db.commit()
@@ -193,7 +241,10 @@ def update_chat_status(db: Session, chat_id: int, status: ChatStatus):
             .first()
         )
 
-        if session:
+        if session and session.status == ChatSessionStatus.REQUESTED:
+            session.status = ChatSessionStatus.CANCELLED
+            db.commit()
+        elif session:
             # There's an active session, end it properly
             end_chat_session(
                 db=db,
@@ -212,9 +263,8 @@ def update_chat_status(db: Session, chat_id: int, status: ChatStatus):
 
 def start_new_chat_session(db: Session, chat_id: int) -> ChatSession:
     """Creates the main session and the first billable interval."""
-    chat_session = ChatSession(chat_id=chat_id, status=ChatStatus.ACTIVE)
-    db.add(chat_session)
-    db.flush()
+    chat_session = _requested_chat_session(db, chat_id)
+    chat_session.status = ChatSessionStatus.ACTIVE
 
     add_session_interval(
         db, session=chat_session, trigger=ChatSessionTrigger.INITIAL_START
@@ -309,7 +359,16 @@ def end_chat_session(
 
 
 async def save_message(db: Session, data: dict, user: User, chat: Chat) -> Message:
-    message = Message(chat_id=chat.id, sender_id=user.id, content=data["content"])
+    # Serialize a human/client insert against Hybrid approval, which locks the
+    # same Chat -> current-session order before its final freshness check.
+    db.query(Chat.id).filter(Chat.id == chat.id).with_for_update().first()
+    chat_session_id = _latest_message_session_id(db, chat.id, lock=True)
+    message = Message(
+        chat_id=chat.id,
+        chat_session_id=chat_session_id,
+        sender_id=user.id,
+        content=data["content"],
+    )
     db.add(message)
     db.commit()
     return message
@@ -321,6 +380,7 @@ def save_system_message(db: Session, chat_id: int, content: str) -> Message:
 
     message = Message(
         chat_id=chat_id,
+        chat_session_id=_latest_message_session_id(db, chat_id),
         content=content,
         is_system=True,
         author_type=AuthorType.SYSTEM,
@@ -331,49 +391,60 @@ def save_system_message(db: Session, chat_id: int, content: str) -> Message:
     return message
 
 
-def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
-    """Store an AI-drafted reply as the reader (sender = the psychic), tagged
-    author_type = AI_DRAFTED. Pure DB, no WebSocket — the broadcaster delivers it.
+def prepare_ai_message(
+    db: Session,
+    chat: Chat,
+    content: str,
+    *,
+    chat_session_id: int | None = None,
+) -> Message:
+    """Stage one AI reader message without committing it.
+
+    Burst delivery uses this seam to advance its durable delivery position in
+    the same transaction as the Message row. Existing callers retain the
+    commit-on-call contract through ``persist_ai_message`` below.
     """
     from app.enums.author_type import AuthorType
     from app.enums.message_status import MessageStatus
+    from app.manager import manager
+    from app.notification_manager import notification_manager
 
     message = Message(
         chat_id=chat.id,
+        chat_session_id=(
+            chat_session_id
+            if chat_session_id is not None
+            else _latest_message_session_id(db, chat.id)
+        ),
         sender_id=chat.psychic_id,
         content=content,
         author_type=AuthorType.AI_DRAFTED,
-        status=MessageStatus.SENT,
     )
+    if chat.user_id in manager.users_in_chat(str(chat.id)):
+        message.status = MessageStatus.READ
+    elif notification_manager.is_user_connected(chat.user_id):
+        message.status = MessageStatus.DELIVERED
+    else:
+        message.status = MessageStatus.SENT
     db.add(message)
+    db.flush()
+    return message
+
+
+def persist_ai_message(db: Session, chat: Chat, content: str) -> Message:
+    """Store an AI-drafted reply as the reader and commit it."""
+    message = prepare_ai_message(db, chat, content)
     db.commit()
     db.refresh(message)
     return message
 
 
-async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message:
-    """Deliver a single AI message to the client as the reader: persist it
-    (tagged AI_DRAFTED), set the read-receipt status from live presence, broadcast
-    over the chat WebSocket, and push if the client is offline. Mirrors the human
-    message path. (Timed delivery of a full DeliveryPlan is the later real-time
-    execution phase; today the only caller is the admin draft-review send.)
-    """
+async def broadcast_persisted_ai_message(
+    db: Session, chat: Chat, message: Message
+) -> None:
+    """Broadcast/push an already committed AI reader Message."""
     from app.enums.message_status import MessageStatus
     from app.manager import manager
-    from app.notification_manager import notification_manager
-
-    message = persist_ai_message(db, chat, content)
-
-    # Read-receipt status from live presence (same tiering as human messages).
-    client_id = chat.user_id
-    if client_id in manager.users_in_chat(str(chat.id)):
-        status = MessageStatus.READ
-    elif notification_manager.is_user_connected(client_id):
-        status = MessageStatus.DELIVERED
-    else:
-        status = MessageStatus.SENT
-    message.status = status
-    db.commit()
 
     payload = {
         "id": message.id,
@@ -386,26 +457,36 @@ async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message
         "created_at": message.created_at.isoformat()
         if message.created_at
         else datetime.now().isoformat(),
-        "status": status.value,
+        "status": message.status.value,
         "author_type": message.author_type.value,
     }
     await manager.send_to_chat(message=payload, chat_id=str(chat.id))
 
     # Push the client when they have no live socket (app closed/backgrounded).
-    if status == MessageStatus.SENT:
+    if message.status == MessageStatus.SENT:
         try:
             from app.services.push import notify_user_push
 
-            preview = content if len(content) <= 120 else content[:117] + "…"
+            preview = (
+                message.content
+                if len(message.content) <= 120
+                else message.content[:117] + "…"
+            )
             reader = chat.psychic.username if chat.psychic else "your reader"
             notify_user_push(
-                client_id,
+                chat.user_id,
                 title=f"New message from {reader}",
                 body=preview,
                 data={"type": "new_message", "chat_id": chat.id, "psychic_name": reader},
             )
         except Exception:  # noqa: BLE001 — push failure never breaks delivery
             pass
+
+
+async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message:
+    """Persist and deliver one AI reader message through the existing path."""
+    message = persist_ai_message(db, chat, content)
+    await broadcast_persisted_ai_message(db, chat, message)
 
     return message
 

@@ -20,6 +20,7 @@ router = APIRouter(dependencies=[Depends(require_superadmin)])
 
 class PromptSave(BaseModel):
     prompt: str
+    model: Optional[str] = None
 
 
 class PromptTest(BaseModel):
@@ -32,11 +33,18 @@ class PromptActivate(BaseModel):
 
 def _to_detail(p) -> dict:
     draft = next((version for version in p.versions if version.state == "DRAFT"), None)
+    editable = registry.is_prompt_editable(p)
     return {
         "key": p.key,
         "name": p.name,
         "description": p.description,
         "model": p.model,
+        "default_model": p.default_model,
+        "available_models": registry.configured_models() if editable else [],
+        "model_editable": editable,
+        "model_lock_reason": None if editable else (
+            "This prompt is protected. Its model stays read-only until the prompt's ownership scope is explicitly unlocked."
+        ),
         "prompt": p.prompt,
         "default_prompt": p.default_prompt,
         "variables": p.variables or [],
@@ -47,6 +55,7 @@ def _to_detail(p) -> dict:
         "active_version": p.active_version,
         "draft_version": p.draft_version,
         "draft_prompt": draft.text if draft else None,
+        "draft_model": draft.model if draft else None,
         "char_count": len(p.prompt or ""),
         "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
         "last_run_status": p.last_run_status,
@@ -87,7 +96,7 @@ def save_ai_prompt(key: str, payload: PromptSave, db: Session = Depends(get_db))
     if not payload.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
     try:
-        p = registry.save_prompt(db, key, payload.prompt)
+        p = registry.save_prompt(db, key, payload.prompt, payload.model)
     except registry.PromptNotFound:
         raise HTTPException(status_code=404, detail="Prompt not found")
     except registry.PromptProtectedError as error:
@@ -100,7 +109,7 @@ def save_ai_prompt(key: str, payload: PromptSave, db: Session = Depends(get_db))
 @router.put("/ai-prompts/{key}/draft")
 def save_ai_prompt_draft(key: str, payload: PromptSave, db: Session = Depends(get_db)):
     try:
-        registry.save_draft(db, key, payload.prompt)
+        registry.save_draft(db, key, payload.prompt, payload.model)
         prompt = registry.get_prompt(db, key)
     except registry.PromptNotFound:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -148,6 +157,7 @@ def get_ai_prompt_versions(key: str, db: Session = Depends(get_db)):
             "id": v.id,
             "version": v.version,
             "text": v.text,
+            "model": v.model,
             "state": v.state,
             "char_count": len(v.text or ""),
             "created_at": v.created_at.isoformat() if v.created_at else None,

@@ -355,13 +355,13 @@ def test_generate_endpoint_launches_regen_for_hybrid(db, make_user, monkeypatch)
     calls = []
     monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: False)
     monkeypatch.setattr(
-        reading_hybrid, "launch_hybrid_regen",
-        lambda cid, mid, content, c: calls.append((cid, content)) or True,
+        "app.services.ai.reading_burst.request_hybrid_regeneration",
+        lambda cid: calls.append(cid) or True,
     )
     resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
     assert resp.status_code == 202
     assert _json.loads(resp.body)["status"] == "generating"
-    assert calls == [(chat.id, "is he coming back?")]  # the client's latest message
+    assert calls == [chat.id]  # the durable coordinator owns the full unanswered turn
 
 
 def test_generate_endpoint_rejects_non_hybrid(db, make_user, monkeypatch):
@@ -372,13 +372,21 @@ def test_generate_endpoint_rejects_non_hybrid(db, make_user, monkeypatch):
     assert resp.status_code == 409
 
 
-def test_generate_endpoint_rejects_when_already_generating(db, make_user, monkeypatch):
+def test_generate_endpoint_delegates_double_click_to_durable_state(
+    db, make_user, monkeypatch
+):
     from app.routers.reading_ai import generate_draft
 
     admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
     monkeypatch.setattr(reading_hybrid, "is_generating", lambda cid: True)
+    calls = []
+    monkeypatch.setattr(
+        "app.services.ai.reading_burst.request_hybrid_regeneration",
+        lambda cid: calls.append(cid) or True,
+    )
     resp = asyncio.run(generate_draft(chat.id, user=admin, db=db))
-    assert resp.status_code == 409
+    assert resp.status_code == 202  # durable row state makes burst double-click safe
+    assert calls == [chat.id]
 
 
 def test_generate_endpoint_400_without_client_message(db, make_user, monkeypatch):
@@ -401,18 +409,23 @@ def test_generating_endpoint_reports_flag(db, make_user, monkeypatch):
     assert resp.status_code == 200
     assert _json.loads(resp.body) == {"chat_id": chat.id, "generating": True}
 
+    monkeypatch.setattr("app.services.ai.reading_hybrid.is_generating", lambda cid: False)
+    monkeypatch.setattr("app.services.ai.reading_burst.is_generating", lambda cid: True)
+    resp = get_draft_generating(chat.id, user=admin, db=db)
+    assert _json.loads(resp.body) == {"chat_id": chat.id, "generating": True}
+
 
 # ── switching TO Automatic takes over the conversation now ───────────────────
-def test_handover_cancels_hybrid_and_launches_auto_for_unanswered(db, make_user, monkeypatch):
-    # The silent-draft race from live testing: a client message arrives, the hybrid turn
-    # claims it, the operator switches to Automatic 2s later — the turn must be CANCELLED
-    # and the unanswered message handed to the real auto pipeline.
+def test_handover_cancels_hybrid_and_rechecks_durable_burst(db, make_user, monkeypatch):
+    # The silent-draft race from live testing: cancel the legacy Hybrid task and
+    # re-evaluate the unanswered messages through the durable burst boundary.
     admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)  # last msg = client's
-    launched = []
-    monkeypatch.setattr(
-        "app.services.ai.reading_pipeline.maybe_launch_pipeline",
-        lambda cid, mid, content: launched.append((cid, content)),
-    )
+    handed_over = []
+
+    async def note_mode_change(cid, db=None):
+        handed_over.append((cid, db))
+
+    monkeypatch.setattr("app.services.ai.reading_burst.note_mode_change", note_mode_change)
 
     async def scenario():
         async def stuck_hybrid_generation():
@@ -425,22 +438,19 @@ def test_handover_cancels_hybrid_and_launches_auto_for_unanswered(db, make_user,
 
     task = asyncio.run(scenario())
     assert task.cancelled()                              # no more silent PENDING draft
-    assert launched == [(chat.id, "is he coming back?")]  # the hanging message is auto-answered
+    assert handed_over == [(chat.id, db)]
 
 
-def test_handover_skips_launch_when_reader_answered_last(db, make_user, monkeypatch):
-    from app.models.message import Message
-
+def test_handover_rechecks_durable_boundary_after_reader_answer(db, make_user, monkeypatch):
     admin, chat = _seed_endpoint_chat(db, make_user, ResponseMode.HYBRID)
-    db.add(Message(chat_id=chat.id, sender_id=chat.psychic_id, content="he is circling back"))
-    db.commit()  # last message is now the READER's — nothing is hanging
-    launched = []
-    monkeypatch.setattr(
-        "app.services.ai.reading_pipeline.maybe_launch_pipeline",
-        lambda cid, mid, content: launched.append(cid),
-    )
+    handed_over = []
+
+    async def note_mode_change(cid, db=None):
+        handed_over.append((cid, db))
+
+    monkeypatch.setattr("app.services.ai.reading_burst.note_mode_change", note_mode_change)
     asyncio.run(reading_hybrid.handover_to_auto(chat.id, db, chat))
-    assert launched == []  # no false auto-reply to an already-answered conversation
+    assert handed_over == [(chat.id, db)]
 
 
 def test_mode_switch_to_sabri_triggers_handover(db, make_user, monkeypatch):

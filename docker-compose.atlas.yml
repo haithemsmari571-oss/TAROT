@@ -1,0 +1,54 @@
+services:
+  atlas-postgres:
+    image: postgres:16-alpine
+    container_name: atlas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: ${ATLAS_POSTGRES_PASSWORD:?ATLAS_POSTGRES_PASSWORD is required}
+      POSTGRES_DB: atlas
+    volumes:
+      - atlas_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tarot_default
+
+  atlas:
+    build:
+      context: ../secondbrain/crm
+      dockerfile: Dockerfile
+    container_name: atlas
+    restart: unless-stopped
+    env_file:
+      - ./.env.atlas
+      - ./.env.crm-providers.local
+    environment:
+      CRM_HOST: "0.0.0.0"
+      ATLAS_DATABASE_MODE: "deployment"
+      ATLAS_DATABASE_URL: "postgresql://atlas:${ATLAS_POSTGRES_PASSWORD:?ATLAS_POSTGRES_PASSWORD is required}@atlas-postgres:5432/atlas"
+    volumes:
+      - ../secondbrain/crm-runtime:/crm-runtime
+      - type: bind
+        source: ../secondbrain/crm/style-prompt.txt
+        target: /app/style-prompt.txt
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      atlas-postgres:
+        condition: service_healthy
+    networks:
+      - tarot_default
+
+networks:
+  tarot_default:
+    external: true
+    name: tarot_default
+
+volumes:
+  atlas_postgres_data:
+    name: atlas_postgres_data
