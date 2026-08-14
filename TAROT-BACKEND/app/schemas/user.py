@@ -94,6 +94,8 @@ class AdminUserListItem(BaseModel):
     role: Role
     status: UserStatus
     balance: float  # money stored to 2 dp (pennies)
+    credit_balance: float
+    total_balance: float
     is_verified: bool
     is_online: bool
     created_at: datetime
@@ -112,6 +114,8 @@ class AdminUserDetail(BaseModel):
     role: Role
     status: UserStatus
     balance: float  # money stored to 2 dp (pennies)
+    credit_balance: float
+    total_balance: float
     is_verified: bool
     is_online: bool
     price_per_second: Optional[float] = None

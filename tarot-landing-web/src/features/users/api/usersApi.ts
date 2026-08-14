@@ -114,7 +114,17 @@ export const usersApi = {
   giftBalance: async (
     userId: number,
     payload: GiftBalancePayload
-  ): Promise<{ transaction_id: number; user_id: number; amount: number; new_balance: number; message: string; status: string }> => {
+  ): Promise<{
+    transaction_id: number;
+    user_id: number;
+    amount: number;
+    new_balance: number;
+    paid_balance: number;
+    credit_balance: number;
+    total_balance: number;
+    message: string;
+    status: string;
+  }> => {
     const response = await axiosClient.post(`/admin/users/${userId}/gift`, payload);
     return response.data;
   },

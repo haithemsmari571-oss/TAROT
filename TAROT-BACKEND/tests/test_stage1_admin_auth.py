@@ -308,3 +308,61 @@ def test_admin_still_cannot_manage_other_admins(db, make_user):
         json={"username": "x", "email": other_admin.email},
     )
     assert resp.status_code == 403
+
+
+def test_admin_user_contract_exposes_paid_credit_and_total(db, make_user):
+    superadmin = make_user(role=Role.SUPERADMIN)
+    target = make_user(balance=12.5, credit_balance=3.25, role=Role.USER)
+    client = build_client(db, superadmin)
+
+    listed = client.get(f"/api/admin/users?search={target.username}")
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json()["users"] if item["id"] == target.id)
+    assert row["balance"] == 12.5
+    assert row["credit_balance"] == 3.25
+    assert row["total_balance"] == 15.75
+
+    detail = client.get(f"/api/admin/users/{target.id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["balance"] == 12.5
+    assert detail.json()["credit_balance"] == 3.25
+    assert detail.json()["total_balance"] == 15.75
+
+
+def test_gift_reports_total_balance_everywhere(db, make_user, monkeypatch):
+    from app.models.notification import Notification
+    from app.notification_manager import notification_manager
+
+    superadmin = make_user(role=Role.SUPERADMIN)
+    target = make_user(balance=10, credit_balance=3, role=Role.USER)
+    sent = {}
+
+    async def capture(message, user_id):
+        sent.update(message=message, user_id=user_id)
+
+    monkeypatch.setattr(notification_manager, "send_to_user", capture)
+    client = build_client(db, superadmin)
+    response = client.post(
+        f"/api/admin/users/{target.id}/gift",
+        json={"amount": 2.5, "message": "Synthetic regression gift"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["paid_balance"] == 10
+    assert payload["credit_balance"] == 5.5
+    assert payload["total_balance"] == 15.5
+    assert payload["new_balance"] == 15.5
+
+    db.refresh(target)
+    assert float(target.balance) == 10
+    assert float(target.credit_balance) == 5.5
+    notification = (
+        db.query(Notification)
+        .filter(Notification.user_id == target.id)
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    assert notification.data["new_balance"] == 15.5
+    assert sent["user_id"] == target.id
+    assert sent["message"]["data"]["new_balance"] == 15.5
