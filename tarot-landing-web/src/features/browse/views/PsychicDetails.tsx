@@ -1,7 +1,6 @@
 import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
@@ -10,7 +9,7 @@ import { useToast } from "@/components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { usePsychicDetails, usePsychicReviewSummary, usePsychicReviews, useMyReviews, useChats } from "../hooks/usePsychicDetails";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import "../../../styles/starfield.css";
+import "../../../styles/glass.css";
 import PageBackground from "../../../components/PageBackground";
 import zodiacHall2 from "../../../assets/backgrounds/zodiac-hall-2.webp";
 
@@ -94,7 +93,7 @@ const PsychicDetails = () => {
           key={i}
           icon={i <= rating ? "ph:star-fill" : "ph:star"}
           className={size}
-          style={{ color: i <= rating ? COLORS.primary : `${COLORS.neutralWhite}30` }}
+          style={{ color: i <= rating ? "var(--gl-accent)" : "var(--gl-hair)" }}
         />
       );
     }
@@ -228,14 +227,11 @@ const PsychicDetails = () => {
   // LOADING STATE
   if (loading) {
     return (
-      <div className="min-h-screen pt-32 pb-20" style={{ backgroundColor: COLORS.dark }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center py-20">
-            <Icon icon="ph:spinner" className="text-6xl mb-4 animate-spin mx-auto" style={{ color: COLORS.primary }} />
-            <p className="text-lg opacity-60" style={{ color: COLORS.neutralWhite }}>
-              Loading psychic details...
-            </p>
-          </div>
+      <div className="min-h-screen pt-16 pb-20">
+        <PageBackground images={zodiacHall2} variant="glass" />
+        <div className="relative z-10 gl-state">
+          <Icon icon="ph:spinner" className="gl-acc text-5xl mb-4 animate-spin mx-auto" />
+          <p>Preparing this reader's page…</p>
         </div>
       </div>
     );
@@ -244,65 +240,39 @@ const PsychicDetails = () => {
   // ERROR STATE
   if (error || !psychic) {
     return (
-      <div className="min-h-screen pt-32 pb-20" style={{ backgroundColor: COLORS.dark }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center py-20">
-            <Icon icon="ph:warning" className="text-6xl mb-4 mx-auto" style={{ color: COLORS.primary }} />
-            <p className="text-lg opacity-60 mb-4" style={{ color: COLORS.neutralWhite }}>
-              {error || "Psychic not found"}
-            </p>
-            <button
-              onClick={() => navigate("/psychics-browse")}
-              className="px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider"
-              style={{
-                backgroundColor: COLORS.primary,
-                color: COLORS.dark,
-              }}
-            >
-              Back to Browse
-            </button>
-          </div>
+      <div className="min-h-screen pt-16 pb-20">
+        <PageBackground images={zodiacHall2} variant="glass" />
+        <div className="relative z-10 gl-state">
+          <Icon icon="ph:warning" className="gl-acc text-5xl mb-4 mx-auto" />
+          <p>{error || "Reader not found"}</p>
+          <button onClick={() => navigate("/psychics-browse")} className="gl-btn-solid">
+            Back to Browse
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div 
-      className="relative min-h-screen pt-32 pb-20" 
-      style={{ backgroundColor: COLORS.dark }}
-    >
-      {/* Subtle dimmed scene — atmospheric but recessed behind the profile */}
-      <PageBackground images={zodiacHall2} variant="subtle" />
-
-      {/* Starfield Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="starfield"></div>
-        <div className="starfield-dense"></div>
-      </div>
+    <div className="relative min-h-screen pt-8 pb-20">
+      {/* The zodiac-hall scene stays vivid in both moods behind the glass. */}
+      <PageBackground images={zodiacHall2} variant="glass" />
 
       {/* Main content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6">
         {/* BACK BUTTON */}
         <button
           onClick={() => navigate("/psychics-browse")}
-          className="mb-6 sm:mb-8 flex items-center gap-2 text-sm font-medium opacity-60 hover:opacity-100 transition-opacity"
-          style={{ color: COLORS.neutralWhite }}
+          className="gl-fchip mb-6 sm:mb-8"
         >
-          <Icon icon="ph:arrow-left" className="text-lg" />
+          <Icon icon="ph:arrow-left" className="text-sm" />
           Back to Browse
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* LEFT COLUMN - PSYCHIC INFO */}
           <div className="lg:col-span-1">
-            <div
-              className="rounded-2xl p-4 sm:p-6 sticky top-32"
-              style={{
-                backgroundColor: COLORS.surface,
-                border: `1px solid ${COLORS.neutralWhite}10`,
-              }}
-            >
+            <div className="gl-panel p-4 sm:p-6 sticky top-32">
               {/* PROFILE IMAGE */}
               <div className="relative h-64 sm:h-80 w-full overflow-hidden rounded-xl mb-6">
                 {psychic.profile_picture_url ? (
@@ -318,7 +288,7 @@ const PsychicDetails = () => {
                   <div 
                     className="w-full h-full flex items-center justify-center"
                     style={{ 
-                      background: `linear-gradient(135deg, ${COLORS.surface} 0%, ${COLORS.surfaceAccent} 100%)` 
+                      background: "var(--gl-glass-2)"
                     }}
                   >
                     <svg
@@ -333,7 +303,7 @@ const PsychicDetails = () => {
                         cx="80"
                         cy="80"
                         r="75"
-                        stroke={COLORS.primary}
+                        stroke="var(--gl-accent)"
                         strokeWidth="2"
                         strokeOpacity="0.3"
                         fill="none"
@@ -342,7 +312,7 @@ const PsychicDetails = () => {
                         cx="80"
                         cy="80"
                         r="68"
-                        stroke={COLORS.primary}
+                        stroke="var(--gl-accent)"
                         strokeWidth="1"
                         strokeOpacity="0.2"
                         fill="none"
@@ -353,27 +323,27 @@ const PsychicDetails = () => {
                         cx="80"
                         cy="60"
                         r="20"
-                        fill={COLORS.primary}
+                        fill="var(--gl-accent)"
                         opacity="0.3"
                       />
                       <path
                         d="M 40 120 Q 40 85 80 85 Q 120 85 120 120"
-                        fill={COLORS.primary}
+                        fill="var(--gl-accent)"
                         opacity="0.3"
                       />
                       
                       {/* Mystical stars and elements */}
                       <path
                         d="M 80 25 L 83 33 L 91 33 L 85 38 L 88 46 L 80 41 L 72 46 L 75 38 L 69 33 L 77 33 Z"
-                        fill={COLORS.primary}
+                        fill="var(--gl-accent)"
                         opacity="0.4"
                       />
-                      <circle cx="30" cy="50" r="2.5" fill={COLORS.primary} opacity="0.3" />
-                      <circle cx="130" cy="50" r="2.5" fill={COLORS.primary} opacity="0.3" />
-                      <circle cx="25" cy="100" r="2" fill={COLORS.primary} opacity="0.3" />
-                      <circle cx="135" cy="100" r="2" fill={COLORS.primary} opacity="0.3" />
-                      <circle cx="40" cy="140" r="1.5" fill={COLORS.primary} opacity="0.25" />
-                      <circle cx="120" cy="140" r="1.5" fill={COLORS.primary} opacity="0.25" />
+                      <circle cx="30" cy="50" r="2.5" fill="var(--gl-accent)" opacity="0.3" />
+                      <circle cx="130" cy="50" r="2.5" fill="var(--gl-accent)" opacity="0.3" />
+                      <circle cx="25" cy="100" r="2" fill="var(--gl-accent)" opacity="0.3" />
+                      <circle cx="135" cy="100" r="2" fill="var(--gl-accent)" opacity="0.3" />
+                      <circle cx="40" cy="140" r="1.5" fill="var(--gl-accent)" opacity="0.25" />
+                      <circle cx="120" cy="140" r="1.5" fill="var(--gl-accent)" opacity="0.25" />
                     </svg>
                   </div>
                 )}
@@ -388,25 +358,20 @@ const PsychicDetails = () => {
               </div>
 
               {/* NAME */}
-              <h1
-                className="uppercase tracking-tight text-2xl sm:text-3xl mb-4"
-                style={{ ...TYPOGRAPHY.headings.h2, color: COLORS.neutralWhite }}
-              >
-                {psychic.username}
-              </h1>
+              <h1 className="gl-h2 mb-4">{psychic.username}</h1>
 
               {/* RATING SUMMARY */}
               {reviewSummary && reviewSummary.total_reviews > 0 && (
-                <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: `${COLORS.neutralWhite}05` }}>
+                <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: "var(--gl-hair-soft)" }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       {renderStars(Math.round(reviewSummary.average_rating), "text-xl")}
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold" style={{ color: COLORS.primary }}>
+                      <div className="text-2xl font-bold" style={{ color: "var(--gl-accent)" }}>
                         {reviewSummary.average_rating.toFixed(1)}
                       </div>
-                      <div className="text-xs opacity-60" style={{ color: COLORS.neutralWhite }}>
+                      <div className="text-xs opacity-60" style={{ color: "var(--gl-text)" }}>
                         {reviewSummary.total_reviews} {reviewSummary.total_reviews === 1 ? "review" : "reviews"}
                       </div>
                     </div>
@@ -416,7 +381,7 @@ const PsychicDetails = () => {
 
               {/* SPECIALTIES */}
               <div className="mb-6">
-                <label className="block text-xs font-bold uppercase tracking-widest mb-3" style={{ color: COLORS.neutralWhite + "80" }}>
+                <label className="block text-xs font-bold uppercase tracking-widest mb-3" style={{ color: "var(--gl-text-dim)" }}>
                   Specialties
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -425,9 +390,9 @@ const PsychicDetails = () => {
                       key={category.id}
                       className="px-3 py-1.5 rounded-full text-xs uppercase font-bold"
                       style={{
-                        backgroundColor: `${COLORS.primary}20`,
-                        color: COLORS.primary,
-                        border: `1px solid ${COLORS.primary}40`,
+                        backgroundColor: "color-mix(in srgb, var(--gl-accent) 12%, transparent)",
+                        color: "var(--gl-accent)",
+                        border: "1px solid var(--gl-accent-dim)",
                       }}
                     >
                       {category.title}
@@ -437,18 +402,18 @@ const PsychicDetails = () => {
               </div>
 
               {/* PRICE */}
-              <div className="mb-6 p-4 rounded-xl border" style={{ 
-                backgroundColor: `${COLORS.primary}10`,
-                borderColor: COLORS.primary 
+              <div className="mb-6 p-4 rounded-xl border" style={{
+                backgroundColor: "color-mix(in srgb, var(--gl-accent) 8%, transparent)",
+                borderColor: "var(--gl-accent-dim)"
               }}>
-                <div className="text-xs uppercase font-bold tracking-widest mb-1 opacity-80" style={{ color: COLORS.neutralWhite }}>
+                <div className="text-xs uppercase font-bold tracking-widest mb-1 opacity-80" style={{ color: "var(--gl-text)" }}>
                   Price
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black" style={{ color: COLORS.primary }}>
+                  <span className="text-3xl font-black" style={{ color: "var(--gl-accent)" }}>
                     {getPricePerMinute(psychic.price_per_second)}
                   </span>
-                  <span className="text-sm uppercase font-bold opacity-60" style={{ color: COLORS.neutralWhite }}>
+                  <span className="text-sm uppercase font-bold opacity-60" style={{ color: "var(--gl-text)" }}>
                     per minute
                   </span>
                 </div>
@@ -459,9 +424,9 @@ const PsychicDetails = () => {
                 <div
                   className="mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
                   style={{
-                    backgroundColor: `${COLORS.starGold}14`,
-                    border: `1px solid ${COLORS.starGold}44`,
-                    color: COLORS.starGold,
+                    backgroundColor: "color-mix(in srgb, var(--gl-accent) 10%, transparent)",
+                    border: "1px solid var(--gl-accent-dim)",
+                    color: "var(--gl-accent)",
                   }}
                 >
                   <Icon icon="ph:gift-fill" className="text-sm" />
@@ -475,17 +440,17 @@ const PsychicDetails = () => {
                 disabled={!psychic.is_online}
                 className="w-full py-4 rounded-xl flex items-center justify-center gap-3 mb-3 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
                 style={{
-                  backgroundColor: psychic.is_online ? COLORS.primary : `${COLORS.neutralWhite}20`,
-                  fontFamily: TYPOGRAPHY.fontFamily.heading,
+                  backgroundColor: psychic.is_online ? "var(--gl-btn-bg)" : "var(--gl-hair)",
+                  fontFamily: "var(--gl-sans)",
                 }}
               >
-                <span className="text-sm font-black uppercase tracking-wider" style={{ color: COLORS.dark }}>
+                <span className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--gl-btn-fg)" }}>
                   Start Reading
                 </span>
               </button>
               
               {!psychic.is_online && (
-                <p className="text-xs text-center opacity-60" style={{ color: COLORS.neutralWhite }}>
+                <p className="text-xs text-center opacity-60" style={{ color: "var(--gl-text)" }}>
                   This psychic is currently offline
                 </p>
               )}
@@ -496,19 +461,10 @@ const PsychicDetails = () => {
           <div className="lg:col-span-2 space-y-8">
             {/* BIO SECTION */}
             <div
-              className="rounded-2xl p-4 sm:p-6 lg:p-8"
-              style={{
-                backgroundColor: COLORS.surface,
-                border: `1px solid ${COLORS.neutralWhite}10`,
-              }}
+              className="gl-panel p-4 sm:p-6 lg:p-8"
             >
-              <h2
-                className="uppercase tracking-tight text-xl sm:text-2xl mb-4"
-                style={{ ...TYPOGRAPHY.headings.h3, color: COLORS.neutralWhite }}
-              >
-                About
-              </h2>
-              <p className="text-base leading-relaxed opacity-80 italic" style={{ color: COLORS.neutralWhite }}>
+              <h2 className="gl-h3 mb-4">About</h2>
+              <p className="text-base leading-relaxed opacity-80 italic" style={{ color: "var(--gl-text)" }}>
                 "{psychic.bio}"
               </p>
             </div>
@@ -516,15 +472,10 @@ const PsychicDetails = () => {
             {/* AVAILABILITY SECTION */}
             {(psychic.availability?.length ?? 0) > 0 && (
               <div
-                className="rounded-2xl p-4 sm:p-6 lg:p-8"
-                style={{
-                  backgroundColor: COLORS.surface,
-                  border: `1px solid ${COLORS.neutralWhite}10`,
-                }}
+                className="gl-panel p-4 sm:p-6 lg:p-8"
               >
                 <h2
-                  className="uppercase tracking-tight text-xl sm:text-2xl mb-4 sm:mb-6"
-                  style={{ ...TYPOGRAPHY.headings.h3, color: COLORS.neutralWhite }}
+                  className="gl-h3 mb-4 sm:mb-6"
                 >
                   Availability
                 </h2>
@@ -533,11 +484,11 @@ const PsychicDetails = () => {
                     <div
                       key={day}
                       className="p-4 rounded-xl"
-                      style={{ backgroundColor: `${COLORS.neutralWhite}05` }}
+                      style={{ backgroundColor: "var(--gl-hair-soft)" }}
                     >
                       <div className="flex items-center gap-2 mb-3">
-                        <Icon icon="ph:calendar" className="text-lg" style={{ color: COLORS.primary }} />
-                        <span className="font-bold uppercase text-sm" style={{ color: COLORS.neutralWhite }}>
+                        <Icon icon="ph:calendar" className="text-lg" style={{ color: "var(--gl-accent)" }} />
+                        <span className="font-bold uppercase text-sm" style={{ color: "var(--gl-text)" }}>
                           {day}
                         </span>
                       </div>
@@ -546,9 +497,9 @@ const PsychicDetails = () => {
                           <div
                             key={slot.id}
                             className="flex items-center gap-2 text-sm opacity-80"
-                            style={{ color: COLORS.neutralWhite }}
+                            style={{ color: "var(--gl-text)" }}
                           >
-                            <Icon icon="ph:clock" className="text-base" style={{ color: COLORS.primary }} />
+                            <Icon icon="ph:clock" className="text-base" style={{ color: "var(--gl-accent)" }} />
                             <span>
                               {slot.start_at} - {slot.end_at}
                             </span>
@@ -564,33 +515,26 @@ const PsychicDetails = () => {
             {/* CHAT HISTORY SECTION */}
             {chatWithPsychic && (
               <div
-                className="rounded-2xl p-4 sm:p-6 lg:p-8"
-                style={{
-                  backgroundColor: COLORS.surface,
-                  border: `1px solid ${COLORS.neutralWhite}10`,
-                }}
+                className="gl-panel p-4 sm:p-6 lg:p-8"
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                  <h2
-                    className="uppercase tracking-tight text-xl sm:text-2xl"
-                    style={{ ...TYPOGRAPHY.headings.h3, color: COLORS.neutralWhite }}
-                  >
+                  <h2 className="gl-h3">
                     Chat History
                   </h2>
                   <button
                     onClick={handleViewChatHistory}
                     className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
                     style={{
-                      backgroundColor: `${COLORS.primary}20`,
-                      color: COLORS.primary,
-                      border: `1px solid ${COLORS.primary}40`,
+                      backgroundColor: "color-mix(in srgb, var(--gl-accent) 12%, transparent)",
+                      color: "var(--gl-accent)",
+                      border: "1px solid var(--gl-accent-dim)",
                     }}
                   >
                     <Icon icon="ph:chat-text" className="text-base" />
                     View Chat
                   </button>
                 </div>
-                <p className="text-sm opacity-60" style={{ color: COLORS.neutralWhite }}>
+                <p className="text-sm opacity-60" style={{ color: "var(--gl-text)" }}>
                   You have an existing conversation with {psychic.username}. Click above to view your chat history.
                 </p>
               </div>
@@ -599,17 +543,10 @@ const PsychicDetails = () => {
             {/* REVIEW FORM SECTION */}
             {user && chatWithPsychic && (
               <div
-                className="rounded-2xl p-4 sm:p-6 lg:p-8"
-                style={{
-                  backgroundColor: COLORS.surface,
-                  border: `1px solid ${COLORS.neutralWhite}10`,
-                }}
+                className="gl-panel p-4 sm:p-6 lg:p-8"
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-                  <h2
-                    className="uppercase tracking-tight text-xl sm:text-2xl"
-                    style={{ ...TYPOGRAPHY.headings.h3, color: COLORS.neutralWhite }}
-                  >
+                  <h2 className="gl-h3">
                     {myReview ? "Your Review" : "Leave a Review"}
                   </h2>
                   {!showReviewForm && myReview && (
@@ -618,9 +555,9 @@ const PsychicDetails = () => {
                         onClick={() => setShowReviewForm(true)}
                         className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
                         style={{
-                          backgroundColor: `${COLORS.primary}20`,
-                          color: COLORS.primary,
-                          border: `1px solid ${COLORS.primary}40`,
+                          backgroundColor: "color-mix(in srgb, var(--gl-accent) 12%, transparent)",
+                          color: "var(--gl-accent)",
+                          border: "1px solid var(--gl-accent-dim)",
                         }}
                       >
                         <Icon icon="ph:pencil" className="text-base" />
@@ -630,8 +567,8 @@ const PsychicDetails = () => {
                         onClick={handleDeleteReview}
                         className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
                         style={{
-                          backgroundColor: `${COLORS.neutralWhite}10`,
-                          color: COLORS.neutralWhite,
+                          backgroundColor: "var(--gl-hair-soft)",
+                          color: "var(--gl-text)",
                         }}
                       >
                         <Icon icon="ph:trash" className="text-base" />
@@ -644,9 +581,9 @@ const PsychicDetails = () => {
                       onClick={() => setShowReviewForm(true)}
                       className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
                       style={{
-                        backgroundColor: `${COLORS.primary}20`,
-                        color: COLORS.primary,
-                        border: `1px solid ${COLORS.primary}40`,
+                        backgroundColor: "color-mix(in srgb, var(--gl-accent) 12%, transparent)",
+                        color: "var(--gl-accent)",
+                        border: "1px solid var(--gl-accent-dim)",
                       }}
                     >
                       <Icon icon="ph:star" className="text-base" />
@@ -656,16 +593,16 @@ const PsychicDetails = () => {
                 </div>
 
                 {!showReviewForm && myReview ? (
-                  <div className="p-4 sm:p-6 rounded-xl" style={{ backgroundColor: `${COLORS.neutralWhite}05` }}>
+                  <div className="p-4 sm:p-6 rounded-xl" style={{ backgroundColor: "var(--gl-hair-soft)" }}>
                     <div className="flex items-center gap-3 mb-4">
                       {renderStars(myReview.rating, "text-xl")}
                     </div>
                     {myReview.comment && (
-                      <p className="text-sm leading-relaxed opacity-80" style={{ color: COLORS.neutralWhite }}>
+                      <p className="text-sm leading-relaxed opacity-80" style={{ color: "var(--gl-text)" }}>
                         {myReview.comment}
                       </p>
                     )}
-                    <p className="text-xs opacity-60 mt-4" style={{ color: COLORS.neutralWhite }}>
+                    <p className="text-xs opacity-60 mt-4" style={{ color: "var(--gl-text)" }}>
                       Posted on {formatDate(myReview.created_at)}
                     </p>
                   </div>
@@ -673,7 +610,7 @@ const PsychicDetails = () => {
                   <div className="space-y-6">
                     {/* Star Rating */}
                     <div>
-                      <label className="block text-sm font-bold uppercase tracking-widest mb-3" style={{ color: COLORS.neutralWhite + "80" }}>
+                      <label className="block text-sm font-bold uppercase tracking-widest mb-3" style={{ color: "var(--gl-text-dim)" }}>
                         Rating
                       </label>
                       <div className="flex gap-1 sm:gap-2">
@@ -685,7 +622,7 @@ const PsychicDetails = () => {
                           >
                             <Icon
                               icon={star <= reviewRating ? "ph:star-fill" : "ph:star"}
-                              style={{ color: star <= reviewRating ? COLORS.primary : `${COLORS.neutralWhite}30` }}
+                              style={{ color: star <= reviewRating ? "var(--gl-accent)" : "var(--gl-hair)" }}
                             />
                           </button>
                         ))}
@@ -694,7 +631,7 @@ const PsychicDetails = () => {
 
                     {/* Comment */}
                     <div>
-                      <label className="block text-sm font-bold uppercase tracking-widest mb-3" style={{ color: COLORS.neutralWhite + "80" }}>
+                      <label className="block text-sm font-bold uppercase tracking-widest mb-3" style={{ color: "var(--gl-text-dim)" }}>
                         Comment (Optional)
                       </label>
                       <textarea
@@ -705,12 +642,12 @@ const PsychicDetails = () => {
                         placeholder="Share your experience..."
                         className="w-full px-4 py-3 rounded-xl text-sm resize-none"
                         style={{
-                          backgroundColor: `${COLORS.neutralWhite}05`,
-                          border: `1px solid ${COLORS.neutralWhite}10`,
-                          color: COLORS.neutralWhite,
+                          backgroundColor: "var(--gl-hair-soft)",
+                          border: "1px solid var(--gl-hair-soft)",
+                          color: "var(--gl-text)",
                         }}
                       />
-                      <p className="text-xs opacity-60 mt-2" style={{ color: COLORS.neutralWhite }}>
+                      <p className="text-xs opacity-60 mt-2" style={{ color: "var(--gl-text)" }}>
                         {reviewComment.length}/1000 characters
                       </p>
                     </div>
@@ -722,8 +659,8 @@ const PsychicDetails = () => {
                         disabled={createReviewMutation.isPending || updateReviewMutation.isPending}
                         className="w-full sm:flex-1 py-3 rounded-xl text-sm font-bold uppercase tracking-wider disabled:opacity-50 transition-opacity hover:opacity-90"
                         style={{
-                          backgroundColor: COLORS.primary,
-                          color: COLORS.dark,
+                          backgroundColor: "var(--gl-btn-bg)",
+                          color: "var(--gl-btn-fg)",
                         }}
                       >
                         {createReviewMutation.isPending || updateReviewMutation.isPending ? (
@@ -748,8 +685,8 @@ const PsychicDetails = () => {
                         }}
                         className="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
                         style={{
-                          backgroundColor: `${COLORS.neutralWhite}10`,
-                          color: COLORS.neutralWhite,
+                          backgroundColor: "var(--gl-hair-soft)",
+                          color: "var(--gl-text)",
                         }}
                       >
                         Cancel
@@ -757,7 +694,7 @@ const PsychicDetails = () => {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm opacity-60 text-center py-6" style={{ color: COLORS.neutralWhite }}>
+                  <p className="text-sm opacity-60 text-center py-6" style={{ color: "var(--gl-text)" }}>
                     You haven't reviewed this psychic yet. Click "Write Review" to share your experience.
                   </p>
                 )}
@@ -766,23 +703,14 @@ const PsychicDetails = () => {
 
             {/* REVIEWS SECTION */}
             <div
-              className="rounded-2xl p-4 sm:p-6 lg:p-8"
-              style={{
-                backgroundColor: COLORS.surface,
-                border: `1px solid ${COLORS.neutralWhite}10`,
-              }}
+              className="gl-panel p-4 sm:p-6 lg:p-8"
             >
-              <h2
-                className="uppercase tracking-tight text-xl sm:text-2xl mb-4 sm:mb-6"
-                style={{ ...TYPOGRAPHY.headings.h3, color: COLORS.neutralWhite }}
-              >
-                Reviews ({totalReviews})
-              </h2>
+              <h2 className="gl-h3 mb-4 sm:mb-6">Reviews ({totalReviews})</h2>
 
               {totalReviews === 0 ? (
                 <div className="text-center py-12">
-                  <Icon icon="ph:chat-text" className="text-5xl mb-4 mx-auto opacity-30" style={{ color: COLORS.neutralWhite }} />
-                  <p className="text-base opacity-60" style={{ color: COLORS.neutralWhite }}>
+                  <Icon icon="ph:chat-text" className="text-5xl mb-4 mx-auto opacity-30" style={{ color: "var(--gl-text)" }} />
+                  <p className="text-base opacity-60" style={{ color: "var(--gl-text)" }}>
                     No reviews yet
                   </p>
                 </div>
@@ -794,20 +722,20 @@ const PsychicDetails = () => {
                         key={review.id}
                         className="p-4 sm:p-6 rounded-xl border"
                         style={{
-                          backgroundColor: `${COLORS.neutralWhite}05`,
-                          borderColor: `${COLORS.neutralWhite}10`,
+                          backgroundColor: "var(--gl-hair-soft)",
+                          borderColor: "var(--gl-hair-soft)",
                         }}
                       >
                         {/* REVIEW HEADER */}
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <div className="flex items-center gap-3 mb-2">
-                              <span className="font-bold text-sm" style={{ color: COLORS.neutralWhite }}>
+                              <span className="font-bold text-sm" style={{ color: "var(--gl-text)" }}>
                                 {review.username || "Anonymous"}
                               </span>
                               {renderStars(review.rating, "text-sm")}
                             </div>
-                            <span className="text-xs opacity-60" style={{ color: COLORS.neutralWhite }}>
+                            <span className="text-xs opacity-60" style={{ color: "var(--gl-text)" }}>
                               {formatDate(review.created_at)}
                             </span>
                           </div>
@@ -815,7 +743,7 @@ const PsychicDetails = () => {
 
                         {/* REVIEW COMMENT */}
                         {review.comment && (
-                          <p className="text-sm leading-relaxed opacity-80" style={{ color: COLORS.neutralWhite }}>
+                          <p className="text-sm leading-relaxed opacity-80" style={{ color: "var(--gl-text)" }}>
                             {review.comment}
                           </p>
                         )}
@@ -825,8 +753,8 @@ const PsychicDetails = () => {
 
                   {/* PAGINATION CONTROLS */}
                   {totalReviews > reviewsPerPage && (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t" style={{ borderColor: `${COLORS.neutralWhite}10` }}>
-                      <div className="text-xs sm:text-sm opacity-60" style={{ color: COLORS.neutralWhite }}>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t" style={{ borderColor: "var(--gl-hair-soft)" }}>
+                      <div className="text-xs sm:text-sm opacity-60" style={{ color: "var(--gl-text)" }}>
                         Showing {reviewsPage * reviewsPerPage + 1}-{Math.min((reviewsPage + 1) * reviewsPerPage, totalReviews)} of {totalReviews}
                       </div>
                       <div className="flex gap-2">
@@ -835,8 +763,8 @@ const PsychicDetails = () => {
                           disabled={reviewsPage === 0}
                           className="px-3 sm:px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
                           style={{
-                            backgroundColor: `${COLORS.neutralWhite}10`,
-                            color: COLORS.neutralWhite,
+                            backgroundColor: "var(--gl-hair-soft)",
+                            color: "var(--gl-text)",
                           }}
                         >
                           <Icon icon="ph:caret-left" className="text-lg" />
@@ -848,8 +776,8 @@ const PsychicDetails = () => {
                               onClick={() => setReviewsPage(index)}
                               className="w-9 sm:w-8 h-9 sm:h-8 rounded-lg text-xs font-bold transition-opacity hover:opacity-80"
                               style={{
-                                backgroundColor: reviewsPage === index ? COLORS.primary : `${COLORS.neutralWhite}10`,
-                                color: reviewsPage === index ? COLORS.dark : COLORS.neutralWhite,
+                                backgroundColor: reviewsPage === index ? "var(--gl-btn-bg)" : "var(--gl-hair-soft)",
+                                color: reviewsPage === index ? "var(--gl-btn-fg)" : "var(--gl-text)",
                               }}
                             >
                               {index + 1}
@@ -861,8 +789,8 @@ const PsychicDetails = () => {
                           disabled={reviewsPage >= Math.ceil(totalReviews / reviewsPerPage) - 1}
                           className="px-3 sm:px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
                           style={{
-                            backgroundColor: `${COLORS.neutralWhite}10`,
-                            color: COLORS.neutralWhite,
+                            backgroundColor: "var(--gl-hair-soft)",
+                            color: "var(--gl-text)",
                           }}
                         >
                           <Icon icon="ph:caret-right" className="text-lg" />
