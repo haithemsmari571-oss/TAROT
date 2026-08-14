@@ -148,42 +148,46 @@ const PsychicsBrowse = () => {
       <div className="relative z-10">
         {/* HERO */}
         <section className="gl-hero">
-          <div className="gl-kicker">Private love readings &amp; tarot clarity</div>
-          <h1 className="gl-h1">
-            Someone here already
-            <br />
-            <i>sees what you can't.</i>
-          </h1>
-          <p className="gl-sub">
-            {totalCount > 0 ? `${totalCount} intuitive readers` : "Intuitive readers"}, live
-            now. Private, judgment-free readings on love, timing and the unsaid —{" "}
-            <b>your first reading is free with £15 credit.</b>
-          </p>
+          {/* In daylight this panel is the frosted surface that carries
+              readability; in candlelight it is invisible (no bg/padding). */}
+          <div className="gl-hero-panel">
+            <div className="gl-kicker">Private love readings &amp; tarot clarity</div>
+            <h1 className="gl-h1">
+              Someone here already
+              <br />
+              <i>sees what you can't.</i>
+            </h1>
+            <p className="gl-sub">
+              {totalCount > 0 ? `${totalCount} intuitive readers` : "Intuitive readers"}, live
+              now. Private, judgment-free readings on love, timing and the unsaid —{" "}
+              <b>your first reading is free with £15 credit.</b>
+            </p>
 
-          {/* SEARCH PILL */}
-          <div className="gl-search">
-            <input
-              type="text"
-              placeholder="Search by name, gift, or what you need answered…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") applySearchNow();
-              }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="gl-search-clear"
-                onClick={() => setSearchQuery("")}
-                title="Clear search"
-              >
-                <Icon icon="ph:x" />
+            {/* SEARCH PILL */}
+            <div className="gl-search">
+              <input
+                type="text"
+                placeholder="Search by name, gift, or what you need answered…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applySearchNow();
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="gl-search-clear"
+                  onClick={() => setSearchQuery("")}
+                  title="Clear search"
+                >
+                  <Icon icon="ph:x" />
+                </button>
+              )}
+              <button type="button" className="gl-search-btn" onClick={applySearchNow}>
+                Search
               </button>
-            )}
-            <button type="button" className="gl-search-btn" onClick={applySearchNow}>
-              Search
-            </button>
+            </div>
           </div>
         </section>
 
@@ -220,10 +224,12 @@ const PsychicsBrowse = () => {
           )}
         </div>
 
-        {/* COUNT LINE */}
+        {/* COUNT LINE — glass pill in daylight, loose text in candlelight */}
         {!loading && !error && (
           <div className="gl-count">
-            {totalCount} {totalCount === 1 ? "reader" : "readers"} found
+            <span>
+              {totalCount} {totalCount === 1 ? "reader" : "readers"} found
+            </span>
           </div>
         )}
 

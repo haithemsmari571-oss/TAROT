@@ -51,7 +51,9 @@
   --gl-glass-edge: rgba(255, 255, 255, 0.9);
   --gl-btn-bg: #211d26;
   --gl-btn-fg: #f7f4ee;
-  --gl-tint: linear-gradient(rgba(247, 244, 238, 0.82), rgba(247, 244, 238, 0.86) 55%, rgba(247, 244, 238, 0.94));
+  /* Light veil only — the artwork (moon, wisteria, candles) must stay clearly
+     visible; readability comes from the glass surfaces, never from this tint. */
+  --gl-tint: linear-gradient(rgba(247, 244, 238, 0.10), rgba(247, 244, 238, 0.18) 55%, rgba(247, 244, 238, 0.42));
   --gl-bar: rgba(255, 255, 255, 0.55);
   --gl-offer-bg: rgba(255, 255, 255, 0.6);
   --gl-photo-fade: linear-gradient(transparent 60%, rgba(255, 255, 255, 0.92));
@@ -239,6 +241,17 @@
 
 /* ————— Hero ————— */
 .gl-hero { text-align: center; padding: 56px 24px 30px; max-width: 820px; margin: 0 auto; }
+/* Daylight readability lives in this frosted panel; candlelight keeps the hero
+   directly over the artwork (dark mode is pixel-identical: no bg, no padding). */
+.gl-hero-panel { border-radius: 32px; }
+:root[data-theme="light"] .gl-hero-panel {
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: var(--gl-inset), var(--gl-card-shadow);
+  padding: 44px clamp(20px, 4vw, 48px) 40px;
+}
 .gl-kicker {
   font-family: var(--gl-sans);
   font-size: 11px;
@@ -411,6 +424,18 @@
   text-transform: uppercase;
   color: var(--gl-text-faint);
   padding: 26px 0 6px;
+}
+/* Daylight: the count becomes a small glass pill; candlelight keeps loose text. */
+.gl-count span { display: inline-block; }
+:root[data-theme="light"] .gl-count span {
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--gl-inset);
+  color: var(--gl-text-dim);
 }
 
 /* ————— Psychic grid + cards ————— */
