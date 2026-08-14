@@ -5,7 +5,7 @@
 import { Link } from "react-router-dom";
 import { Icon } from "@iconify/react";
 import Seo from "../../../components/Seo";
-import { COLORS } from "../../../theme";
+import "../../../styles/glass.css";
 
 export interface FaqItem {
   q: string;
@@ -49,20 +49,15 @@ function Section({
   return (
     <section className="mb-12">
       {eyebrow && (
-        <p
-          className="text-xs uppercase tracking-[0.25em] mb-2 font-bold"
-          style={{ color: COLORS.starGold }}
-        >
+        <p className="gl-kicker" style={{ marginBottom: 10 }}>
           {eyebrow}
         </p>
       )}
-      <h2
-        className="text-2xl md:text-3xl font-bold mb-4"
-        style={{ color: COLORS.neutralWhite, letterSpacing: "-0.02em" }}
+      <h2 className="gl-h3 mb-4">{title}</h2>
+      <div
+        className="space-y-4 text-base md:text-lg leading-relaxed"
+        style={{ color: "var(--gl-text-dim)" }}
       >
-        {title}
-      </h2>
-      <div className="space-y-4 text-base md:text-lg leading-relaxed" style={{ color: COLORS.neutralGray }}>
         {children}
       </div>
     </section>
@@ -75,22 +70,19 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
   return (
     <article
       className="mx-auto max-w-3xl px-5 md:px-6 py-12 md:py-16"
-      style={{ fontFamily: "'Poppins', sans-serif" }}
+      style={{ fontFamily: "var(--gl-sans)" }}
     >
       <Seo path={content.seoPath} />
 
       <header className="mb-10">
-        <h1
-          className="text-3xl md:text-5xl font-extrabold mb-6"
-          style={{ color: COLORS.primary, letterSpacing: "-0.03em", lineHeight: 1.1 }}
-        >
+        <h1 className="gl-h1" style={{ marginBottom: 24 }}>
           {content.h1}
         </h1>
         {content.intro.map((p, i) => (
           <p
             key={i}
             className="text-lg md:text-xl leading-relaxed mb-4"
-            style={{ color: COLORS.neutralWhite, opacity: 0.9 }}
+            style={{ color: "var(--gl-text)" }}
           >
             {p}
           </p>
@@ -116,7 +108,7 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
               <Icon
                 icon="ph:sparkle-fill"
                 className="mt-1.5 shrink-0"
-                style={{ color: COLORS.starGold }}
+                style={{ color: "var(--gl-accent)" }}
                 width={16}
                 height={16}
               />
@@ -139,22 +131,16 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
       </Section>
 
       {/* Primary CTA */}
-      <div
-        className="rounded-2xl p-8 my-12 text-center"
-        style={{
-          background: `linear-gradient(135deg, ${COLORS.surface} 0%, ${COLORS.surfaceAccent} 100%)`,
-          border: `1px solid ${COLORS.neutralDarkGray}`,
-        }}
-      >
-        <h2 className="text-2xl md:text-3xl font-bold mb-3" style={{ color: COLORS.neutralWhite }}>
-          {content.ctaHeading}
-        </h2>
-        <p className="mb-3 text-base md:text-lg" style={{ color: COLORS.neutralGray }}>
+      <div className="gl-panel gl-panel--2 p-8 my-12 text-center">
+        <h2 className="gl-h3 mb-3">{content.ctaHeading}</h2>
+        <p
+          className="mb-3 text-base md:text-lg"
+          style={{ color: "var(--gl-text-dim)" }}
+        >
           {content.ctaBody}
         </p>
         <p
-          className="mb-6 flex items-center justify-center gap-1.5 text-sm font-bold"
-          style={{ color: COLORS.starGold }}
+          className="gl-acc mb-6 flex items-center justify-center gap-1.5 text-sm font-semibold"
         >
           <Icon icon="ph:gift-fill" width={16} height={16} />
           New here? Your first £15 is free.
@@ -163,8 +149,8 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
             ships (Phase 2). For now it routes to the readers page. */}
         <Link
           to={content.ctaHref}
-          className="inline-block px-8 py-3.5 rounded-xl font-bold uppercase tracking-widest transition-transform hover:scale-105"
-          style={{ backgroundColor: COLORS.primary, color: COLORS.dark }}
+          className="gl-btn-solid inline-block"
+          style={{ padding: "14px 34px", fontSize: 13, textDecoration: "none" }}
         >
           {content.ctaButtonLabel}
         </Link>
@@ -175,7 +161,10 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
         <div className="space-y-6">
           {content.faqs.map((f, i) => (
             <div key={i}>
-              <h3 className="text-lg font-semibold mb-2" style={{ color: COLORS.neutralWhite }}>
+              <h3
+                className="gl-serif text-lg mb-2"
+                style={{ color: "var(--gl-text)", fontWeight: 400 }}
+              >
                 {f.q}
               </h3>
               <p>{f.a}</p>
@@ -185,10 +174,8 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
       </Section>
 
       {/* Related links */}
-      <section className="mt-12 pt-8" style={{ borderTop: `1px solid ${COLORS.neutralDarkGray}` }}>
-        <h2 className="text-xl font-bold mb-4" style={{ color: COLORS.neutralWhite }}>
-          Keep Reading
-        </h2>
+      <section className="mt-12 pt-8" style={{ borderTop: "1px solid var(--gl-hair)" }}>
+        <h2 className="gl-h3 mb-4">Keep Reading</h2>
         <ul className="space-y-2">
           {content.related.map((r, i) => (
             <li key={i}>
@@ -196,12 +183,12 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
                 <Link
                   to={r.href}
                   className="hover:underline"
-                  style={{ color: COLORS.primary }}
+                  style={{ color: "var(--gl-accent)" }}
                 >
                   {r.label}
                 </Link>
               ) : (
-                <a href={r.href} className="hover:underline" style={{ color: COLORS.primary }}>
+                <a href={r.href} className="hover:underline" style={{ color: "var(--gl-accent)" }}>
                   {r.label}
                 </a>
               )}

@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
 import AboutHero from "../components/AboutHero";
-import CelestialBackground from "../components/CelestialBackground";
+import PageBackground from "../../../components/PageBackground";
 import { motion } from "framer-motion";
 import axiosClient from "../../../lib/axiosClient";
 import type { AboutContent } from "../../landing-editor/types/landingEditor.types";
+import zodiacHall from "../../../assets/backgrounds/zodiac-hall-3.webp";
+import "../../../styles/glass.css";
 
 const DEFAULT_ABOUT: AboutContent = {
   badge: "The Foundation",
   title: "OUR",
   titleHighlighted: "ETHOS",
   established: "Established 2026",
-  tagline: "Guided by the absolute resonance of the stars",
+  tagline: "Guided by the quiet resonance of the stars",
   leftTag: "Celestial Navigation System v1.0",
   rightTag: "Deciphering the Void",
   bodyTitle: "Our Mission",
@@ -34,33 +35,26 @@ const AboutPage = () => {
   }, []);
 
   return (
-    <div
-      className="relative min-h-screen"
-      style={{ backgroundColor: COLORS.dark }}
-    >
-      <CelestialBackground scrollY={0} />
+    <div className="relative min-h-screen">
+      {/* The zodiac-hall scene stays vivid in both moods; the token tint carries mood. */}
+      <PageBackground images={zodiacHall} variant="glass" />
       <div className="relative z-10">
         <AboutHero content={content} />
-        <div className="max-w-4xl mx-auto px-6 pb-32 space-y-20">
+        <div className="max-w-4xl mx-auto px-6 pb-32 space-y-10">
           {content.bodyContent && (
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="space-y-8"
+              className="gl-panel px-7 py-9 md:px-12 md:py-12 space-y-6"
             >
-              <h2
-                className="text-4xl md:text-5xl font-black uppercase tracking-tighter"
-                style={{
-                  ...TYPOGRAPHY.headings.h2,
-                  color: COLORS.neutralWhite,
-                }}
-              >
-                {content.bodyTitle}
-              </h2>
+              <h2 className="gl-h2">{content.bodyTitle}</h2>
               <p
-                className="text-base md:text-lg leading-relaxed max-w-2xl"
-                style={{ color: COLORS.neutralGray }}
+                className="text-base leading-relaxed max-w-2xl"
+                style={{
+                  color: "var(--gl-text-dim)",
+                  fontFamily: "var(--gl-sans)",
+                }}
               >
                 {content.bodyContent}
               </p>
@@ -71,20 +65,15 @@ const AboutPage = () => {
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="space-y-8"
+              className="gl-panel gl-panel--2 px-7 py-9 md:px-12 md:py-12 space-y-6"
             >
-              <h2
-                className="text-4xl md:text-5xl font-black uppercase tracking-tighter"
-                style={{
-                  ...TYPOGRAPHY.headings.h2,
-                  color: COLORS.neutralWhite,
-                }}
-              >
-                {content.missionTitle}
-              </h2>
+              <h2 className="gl-h2">{content.missionTitle}</h2>
               <p
-                className="text-base md:text-lg leading-relaxed max-w-2xl"
-                style={{ color: COLORS.neutralGray }}
+                className="text-base leading-relaxed max-w-2xl"
+                style={{
+                  color: "var(--gl-text-dim)",
+                  fontFamily: "var(--gl-sans)",
+                }}
               >
                 {content.missionContent}
               </p>

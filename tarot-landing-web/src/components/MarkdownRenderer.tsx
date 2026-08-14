@@ -1,5 +1,5 @@
 import React from "react";
-import { COLORS, TYPOGRAPHY } from "../theme";
+import "../styles/glass.css";
 
 interface MarkdownRendererProps {
   content: string;
@@ -55,10 +55,10 @@ function renderInline(tokens: InlineToken[], keyPrefix: string): React.ReactNode
   return tokens.map((t, i) => {
     const key = `${keyPrefix}-${i}`;
     switch (t.type) {
-      case "bold": return <strong key={key} className="font-bold" style={{ color: COLORS.neutralWhite }}>{t.text}</strong>;
-      case "italic": return <em key={key} className="italic" style={{ color: COLORS.neutralWhite }}>{t.text}</em>;
-      case "code": return <code key={key} className="px-2 py-0.5 rounded-md text-sm font-mono" style={{ backgroundColor: `${COLORS.neutralWhite}08`, color: COLORS.primary, border: `1px solid ${COLORS.neutralDarkGray}` }}>{t.text}</code>;
-      case "link": return <a key={key} href={t.href} target="_blank" rel="noopener noreferrer" className="underline decoration-1 underline-offset-2 transition-colors" style={{ color: COLORS.primary }}>{t.text}</a>;
+      case "bold": return <strong key={key} className="font-semibold" style={{ color: "var(--gl-text)" }}>{t.text}</strong>;
+      case "italic": return <em key={key} className="italic" style={{ color: "var(--gl-text)" }}>{t.text}</em>;
+      case "code": return <code key={key} className="px-2 py-0.5 rounded-md text-sm font-mono" style={{ backgroundColor: "var(--gl-glass)", color: "var(--gl-accent)", border: "1px solid var(--gl-hair)" }}>{t.text}</code>;
+      case "link": return <a key={key} href={t.href} target="_blank" rel="noopener noreferrer" className="underline decoration-1 underline-offset-2 transition-colors" style={{ color: "var(--gl-accent)" }}>{t.text}</a>;
       default: return <React.Fragment key={key}>{t.text}</React.Fragment>;
     }
   });
@@ -160,35 +160,35 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
     const key = `block-${idx}`;
     switch (block.type) {
       case "h1":
-        return <h1 key={key} className="text-3xl md:text-4xl font-black uppercase tracking-tighter mt-12 mb-6" style={{ color: COLORS.neutralWhite, fontFamily: TYPOGRAPHY.fontFamily.heading }}>{renderInline(parseInline(block.text), key)}</h1>;
+        return <h1 key={key} className="gl-h2 mt-12 mb-6">{renderInline(parseInline(block.text), key)}</h1>;
       case "h2":
-        return <h2 key={key} className="text-2xl md:text-3xl font-black uppercase tracking-tighter mt-10 mb-4" style={{ color: COLORS.neutralWhite, fontFamily: TYPOGRAPHY.fontFamily.heading }}>{renderInline(parseInline(block.text), key)}</h2>;
+        return <h2 key={key} className="gl-h3 mt-10 mb-4">{renderInline(parseInline(block.text), key)}</h2>;
       case "h3":
-        return <h3 key={key} className="text-xl md:text-2xl font-bold uppercase tracking-tight mt-8 mb-3" style={{ color: COLORS.neutralWhite, fontFamily: TYPOGRAPHY.fontFamily.heading }}>{renderInline(parseInline(block.text), key)}</h3>;
+        return <h3 key={key} className="gl-serif mt-8 mb-3" style={{ color: "var(--gl-text)", fontSize: 20, fontWeight: 400, letterSpacing: "-0.2px" }}>{renderInline(parseInline(block.text), key)}</h3>;
       case "h4":
-        return <h4 key={key} className="text-lg font-bold uppercase tracking-wider mt-6 mb-2" style={{ color: COLORS.neutralGray }}>{renderInline(parseInline(block.text), key)}</h4>;
+        return <h4 key={key} className="uppercase mt-6 mb-2" style={{ color: "var(--gl-text-faint)", fontFamily: "var(--gl-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "2px" }}>{renderInline(parseInline(block.text), key)}</h4>;
       case "p":
-        return <p key={key} className="text-base leading-relaxed mb-4" style={{ color: COLORS.neutralGray }}>{renderInline(parseInline(block.text), key)}</p>;
+        return <p key={key} className="text-base leading-relaxed mb-4" style={{ color: "var(--gl-text-dim)" }}>{renderInline(parseInline(block.text), key)}</p>;
       case "blockquote":
-        return <blockquote key={key} className="pl-6 py-3 my-6 rounded-r-2xl border-l-2" style={{ borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}08` }}><div className="text-base leading-relaxed italic" style={{ color: COLORS.neutralGray }}>{renderInline(parseInline(block.text), key)}</div></blockquote>;
+        return <blockquote key={key} className="pl-6 py-3 my-6 rounded-r-2xl border-l-2" style={{ borderColor: "var(--gl-accent-dim)", backgroundColor: "var(--gl-glass)" }}><div className="text-base leading-relaxed italic" style={{ color: "var(--gl-text-dim)" }}>{renderInline(parseInline(block.text), key)}</div></blockquote>;
       case "hr":
-        return <hr key={key} className="my-10 border-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />;
+        return <hr key={key} className="gl-divider my-10 border-0" />;
       case "code":
         return (
-          <div key={key} className="relative group my-6 rounded-2xl overflow-hidden" style={{ backgroundColor: `${COLORS.neutralWhite}04`, border: `1px solid ${COLORS.neutralDarkGray}` }}>
-            <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: COLORS.neutralDarkGray, backgroundColor: `${COLORS.neutralWhite}04` }}>
+          <div key={key} className="relative group my-6 rounded-2xl overflow-hidden" style={{ backgroundColor: "var(--gl-glass)", border: "1px solid var(--gl-hair-soft)" }}>
+            <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: "var(--gl-hair-soft)", backgroundColor: "var(--gl-glass)" }}>
               <div className="flex gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500/60" /><span className="w-3 h-3 rounded-full bg-yellow-500/60" /><span className="w-3 h-3 rounded-full bg-green-500/60" /></div>
-              <span className="text-[10px] font-mono uppercase tracking-widest ml-2" style={{ color: COLORS.neutralGray }}>{block.lang || "code"}</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest ml-2" style={{ color: "var(--gl-text-faint)" }}>{block.lang || "code"}</span>
             </div>
-            <pre className="p-5 overflow-x-auto"><code className="text-sm font-mono leading-relaxed" style={{ color: COLORS.neutralGray }}>{block.text}</code></pre>
+            <pre className="p-5 overflow-x-auto"><code className="text-sm font-mono leading-relaxed" style={{ color: "var(--gl-text-dim)" }}>{block.text}</code></pre>
           </div>
         );
       case "ul":
         return (
           <ul key={key} className="space-y-2 mb-4 ml-6">
             {block.items.map((item, j) => (
-              <li key={`${key}-li-${j}`} className="text-base leading-relaxed pl-2" style={{ color: COLORS.neutralGray }}>
-                <span className="inline-block mr-2" style={{ color: COLORS.primary }}>✦</span>
+              <li key={`${key}-li-${j}`} className="text-base leading-relaxed pl-2" style={{ color: "var(--gl-text-dim)" }}>
+                <span className="inline-block mr-2" style={{ color: "var(--gl-accent)" }}>✦</span>
                 {renderInline(parseInline(item), `${key}-${j}`)}
               </li>
             ))}
@@ -196,9 +196,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
         );
       case "ol":
         return (
-          <ol key={key} className="space-y-2 mb-4 ml-6 list-decimal" style={{ color: COLORS.neutralGray }}>
+          <ol key={key} className="space-y-2 mb-4 ml-6 list-decimal" style={{ color: "var(--gl-text-dim)" }}>
             {block.items.map((item, j) => (
-              <li key={`${key}-li-${j}`} className="text-base leading-relaxed pl-2" style={{ color: COLORS.neutralGray }}>
+              <li key={`${key}-li-${j}`} className="text-base leading-relaxed pl-2" style={{ color: "var(--gl-text-dim)" }}>
                 {renderInline(parseInline(item), `${key}-${j}`)}
               </li>
             ))}
@@ -206,14 +206,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
         );
       case "table":
         return (
-          <div key={key} className="my-6 rounded-2xl overflow-hidden border" style={{ borderColor: COLORS.neutralDarkGray }}>
+          <div key={key} className="my-6 rounded-2xl overflow-hidden border" style={{ borderColor: "var(--gl-hair)" }}>
             <table className="w-full text-sm">
-              <thead style={{ backgroundColor: `${COLORS.neutralWhite}06` }}>
-                <tr>{block.headers.map((h, j) => <th key={`${key}-th-${j}`} className="px-5 py-3 text-left font-bold uppercase tracking-wider text-[10px]" style={{ color: COLORS.neutralGray, borderBottom: `1px solid ${COLORS.neutralDarkGray}` }}>{renderInline(parseInline(h), `${key}-th-${j}`)}</th>)}</tr>
+              <thead style={{ backgroundColor: "var(--gl-glass)" }}>
+                <tr>{block.headers.map((h, j) => <th key={`${key}-th-${j}`} className="px-5 py-3 text-left font-semibold uppercase tracking-wider text-[10px]" style={{ color: "var(--gl-text-faint)", borderBottom: "1px solid var(--gl-hair)" }}>{renderInline(parseInline(h), `${key}-th-${j}`)}</th>)}</tr>
               </thead>
               <tbody>
                 {block.rows.map((row, j) => (
-                  <tr key={`${key}-tr-${j}`}>{row.map((cell, k) => <td key={`${key}-td-${j}-${k}`} className="px-5 py-3" style={{ color: COLORS.neutralGray, borderBottom: `1px solid ${COLORS.neutralDarkGray}` }}>{renderInline(parseInline(cell), `${key}-td-${j}-${k}`)}</td>)}</tr>
+                  <tr key={`${key}-tr-${j}`}>{row.map((cell, k) => <td key={`${key}-td-${j}-${k}`} className="px-5 py-3" style={{ color: "var(--gl-text-dim)", borderBottom: "1px solid var(--gl-hair-soft)" }}>{renderInline(parseInline(cell), `${key}-td-${j}-${k}`)}</td>)}</tr>
                 ))}
               </tbody>
             </table>
@@ -222,7 +222,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
     }
   };
 
-  return <div className="markdown-body">{blocks.map(renderBlock)}</div>;
+  return <div className="markdown-body" style={{ fontFamily: "var(--gl-sans)" }}>{blocks.map(renderBlock)}</div>;
 };
 
 export default MarkdownRenderer;

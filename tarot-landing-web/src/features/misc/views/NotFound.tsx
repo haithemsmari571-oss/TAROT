@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Icon } from "@iconify/react";
 import Seo from "../../../components/Seo";
-import { COLORS } from "../../../theme";
+import "../../../styles/glass.css";
 
 // Branded 404. SSR-safe so the prerenderer can emit a real /404.html with a
 // proper 404 status at the edge.
@@ -9,7 +9,7 @@ export default function NotFound() {
   return (
     <div
       className="flex flex-col items-center justify-center w-full min-h-screen text-center px-6"
-      style={{ backgroundColor: COLORS.dark, fontFamily: "'Poppins', sans-serif" }}
+      style={{ background: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
     >
       <Seo
         meta={{
@@ -18,37 +18,37 @@ export default function NotFound() {
           description: "This page has drifted out of orbit. Find your way back to Ask Valentina.",
         }}
       />
-      <Icon
-        icon="ph:moon-stars-duotone"
-        width={72}
-        height={72}
-        style={{ color: COLORS.primary }}
-        className="mb-6"
-      />
-      <h1
-        className="text-3xl md:text-5xl font-extrabold mb-3"
-        style={{ color: COLORS.primary, letterSpacing: "-0.02em" }}
-      >
-        This page has drifted out of orbit
-      </h1>
-      <p className="text-lg mb-10 max-w-md" style={{ color: COLORS.neutralGray }}>
-        The page you're looking for isn't here — but your reading still is. Let's guide you back.
-      </p>
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Link
-          to="/"
-          className="px-8 py-3.5 rounded-xl font-bold uppercase tracking-widest transition-transform hover:scale-105"
-          style={{ backgroundColor: COLORS.primary, color: COLORS.dark }}
-        >
-          Back to Home
-        </Link>
-        <Link
-          to="/psychics-browse"
-          className="px-8 py-3.5 rounded-xl font-bold uppercase tracking-widest border transition-colors"
-          style={{ borderColor: COLORS.neutralDarkGray, color: COLORS.neutralWhite }}
-        >
-          Browse Our Readers
-        </Link>
+      <div className="gl-panel flex flex-col items-center w-full max-w-xl px-8 py-12 md:px-14 md:py-14">
+        <Icon
+          icon="ph:moon-stars-duotone"
+          width={64}
+          height={64}
+          style={{ color: "var(--gl-accent)" }}
+          className="mb-6"
+        />
+        <p className="gl-kicker">Four Oh Four</p>
+        <h1 className="gl-h2 mb-4">
+          This page has drifted <i>out of orbit</i>
+        </h1>
+        <p className="gl-sub" style={{ marginBottom: 34 }}>
+          The page you're looking for isn't here — but your reading still is. Let's guide you back.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Link
+            to="/"
+            className="gl-btn-solid inline-block"
+            style={{ padding: "13px 30px", textDecoration: "none" }}
+          >
+            Back to Home
+          </Link>
+          <Link
+            to="/psychics-browse"
+            className="gl-btn-ghost inline-block"
+            style={{ padding: "13px 30px", textDecoration: "none" }}
+          >
+            Browse Our Readers
+          </Link>
+        </div>
       </div>
     </div>
   );
