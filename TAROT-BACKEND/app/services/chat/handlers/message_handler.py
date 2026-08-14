@@ -52,6 +52,13 @@ class MessageHandler(BaseEventHandler):
     """Handles message sending/receiving"""
 
     async def handle(self, event_data: Dict[str, Any]) -> None:
+        """Keep one chat's commit and notification order causal."""
+        from app.services.ai.reading_burst import message_flow_lock
+
+        async with message_flow_lock(self.chat_id):
+            await self._handle_serialized(event_data)
+
+    async def _handle_serialized(self, event_data: Dict[str, Any]) -> None:
         """Save message and broadcast to chat participants"""
         from app.routers.chats import manager  # Import here to avoid circular
 

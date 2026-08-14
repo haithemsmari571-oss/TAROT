@@ -33,7 +33,22 @@ GENERATION_HEARTBEAT_SECONDS = 15.0
 _tasks: Dict[int, asyncio.Task] = {}
 _wake_events: Dict[int, asyncio.Event] = {}
 _generating: set[int] = set()
+_message_flow_locks: Dict[int, asyncio.Lock] = {}
 _stopping = False
+
+
+def message_flow_lock(chat_id: int) -> asyncio.Lock:
+    """Serialize one chat's persistence-through-notification boundary.
+
+    Production runs one Uvicorn worker. Keeping the client/manual send path and
+    Automatic bubble delivery under this same per-chat lock prevents an older
+    committed bubble from notifying after a newer client message.
+    """
+    lock = _message_flow_locks.get(chat_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _message_flow_locks[chat_id] = lock
+    return lock
 
 
 def _now() -> datetime:
@@ -1162,6 +1177,16 @@ def _store_auto_plan(
 
 
 async def _deliver_bubble(
+    claim: _Claim, bubble: str, expected_position: int, total: int
+):
+    """Serialize, commit and notify one Automatic bubble in causal order."""
+    async with message_flow_lock(claim.chat_id):
+        return await _deliver_bubble_serialized(
+            claim, bubble, expected_position, total
+        )
+
+
+async def _deliver_bubble_serialized(
     claim: _Claim, bubble: str, expected_position: int, total: int
 ):
     """Commit one reader Message and reveal progress atomically, then broadcast it."""

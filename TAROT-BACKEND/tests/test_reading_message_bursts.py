@@ -116,6 +116,7 @@ def _burst_globals(monkeypatch):
     reading_burst._tasks.clear()
     reading_burst._wake_events.clear()
     reading_burst._generating.clear()
+    getattr(reading_burst, "_message_flow_locks", {}).clear()
     reading_burst._stopping = False
     monkeypatch.setattr(reading_burst, "MESSAGE_BURST_SILENCE_SECONDS", 0.08)
     monkeypatch.setattr(reading_burst, "CLIENT_TYPING_EXPIRY_SECONDS", 0.12)
@@ -1033,6 +1034,235 @@ def test_manual_reply_during_automatic_reveal_does_not_duplicate_client_memory(
     ]
     db.expire_all()
     assert db.get(ReadingMessageBurst, session.id).completed_client_message_id == trigger.id
+
+
+def test_automatic_commit_notifies_before_a_concurrent_newer_client_message(
+    db, make_user, monkeypatch
+):
+    factory = _install_db(monkeypatch, db)
+    client, psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.SABRI
+    )
+    trigger = _client_message(db, chat, session, client, "question for Automatic")
+    row = ReadingMessageBurst(
+        chat_session_id=session.id,
+        chat_id=chat.id,
+        latest_client_message_id=trigger.id,
+        generation_version=3,
+        status="DELIVERING",
+        lease_owner="d32-owner",
+        response_bubbles='["older Automatic bubble"]',
+        delivery_position=0,
+    )
+    db.add(row)
+    db.commit()
+
+    claim = reading_burst._Claim(
+        chat_session_id=session.id,
+        chat_id=chat.id,
+        client_id=client.id,
+        psychic_id=psychic.id,
+        mode=ResponseMode.SABRI.value,
+        owner="d32-owner",
+        version=3,
+        through_message_id=trigger.id,
+        contents=[trigger.content],
+        response_bubbles=["older Automatic bubble"],
+    )
+    automatic_committed = asyncio.Event()
+    release_notification = asyncio.Event()
+    notifications = []
+
+    async def paused_automatic_notification(_db, _chat, message):
+        automatic_committed.set()
+        await release_notification.wait()
+        notifications.append(message.content)
+
+    async def record_client_notification(message, chat_id):
+        assert chat_id == str(chat.id)
+        notifications.append(message["content"])
+
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message",
+        paused_automatic_notification,
+    )
+    from app.routers.chats import manager
+    from app.services import session_manager as session_manager_module
+    from app.services.chat.handlers.message_handler import MessageHandler
+
+    monkeypatch.setattr(manager, "send_to_chat", record_client_notification)
+    monkeypatch.setattr(reading_burst, "_wake", lambda _session_id: None)
+    prior_manager = session_manager_module.session_manager
+    session_manager_module.session_manager = SimpleNamespace(
+        active_sessions={chat.id: SimpleNamespace(awaiting_join=False, is_grace=False)}
+    )
+
+    class Socket:
+        async def send_json(self, _payload):
+            return None
+
+    async def scenario():
+        automatic = asyncio.create_task(
+            reading_burst._deliver_bubble(
+                claim, "older Automatic bubble", expected_position=0, total=1
+            )
+        )
+        await automatic_committed.wait()
+        client_send = asyncio.create_task(
+            MessageHandler(Socket(), db, chat.id, client.id).handle(
+                {"content": "newer client message"}
+            )
+        )
+        await asyncio.sleep(0.02)
+        with factory() as reader:
+            client_messages = (
+                reader.query(Message)
+                .filter(
+                    Message.chat_session_id == session.id,
+                    Message.sender_id == client.id,
+                )
+                .order_by(Message.id)
+                .all()
+            )
+            assert [message.content for message in client_messages] == [
+                "question for Automatic"
+            ]
+        assert not client_send.done()
+        release_notification.set()
+        await asyncio.gather(automatic, client_send)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        session_manager_module.session_manager = prior_manager
+
+    assert notifications == ["older Automatic bubble", "newer client message"]
+    db.expire_all()
+    row = db.get(ReadingMessageBurst, session.id)
+    newer = (
+        db.query(Message)
+        .filter(
+            Message.chat_session_id == session.id,
+            Message.sender_id == client.id,
+        )
+        .order_by(Message.id.desc())
+        .first()
+    )
+    assert newer.content == "newer client message"
+    assert row.completed_client_message_id == trigger.id
+    assert row.latest_client_message_id == newer.id
+    assert row.status == "WAITING"
+
+
+def test_newer_client_message_that_owns_flow_first_refuses_stale_automatic_bubble(
+    db, make_user, monkeypatch
+):
+    _install_db(monkeypatch, db)
+    client, psychic, chat, session, _interval = _seed_reading(
+        db, make_user, ResponseMode.SABRI
+    )
+    trigger = _client_message(db, chat, session, client, "question before race")
+    row = ReadingMessageBurst(
+        chat_session_id=session.id,
+        chat_id=chat.id,
+        latest_client_message_id=trigger.id,
+        generation_version=8,
+        status="DELIVERING",
+        lease_owner="d32-client-first",
+        response_bubbles='["stale Automatic bubble"]',
+        delivery_position=0,
+    )
+    db.add(row)
+    db.commit()
+    claim = reading_burst._Claim(
+        chat_session_id=session.id,
+        chat_id=chat.id,
+        client_id=client.id,
+        psychic_id=psychic.id,
+        mode=ResponseMode.SABRI.value,
+        owner="d32-client-first",
+        version=8,
+        through_message_id=trigger.id,
+        contents=[trigger.content],
+        response_bubbles=["stale Automatic bubble"],
+    )
+
+    from app.routers.chats import manager
+    from app.services import session_manager as session_manager_module
+    from app.services.chat.handlers.message_handler import MessageHandler
+
+    client_owns_flow = asyncio.Event()
+    release_client = asyncio.Event()
+    notifications = []
+    original_handle = MessageHandler._handle_serialized
+
+    async def paused_client_handle(self, event_data):
+        client_owns_flow.set()
+        await release_client.wait()
+        await original_handle(self, event_data)
+
+    async def record_client_notification(message, chat_id):
+        assert chat_id == str(chat.id)
+        notifications.append(message["content"])
+
+    async def reject_stale_notification(*_args, **_kwargs):
+        raise AssertionError("the stale Automatic bubble must never notify")
+
+    monkeypatch.setattr(MessageHandler, "_handle_serialized", paused_client_handle)
+    monkeypatch.setattr(manager, "send_to_chat", record_client_notification)
+    monkeypatch.setattr(
+        "app.services.chats.broadcast_persisted_ai_message",
+        reject_stale_notification,
+    )
+    monkeypatch.setattr(reading_burst, "_wake", lambda _session_id: None)
+    prior_manager = session_manager_module.session_manager
+    session_manager_module.session_manager = SimpleNamespace(
+        active_sessions={chat.id: SimpleNamespace(awaiting_join=False, is_grace=False)}
+    )
+
+    class Socket:
+        async def send_json(self, _payload):
+            return None
+
+    async def scenario():
+        client_send = asyncio.create_task(
+            MessageHandler(Socket(), db, chat.id, client.id).handle(
+                {"content": "newer client message owns flow"}
+            )
+        )
+        await client_owns_flow.wait()
+        automatic = asyncio.create_task(
+            reading_burst._deliver_bubble(
+                claim, "stale Automatic bubble", expected_position=0, total=1
+            )
+        )
+        await asyncio.sleep(0.02)
+        assert not automatic.done()
+        release_client.set()
+        await client_send
+        return await automatic
+
+    try:
+        result = asyncio.run(scenario())
+    finally:
+        session_manager_module.session_manager = prior_manager
+
+    assert result == (None, False)
+    assert notifications == ["newer client message owns flow"]
+    db.expire_all()
+    assert (
+        db.query(Message)
+        .filter(
+            Message.chat_session_id == session.id,
+            Message.sender_id == psychic.id,
+        )
+        .count()
+        == 0
+    )
+    row = db.get(ReadingMessageBurst, session.id)
+    assert row.latest_client_message_id > trigger.id
+    assert row.completed_client_message_id is None
+    assert row.status == "WAITING"
 
 
 def test_recovery_and_concurrent_wakes_resume_without_duplicate_response(
