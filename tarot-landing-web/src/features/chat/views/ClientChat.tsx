@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
+import "../../../styles/glass.css";
 import { useChats } from "../hooks/useChats";
 import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
@@ -204,7 +204,7 @@ const ClientChat = () => {
   // State for messages
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  // Reader "typing…" indicator, driven by backend typing_start/typing_stop events.
+  // Reader "typingâ€¦" indicator, driven by backend typing_start/typing_stop events.
   const [isReaderTyping, setIsReaderTyping] = useState(false);
 
   // ChatFacade for WebSocket connection
@@ -284,7 +284,7 @@ const ClientChat = () => {
   // Stable event handlers using useCallback
   const handleMessageReceived = useCallback(({ message }: { message: ChatMessage }) => {
     console.log('[ClientChat] Message received handler called:', message);
-    // A message arrived → stop showing the reader typing indicator.
+    // A message arrived â†’ stop showing the reader typing indicator.
     setIsReaderTyping(false);
     setMessages(prev => {
       // Avoid duplicates
@@ -305,7 +305,7 @@ const ClientChat = () => {
   }, [user]);
   const handleTypingStop = useCallback(() => setIsReaderTyping(false), []);
 
-  // The other party opened the conversation → flip our sent messages to "seen".
+  // The other party opened the conversation â†’ flip our sent messages to "seen".
   const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
     if (!user || readerId === user.id) return;
     setMessages(prev =>
@@ -370,7 +370,7 @@ const ClientChat = () => {
     });
 
     // This handler knows the real end reason (MANUAL_EXIT vs INSUFFICIENT_FUNDS,
-    // etc.), so claim the session-end here — the client-side timer-0 fallback
+    // etc.), so claim the session-end here â€” the client-side timer-0 fallback
     // effect must not override the modal variant it just chose.
     hasHandledSessionEnd.current = true;
 
@@ -451,7 +451,7 @@ const ClientChat = () => {
       remaining_minutes: p.remainingMinutes,
       minutes_charged: p.minutesCharged,
       rate_per_minute: p.ratePerMinute,
-      // session_started only fires once the client has joined → billing ACTIVE.
+      // session_started only fires once the client has joined â†’ billing ACTIVE.
       session_status: (p.sessionStatus as any) ?? 'ACTIVE',
     };
 
@@ -615,7 +615,7 @@ const ClientChat = () => {
   }, [selectedChat]);
 
   // NOTE: billing is anchored ONLY by an explicit click on the global
-  // "Incoming Reading" Join button (IncomingReadingModal → joinChat). It must
+  // "Incoming Reading" Join button (IncomingReadingModal â†’ joinChat). It must
   // NOT be triggered by viewing/rendering this conversation, so there is no
   // join-on-view effect here by design.
 
@@ -657,7 +657,7 @@ const ClientChat = () => {
 
       // Show session summary modal. CHAT_ENDED forces remainingSeconds to 0 for
       // EVERY end (manual or balance), so this fallback must key off the real
-      // end reason — not assume "insufficient balance". A voluntary End Chat
+      // end reason â€” not assume "insufficient balance". A voluntary End Chat
       // carries "user_initiated" and gets the graceful (purple) variant.
       setSessionSummaryData({
         duration: sessionState.elapsedSeconds,
@@ -864,18 +864,18 @@ const ClientChat = () => {
   // In-session "Add Stardust": open the real Stardust Glider (any amount + bonus
   // tiers). We pause the reading only once she commits (onBeforeCheckout), so the
   // clock isn't running during the Stripe round-trip; on return we resume (see the
-  // payment-return effect — the glider's webhook credits Stardust but, unlike
+  // payment-return effect â€” the glider's webhook credits Stardust but, unlike
   // /topup, does not itself resume the paused chat).
   const handleAddStardust = useCallback(() => {
     if (!selectedChat) return;
     const chatId = selectedChat;
     // Already in the out-of-balance GRACE hold? The session is paused, so don't
-    // re-pause — instead flag the top-up (/topup → mark_topping_up) to extend the
+    // re-pause â€” instead flag the top-up (/topup â†’ mark_topping_up) to extend the
     // hold from 60s to the 5-minute cap while checkout completes.
     const inGrace = sessionState.sessionStatus === 'GRACE';
     openTopUp({
       reason:
-        "Add Stardust to keep your reading going — we'll pause the clock while you top up.",
+        "Add Stardust to keep your reading going â€” we'll pause the clock while you top up.",
       returnUrl: `/chats?chat_id=${chatId}&resume=1`,
       onBeforeCheckout: async () => {
         if (inGrace) {
@@ -926,11 +926,11 @@ const ClientChat = () => {
     if (status === 'success') {
       setSelectedChat(chatIdNum);
 
-      // Glider top-up (resume=1): the Stardust webhook only credits balance — it
-      // does NOT resume the chat — so we resume ourselves, retrying to let the
+      // Glider top-up (resume=1): the Stardust webhook only credits balance â€” it
+      // does NOT resume the chat â€” so we resume ourselves, retrying to let the
       // async credit land before /resume's own balance check runs.
       if (searchParams.get('resume') === '1') {
-        toastRef.current.success('Payment received — resuming your reading…');
+        toastRef.current.success('Payment received â€” resuming your readingâ€¦');
         let cancelled = false;
         (async () => {
           for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
@@ -984,7 +984,7 @@ const ClientChat = () => {
       setSelectedChat(chatIdNum);
 
       const timer = setTimeout(async () => {
-        toast.info('Top-up cancelled. Your chat is paused — you can top up again or resume if you have balance.');
+        toast.info('Top-up cancelled. Your chat is paused â€” you can top up again or resume if you have balance.');
 
         // Clean up URL
         navigate(`/chats?chat_id=${chatIdNum}`, { replace: true });
@@ -994,7 +994,7 @@ const ClientChat = () => {
     }
   }, [searchParams, navigate]);
 
-  // ── Deep-link: open a specific conversation straight from a notification ──
+  // â”€â”€ Deep-link: open a specific conversation straight from a notification â”€â”€
   // /chats?chat_id=123 (no payment `status`) selects that chat directly, instead
   // of dropping the client on the list to hunt for it while billing runs.
   useEffect(() => {
@@ -1026,7 +1026,7 @@ const ClientChat = () => {
     return [...olderMessages, ...messages];
   }, [olderMessages, messages]);
 
-  // ── LOCAL-ONLY PREVIEW (dev only): /chats?preview=active|lowbalance|paused|ended|ranout
+  // â”€â”€ LOCAL-ONLY PREVIEW (dev only): /chats?preview=active|lowbalance|paused|ended|ranout
   //    Renders the redesigned session states with mock data so they can be eyeballed
   //    without a live reading. Remove this block (and ChatStatePreview below) before shipping.
   const previewMode = import.meta.env.DEV ? searchParams.get("preview") : null;
@@ -1037,7 +1037,7 @@ const ClientChat = () => {
   // --- LOADING STATE ---
   if (loading) {
     return (
-      <div className="h-[calc(100dvh-80px)] flex items-center justify-center relative overflow-hidden" style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}>
+      <div className="h-[calc(100dvh-80px)] flex items-center justify-center relative overflow-hidden" style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}>
         <div className="text-center relative z-10">
           <div className="w-20 h-20 rounded-3xl border-4 border-white/10 border-t-primary mx-auto mb-6 animate-spin" />
           <p className="text-base text-white/60 font-semibold">Loading your messages...</p>
@@ -1049,12 +1049,12 @@ const ClientChat = () => {
   // --- ERROR STATE ---
   if (error) {
     return (
-      <div className="h-[calc(100dvh-80px)] flex items-center justify-center relative overflow-hidden" style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}>
+      <div className="h-[calc(100dvh-80px)] flex items-center justify-center relative overflow-hidden" style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}>
         <div className="text-center max-w-md px-6 relative z-10">
           <div className="w-20 h-20 rounded-3xl bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center mx-auto mb-6">
             <Icon icon="solar:danger-triangle-bold-duotone" className="text-4xl text-red-400" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+          <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: "var(--gl-serif)" }}>
             Unable to Load Chats
           </h2>
           <p className="text-base text-white/60 mb-8">{error}</p>
@@ -1062,7 +1062,7 @@ const ClientChat = () => {
             onClick={refetch}
             className="px-8 py-4 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 shadow-lg text-white"
             style={{
-              background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
+              background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
             }}
           >
             Try Again
@@ -1076,7 +1076,7 @@ const ClientChat = () => {
   const remaining = sessionState.remainingSeconds;
   const isGrace = sessionState.sessionStatus === 'GRACE';
   // Per-minute model: clientBalance is the LIVE balance after each minute's
-  // upfront debit — it IS the Stardust left (don't subtract cost again). Keep it
+  // upfront debit â€” it IS the Stardust left (don't subtract cost again). Keep it
   // EXACT (no floor) so the counter matches the header (9.6, not 9).
   const stardustLeft =
     sessionState.clientBalance == null
@@ -1087,7 +1087,7 @@ const ClientChat = () => {
   const psychicName =
     psychicDetails?.username || selectedChatData?.user_name || "Your reader";
 
-  // Human-friendly "reading time left" for the low-balance banner — derived from
+  // Human-friendly "reading time left" for the low-balance banner â€” derived from
   // the live whole minutes remaining, not hardcoded, so it tracks reality.
   const readingTimeLeftLabel = (() => {
     if (minutesLeft <= 0) {
@@ -1100,10 +1100,10 @@ const ClientChat = () => {
   return (
     <div
       className="h-[calc(100dvh-80px)] flex gap-2 md:gap-4 p-2 sm:p-3 md:p-4 relative overflow-hidden"
-      style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}
+      style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}
     >
-      {/* Faint dimmed scene — texture only; kept well below message legibility */}
-      <PageBackground images={chatBackground} variant="soft" />
+      {/* Faint dimmed scene â€” texture only; kept well below message legibility */}
+      <PageBackground images={chatBackground} variant="glass" />
 
       {/* Starfield Background */}
       <div className="fixed inset-0 pointer-events-none">
@@ -1112,12 +1112,12 @@ const ClientChat = () => {
       </div>
 
       {/* LEFT SIDEBAR - CHAT LIST */}
-      <div className={`${selectedChat ? 'hidden' : 'flex'} md:flex w-full md:w-80 lg:w-96 flex-col relative z-10 backdrop-blur-xl rounded-3xl border border-white/10`} style={{ backgroundColor: `${COLORS.dark}22` }}>
+      <div className={`${selectedChat ? 'hidden' : 'flex'} md:flex w-full md:w-80 lg:w-96 flex-col relative z-10 backdrop-blur-xl rounded-3xl border border-white/10`} style={{ backgroundColor: `color-mix(in srgb, var(--gl-base) 13%, transparent)` }}>
         {/* Header */}
         <div className="p-6 border-b border-white/5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+              <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: "var(--gl-serif)" }}>
                 Messages
               </h1>
               <p className="text-sm text-white/40">Connect with your psychics</p>
@@ -1139,7 +1139,7 @@ const ClientChat = () => {
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-6 border border-white/10">
                 <Icon icon="solar:chat-dots-bold-duotone" className="text-5xl text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+              <h3 className="text-xl font-bold text-white mb-2" style={{ fontFamily: "var(--gl-serif)" }}>
                 No messages yet
               </h3>
               <p className="text-sm text-white/50 mb-6 max-w-[240px]">
@@ -1149,7 +1149,7 @@ const ClientChat = () => {
                 onClick={() => window.location.href = '/psychics-browse'}
                 className="px-8 py-3 rounded-full font-semibold text-sm transition-opacity hover:opacity-90 shadow-lg text-white"
                 style={{
-                  background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
+                  background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
                 }}
               >
                 Browse Psychics
@@ -1188,7 +1188,7 @@ const ClientChat = () => {
                       {displayStatus === 'ACTIVE' && (
                         <div
                           className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 flex items-center justify-center"
-                          style={{ borderColor: selectedChat === chat.id ? 'rgba(255,255,255,0.1)' : COLORS.surface }}
+                          style={{ borderColor: selectedChat === chat.id ? 'rgba(255,255,255,0.1)' : "var(--gl-glass)" }}
                         >
                           <div className="w-2 h-2 rounded-full bg-white" />
                         </div>
@@ -1196,7 +1196,7 @@ const ClientChat = () => {
                       {displayStatus === 'PAUSED' && (
                         <div
                           className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-orange-500 border-2 flex items-center justify-center"
-                          style={{ borderColor: selectedChat === chat.id ? 'rgba(255,255,255,0.1)' : COLORS.surface }}
+                          style={{ borderColor: selectedChat === chat.id ? 'rgba(255,255,255,0.1)' : "var(--gl-glass)" }}
                         >
                           <div className="w-2 h-2 rounded-full bg-white" />
                         </div>
@@ -1206,7 +1206,7 @@ const ClientChat = () => {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-2 mb-1">
-                        <span className="font-bold text-white text-base truncate" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                        <span className="font-bold text-white text-base truncate" style={{ fontFamily: "var(--gl-serif)" }}>
                           {chat.user_name}
                         </span>
                         {displayStatus === 'ACTIVE' && (
@@ -1269,7 +1269,7 @@ const ClientChat = () => {
                 }
                 return pages.map((p, i) =>
                   typeof p === 'string' ? (
-                    <span key={`e${i}`} className="text-white/30 text-xs px-1">···</span>
+                    <span key={`e${i}`} className="text-white/30 text-xs px-1">Â·Â·Â·</span>
                   ) : (
                     <button
                       key={p}
@@ -1298,7 +1298,7 @@ const ClientChat = () => {
       </div>
 
       {/* RIGHT SIDE - CHAT WINDOW */}
-      <div className={`${!selectedChat ? 'hidden' : 'flex'} md:flex flex-1 relative z-10 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden`} style={{ backgroundColor: `${COLORS.dark}22` }}>
+      <div className={`${!selectedChat ? 'hidden' : 'flex'} md:flex flex-1 relative z-10 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden`} style={{ backgroundColor: `color-mix(in srgb, var(--gl-base) 13%, transparent)` }}>
         {!selectedChat ? (
           // No chat selected
           <div className="flex-1 flex items-center justify-center">
@@ -1306,7 +1306,7 @@ const ClientChat = () => {
               <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center mx-auto mb-6 border border-white/10">
                 <Icon icon="solar:chat-round-dots-bold-duotone" className="text-6xl text-primary/60" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+              <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: "var(--gl-serif)" }}>
                 Select a conversation
               </h2>
               <p className="text-base text-white/50 max-w-sm mx-auto">
@@ -1319,7 +1319,7 @@ const ClientChat = () => {
             {/* CHAT MESSAGES AREA */}
             <div className="flex-1 flex flex-col">
               {/* Chat Header - Desktop */}
-              <div className="hidden md:flex items-center justify-between p-5 border-b border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}22` }}>
+              <div className="hidden md:flex items-center justify-between p-5 border-b border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 13%, transparent)` }}>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border border-white/10">
                     {selectedChatData?.user_profile_pic_url ? (
@@ -1335,7 +1335,7 @@ const ClientChat = () => {
 
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-white text-lg" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                      <h2 className="font-bold text-white text-lg" style={{ fontFamily: "var(--gl-serif)" }}>
                         {selectedChatData?.user_name || "Psychic"}
                       </h2>
                       {/* Tablet (<lg): open the reader profile sheet; on lg the sidebar shows it. */}
@@ -1356,8 +1356,8 @@ const ClientChat = () => {
                         </>
                       ) : isPaused ? (
                         <>
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS.starGold }} />
-                          <span className="text-sm font-medium" style={{ color: COLORS.starGold }}>Reading paused — add Stardust to resume</span>
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "var(--gl-accent)" }} />
+                          <span className="text-sm font-medium" style={{ color: "var(--gl-accent)" }}>Reading paused â€” add Stardust to resume</span>
                         </>
                       ) : currentChatStatus === 'ENDED' ? (
                         <>
@@ -1396,7 +1396,7 @@ const ClientChat = () => {
               </div>
 
               {/* Chat Header - Mobile */}
-              <div className="md:hidden flex items-center justify-between px-3 py-2 border-b border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}22` }}>
+              <div className="md:hidden flex items-center justify-between px-3 py-2 border-b border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 13%, transparent)` }}>
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <button
                     onClick={handleBackToList}
@@ -1421,7 +1421,7 @@ const ClientChat = () => {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white text-sm truncate" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                        <span className="font-bold text-white text-sm truncate" style={{ fontFamily: "var(--gl-serif)" }}>
                           {selectedChatData?.user_name || "Psychic"}
                         </span>
                         {isChatActive && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />}
@@ -1445,7 +1445,7 @@ const ClientChat = () => {
                 )}
               </div>
 
-              {/* ── Session status bar — Time Left + Stardust lead; tap Stardust to top up ── */}
+              {/* â”€â”€ Session status bar â€” Time Left + Stardust lead; tap Stardust to top up â”€â”€ */}
               {(isChatActive || isPaused) && (
                 <SessionBar
                   elapsedSeconds={sessionState.elapsedSeconds}
@@ -1620,7 +1620,7 @@ const ClientChat = () => {
                   </div>
                 )}
 
-                {/* Reader "typing…" indicator while a message is being delivered */}
+                {/* Reader "typingâ€¦" indicator while a message is being delivered */}
                 {isReaderTyping && currentChatStatus === 'ACTIVE' && (
                   <TypingIndicator
                     avatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
@@ -1631,18 +1631,18 @@ const ClientChat = () => {
                 <div ref={scrollRef} />
               </div>
 
-              {/* ── Calm low-balance banner (~1 minute of reading time left) ── */}
+              {/* â”€â”€ Calm low-balance banner (~1 minute of reading time left) â”€â”€ */}
               {isChatActive && sessionState.showCriticalWarning && (
                 <div className="px-3 sm:px-6 pt-3">
                   <div
                     className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-4 py-3.5"
-                    style={{ borderColor: `${COLORS.starGold}44`, backgroundColor: `${COLORS.starGold}14` }}
+                    style={{ borderColor: `color-mix(in srgb, var(--gl-accent) 27%, transparent)`, backgroundColor: `color-mix(in srgb, var(--gl-accent) 8%, transparent)` }}
                   >
                     <div
                       className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${COLORS.starGold}22`, border: `1px solid ${COLORS.starGold}44` }}
+                      style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}
                     >
-                      <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
+                      <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
                     </div>
                     <p className="flex-1 text-sm leading-snug text-white/80">
                       You have <span className="font-bold text-white">{readingTimeLeftLabel}</span> of reading time left. Add Stardust to keep your reading going.
@@ -1650,7 +1650,7 @@ const ClientChat = () => {
                     <button
                       onClick={handlePauseForTopUp}
                       className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                      style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
+                      style={{ backgroundColor: "var(--gl-accent)", color: "var(--gl-base)" }}
                     >
                       <Icon icon="ph:sparkle-fill" className="text-base" />
                       Add Stardust
@@ -1661,7 +1661,7 @@ const ClientChat = () => {
 
               {/* Message Input - Only show for ACTIVE chats */}
               {isChatActive ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
                   <form onSubmit={handleSendMessage} className="flex items-center gap-3">
                     <div className="flex-1 relative">
                       <input
@@ -1687,7 +1687,7 @@ const ClientChat = () => {
                       style={{
                         background: (!isConnected || !input.trim() || sessionState.status === 'ENDED' || !sessionState.isInputEnabled)
                           ? 'rgba(255, 255, 255, 0.1)'
-                          : `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
+                          : `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
                       }}
                     >
                       <Icon icon="solar:plain-2-bold" className="text-xl" />
@@ -1700,11 +1700,11 @@ const ClientChat = () => {
                   )}
                 </div>
               ) : isPaused ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
-                  <div className="p-5 rounded-2xl border mb-4" style={{ backgroundColor: `${COLORS.starGold}12`, borderColor: `${COLORS.starGold}33` }}>
+                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
+                  <div className="p-5 rounded-2xl border mb-4" style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 7%, transparent)`, borderColor: `color-mix(in srgb, var(--gl-accent) 20%, transparent)` }}>
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${COLORS.starGold}22`, border: `1px solid ${COLORS.starGold}44` }}>
-                        <Icon icon="solar:pause-circle-bold-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}>
+                        <Icon icon="solar:pause-circle-bold-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-bold text-white">
@@ -1714,13 +1714,13 @@ const ClientChat = () => {
                           {isGrace
                             ? `Not enough Stardust for another minute with ${psychicName}.`
                             : sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
-                              ? 'Your Stardust ran low — add more to keep going.'
+                              ? 'Your Stardust ran low â€” add more to keep going.'
                               : 'Waiting for your reader to resume.'}
                         </p>
                       </div>
                       {isGrace && (
                         <div className="text-right flex-shrink-0">
-                          <p className="text-2xl font-black tabular-nums" style={{ color: COLORS.starGold }}>
+                          <p className="text-2xl font-black tabular-nums" style={{ color: "var(--gl-accent)" }}>
                             0:{String(Math.max(0, sessionState.graceSecondsLeft)).padStart(2, '0')}
                           </p>
                           <p className="text-[10px] uppercase tracking-wider text-white/40">to top up</p>
@@ -1729,8 +1729,8 @@ const ClientChat = () => {
                     </div>
                     <p className="text-xs text-white/50 mb-4">
                       {isGrace
-                        ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on — the reading pauses here until you do, and closes on its own if you don't.`
-                        : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn’t resumed.'}
+                        ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on â€” the reading pauses here until you do, and closes on its own if you don't.`
+                        : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isnâ€™t resumed.'}
                     </p>
                     <div className="flex gap-2 text-xs text-white/40">
                       <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
@@ -1752,7 +1752,7 @@ const ClientChat = () => {
                       onClick={handleTopUpClick}
                       className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg text-white flex items-center justify-center gap-2"
                       style={{
-                        background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`
+                        background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
                       }}
                     >
                       <Icon icon="ph:sparkle-fill" className="text-lg" />
@@ -1771,7 +1771,7 @@ const ClientChat = () => {
                   </div>
                 </div>
               ) : currentChatStatus === 'REQUESTED' ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
                   <div className="p-5 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 mb-4">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 rounded-2xl bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center flex-shrink-0 animate-pulse">
@@ -1810,16 +1810,16 @@ const ClientChat = () => {
                   </button>
                 </div>
               ) : currentChatStatus === 'ENDED' ? (
-                <div className="p-5 sm:p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+                <div className="p-5 sm:p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
                   <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/10">
                     <div
                       className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${COLORS.primary}1f`, border: `1px solid ${COLORS.primary}44` }}
+                      style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 12%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}
                     >
-                      <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
+                      <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
                     </div>
                     <div>
-                      <p className="text-base font-bold text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                      <p className="text-base font-bold text-white" style={{ fontFamily: "var(--gl-serif)" }}>
                         Your reading has ended
                       </p>
                       <p className="text-sm text-white/55 mt-0.5">
@@ -1832,7 +1832,7 @@ const ClientChat = () => {
                       onClick={() => { setRequestError(null); setShowRequestModal(true); }}
                       disabled={requestChatMutation.isPending}
                       className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg text-white"
-                      style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}
+                      style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}
                     >
                       <Icon icon="solar:chat-round-line-bold-duotone" className="text-xl" />
                       Book another reading
@@ -1841,7 +1841,7 @@ const ClientChat = () => {
                       onClick={() => navigate('/psychics-browse')}
                       className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm transition-colors hover:bg-white/10 flex items-center justify-center gap-2 text-white border border-white/15 bg-white/[0.04]"
                     >
-                      <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: COLORS.primary }} />
+                      <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: "var(--gl-accent)" }} />
                       Browse psychics
                     </button>
                   </div>
@@ -1849,11 +1849,11 @@ const ClientChat = () => {
               ) : null}
             </div>
 
-            {/* RIGHT SIDEBAR — desktop only; mobile/tablet use the profile sheet */}
+            {/* RIGHT SIDEBAR â€” desktop only; mobile/tablet use the profile sheet */}
             {selectedChatData && (
-              <div className="hidden lg:flex w-80 border-l border-white/5 flex-col backdrop-blur-xl overflow-y-auto" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+              <div className="hidden lg:flex w-80 border-l border-white/5 flex-col backdrop-blur-xl overflow-y-auto" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
                 <div className="p-6">
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-6" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-6" style={{ fontFamily: "var(--gl-serif)" }}>
                     Your Reader
                   </h3>
 
@@ -1879,7 +1879,7 @@ const ClientChat = () => {
         )}
       </div>
 
-      {/* Reader profile — mobile/tablet bottom sheet (lg shows the sidebar instead) */}
+      {/* Reader profile â€” mobile/tablet bottom sheet (lg shows the sidebar instead) */}
       {showProfileSheet && selectedChatData && (
         <div
           className="fixed inset-0 z-[120] lg:hidden"
@@ -1892,11 +1892,11 @@ const ClientChat = () => {
             transition={{ type: "spring", stiffness: 300, damping: 32 }}
             onClick={(e) => e.stopPropagation()}
             className="absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-3xl border-t border-white/10 p-5 pb-8"
-            style={{ backgroundColor: COLORS.surface }}
+            style={{ backgroundColor: "var(--gl-glass)" }}
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-white/40" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-white/40" style={{ fontFamily: "var(--gl-serif)" }}>
                 Your Reader
               </h3>
               <button
@@ -1929,12 +1929,12 @@ const ClientChat = () => {
       {/* Request New Chat Modal */}
       {showRequestModal && selectedChatData && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="rounded-3xl border border-white/10 p-8 max-w-md w-full relative overflow-hidden" style={{ backgroundColor: COLORS.surface }}>
+          <div className="rounded-3xl border border-white/10 p-8 max-w-md w-full relative overflow-hidden" style={{ backgroundColor: "var(--gl-glass)" }}>
             {/* Decorative gradient */}
             <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none" />
 
             <div className="relative">
-              <h3 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+              <h3 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: "var(--gl-serif)" }}>
                 Request New Session
               </h3>
               <p className="text-sm text-white/60 mb-6">
@@ -1968,7 +1968,7 @@ const ClientChat = () => {
                   onClick={handleRequestNewChat}
                   disabled={requestChatMutation.isPending}
                   className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-lg text-white"
-                  style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}
+                  style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}
                 >
                   {requestChatMutation.isPending ? 'Sending...' : 'Send Request'}
                 </button>
@@ -1989,7 +1989,7 @@ const ClientChat = () => {
       {/* End Chat Confirmation Modal */}
       {showEndConfirm && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="rounded-3xl border border-red-500/20 p-8 max-w-md w-full relative overflow-hidden" style={{ backgroundColor: COLORS.surface }}>
+          <div className="rounded-3xl border border-red-500/20 p-8 max-w-md w-full relative overflow-hidden" style={{ backgroundColor: "var(--gl-glass)" }}>
             {/* Decorative gradient */}
             <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-red-500/10 to-transparent pointer-events-none" />
 
@@ -1999,7 +1999,7 @@ const ClientChat = () => {
                   <Icon icon="solar:danger-triangle-bold-duotone" className="text-3xl text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>
+                  <h3 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "var(--gl-serif)" }}>
                     End Chat Session?
                   </h3>
                   <p className="text-sm text-white/50">
@@ -2038,11 +2038,11 @@ const ClientChat = () => {
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOCAL-ONLY PREVIEW HARNESS (dev only) — REMOVE BEFORE SHIPPING.
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// LOCAL-ONLY PREVIEW HARNESS (dev only) â€” REMOVE BEFORE SHIPPING.
 // Eyeball the redesigned session states without a live reading:
 //   /chats?preview=active | lowbalance | paused | ended | ranout
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PREVIEW_CFG: Record<
   string,
   { elapsed: number; remaining: number; balance: number; cost: number; status: string; paused: boolean }
@@ -2077,19 +2077,19 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
   const psychicName = "Selene Mare";
 
   const bubbles = [
-    { mine: false, text: "Hello, love. I can feel there's something weighing on your heart today. Take a breath — we'll look at it together.", t: "7:41 PM" },
-    { mine: true, text: "Hi Selene. Yes… it's about a decision I've been putting off.", t: "7:42 PM" },
-    { mine: false, text: "The cards are showing me a path opening. You already know the answer — let's give you the clarity to trust it.", t: "7:42 PM" },
-    { mine: true, text: "That feels right. Thank you 💜", t: "7:43 PM" },
+    { mine: false, text: "Hello, love. I can feel there's something weighing on your heart today. Take a breath â€” we'll look at it together.", t: "7:41 PM" },
+    { mine: true, text: "Hi Selene. Yesâ€¦ it's about a decision I've been putting off.", t: "7:42 PM" },
+    { mine: false, text: "The cards are showing me a path opening. You already know the answer â€” let's give you the clarity to trust it.", t: "7:42 PM" },
+    { mine: true, text: "That feels right. Thank you ðŸ’œ", t: "7:43 PM" },
   ];
   const modes = ["active", "warning", "lowbalance", "paused", "ended", "ranout"];
 
   return (
-    <div className="h-[calc(100dvh-80px)] p-2 sm:p-4 relative overflow-hidden" style={{ fontFamily: TYPOGRAPHY.fontFamily.body, backgroundColor: COLORS.dark }}>
-      <PageBackground images={chatBackground} variant="soft" />
-      <div className="relative z-10 mx-auto max-w-2xl h-full flex flex-col rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl" style={{ backgroundColor: `${COLORS.dark}22` }}>
+    <div className="h-[calc(100dvh-80px)] p-2 sm:p-4 relative overflow-hidden" style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}>
+      <PageBackground images={chatBackground} variant="glass" />
+      <div className="relative z-10 mx-auto max-w-2xl h-full flex flex-col rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-base) 13%, transparent)` }}>
         {/* Preview switcher (dev-only chrome) */}
-        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}66` }}>
+        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-white/5" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 40%, transparent)` }}>
           <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 mr-1">Preview</span>
           {modes.map((m) => (
             <button
@@ -2097,9 +2097,9 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
               onClick={() => navigate(`/chats?preview=${m}`)}
               className="text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors"
               style={{
-                borderColor: m === mode ? COLORS.primary : "rgba(255,255,255,0.12)",
-                color: m === mode ? COLORS.primary : "rgba(255,255,255,0.6)",
-                backgroundColor: m === mode ? `${COLORS.primary}18` : "transparent",
+                borderColor: m === mode ? "var(--gl-accent)" : "rgba(255,255,255,0.12)",
+                color: m === mode ? "var(--gl-accent)" : "rgba(255,255,255,0.6)",
+                backgroundColor: m === mode ? `color-mix(in srgb, var(--gl-accent) 9%, transparent)` : "transparent",
               }}
             >
               {m}
@@ -2111,16 +2111,16 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
         </div>
 
         {/* Header */}
-        <div className="flex items-center gap-3 p-4 border-b border-white/5" style={{ backgroundColor: `${COLORS.surface}22` }}>
+        <div className="flex items-center gap-3 p-4 border-b border-white/5" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 13%, transparent)` }}>
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary/25 to-secondary/25 flex items-center justify-center border border-white/10">
             <Icon icon="ph:user-fill" className="text-white/80 text-xl" />
           </div>
           <div>
-            <h2 className="font-bold text-white text-lg" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>{psychicName}</h2>
+            <h2 className="font-bold text-white text-lg" style={{ fontFamily: "var(--gl-serif)" }}>{psychicName}</h2>
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isEnded ? "#FF6B6B" : isPaused ? COLORS.starGold : "#22c55e" }} />
-              <span className="text-sm font-medium" style={{ color: isEnded ? "#FF6B6B" : isPaused ? COLORS.starGold : "#4ade80" }}>
-                {isEnded ? "Session ended" : isPaused ? "Reading paused — add Stardust to resume" : "Active now"}
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isEnded ? "#FF6B6B" : isPaused ? "var(--gl-accent)" : "#22c55e" }} />
+              <span className="text-sm font-medium" style={{ color: isEnded ? "#FF6B6B" : isPaused ? "var(--gl-accent)" : "#4ade80" }}>
+                {isEnded ? "Session ended" : isPaused ? "Reading paused â€” add Stardust to resume" : "Active now"}
               </span>
             </div>
           </div>
@@ -2160,12 +2160,12 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
         {/* Low-balance banner */}
         {critical && (
           <div className="px-3 sm:px-6 pt-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-4 py-3.5" style={{ borderColor: `${COLORS.starGold}44`, backgroundColor: `${COLORS.starGold}14` }}>
-              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${COLORS.starGold}22`, border: `1px solid ${COLORS.starGold}44` }}>
-                <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: COLORS.starGold }} />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-4 py-3.5" style={{ borderColor: `color-mix(in srgb, var(--gl-accent) 27%, transparent)`, backgroundColor: `color-mix(in srgb, var(--gl-accent) 8%, transparent)` }}>
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}>
+                <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
               </div>
               <p className="flex-1 text-sm leading-snug text-white/80">You have about <span className="font-bold text-white">1 minute</span> of reading time left. Add Stardust to keep your reading going.</p>
-              <button onClick={() => navigate("/billing")} className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:scale-[1.02]" style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}>
+              <button onClick={() => navigate("/billing")} className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:scale-[1.02]" style={{ backgroundColor: "var(--gl-accent)", color: "var(--gl-base)" }}>
                 <Icon icon="ph:sparkle-fill" className="text-base" />Add Stardust
               </button>
             </div>
@@ -2174,30 +2174,30 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
 
         {/* Footer */}
         {isEnded ? (
-          <div className="p-5 sm:p-6 border-t border-white/5" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+          <div className="p-5 sm:p-6 border-t border-white/5" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
             <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/10">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${COLORS.primary}1f`, border: `1px solid ${COLORS.primary}44` }}>
-                <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: COLORS.primary }} />
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 12%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}>
+                <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
               </div>
               <div>
-                <p className="text-base font-bold text-white" style={{ fontFamily: TYPOGRAPHY.fontFamily.heading }}>Your reading has ended</p>
+                <p className="text-base font-bold text-white" style={{ fontFamily: "var(--gl-serif)" }}>Your reading has ended</p>
                 <p className="text-sm text-white/55 mt-0.5">We hope it brought you clarity. You're welcome back any time.</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2.5">
-              <button onClick={() => navigate("/psychics-browse")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2" style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}>
+              <button onClick={() => navigate("/psychics-browse")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2" style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}>
                 <Icon icon="solar:chat-round-line-bold-duotone" className="text-xl" />Book another reading
               </button>
               <button onClick={() => navigate("/psychics-browse")} className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm text-white border border-white/15 bg-white/[0.04] flex items-center justify-center gap-2">
-                <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: COLORS.primary }} />Browse psychics
+                <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: "var(--gl-accent)" }} />Browse psychics
               </button>
             </div>
           </div>
         ) : (
-          <div className="p-4 sm:p-6 border-t border-white/5" style={{ backgroundColor: `${COLORS.surface}dd` }}>
+          <div className="p-4 sm:p-6 border-t border-white/5" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl px-6 py-4 text-white/30 text-sm">{isPaused ? "Reading paused" : "Type your message…"}</div>
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)` }}>
+              <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl px-6 py-4 text-white/30 text-sm">{isPaused ? "Reading paused" : "Type your messageâ€¦"}</div>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}>
                 <Icon icon="solar:plain-2-bold" className="text-xl" />
               </div>
             </div>
