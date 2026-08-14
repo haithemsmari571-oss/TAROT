@@ -1,4 +1,4 @@
-import { COLORS } from "../../../theme";
+﻿import { COLORS } from "../../../theme";
 import type { HeroContent } from "../types/landingEditor.types";
 import { FieldSet } from "./FieldSet";
 
@@ -47,7 +47,7 @@ export const HeroForm = ({ content, onChange }: HeroFormProps) => {
           <input
             value={content.headlineHighlighted}
             onChange={(e) => update("headlineHighlighted", e.target.value)}
-            placeholder="& Divine Truth"
+            placeholder="& Gentle Perspective"
             className="w-full px-4 py-3 rounded-xl outline-none transition-all"
             style={{
               backgroundColor: COLORS.surface,
@@ -62,7 +62,7 @@ export const HeroForm = ({ content, onChange }: HeroFormProps) => {
         <textarea
           value={content.subtitle}
           onChange={(e) => update("subtitle", e.target.value)}
-          placeholder="Navigate life's complexity with insights you can trust..."
+          placeholder="Navigate life's complexity with a reader who listens..."
           rows={3}
           className="w-full px-4 py-3 rounded-xl outline-none transition-all resize-none"
           style={{
