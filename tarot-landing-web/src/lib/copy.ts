@@ -13,6 +13,10 @@ const REPLACEMENTS: [RegExp, string][] = [
   [/\b100% accurate\b/gi, "deeply considered"],
   [/\baccurate readings?\b/gi, "thoughtful readings"],
   [/guaranteed (answers|results)/gi, "a calm, honest space"],
+  // Blanket accuracy vocabulary (kept last so the specific phrases above win):
+  // noun-for-noun and adjective-for-adjective, so sentences stay grammatical.
+  [/\baccuracy\b/gi, "clarity"],
+  [/\baccurate\b/gi, "clear"],
 ];
 
 /** Replace accuracy/certainty claims in display copy with clarity/comfort wording. */
