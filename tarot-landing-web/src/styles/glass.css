@@ -252,6 +252,16 @@
   box-shadow: var(--gl-inset), var(--gl-card-shadow);
   padding: 44px clamp(20px, 4vw, 48px) 40px;
 }
+/* Variant used by heroes that carry the frosted panel in BOTH moods (home and
+   the newer glass pages). The browse hero keeps its approved light-only panel. */
+.gl-hero-panel--solid {
+  border-radius: 32px;
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: var(--gl-inset), var(--gl-card-shadow);
+}
 .gl-kicker {
   font-family: var(--gl-sans);
   font-size: 11px;
@@ -635,6 +645,47 @@
   letter-spacing: 0.6px;
 }
 .gl-foot-line b { color: var(--gl-text-dim); font-weight: 500; }
+
+/* ————— Shared page patterns (sections, panels, headings) ————— */
+.gl-h2 {
+  font-family: var(--gl-serif);
+  font-size: clamp(30px, 4.5vw, 46px);
+  font-weight: 300;
+  letter-spacing: -0.4px;
+  line-height: 1.08;
+  color: var(--gl-text);
+}
+.gl-h2 i { font-style: italic; font-weight: 300; }
+.gl-h3 {
+  font-family: var(--gl-serif);
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 400;
+  letter-spacing: -0.2px;
+  line-height: 1.15;
+  color: var(--gl-text);
+}
+.gl-panel {
+  border-radius: 24px;
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow: var(--gl-inset), var(--gl-card-shadow);
+}
+.gl-panel--2 {
+  background: var(--gl-glass-2);
+}
+.gl-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gl-accent-dim), transparent);
+}
+.gl-serif { font-family: var(--gl-serif); }
+.gl-italic-note {
+  font-family: var(--gl-serif);
+  font-style: italic;
+  font-weight: 300;
+  color: var(--gl-text-dim);
+}
 
 /* ————— Page states (loading / error / empty) ————— */
 .gl-state { text-align: center; padding: 80px 20px; }

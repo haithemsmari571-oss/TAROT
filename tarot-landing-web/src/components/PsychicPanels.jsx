@@ -88,9 +88,8 @@ const PANELS = [
   },
 ];
 
-const HEADING_FONT = "'Bricolage Grotesque', sans-serif";
-const BODY_FONT = "'Poppins', sans-serif";
-const LAVENDER = "#D2B9FF";
+const HEADING_FONT = "var(--gl-serif)";
+const BODY_FONT = "var(--gl-sans)";
 const EASE = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
 
 function useIsMobile() {
@@ -109,7 +108,7 @@ const Panel = ({ panel, active, isMobile, onEnter, onLeave, panelRef }) => {
   return (
     <div
       ref={panelRef}
-      className={active ? "psychic-panel psychic-panel-active" : "psychic-panel"}
+      className="psychic-panel"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       style={{
@@ -119,18 +118,18 @@ const Panel = ({ panel, active, isMobile, onEnter, onLeave, panelRef }) => {
         width: isMobile ? "100%" : undefined,
         height: isMobile ? 520 : undefined,
         minHeight: isMobile ? undefined : 680,
-        borderRadius: 16,
+        borderRadius: 24,
         overflow: "hidden",
         cursor: "pointer",
+        // Hairlines over glows: the active panel earns a soft accent hairline
+        // and a deep shadow, never a pulsing colour halo.
         border: active
-          ? `1px solid ${hexToRgba(panel.glowColor, 0.4)}`
+          ? `1px solid var(--gl-accent-dim)`
           : "1px solid rgba(255,255,255,0.08)",
-        // active box-shadow is driven by the glowPulse keyframe (which reads
-        // --glow-rgb); leave it unset here so the animation can win.
-        boxShadow: active ? undefined : "none",
+        boxShadow: active
+          ? "inset 0 1px 0 rgba(244,239,230,0.08), 0 30px 80px rgba(0,0,0,0.5)"
+          : "0 18px 50px rgba(0,0,0,0.35)",
         transition: EASE,
-        // custom property consumed by the @keyframes glowPulse rule
-        "--glow-rgb": panel.glowColorRgb,
       }}
     >
       {/* Background image */}
@@ -187,9 +186,10 @@ const Panel = ({ panel, active, isMobile, onEnter, onLeave, panelRef }) => {
             style={{
               fontFamily: BODY_FONT,
               fontSize: 11,
-              letterSpacing: "0.15em",
+              fontWeight: 600,
+              letterSpacing: "2.4px",
               textTransform: "uppercase",
-              color: active ? panel.glowColor : "rgba(255,255,255,0.55)",
+              color: active ? "#d9c49a" : "rgba(255,255,255,0.55)",
               transition: EASE,
             }}
           >
@@ -242,9 +242,10 @@ const Panel = ({ panel, active, isMobile, onEnter, onLeave, panelRef }) => {
           <h3
             style={{
               fontFamily: HEADING_FONT,
-              fontWeight: 700,
-              fontSize: isMobile ? 22 : 26,
+              fontWeight: 400,
+              fontSize: isMobile ? 24 : 30,
               lineHeight: 1.1,
+              letterSpacing: "-0.2px",
               color: "#fff",
               margin: "0 0 12px 0",
               whiteSpace: "pre-line",
@@ -275,14 +276,6 @@ const Panel = ({ panel, active, isMobile, onEnter, onLeave, panelRef }) => {
     </div>
   );
 };
-
-function hexToRgba(hex, alpha) {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 const PsychicPanels = () => {
   const isMobile = useIsMobile();
@@ -318,59 +311,30 @@ const PsychicPanels = () => {
 
   return (
     <>
-      <style>{`
-        @keyframes glowPulse {
-          0%, 100% {
-            box-shadow: 0 0 40px 8px rgba(var(--glow-rgb), 0.35),
-                        inset 0 0 60px 0px rgba(var(--glow-rgb), 0.12);
-          }
-          50% {
-            box-shadow: 0 0 48px 10px rgba(var(--glow-rgb), 0.5),
-                        inset 0 0 60px 0px rgba(var(--glow-rgb), 0.14);
-          }
-        }
-        .psychic-panel-active {
-          animation: glowPulse 3s ease-in-out infinite;
-        }
-      `}</style>
-
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2
-          style={{
-            fontFamily: HEADING_FONT,
-            fontWeight: 800,
-            fontSize: "clamp(2rem, 6vw, 3.5rem)",
-            lineHeight: 1.1,
-            color: "#fff",
-            margin: 0,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          What your psychic <span style={{ color: LAVENDER }}>already</span> sees.
+        <div className="gl-kicker">What a reading can hold</div>
+        <h2 className="gl-h2" style={{ margin: 0 }}>
+          What your psychic <i>already</i> sees.
         </h2>
         <p
-          style={{
-            fontFamily: BODY_FONT,
-            fontSize: 14,
-            color: "rgba(255,255,255,0.5)",
-            marginTop: 14,
-            letterSpacing: "0.02em",
-          }}
+          className="gl-td"
+          style={{ fontFamily: BODY_FONT, fontSize: 14, marginTop: 14, letterSpacing: "0.02em" }}
         >
-          Five truths. One reading.
+          Five doorways. One reading.
         </p>
         <p
+          className="gl-acc"
           style={{
             fontFamily: BODY_FONT,
-            fontSize: 12.5,
-            fontWeight: 700,
-            color: "#F2AE40",
+            fontSize: 12,
+            fontWeight: 600,
             marginTop: 12,
-            letterSpacing: "0.02em",
+            letterSpacing: "1.4px",
+            textTransform: "uppercase",
           }}
         >
-          🎁 Your first reading is on us — £15 free credit for new members.
+          Your first reading is on us — £15 free credit for new members
         </p>
       </div>
 

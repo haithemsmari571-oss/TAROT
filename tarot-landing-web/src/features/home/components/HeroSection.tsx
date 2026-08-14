@@ -1,16 +1,17 @@
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useEffect, useState } from "react";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../../../lib/axiosClient";
+import { sanitizeClaims } from "../../../lib/copy";
+import "../../../styles/glass.css";
 
 const DEFAULT_HERO = {
   badge: "Psychic & Intuitive Readings",
   headline: "Clarity, Guidance",
-  headlineHighlighted: "& Divine Truth",
+  headlineHighlighted: "& Gentle Perspective",
   subtitle:
-    "Navigate life's complexity with insights you can trust. Reveal the deeper truths that matter most.",
+    "Navigate life's complexity with a reader who listens. Find the clarity and comfort that matter most.",
 };
 
 const HeroSection = () => {
@@ -46,43 +47,27 @@ const HeroSection = () => {
       });
   }, []);
 
-  // Elegant, static hero: velvet plum vignette framing the gold background scene,
-  // a gold embossed 'V' seal, lavender eyebrow, and a Bricolage headline with a
-  // single lavender-to-gold accent. No scroll hijack, no floating cards — one
-  // slow fade-in only.
+  // Glass hero: the artwork stays vivid behind a large frosted panel that
+  // carries readability in both moods. Serif Fraunces headline with italic
+  // emphasis; DB-driven copy passes through the claims sanitizer.
   return (
-    <section
-      className="relative w-full min-h-[calc(100vh-116px)] flex flex-col items-center justify-center px-6 py-20"
-      style={{ backgroundColor: "transparent" }}
-    >
-      {/* COLOR WASH — deep plum-wine radial vignette framing the gold scene */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          zIndex: 1,
-          background:
-            "radial-gradient(ellipse 92% 88% at 50% 46%, transparent 38%, #2A0F26 100%)",
-        }}
-      />
-
-      <div className="relative z-40 w-full max-w-[920px] flex flex-col items-center text-center">
+    <section className="relative w-full min-h-[calc(100vh-104px)] flex flex-col items-center justify-center px-4 sm:px-6 py-16">
+      <div className="relative z-40 w-full max-w-[880px] flex flex-col items-center text-center">
         {isLoaded && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1.1, ease: "easeOut" }}
-            className="flex flex-col items-center w-full"
+            className="gl-hero-panel--solid w-full flex flex-col items-center px-6 py-12 sm:px-12 sm:py-14"
           >
-            {/* LOGO — gold 'V' monogram seal (navbar mark rendered in gold via mask) */}
+            {/* Monogram seal — champagne accent, quiet glow */}
             <div
               aria-hidden
               style={{
-                width: "clamp(92px, 9.5vw, 132px)",
+                width: "clamp(72px, 7vw, 104px)",
                 aspectRatio: "810 / 963",
-                backgroundColor: COLORS.starGold,
-                opacity: 0.98,
-                filter: "drop-shadow(0 0 18px rgba(242,174,64,0.45))",
+                backgroundColor: "var(--gl-accent)",
+                opacity: 0.95,
                 WebkitMaskImage: "url('/logo short normal.svg')",
                 maskImage: "url('/logo short normal.svg')",
                 WebkitMaskRepeat: "no-repeat",
@@ -94,118 +79,51 @@ const HeroSection = () => {
               }}
             />
 
-            {/* Thin gold flourish line under the seal */}
-            <div className="flex items-center justify-center gap-2 mt-4 mb-6">
-              <div
-                style={{
-                  width: "clamp(48px, 7vw, 84px)",
-                  height: 1,
-                  background: `linear-gradient(90deg, transparent, ${COLORS.starGold})`,
-                  opacity: 0.75,
-                }}
-              />
+            {/* Hairline flourish under the seal */}
+            <div className="flex items-center justify-center gap-2 mt-4 mb-7 w-full max-w-[280px]">
+              <div className="gl-divider flex-1" />
               <div
                 style={{
                   width: 5,
                   height: 5,
                   transform: "rotate(45deg)",
-                  backgroundColor: COLORS.starGold,
+                  backgroundColor: "var(--gl-accent)",
                   opacity: 0.8,
                 }}
               />
-              <div
-                style={{
-                  width: "clamp(48px, 7vw, 84px)",
-                  height: 1,
-                  background: `linear-gradient(90deg, ${COLORS.starGold}, transparent)`,
-                  opacity: 0.75,
-                }}
-              />
+              <div className="gl-divider flex-1" />
             </div>
 
-            {/* EYEBROW — small, letterspaced, lavender */}
-            <span
-              className="mb-5"
-              style={{
-                fontFamily: TYPOGRAPHY.fontFamily.body,
-                color: COLORS.primary,
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.38em",
-                textTransform: "uppercase",
-              }}
-            >
-              {content.badge}
-            </span>
+            <div className="gl-kicker">{sanitizeClaims(content.badge)}</div>
 
-            {/* HEADLINE — Bricolage, white, one lavender→gold gradient accent */}
-            <h1
-              className="mb-6"
-              style={{
-                fontFamily: TYPOGRAPHY.fontFamily.heading,
-                fontWeight: 800,
-                fontSize: "clamp(3rem, 7.5vw, 5.5rem)",
-                lineHeight: 1.02,
-                letterSpacing: "-0.02em",
-                color: COLORS.neutralWhite,
-                textShadow: "0 2px 22px rgba(0,0,0,0.45)",
-              }}
-            >
-              {content.headline} <br />
-              <span
-                className="inline-block"
-                style={{
-                  background: `linear-gradient(120deg, ${COLORS.primary} 0%, ${COLORS.starGold} 100%)`,
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                {content.headlineHighlighted}
-              </span>
+            <h1 className="gl-h1" style={{ marginBottom: 18 }}>
+              {sanitizeClaims(content.headline)}
+              <br />
+              <i>{sanitizeClaims(content.headlineHighlighted)}</i>
             </h1>
 
-            {/* Subtitle — warm white, never grey */}
-            <p
-              className="max-w-xl mb-8 text-base md:text-xl leading-relaxed font-light"
-              style={{
-                fontFamily: TYPOGRAPHY.fontFamily.body,
-                color: COLORS.neutralWhite,
-                opacity: 0.84,
-              }}
-            >
-              {content.subtitle}
+            <p className="gl-sub" style={{ marginBottom: 32 }}>
+              {sanitizeClaims(content.subtitle)}
             </p>
 
-            {/* PRIMARY BUTTON — brand purple, soft glow on hover */}
             <motion.button
               onClick={() => navigate("/psychics-browse")}
-              whileHover={{
-                scale: 1.04,
-                boxShadow: `0 0 42px ${COLORS.secondary}99, 0 14px 46px ${COLORS.secondary}55`,
-              }}
               whileTap={{ scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
-              className="px-11 py-5 rounded-full text-[11px] font-bold tracking-[0.28em] uppercase"
-              style={{
-                fontFamily: TYPOGRAPHY.fontFamily.heading,
-                backgroundColor: COLORS.secondary,
-                color: COLORS.neutralWhite,
-                boxShadow: `0 12px 34px ${COLORS.secondary}44`,
-              }}
+              className="gl-btn-solid"
+              style={{ padding: "14px 38px", fontSize: 13 }}
             >
               Meet Our Readers
             </motion.button>
 
-            {/* New-member welcome credit — the existing gold £15 pill, unchanged */}
+            {/* New-member welcome credit chip */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-full border mt-6 backdrop-blur-3xl"
-              style={{ borderColor: `${COLORS.starGold}59`, backgroundColor: `${COLORS.starGold}1a` }}
+              className="gl-fchip mt-6"
+              style={{ cursor: "default" }}
             >
-              <Icon icon="ph:gift-fill" className="text-xs" style={{ color: COLORS.starGold }} />
-              <span className="uppercase tracking-[0.3em] text-[9px] font-bold" style={{ color: COLORS.starGold }}>
+              <Icon icon="ph:gift-fill" className="text-xs gl-acc" />
+              <span className="gl-acc" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase" }}>
                 New here? £15 free credit
               </span>
             </motion.div>

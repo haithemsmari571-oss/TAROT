@@ -296,23 +296,15 @@ const StardustGlider = ({
         </div>
 
         <h2
-          className="text-3xl font-black uppercase leading-none sm:text-4xl"
+          className="text-4xl leading-none sm:text-5xl"
           style={{
-            fontFamily: TYPOGRAPHY.fontFamily.heading,
+            fontFamily: "var(--gl-serif)",
+            fontWeight: 300,
+            letterSpacing: "-0.5px",
             color: COLORS.neutralWhite,
           }}
         >
-          Name your{" "}
-          <span
-            style={{
-              backgroundImage: `linear-gradient(135deg, ${LAVENDER} 0%, ${GOLD} 100%)`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
-            offering
-          </span>
+          Name your <i style={{ color: "#d9c49a" }}>offering</i>
         </h2>
         <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
           Slide to choose any amount from £{STARDUST_MIN_USD} to £{STARDUST_MAX_USD}. Larger
@@ -325,15 +317,11 @@ const StardustGlider = ({
           <div>
             <div className="flex items-end gap-2">
               <span
-                className="text-6xl font-black leading-none sm:text-7xl"
+                className="text-6xl leading-none sm:text-7xl"
                 style={{
-                  fontFamily: TYPOGRAPHY.fontFamily.heading,
-                  backgroundImage: isLifetime
-                    ? `linear-gradient(135deg, ${GOLD} 0%, #FFE7A8 100%)`
-                    : `linear-gradient(135deg, #ffffff 0%, ${LAVENDER} 100%)`,
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
+                  fontFamily: "var(--gl-serif)",
+                  fontWeight: 300,
+                  color: isLifetime ? GOLD : "#ffffff",
                 }}
               >
                 £{amount}

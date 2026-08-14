@@ -2,15 +2,10 @@ import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { COLORS, TYPOGRAPHY } from "../../../theme";
 import axiosClient from "../../../lib/axiosClient";
 import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
-import {
-  DISPLAY_RATINGS,
-  getHaloColor,
-  getTier,
-  hexToRgb,
-} from "../../../lib/psychicDisplay";
+import { DISPLAY_RATINGS, getTier } from "../../../lib/psychicDisplay";
+import "../../../styles/glass.css";
 
 const DEFAULT_PSYCHICS_SECTION = {
   heading: "Find the psychic reader who",
@@ -137,35 +132,18 @@ const TarotCouncil = () => {
           transition={{ duration: 0.5 }}
           className="w-full h-full"
         >
-          {/* Background Glows */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full opacity-10 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary blur-[120px] rounded-full" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary blur-[120px] rounded-full" />
-      </div>
-
-      <div className="max-w-6xl mx-auto mb-8 text-center space-y-3 relative z-10 px-4">
+      <div className="max-w-6xl mx-auto mb-8 text-center space-y-4 relative z-10 px-4">
+        <div className="gl-kicker" style={{ marginBottom: 0 }}>Live readers</div>
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          style={{
-            ...TYPOGRAPHY.headings.h2,
-            fontSize: "clamp(2rem, 5vw, 3.5rem)",
-          }}
-          className="tracking-tighter leading-[1] lg:px-20"
+          className="gl-h2 lg:px-20"
         >
-          {sectionContent.heading}{" "}
-          <span style={{ color: COLORS.primary }}>
-            {sectionContent.headingHighlighted}
-          </span>
+          {sectionContent.heading} <i>{sectionContent.headingHighlighted}</i>
         </motion.h2>
-        <p
-          className="text-sm md:text-base leading-relaxed mx-auto max-w-xl font-medium"
-          style={{ color: COLORS.neutralWhite }}
-        >
-          Your first reading is on us —{" "}
-          <span style={{ color: COLORS.starGold, fontWeight: 700 }}>£15 free credit</span>{" "}
-          with any reader below. <br />
-          {sectionContent.subtitleLine2}
+        <p className="gl-sub" style={{ marginBottom: 0 }}>
+          Your first reading is on us — <b>£15 free credit</b> with any reader
+          below. {sectionContent.subtitleLine2}
         </p>
       </div>
 
@@ -198,11 +176,8 @@ const TarotCouncil = () => {
             className="h-1 rounded-full transition-all duration-500"
             style={{
               width: i === activeIndex ? "32px" : "8px",
-              backgroundColor:
-                i === activeIndex
-                  ? COLORS.primary
-                  : `${COLORS.neutralDarkGray}80`,
-              opacity: i === activeIndex ? 1 : 0.4,
+              backgroundColor: i === activeIndex ? "var(--gl-accent)" : "var(--gl-hair)",
+              opacity: i === activeIndex ? 1 : 0.5,
             }}
           />
         ))}
@@ -214,233 +189,82 @@ const TarotCouncil = () => {
 };
 
 const TarotCard = ({ psychic }: { psychic: any }) => {
-  const [isBtnHovered, setIsBtnHovered] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
   const specialties = psychic.categories?.map((c: any) => c.title) || [];
   const perMinute = psychic.price_per_second ? psychic.price_per_second * 60 : 0;
   const pricePerMinute = formatPerMinuteGbp(perMinute);
 
-  const halo = getHaloColor(psychic.categories);
-  const haloRgb = hexToRgb(halo);
   const tier = getTier(perMinute);
+  const tierClass = tier.label === "Rising" ? "gl-tier--rising" : "gl-tier--elite";
   const rating = DISPLAY_RATINGS[psychic.id];
   const filledStars = rating != null ? Math.round(rating) : 0;
+
+  const displayName = psychic.username
+    ? psychic.username.charAt(0).toUpperCase() + psychic.username.slice(1).toLowerCase()
+    : "";
 
   return (
     <motion.div
       whileHover={{ y: -12 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className="relative min-w-[320px] md:min-w-[340px] h-[600px] snap-center rounded-[2.2rem] p-4 flex flex-col group cursor-pointer"
+      className="gl-pc relative min-w-[320px] md:min-w-[340px] h-[600px] snap-center flex flex-col group"
       onClick={() => navigate(`/psychics/${psychic.id}/details`)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        backgroundColor: COLORS.surface,
-        border: `1px solid rgba(${haloRgb}, ${isHovered ? 0.6 : 0.35})`,
-        boxShadow: isHovered
-          ? `0 0 40px 6px rgba(${haloRgb}, 0.3), 0 25px 50px -12px rgba(0, 0, 0, 0.5)`
-          : `0 0 20px 2px rgba(${haloRgb}, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.5)`,
-        transition: "border-color 0.35s ease, box-shadow 0.35s ease",
-      }}
     >
-      <div className="absolute inset-3 border border-white/5 rounded-[1.8rem] pointer-events-none" />
-
-      <div className="relative h-[42%] w-full overflow-hidden rounded-[1.6rem] mb-5">
+      <div className="gl-ph relative w-full overflow-hidden" style={{ height: "42%" }}>
         <motion.img
           src={
             psychic.profile_picture_url ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(psychic.username)}&background=5D3A9B&color=fff`
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(psychic.username)}&background=9a7b4f&color=fff`
           }
-          whileHover={{ scale: 1.05 }}
           className="w-full h-full object-cover transition-all duration-700"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-surface/80 via-transparent to-transparent" />
 
-        {/* Tier badge (top-left) */}
-        <div
-          className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-[0.08em]"
-          style={{ background: tier.gradient, color: COLORS.dark }}
-        >
-          {tier.label}
-        </div>
-
-        {/* Rating badge (top-right) — real, varied display rating */}
-        {rating != null && (
-          <div className="absolute top-3 right-3 px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 flex items-center gap-1.5">
-            <span className="text-[10px] tracking-tight" style={{ letterSpacing: "0.5px" }}>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span
-                  key={i}
-                  style={{ color: i < filledStars ? COLORS.starGold : "rgba(255,255,255,0.25)" }}
-                >
-                  {i < filledStars ? "★" : "☆"}
-                </span>
-              ))}
-            </span>
-            <span className="text-[11px] font-bold text-white">
-              {rating.toFixed(1)}
-            </span>
+        {psychic.is_online && (
+          <div className="gl-online">
+            <span className="gl-dot" /> Online
           </div>
         )}
 
-        <div className="absolute bottom-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
-          <div
-            className="w-1.5 h-1.5 rounded-full"
-            style={{
-              backgroundColor: psychic.is_online
-                ? "#4ADE80"
-                : COLORS.neutralGray,
-            }}
-          />
-          <span className="text-[9px] uppercase font-bold tracking-widest text-white">
-            {psychic.is_online ? "Online" : "Away"}
-          </span>
-        </div>
+        <div className={`gl-tier ${tierClass}`}>{tier.label}</div>
 
-        {/* Welcome-credit badge (bottom-right) — £15 free = X min with this reader */}
         {welcomeCreditMinutes(psychic.price_per_second) > 0 && (
-          <div
-            className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full flex items-center"
-            style={{
-              background: "rgba(13,17,23,0.72)",
-              border: `1px solid ${COLORS.starGold}80`,
-              backdropFilter: "blur(4px)",
-            }}
-          >
-            <span className="text-[9px] font-black tracking-wide" style={{ color: COLORS.starGold }}>
-              🎁 £15 FREE = {welcomeCreditMinutes(psychic.price_per_second)} min
-            </span>
+          <div className="gl-gift">
+            £15 free · {welcomeCreditMinutes(psychic.price_per_second)} min
           </div>
         )}
       </div>
 
-      <div className="flex-1 flex flex-col items-center text-center space-y-4 px-1">
-        <div className="space-y-2">
-          <h3
-            className="uppercase tracking-tight"
-            style={{
-              ...TYPOGRAPHY.headings.h3,
-              color: COLORS.neutralWhite,
-              fontSize: "1.5rem",
-            }}
-          >
-            {psychic.username}
-          </h3>
+      <div className="flex-1 flex flex-col items-center text-center px-5 pt-4 pb-5">
+        <div className="space-y-2.5">
+          <h3 className="gl-pname" style={{ fontSize: 26 }}>{displayName}</h3>
+          {rating != null && (
+            <div className="gl-stars">
+              {"★".repeat(filledStars)}
+              {"☆".repeat(Math.max(0, 5 - filledStars))}
+              <span>{rating.toFixed(1)}</span>
+            </div>
+          )}
           <div className="flex flex-wrap justify-center gap-1.5">
-            {specialties.map((s: string, i: number) => (
-              <span
-                key={s}
-                className="px-2.5 py-0.5 rounded-full text-[9px] uppercase font-bold"
-                style={
-                  i === 0
-                    ? {
-                        color: halo,
-                        border: `1px solid ${halo}`,
-                        background: `rgba(${haloRgb}, 0.08)`,
-                      }
-                    : {
-                        color: "rgba(255,255,255,0.7)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        background: "rgba(255,255,255,0.05)",
-                      }
-                }
-              >
-                {s}
-              </span>
+            {specialties.slice(0, 3).map((s: string) => (
+              <span key={s} className="gl-tag">{s}</span>
             ))}
+            {specialties.length > 3 && (
+              <span className="gl-tag">+{specialties.length - 3}</span>
+            )}
           </div>
         </div>
 
-        <div className="w-full grid grid-cols-2 gap-px border-y border-white/5 py-3 mt-1">
-          <div className="text-center">
-            <span className="block text-[8px] uppercase tracking-widest opacity-40 text-white mb-0.5">
-              Exp.
-            </span>
-            <span className="text-xs font-bold" style={{ color: halo }}>
-              {tier.label}
-            </span>
-          </div>
-          <div className="text-center border-l border-white/5">
-            <span className="block text-[8px] uppercase tracking-widest opacity-40 text-white mb-0.5">
-              Status
-            </span>
-            <span className="text-xs text-white font-bold">
-              {psychic.is_online ? "Available" : "Unavailable"}
-            </span>
-          </div>
-        </div>
-
-        <p
-          className="text-[10px] leading-relaxed opacity-40 line-clamp-2 italic px-2"
-          style={{ color: COLORS.neutralWhite }}
-        >
-          "
-          {psychic.bio ||
-            "A skilled spiritual guide ready to help you find clarity."}
-          "
+        <p className="gl-spec px-1 mt-4" style={{ minHeight: 0 }}>
+          {psychic.bio || "A gentle guide ready to help you find clarity."}
         </p>
 
-        <div className="mt-auto w-full relative">
-          <motion.div
-            onMouseEnter={() => setIsBtnHovered(true)}
-            onMouseLeave={() => setIsBtnHovered(false)}
-            whileTap={{ scale: 0.98 }}
-            className="w-full py-2.5 px-6 transition-all duration-500 relative flex items-center justify-between overflow-hidden rounded-[1.5rem] group/btn"
-            style={{
-              fontFamily: TYPOGRAPHY.fontFamily.heading,
-              backgroundColor: isBtnHovered
-                ? COLORS.primary
-                : `${COLORS.neutralWhite}15`,
-              border: `1px solid ${isBtnHovered ? COLORS.primary : `${COLORS.neutralWhite}15`}`,
-              boxShadow: isBtnHovered ? `0 0 15px ${COLORS.primary}30` : "none",
-            }}
-          >
-            <div className="flex flex-col items-start relative z-10 text-left">
-              <span
-                className="uppercase tracking-[0.15em] text-[9px] font-black"
-                style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}
-              >
-                Start Reading
-              </span>
-              <span
-                className="text-[8px] opacity-60 uppercase font-medium"
-                style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}
-              >
-                Instant Connection
-              </span>
-            </div>
-
-            <div className="relative z-10 flex items-center gap-3">
-              <div
-                className="w-[1px] h-5 transition-colors duration-300"
-                style={{
-                  backgroundColor: isBtnHovered
-                    ? `${COLORS.dark}20`
-                    : `${COLORS.primary}30`,
-                }}
-              />
-              <div className="flex flex-col items-end">
-                <span
-                  className="text-xs font-black"
-                  style={{ color: isBtnHovered ? COLORS.dark : tier.color }}
-                >
-                  {pricePerMinute}
-                </span>
-                <span
-                  className="text-[7px] uppercase font-bold"
-                  style={{ color: isBtnHovered ? COLORS.dark : tier.color }}
-                >
-                  / Min
-                </span>
-              </div>
-              <Icon
-                icon="ph:chat-teardrop-dots-fill"
-                className="text-lg"
-                style={{ color: isBtnHovered ? COLORS.dark : COLORS.primary }}
-              />
-            </div>
-          </motion.div>
+        <div className="gl-prow2 mt-auto w-full">
+          <div className="gl-price">
+            {pricePerMinute} <span>/ min</span>
+          </div>
+          <button className="gl-start" type="button">
+            Start
+          </button>
         </div>
       </div>
     </motion.div>
@@ -448,11 +272,8 @@ const TarotCard = ({ psychic }: { psychic: any }) => {
 };
 
 const NavBtn = ({ icon, onClick }: { icon: string; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    className="w-12 h-12 rounded-full border border-white/5 flex items-center justify-center text-white/20 hover:text-primary hover:border-primary/40 hover:bg-white/5 transition-all active:scale-90 bg-surface/40 backdrop-blur-xl z-50"
-  >
-    <Icon icon={icon} className="text-2xl" />
+  <button onClick={onClick} className="gl-theme-toggle" style={{ width: 46, height: 46 }}>
+    <Icon icon={icon} className="text-xl mx-auto" />
   </button>
 );
 
