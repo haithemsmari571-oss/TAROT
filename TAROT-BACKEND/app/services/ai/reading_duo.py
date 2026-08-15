@@ -1,10 +1,11 @@
 """Two-role coordinator (READING_ENGINE=two_role): Valentina writes / Sabri delivers.
 
 Per client message:
-  * ROUTE (cheap): NEW (a real question / new direction / opening) vs CONTINUE (a reaction /
-    small follow-up). Reuses the single-agent continue-vs-redirect classifier (heuristic first,
-    a Haiku tie-break only for the genuinely ambiguous) — redirect→NEW, continuer→CONTINUE. It
-    NEVER reviews or corrects Valentina; it only picks whether fresh content is needed.
+  * ROUTE (cheap): NEW (Valentina must write) vs CONTINUE (answer from the held reserve).
+    The decision is made against the reserve itself, not against the wording of her message:
+    nothing held → NEW; a bare reaction → CONTINUE; anything else → a Haiku call that reads
+    the held material and says whether it answers her, defaulting to NEW when it does not
+    clearly do so. It NEVER reviews or corrects Valentina; it only picks the source.
   * GENERATE (invisible): NEW → Valentina writes ONE complete reading (Opus 4.6 + gated thinking)
     → Sabri delivers it (curate + hold + voice-preserving-facts + chunk). CONTINUE → Sabri works
     from the held reserve (or gives a short glue reply). So a NEW turn is TWO real model calls
@@ -52,11 +53,63 @@ def _lock(chat_id: int) -> asyncio.Lock:
 # ═════════════════════════════════════════════════════════════════════════════
 # Route + generate (invisible) — injectable seams for tests.
 # ═════════════════════════════════════════════════════════════════════════════
-async def _resolve_route(message: str) -> str:
-    """"new" (fresh Valentina content needed) or "continue" (work from reserve / short reply).
-    redirect→new, continuer→continue, via the reused heuristic+Haiku classifier."""
+_RESERVE_ROUTER_SYSTEM = (
+    "A psychic has written a reading for this client. Part of it has been said to her "
+    "already; the rest is HELD BACK, and you are shown it below. The client has just "
+    "replied. Decide where her answer should come from.\n\n"
+    "Reply with exactly one word:\n"
+    "HELD — the held material already answers her. She is asking for more of what is "
+    "there: an explanation, an elaboration, a repeat, or simply the next part of it.\n"
+    "FRESH — she has raised a different subject, a new person, a new question, or told "
+    "the psychic something new that the held material does not speak to.\n\n"
+    "If the held material does not clearly speak to her reply, answer FRESH. "
+    "Never comment on the writing. One word."
+)
+
+
+def _ask_reserve_router(message: str, held: str) -> str:
+    """Can the held reading answer her? Sync — call in a thread."""
+    from app.config import get_app_settings
+    from app.services.ai import client as ai_client
+
+    s = get_app_settings()
+    result = ai_client.run_chat(
+        system=_RESERVE_ROUTER_SYSTEM,
+        user_content=f"HELD MATERIAL:\n{held}\n\nHER REPLY:\n{message or ''}",
+        model=s.READER_CLASSIFIER_MODEL,
+        max_tokens=4,
+    )
+    out = (result.get("text") or "").strip().lower()
+    return "continue" if out.startswith("held") else "new"
+
+
+async def _resolve_route(message: str, reserve: str = "") -> str:
+    """"new" (fresh Valentina content needed) or "continue" (work from the held reserve).
+
+    The old rule asked only "is this a question?", and a question mark alone forced a
+    fresh 40-60 second Valentina call. That threw away between 1,500 and 4,600
+    characters of reading Sabri was already holding, and made "say more" cost exactly
+    as much as a new question — measured live, CONTINUE never routed once.
+
+    The question that actually matters is whether the held material answers her, so
+    that is the question now asked. Cheap outs first, in this order: a bare reaction
+    never needed Valentina whether or not anything is held (routing "okay" to a fresh
+    reading would be far worse than the bug being fixed), and a real question with
+    nothing banked can only be answered by writing one. Only a real question with
+    material banked is worth a Haiku call to compare the two, and anything short of a
+    clear match falls back to a fresh reading.
+    """
     kind = await resolve_classification(message)
-    return "new" if kind == "redirect" else "continue"
+    if kind == "continuer":
+        return "continue"                  # a reaction: glue reply, exactly as before
+    held = (reserve or "").strip()
+    if not held:
+        return "new"                       # a real question, nothing banked to answer it
+    try:
+        return await asyncio.to_thread(_ask_reserve_router, message, held)
+    except Exception as e:  # noqa: BLE001 - never answer from stale reserve by accident
+        logger.warning("duo_reserve_router_failed", chat_error=str(e))
+        return "new"
 
 
 def _transcript_excluding(state, trigger_entry):
@@ -157,12 +210,16 @@ async def _duo_generate(
     """Route → (Valentina if NEW) → Sabri. Returns (bubbles, reserve, route). Nothing reaches the
     client here. bubbles is the paced-reveal payload (ALWAYS non-empty — Sabri guarantees a
     fallback line, and a failed Valentina write yields one too, so the client never sees dead
-    silence); reserve is what Sabri is still holding. ``forced_route`` overrides the classifier
-    for a dequeued redirect (already classified NEW when queued — never re-classify and risk a
-    non-deterministic flip to CONTINUE that would answer a new topic from stale reserve)."""
+    silence); reserve is what Sabri is still holding. ``forced_route`` overrides the routing
+    entirely and is now only used by tests — the guard it used to provide (never re-classify a
+    queued message, in case a non-deterministic flip answered a new topic from stale reserve) is
+    what the reserve router does directly, by reading the held material before choosing it."""
     from app.services.ai.reading_llm import FALLBACK_MESSAGE
 
-    route = forced_route or await _resolve_route(message)
+    held = (state.reserve or "") if state is not None else ""
+    route = forced_route or await _resolve_route(message, held)
+    logger.info("duo_routed", chat_id=chat_id, route=route,
+                reserve_chars=len(held.strip()), forced=forced_route is not None)
     if route == "new":
         valentina_text = (
             await _write_valentina_turn(
@@ -352,7 +409,12 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
                     message, trigger_entry = None, None
                 else:
                     message, trigger_entry = nxt
-                    forced_route = "new"       # queued messages are always redirects → NEW
+                    # Deliberately NOT forced to NEW any more. Assuming a queued
+                    # message must be a new topic is what made "say more", typed
+                    # while bubbles were still landing, cost a whole fresh reading.
+                    # The reserve router reads the held material before deciding,
+                    # so it can tell those two cases apart on the evidence.
+                    forced_route = None
                     logger.info("duo_redirect_dequeued", chat_id=chat_id)
     except asyncio.CancelledError:
         logger.info("duo_turn_cancelled", chat_id=chat_id)

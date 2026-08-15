@@ -18,13 +18,59 @@ def _reset(chat_id):
     get_session_store().delete(f"chat:{chat_id}")
 
 
-# ── router: redirect→new, continuer→continue (pure heuristic on clear cases) ──
-def test_resolve_route():
+# ── router: the source is chosen against the reserve, not the wording ─────────
+def test_resolve_route_without_reserve():
+    """Nothing banked: a real question needs Valentina, a reaction still does not."""
     assert asyncio.run(reading_duo._resolve_route("will he come back to me?")) == "new"
     assert asyncio.run(reading_duo._resolve_route(
         "so my sister told me he was seen with his ex last night")) == "new"
+    # A bare reaction must never trigger a fresh reading, reserve or no reserve —
+    # a sixty-second Valentina call in reply to "okay" is worse than any wait.
     assert asyncio.run(reading_duo._resolve_route("okay")) == "continue"
     assert asyncio.run(reading_duo._resolve_route("wow youre good")) == "continue"
+    assert asyncio.run(reading_duo._resolve_route("okay", "held material")) == "continue"
+
+
+def test_follow_ups_reach_the_reserve_instead_of_valentina(monkeypatch):
+    """The regression this router exists for.
+
+    Measured in production, every one of these cost a fresh 40-60 second Valentina
+    call while 1,500-4,600 characters of reading sat held and unused, because the old
+    rule treated any question mark as a new topic.
+    """
+    asked = []
+
+    def _held(message, held):
+        asked.append((message, held))
+        return "continue"
+
+    monkeypatch.setattr(reading_duo, "_ask_reserve_router", _held)
+    for follow_up in ("say more", "what do you mean by that",
+                      "i dont understand", "can you explain that last bit"):
+        assert asyncio.run(
+            reading_duo._resolve_route(follow_up, "HELD: the rest of her reading")
+        ) == "continue", follow_up
+    assert len(asked) == 4
+    assert all(held == "HELD: the rest of her reading" for _, held in asked)
+
+
+def test_a_new_subject_still_costs_a_fresh_reading(monkeypatch):
+    """The router must not answer a new topic out of stale reserve."""
+    monkeypatch.setattr(reading_duo, "_ask_reserve_router", lambda m, h: "new")
+    assert asyncio.run(
+        reading_duo._resolve_route("what about my job", "HELD: about her ex")
+    ) == "new"
+
+
+def test_router_failure_falls_back_to_a_fresh_reading(monkeypatch):
+    """On any error, write rather than risk answering from material that cannot."""
+    def _boom(message, held):
+        raise RuntimeError("classifier down")
+
+    monkeypatch.setattr(reading_duo, "_ask_reserve_router", _boom)
+    assert asyncio.run(
+        reading_duo._resolve_route("say more", "HELD: something")
+    ) == "new"
 
 
 def test_valentina_receives_verified_numerology_or_explicit_not_available_signal():
@@ -73,7 +119,7 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
     monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
 
     # NEW route → Valentina called, Sabri fed her fresh prose
-    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m: _coro("new"))
+    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m, r="": _coro("new"))
     st = create_session_state("chat:x", chat_id=1)
     st.reserve = "OLD_RESERVE"
     b, reserve, route = asyncio.run(reading_duo._duo_generate(1, "will he come back?", None, st, 2))
@@ -82,7 +128,7 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
     assert sabri_calls[-1] == {"source": "VALENTINA_PROSE::will he come back?", "is_new": True}
 
     # CONTINUE route → Valentina NOT called again, Sabri fed the held reserve
-    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m: _coro("continue"))
+    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m, r="": _coro("continue"))
     st.reserve = "HELD_RESERVE_TEXT"
     b, reserve, route = asyncio.run(reading_duo._duo_generate(1, "wow", None, st, 2))
     assert route == "continue"
@@ -108,7 +154,7 @@ def test_forced_route_bypasses_classifier(monkeypatch):
         return ([f"b::{message}"], "R")
 
     # the classifier would say "continue" — forced_route="new" must win (no flip to stale reserve)
-    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m: _coro("continue"))
+    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m, r="": _coro("continue"))
     monkeypatch.setattr(reading_duo, "_write_valentina_turn", fake_valentina)
     monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
 
@@ -133,7 +179,7 @@ def test_valentina_failure_delivers_fallback_keeps_reserve(monkeypatch):
         called.append(True)
         return (["should not run"], "")
 
-    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m: _coro("new"))
+    monkeypatch.setattr(reading_duo, "_resolve_route", lambda m, r="": _coro("new"))
     monkeypatch.setattr(reading_duo, "_write_valentina_turn", failed_valentina)
     monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
 

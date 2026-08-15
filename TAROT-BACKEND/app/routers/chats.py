@@ -1343,13 +1343,15 @@ async def join_chat_endpoint(
         if info.client_joined_now:
             # One greeting per new paid ChatSession. mark_client_joined() returns
             # False for repeat mounts and ordinary WebSocket reconnects.
-            from app.services.chats import broadcast_ai_message
+            #
+            # This was one fixed sentence, identical for every client and every
+            # reader, for the whole life of the product. The reader now says hello
+            # in her own words, so it varies with who she is talking to. Launched,
+            # not awaited: the join response must not wait on a model, and if the
+            # greeting fails the client simply speaks first.
+            from app.services.ai import reading_first_word
 
-            await broadcast_ai_message(
-                db,
-                chat,
-                "hi lovely, i'm here and ready when you are.",
-            )
+            reading_first_word.greet_now(chat_id, info.chat_session_id)
         return JSONResponse(
             content={
                 "chat_id": info.chat_id,

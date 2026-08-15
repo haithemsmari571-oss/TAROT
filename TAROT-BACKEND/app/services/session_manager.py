@@ -92,6 +92,10 @@ class SessionInfo:
     # ChatSession. The join route uses it to send one reader greeting; ordinary
     # mounts and WebSocket reconnects receive False.
     client_joined_now: bool = False
+    # The ChatSession this info describes. The greeting is attributed to it
+    # explicitly: inferring the session from the newest message would attach the
+    # hello to the previous session on a returning client's first join.
+    chat_session_id: int | None = None
 
 
 @dataclass
@@ -1433,6 +1437,7 @@ class SessionManager:
 
         return SessionInfo(
             chat_id=session_state.chat_id,
+            chat_session_id=session_state.session_id,
             elapsed_seconds=elapsed_seconds,
             estimated_cost=estimated_cost,
             remaining_seconds=remaining_seconds,

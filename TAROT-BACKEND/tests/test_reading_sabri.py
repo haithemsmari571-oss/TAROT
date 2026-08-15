@@ -416,3 +416,43 @@ def test_sabri_prompt_requires_real_rewrite_and_forbids_dashes():
     assert "an em dash (—)" in S.SABRI_SYSTEM_PROMPT
     assert "an en dash (–)" in S.SABRI_SYSTEM_PROMPT
     assert "[[KEEP_0001]]" in S.SABRI_SYSTEM_PROMPT
+
+
+# ── sentence openers are not proper names ────────────────────────────────────
+def test_sentence_openers_do_not_rewrite_ordinary_words():
+    """The defect live clients saw: "this has been sitting with you For weeks".
+
+    Valentina writes prose. Every sentence she began with "For" or "Like" was
+    harvested as a proper name and then force-applied, case-insensitively, to
+    every later occurrence in Sabri's delivery.
+    """
+    source = (
+        "For weeks she has been holding this alone, waiting for something to shift. "
+        "Like a door she keeps propped open, like she cannot quite close it. "
+        "Before anything else she needs to hear that, before the rest of it lands."
+    )
+    delivery = (
+        "you've known for a while haven't you, like deep down, "
+        "and this has been sitting with you for weeks before today"
+    )
+    out = S._canonicalize_protected_literals(delivery, {}, source_content=source)
+    assert "For weeks" not in out
+    assert "like deep" in out
+    assert out == delivery, out
+
+
+def test_a_name_at_a_sentence_start_is_still_protected():
+    """A word never written in lower case is a name, wherever it appears."""
+    source = "Daniel was born in the spring. The pull here is his."
+    out = S._canonicalize_protected_literals(
+        "i keep coming back to daniel in this", {}, source_content=source
+    )
+    assert "Daniel" in out
+
+
+def test_a_name_used_mid_sentence_is_protected():
+    source = "The pull here is Marcus. Marcus has been circling back for months."
+    out = S._canonicalize_protected_literals(
+        "i keep coming back to marcus in this", {}, source_content=source
+    )
+    assert "Marcus" in out

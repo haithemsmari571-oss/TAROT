@@ -48,6 +48,10 @@ FIRST_WORD_DEADLINE_SECONDS = 8.0
 # The goodbye is awaited inline by the session teardown, so it gets its own,
 # looser budget — but it still cannot hold the end of a session open.
 CLOSING_DEADLINE_SECONDS = 4.0
+# Nobody is waiting on the greeting the way they wait on a reply — she has just
+# arrived and is still reading the screen — so it can afford to be a little late
+# rather than fall back to a fixed line.
+GREETING_DEADLINE_SECONDS = 6.0
 # A holding line is one short breath, but the ceiling has to leave room for the
 # model to finish its sentence: at 64 the goodbye was cut mid-line and discarded
 # as truncated. The validators enforce brevity; this only stops a runaway.
@@ -107,6 +111,27 @@ already used with her.
 Reply with the goodbye alone. No quotes, no preamble, nothing else.
 """
 
+GREETING_INSTRUCTION = """
+
+---
+
+RIGHT NOW: HELLO. SHE HAS JUST WALKED IN.
+
+She has joined the reading and you have not spoken yet. This is the first thing
+she ever hears from you, so it cannot sound like a template — it was a fixed
+line for every client until now, and that is exactly what is being replaced.
+
+Send ONE short line: warm, present, hers. Let her know you are here and that she
+can take her time. If she said something when she booked, let that colour how
+you greet her, without answering it yet.
+
+You have not looked at anything. No cards, no numbers, no dates, no signs, no
+names, no timing, no hint of what is coming. Do not promise what the reading
+will say. Do not reserve anything or emit any marker.
+
+Reply with the greeting alone. No quotes, no preamble, nothing else.
+"""
+
 # Appended to the user turn on the second attempt. Naming the specific failure
 # is what makes the retry worth making: an identical prompt would most likely
 # produce an identically rejected line.
@@ -149,9 +174,24 @@ _FALLBACK_CLOSERS = (
 )
 
 
-def _fallback_line(previous: List[str], closing: bool) -> str:
+_FALLBACK_GREETINGS = (
+    "hi love, i'm here. take your time.",
+    "hey, i'm with you. whenever you're ready.",
+    "hi, i'm here now. tell me what's going on.",
+    "hello love. i'm listening whenever you want to start.",
+    "hi. i'm here, no rush at all.",
+)
+
+_FALLBACK_POOLS = {
+    "greet": _FALLBACK_GREETINGS,
+    "open": _FALLBACK_OPENERS,
+    "close": _FALLBACK_CLOSERS,
+}
+
+
+def _fallback_line(previous: List[str], moment: str) -> str:
     """A safe line she has not heard yet, or empty if she has heard them all."""
-    pool = _FALLBACK_CLOSERS if closing else _FALLBACK_OPENERS
+    pool = _FALLBACK_POOLS.get(moment, _FALLBACK_OPENERS)
     for line in pool:
         if _too_similar(line, previous):
             continue
@@ -489,8 +529,9 @@ async def _speak(
     deadline_seconds: float,
     started: float,
     event: str,
-    require_message: bool = True,
+    moment: str = "open",
 ) -> bool:
+    require_message = moment == "open"
     context = await asyncio.to_thread(
         _load_context, chat_id, chat_session_id, message_id, require_message
     )
@@ -547,7 +588,7 @@ async def _speak(
     if not line:
         # Nothing the model produced was safe to send. Say something true and
         # empty of substance rather than nothing at all.
-        line = _fallback_line(previous, closing=not require_message)
+        line = _fallback_line(previous, moment)
         source = "fallback"
         if not line:
             logger.info("reading_first_word_rejected", chat_id=chat_id,
@@ -605,6 +646,43 @@ async def speak_now(
                        error_type=type(error).__name__)
 
 
+def greet_now(chat_id: int, chat_session_id: Optional[int]) -> None:
+    """Say hello, in the reader's own words, without holding up the join.
+
+    Fire and forget so the join endpoint still returns immediately. If it
+    produces nothing she simply arrives to a quiet room and speaks first, which
+    is what happens on every other platform anyway.
+    """
+    started = time.perf_counter()
+    try:
+        task = asyncio.create_task(_greet(chat_id, chat_session_id, started))
+    except RuntimeError:
+        return                       # no running loop: the join is unaffected
+    task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
+
+
+async def _greet(chat_id: int, chat_session_id: Optional[int], started: float) -> None:
+    try:
+        await asyncio.wait_for(
+            _speak(
+                chat_id=chat_id,
+                chat_session_id=chat_session_id,
+                message_id=None,
+                instruction=GREETING_INSTRUCTION,
+                moment="greet",
+                deadline_seconds=GREETING_DEADLINE_SECONDS,
+                started=started,
+                event="reading_greeting_sent",
+            ),
+            timeout=GREETING_DEADLINE_SECONDS + 1.0,
+        )
+    except asyncio.TimeoutError:
+        logger.info("reading_greeting_rejected", chat_id=chat_id, reason="timeout")
+    except Exception as error:  # noqa: BLE001 - a missing hello must never break a join
+        logger.warning("reading_greeting_failed", chat_id=chat_id,
+                       error_type=type(error).__name__)
+
+
 async def say_goodbye(chat_id: int, chat_session_id: Optional[int]) -> None:
     """The last thing she hears. Awaited by session teardown, never raises."""
     started = time.perf_counter()
@@ -615,7 +693,7 @@ async def say_goodbye(chat_id: int, chat_session_id: Optional[int]) -> None:
                 chat_session_id=chat_session_id,
                 message_id=None,
                 instruction=CLOSING_INSTRUCTION,
-                require_message=False,
+                moment="close",
                 deadline_seconds=CLOSING_DEADLINE_SECONDS,
                 started=started,
                 event="reading_last_word_sent",

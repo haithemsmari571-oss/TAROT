@@ -308,6 +308,58 @@ _GENERIC_OPENERS = re.compile(
 )
 
 
+_AUTO_NAME_RE = re.compile(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*\b")
+
+
+def _sentence_initial(source: str, start: int) -> bool:
+    """Is this capital fully explained by the punctuation in front of it?"""
+    index = start - 1
+    while index >= 0 and source[index] in " \t\"'“‘(":
+        index -= 1
+    if index < 0:
+        return True
+    return source[index] in ".!?:;\n"
+
+
+def _auto_name_matches(source: str):
+    """Capitalised runs that behave like names, not like sentence openers.
+
+    Valentina writes ordinary prose, so every sentence she began with "For" or
+    "Like" registered that word as a proper name. It was then force-applied,
+    case-insensitively, to every later occurrence in Sabri's delivery — which is
+    how "this has been sitting with you For weeks" reached a client.
+
+    Two things earn a capital the right to be enforced. Either the word appears
+    capitalised somewhere a full stop does not explain — a real name turns up
+    mid-sentence sooner or later — or it never appears in lower case at all, in
+    which case there is no evidence it is an ordinary word. "Daniel" survives on
+    the second test even when he is only ever mentioned at the start of a
+    sentence; "For" fails it, because her prose says "for" elsewhere.
+
+    This only filters the automatic guess. Names known from the dossier arrive
+    through ``names`` and are matched exactly, untouched by any of this.
+    """
+    text = source or ""
+    matches = [
+        match for match in _AUTO_NAME_RE.finditer(text)
+        if any(word not in _NON_NAME_WORDS for word in match.group(0).lower().split())
+    ]
+    earned = {
+        match.group(0) for match in matches
+        if not _sentence_initial(text, match.start())
+    }
+    kept = []
+    for match in matches:
+        literal = match.group(0)
+        if literal in earned:
+            kept.append(match)
+        elif not re.search(
+            r"(?<!\w)" + re.escape(literal.lower()) + r"(?!\w)", text
+        ):
+            kept.append(match)          # never written in lower case: treat as a name
+    return kept
+
+
 def _protected_spans(source: str, *, names=()):
     """Return non-overlapping credibility-critical spans, longest match first at each offset."""
     candidates = []
@@ -322,12 +374,12 @@ def _protected_spans(source: str, *, names=()):
             candidates.extend((m.start(), m.end()) for m in re.finditer(
                 r"\b" + re.escape(str(name)) + r"\b", source or "", re.IGNORECASE
             ))
-    # Conservative automatic proper-name guard. False positives only preserve an extra capitalized
-    # word; false negatives would let a person's name drift, so preservation wins.
-    for match in re.finditer(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*\b", source or ""):
-        words = match.group(0).lower().split()
-        if any(word not in _NON_NAME_WORDS for word in words):
-            candidates.append((match.start(), match.end()))
+    # Automatic proper-name guard, restricted to capitals that a full stop does not
+    # already explain (see _auto_name_matches). A false negative lets an unknown name
+    # drift; a false positive rewrites ordinary words mid-sentence in front of the
+    # client, which is the worse of the two and the one that actually shipped.
+    for match in _auto_name_matches(source or ""):
+        candidates.append((match.start(), match.end()))
     chosen = []
     for start, end in sorted(set(candidates), key=lambda span: (span[0], -(span[1] - span[0]))):
         if not any(start < other_end and end > other_start for other_start, other_end in chosen):
@@ -369,10 +421,8 @@ def _canonicalize_protected_literals(text: str, mapping, *, source_content: str 
     """Restore canonical spelling/capitalisation if Sabri independently repeats a protected fact."""
     canonical = set(mapping.values())
     canonical.update(str(name) for name in names or () if str(name).strip())
-    for match in re.finditer(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*\b", source_content or ""):
-        words = match.group(0).lower().split()
-        if any(word not in _NON_NAME_WORDS for word in words):
-            canonical.add(match.group(0))
+    for match in _auto_name_matches(source_content or ""):
+        canonical.add(match.group(0))
     result = text or ""
     for literal in sorted(canonical, key=len, reverse=True):
         result = re.sub(

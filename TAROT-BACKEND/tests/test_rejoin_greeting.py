@@ -40,19 +40,20 @@ def test_join_sends_one_reader_greeting_not_one_per_mount(db, make_user, monkeyp
                 started_at="2026-08-13T12:00:00",
                 rate_per_second=1 / 60,
                 client_joined_now=self.calls == 1,
+                chat_session_id=4242,
             )
 
     session_manager = FakeSessionManager()
-    delivered = []
-
-    async def fake_broadcast(_db, target_chat, content):
-        delivered.append((target_chat.id, content))
+    greeted = []
 
     monkeypatch.setattr(
         "app.services.session_manager.get_session_manager",
         lambda: session_manager,
     )
-    monkeypatch.setattr("app.services.chats.broadcast_ai_message", fake_broadcast)
+    monkeypatch.setattr(
+        "app.services.ai.reading_first_word.greet_now",
+        lambda chat_id, chat_session_id: greeted.append((chat_id, chat_session_id)),
+    )
 
     app = FastAPI()
     app.include_router(router, prefix="/api/chat")
@@ -65,9 +66,10 @@ def test_join_sends_one_reader_greeting_not_one_per_mount(db, make_user, monkeyp
 
     assert first.status_code == 200
     assert reconnect.status_code == 200
-    assert delivered == [
-        (chat.id, "hi lovely, i'm here and ready when you are."),
-    ]
+    # One hello per paid session, still. It is no longer a fixed sentence: the
+    # reader writes it, so it varies by client, and it is attributed to this
+    # session explicitly rather than inferred from the newest message.
+    assert greeted == [(chat.id, 4242)]
 
 
 def test_join_does_not_greet_when_no_new_session_transition(
@@ -102,7 +104,7 @@ def test_join_does_not_greet_when_no_new_session_transition(
 
     fake_manager.mark_client_joined = fake_join
 
-    async def forbidden_broadcast(*_args, **_kwargs):
+    def forbidden_greeting(*_args, **_kwargs):
         raise AssertionError("repeat join must not send another greeting")
 
     monkeypatch.setattr(
@@ -110,8 +112,8 @@ def test_join_does_not_greet_when_no_new_session_transition(
         lambda: fake_manager,
     )
     monkeypatch.setattr(
-        "app.services.chats.broadcast_ai_message",
-        forbidden_broadcast,
+        "app.services.ai.reading_first_word.greet_now",
+        forbidden_greeting,
     )
 
     app = FastAPI()
