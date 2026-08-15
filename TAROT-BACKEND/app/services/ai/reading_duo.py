@@ -53,6 +53,12 @@ def _lock(chat_id: int) -> asyncio.Lock:
 # ═════════════════════════════════════════════════════════════════════════════
 # Route + generate (invisible) — injectable seams for tests.
 # ═════════════════════════════════════════════════════════════════════════════
+# Why the last route was chosen, for the log line in _duo_generate. Single-worker
+# process, and routing is sequential per turn, so one slot is enough; it exists
+# because "route: new" alone could not distinguish a reaction from a router
+# verdict from a missing hold, and each has a completely different fix.
+_LAST_ROUTE_REASON = {"why": "unknown"}
+
 _RESERVE_ROUTER_SYSTEM = (
     "A psychic has written a reading for this client. Part of it has been said to her "
     "already; the rest is HELD BACK, and you are shown it below. The client has just "
@@ -101,13 +107,18 @@ async def _resolve_route(message: str, reserve: str = "") -> str:
     """
     kind = await resolve_classification(message)
     if kind == "continuer":
+        _LAST_ROUTE_REASON["why"] = "reaction"
         return "continue"                  # a reaction: glue reply, exactly as before
     held = (reserve or "").strip()
     if not held:
+        _LAST_ROUTE_REASON["why"] = "nothing held"
         return "new"                       # a real question, nothing banked to answer it
     try:
-        return await asyncio.to_thread(_ask_reserve_router, message, held)
+        verdict = await asyncio.to_thread(_ask_reserve_router, message, held)
+        _LAST_ROUTE_REASON["why"] = f"router said {verdict}"
+        return verdict
     except Exception as e:  # noqa: BLE001 - never answer from stale reserve by accident
+        _LAST_ROUTE_REASON["why"] = "router failed"
         logger.warning("duo_reserve_router_failed", chat_error=str(e))
         return "new"
 
@@ -219,7 +230,10 @@ async def _duo_generate(
     held = (state.reserve or "") if state is not None else ""
     route = forced_route or await _resolve_route(message, held)
     logger.info("duo_routed", chat_id=chat_id, route=route,
-                reserve_chars=len(held.strip()), forced=forced_route is not None)
+                reserve_chars=len(held.strip()), forced=forced_route is not None,
+                why=("forced" if forced_route is not None
+                     else _LAST_ROUTE_REASON.get("why", "unknown")),
+                held_head=held.strip()[:120])
     if route == "new":
         valentina_text = (
             await _write_valentina_turn(

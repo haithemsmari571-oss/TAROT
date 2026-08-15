@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 11 files."""
+"""Verification of the eleven Production Lock Version 12 files."""
 
 from __future__ import annotations
 
@@ -9,7 +9,14 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
-    # Production Lock Version 11: the follow-up wait, and the capitalisation defect.
+    # Production Lock Version 12: Version 11 plus the routing decision reason.
+    #
+    # Version 11 shipped, and its own log could not say WHY a turn routed the way
+    # it did — a reaction, a missing hold and a router verdict all printed the
+    # same line, and each needs a different fix. reading_duo.py carries that
+    # reason now. Version 11's contents are otherwise unchanged and described here:
+    #
+    # Version 11: the follow-up wait, and the capitalisation defect.
     #
     # Exactly two of the eleven files moved from Version 10; the other nine are
     # byte-identical, which is the point of re-cutting rather than widening.
@@ -25,11 +32,11 @@ LOCKED_SHA256 = {
     #                     then force-applied them case-insensitively to the delivery.
     #                     That is how "sitting with you For weeks" reached clients.
     #
-    # Versions 1-10 stay preserved in Second Brain.
+    # Versions 1-11 stay preserved in Second Brain.
     "app/config.py": "B760A1DB9ACE63180B1733215A10F63EC92F8CBCC306ADDAF693FC3CA147ADC1",
     "app/services/ai/client.py": "35E42B59265880441751DE0F53A7637A032B51D60A1D9B64A12AAD20865658CB",
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
-    "app/services/ai/reading_duo.py": "15149D8249C2F40E434778299D29AB4B4D3CB03930B45022763738CFFE6E71D6",
+    "app/services/ai/reading_duo.py": "79A75F6211C68FF2A62F54418A173E55870CDBFBB71D403E433FBA05ADA3BC12",
     "app/services/ai/reading_valentina.py": "0CEC02B404AC5842BAEBA68FA97DEA4A0EBDE60FB63994CBAE700FD397B1D2F1",
     "app/services/ai/reading_sabri.py": "8D5ABED8363102EFCD6D6BBB983CAB76A4A4A102B8AB4D9534DB88C140D9D134",
     "app/services/ai/reading_reveal.py": "F90FBD4FB3A24A3D043E138AEFE17FB54EBCB760C413D4A462D52F39337DC885",
