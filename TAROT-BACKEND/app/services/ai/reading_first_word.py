@@ -84,6 +84,10 @@ CLOSING_INSTRUCTION = """
 
 RIGHT NOW: THE LAST THING SHE HEARS FROM YOU.
 
+This is not a delivery. There is no reading material to relay and none is
+missing — nothing is owed, nothing is being held back. Do not reserve, do not
+ask for material, do not emit any marker or bracketed note. Speak plainly.
+
 The session is over. This is your goodbye, and it is the final message she will
 read. Make it warm and human — that she was heard, that you hope she leaves
 steadier, that she is welcome back.
@@ -195,6 +199,25 @@ def _reject_reason(candidate: str, previous: List[str]) -> Optional[str]:
     if _too_similar(text, previous):
         return "repeats an earlier line"
     return None
+
+
+def _take_spoken_line(text: str) -> str:
+    """The words she is meant to hear, with the delivery protocol stripped off.
+
+    Sabri's system prompt is a *delivery* prompt: when it has no fresh reading
+    material to relay it is supposed to emit ``@@RESERVE@@`` and explain itself.
+    At the end of a session there is nothing fresh by definition, so it does
+    exactly that, and the goodbye arrives as one good line followed by protocol
+    machinery. Taking the first paragraph and cutting at the first marker keeps
+    the line and discards the machinery, which is what the protocol means rather
+    than a fight with it.
+    """
+    body = (text or "").strip()
+    marker = re.search(r"@@|\n\s*\[", body)
+    if marker:
+        body = body[: marker.start()]
+    paragraph = body.strip().split("\n\n", 1)[0]
+    return paragraph.strip()
 
 
 def _build_user_turn(
@@ -415,8 +438,11 @@ async def _speak(
         is_first_message=context["is_first_message"],
     )
 
-    candidate, stop_reason = await asyncio.to_thread(_generate, system_block, user_turn, model)
-    if stop_reason == "max_tokens":
+    raw, stop_reason = await asyncio.to_thread(_generate, system_block, user_turn, model)
+    candidate = _take_spoken_line(raw)
+    # Truncation only matters if it landed inside the spoken line itself. If the
+    # cut fell in the protocol block that follows it, her line is whole.
+    if stop_reason == "max_tokens" and candidate == (raw or "").strip():
         logger.info("reading_first_word_rejected", chat_id=chat_id, reason="truncated")
         return False
 
