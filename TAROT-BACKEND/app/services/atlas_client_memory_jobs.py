@@ -25,8 +25,6 @@ from app.services.atlas_client_memory_summary import (
     AtlasSummaryGenerationResult,
     AtlasTranscriptLine,
 )
-from app.services.ai.prompt_runs import record_prompt_run
-from app.services.atlas_client_memory_prompt import ATLAS_CLIENT_MEMORY_PROMPT_KEY
 from app.services.atlas_memory_numerology import calculate_atlas_memory_numerology
 
 
@@ -296,18 +294,9 @@ def process_atlas_client_memory_job_attempt(
             raise RuntimeError("The memory job has no client account.")
 
         atlas_memory = deps.atlas.read(chat.user_id, chat.psychic_id)
-        try:
-            summary: AtlasSummaryGenerationResult = deps.summarizer.generate(
-                db,
-                _generation_input(db, session, chat, user, atlas_memory),
-            )
-        except Exception as error:  # noqa: BLE001 - re-raised into the retry path below
-            record_prompt_run(
-                ATLAS_CLIENT_MEMORY_PROMPT_KEY, ok=False, detail=type(error).__name__
-            )
-            raise
-        record_prompt_run(
-            ATLAS_CLIENT_MEMORY_PROMPT_KEY, ok=True, model=summary.model_identifier
+        summary: AtlasSummaryGenerationResult = deps.summarizer.generate(
+            db,
+            _generation_input(db, session, chat, user, atlas_memory),
         )
         current = atlas_memory.get("current")
         expected_version = current.get("versionNumber", 0) if isinstance(current, dict) else 0

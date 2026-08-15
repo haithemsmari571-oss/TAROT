@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session
 from app.schemas.numerology import NumerologyReport
 from app.services.ai import registry
 from app.services.ai.defaults import NUMEROLOGY_FULL_READING_KEY
-from app.services.ai.prompt_runs import record_prompt_run
 from app.services.numerology import build_profile
 from app.services import numerology_ai_client as ai_client
 from app.services.numerology_config import (
@@ -518,23 +517,10 @@ async def generate_full_reading(
             _inflight[cache_key] = task
     try:
         result = await asyncio.shield(task)
-    except Exception as error:  # noqa: BLE001 - re-raised untouched; only noted
-        # Only the call that started the task made a provider request, so only
-        # it reports the run. A cache hit or a piggybacked wait records nothing.
-        if owner:
-            record_prompt_run(
-                NUMEROLOGY_FULL_READING_KEY,
-                ok=False,
-                model=prompt.model,
-                detail=type(error).__name__,
-            )
-        raise
     finally:
         if owner:
             async with _state_lock:
                 _inflight.pop(cache_key, None)
-    if owner:
-        record_prompt_run(NUMEROLOGY_FULL_READING_KEY, ok=True, model=prompt.model)
     result["promptVersion"] = version.version
     if owner:
         async with _state_lock:

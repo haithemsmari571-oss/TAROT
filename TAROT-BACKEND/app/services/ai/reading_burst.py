@@ -762,26 +762,18 @@ def _commit_hybrid(claim: _Claim, text: str) -> bool:
 
 async def _generate_hybrid(claim: _Claim) -> None:
     from app.services.ai import reading_duo
-    from app.services.ai.defaults import VALENTINA_READING_KEY
-    from app.services.ai.prompt_runs import record_prompt_run
 
     _store, state, turn, trigger = _working_state(claim)
-    try:
-        text = await reading_duo._write_valentina_turn(
-            claim.chat_id,
-            turn,
-            trigger,
-            state,
-            claim.client_id,
-            psychic_id=claim.psychic_id,
-        )
-    except Exception as error:  # noqa: BLE001 - re-raised untouched; only noted
-        record_prompt_run(VALENTINA_READING_KEY, ok=False, detail=type(error).__name__)
-        raise
+    text = await reading_duo._write_valentina_turn(
+        claim.chat_id,
+        turn,
+        trigger,
+        state,
+        claim.client_id,
+        psychic_id=claim.psychic_id,
+    )
     if not (text or "").strip():
-        record_prompt_run(VALENTINA_READING_KEY, ok=False, detail="empty draft")
         raise RuntimeError("Valentina returned an empty Hybrid draft")
-    record_prompt_run(VALENTINA_READING_KEY, ok=True)
     if _commit_hybrid(claim, text):
         logger.info(
             "reading_burst_hybrid_completed",
@@ -1316,32 +1308,18 @@ async def _deliver_auto_plan(claim: _Claim, state=None, store=None) -> bool:
 
 async def _generate_auto(claim: _Claim) -> None:
     from app.services.ai import reading_duo
-    from app.services.ai.defaults import SABRI_DELIVERY_KEY, VALENTINA_READING_KEY
-    from app.services.ai.prompt_runs import record_prompt_run
 
     store, state, turn, trigger = _working_state(claim)
-    # One automatic turn runs Valentina and then Sabri inside the duo, so both
-    # are recorded together. A failure cannot be attributed to one of them from
-    # out here, so neither is blamed for the other.
-    try:
-        bubbles, reserve, route = await reading_duo._duo_generate(
-            claim.chat_id,
-            turn,
-            trigger,
-            state,
-            claim.client_id,
-            psychic_id=claim.psychic_id,
-        )
-    except Exception as error:  # noqa: BLE001 - re-raised untouched; only noted
-        for key in (VALENTINA_READING_KEY, SABRI_DELIVERY_KEY):
-            record_prompt_run(key, ok=False, detail=f"two-role turn: {type(error).__name__}")
-        raise
+    bubbles, reserve, route = await reading_duo._duo_generate(
+        claim.chat_id,
+        turn,
+        trigger,
+        state,
+        claim.client_id,
+        psychic_id=claim.psychic_id,
+    )
     if not bubbles:
-        for key in (VALENTINA_READING_KEY, SABRI_DELIVERY_KEY):
-            record_prompt_run(key, ok=False, detail="no delivery bubbles")
         raise RuntimeError("Sabri returned no delivery bubbles")
-    for key in (VALENTINA_READING_KEY, SABRI_DELIVERY_KEY):
-        record_prompt_run(key, ok=True)
     if not _store_auto_plan(claim, bubbles, reserve, route):
         return
     store.put(state)
