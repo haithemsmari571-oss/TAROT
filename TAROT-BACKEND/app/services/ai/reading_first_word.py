@@ -346,9 +346,18 @@ def _load_context(
                     break
         if require_message and not client_message.strip():
             return {"skip": "no client message"}
+        # Everything she has already heard from the reader, whoever sent it. The
+        # in-process record only knows this module's own lines, so on its own it
+        # let the goodbye repeat the last delivery bubble word for word.
+        spoken = [
+            str(entry["content"])
+            for entry in transcript[-8:]
+            if entry.get("role") == "logan" and entry.get("content")
+        ]
         return {
             "client_message": client_message,
             "transcript": transcript,
+            "spoken": spoken,
             "is_first_message": len([e for e in transcript if e.get("role") == "client"]) <= 1,
         }
 
@@ -430,6 +439,9 @@ async def _speak(
         return False
 
     previous = already_said(chat_session_id)
+    for line in context.get("spoken") or ():
+        if line not in previous:
+            previous.append(line)
     system_block, model = await asyncio.to_thread(_resolve_prompt, instruction)
     user_turn = _build_user_turn(
         client_message=context["client_message"],
