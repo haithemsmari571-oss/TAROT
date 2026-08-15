@@ -484,10 +484,20 @@ def get_active_prompt(db: Session, key: str) -> tuple[AiPrompt, AiPromptVersion,
     return row, version, text
 
 
-def record_run(db: Session, key: str, status: str, at: Optional[datetime] = None) -> None:
+def record_run(
+    db: Session,
+    key: str,
+    status: str,
+    at: Optional[datetime] = None,
+    model: Optional[str] = None,
+) -> None:
     row = db.query(AiPrompt).filter(AiPrompt.key == key).first()
     if row is None:
         return
     row.last_run_at = at or datetime.now(timezone.utc)
     row.last_run_status = status[:255]
+    # The model the run actually used. Left untouched when the caller does not
+    # know it, so an older record is never overwritten with a guess.
+    if model:
+        row.last_run_model = model[:64]
     db.commit()

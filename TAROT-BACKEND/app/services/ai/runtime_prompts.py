@@ -76,6 +76,20 @@ def resolve_runtime_prompt_and_model(
             return _LAST_KNOWN_GOOD_BUNDLES.get(key, fallback)
 
 
+def last_resolved_model(key: str) -> str | None:
+    """The model this process last actually resolved for ``key``.
+
+    Read-only view of the resolver's own cache, so run telemetry can report the
+    model a reading really used rather than whatever is configured now.
+    """
+    with _LOCK:
+        bundle = _LAST_KNOWN_GOOD_BUNDLES.get(key)
+    if not bundle:
+        return None
+    model = (bundle[1] or "").strip()
+    return model or None
+
+
 def clear_runtime_prompt_cache() -> None:
     """Test seam. Registry writes still bust their own authoritative cache."""
     with _LOCK:

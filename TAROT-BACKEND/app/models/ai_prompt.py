@@ -56,6 +56,9 @@ class AiPrompt(Base):
         DateTime(timezone=True), nullable=True
     )
     last_run_status: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # The model the last recorded run actually used, which is not necessarily
+    # the model configured now.
+    last_run_model: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     versions: Mapped[List["AiPromptVersion"]] = relationship(
         "AiPromptVersion",

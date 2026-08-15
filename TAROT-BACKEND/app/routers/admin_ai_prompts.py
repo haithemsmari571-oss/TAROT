@@ -59,6 +59,7 @@ def _to_detail(p) -> dict:
         "char_count": len(p.prompt or ""),
         "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
         "last_run_status": p.last_run_status,
+        "last_run_model": p.last_run_model,
     }
 
 
@@ -77,6 +78,7 @@ def list_ai_prompts(db: Session = Depends(get_db)):
             "draft_version": p.draft_version,
             "last_run_at": p.last_run_at.isoformat() if p.last_run_at else None,
             "last_run_status": p.last_run_status,
+            "last_run_model": p.last_run_model,
         }
         for p in rows
     ]
