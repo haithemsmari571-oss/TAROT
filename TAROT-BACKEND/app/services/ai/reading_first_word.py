@@ -107,6 +107,62 @@ already used with her.
 Reply with the goodbye alone. No quotes, no preamble, nothing else.
 """
 
+# Appended to the user turn on the second attempt. Naming the specific failure
+# is what makes the retry worth making: an identical prompt would most likely
+# produce an identically rejected line.
+_RETRY_NOTE = """
+
+YOUR PREVIOUS ATTEMPT WAS DISCARDED: {reason}.
+
+Write a different line. Keep it short and plain. Say nothing at all about what
+is in the reading — no cards, no numbers, no dates, no signs, no names, no
+timing. Warmth only.
+"""
+
+# The floor. When neither attempt survives, she still hears something human
+# instead of nothing, and nothing here can leak the reading because none of it
+# came from a model. These are deliberately plain: they are the safety net, not
+# the intended voice, and a plain true line beats a clever unsafe one.
+#
+# Every line is checked against the same validators at selection time, so a
+# careless edit here fails closed rather than smuggling substance through.
+_FALLBACK_OPENERS = (
+    "i'm here. give me a moment with this.",
+    "thank you for telling me that. let me take it in properly.",
+    "i hear you. stay with me a second.",
+    "that landed with me. let me sit with it before i say anything.",
+    "i'm with you. give me a breath.",
+    "okay. i want to give this the attention it deserves.",
+    "i've got you. one moment.",
+    "thank you for trusting me with that. let me take a proper look.",
+)
+
+_FALLBACK_CLOSERS = (
+    "thank you for being here today. take care of yourself.",
+    "i'm glad you came. go gently with yourself.",
+    # "you're welcome back any time" belongs here by tone but reads as a
+    # returning-client greeting to the return-acknowledgement guard, so it is
+    # rejected on principle. Kept out of the pool rather than kept and skipped.
+    "take care of yourself. it was good to talk.",
+    "thank you for trusting me with your time today. be kind to yourself.",
+    "go well. i'm glad we talked.",
+)
+
+
+def _fallback_line(previous: List[str], closing: bool) -> str:
+    """A safe line she has not heard yet, or empty if she has heard them all."""
+    pool = _FALLBACK_CLOSERS if closing else _FALLBACK_OPENERS
+    for line in pool:
+        if _too_similar(line, previous):
+            continue
+        if _reject_reason(line, previous):
+            # Belt and braces: a fallback that cannot pass the filter is a bug
+            # in this file, and it must not reach a client either way.
+            continue
+        return line
+    return ""
+
+
 # Regexes miss what reads as substance without matching a card or a digit.
 _SUBSTANCE_PHRASES = (
     "card", "cards", "spread", "chart", "reading says", "your reading",
@@ -457,29 +513,48 @@ async def _speak(
         is_first_message=context["is_first_message"],
     )
 
-    raw, stop_reason = await asyncio.to_thread(_generate, system_block, user_turn, model)
-    candidate = _take_spoken_line(raw)
-    # Truncation only matters if it landed inside the spoken line itself. If the
-    # cut fell in the protocol block that follows it, her line is whole.
-    if stop_reason == "max_tokens" and candidate == (raw or "").strip():
-        logger.info("reading_first_word_rejected", chat_id=chat_id, reason="truncated")
-        return False
-
-    reason = _reject_reason(candidate, previous)
-    if reason:
-        logger.info("reading_first_word_rejected", chat_id=chat_id, reason=reason,
-                    candidate=(candidate or "")[:160])
-        return False
-
     from app.services.ai.reading_sabri import sanitize_delivery_text
 
-    line = sanitize_delivery_text(candidate).strip()
-    elapsed = time.perf_counter() - started
-    if elapsed > deadline_seconds:
-        # A line that arrives after the reading has started is worse than none.
-        logger.info("reading_first_word_rejected", chat_id=chat_id, reason="deadline",
-                    elapsed_ms=int(elapsed * 1000))
-        return False
+    # A rejection is a reason to try again, not a reason to leave her alone. She
+    # cannot tell the difference between a filter firing and nobody being there,
+    # and the empty minute is the whole problem this module exists to solve.
+    line = ""
+    source = "model"
+    attempts: List[str] = []
+    for attempt in range(2):
+        if time.perf_counter() - started > deadline_seconds:
+            attempts.append("deadline")
+            break
+        turn = user_turn if attempt == 0 else user_turn + _RETRY_NOTE.format(
+            reason=attempts[-1] if attempts else "it broke the rules"
+        )
+        raw, stop_reason = await asyncio.to_thread(_generate, system_block, turn, model)
+        candidate = _take_spoken_line(raw)
+        # Truncation only matters if it landed inside the spoken line itself. If
+        # the cut fell in the protocol block that follows it, her line is whole.
+        if stop_reason == "max_tokens" and candidate == (raw or "").strip():
+            attempts.append("truncated")
+            continue
+        reason = _reject_reason(candidate, previous)
+        if reason:
+            attempts.append(reason)
+            logger.info("reading_first_word_rejected", chat_id=chat_id, reason=reason,
+                        attempt=attempt + 1, candidate=(candidate or "")[:160])
+            continue
+        line = sanitize_delivery_text(candidate).strip()
+        break
+
+    if not line:
+        # Nothing the model produced was safe to send. Say something true and
+        # empty of substance rather than nothing at all.
+        line = _fallback_line(previous, closing=not require_message)
+        source = "fallback"
+        if not line:
+            logger.info("reading_first_word_rejected", chat_id=chat_id,
+                        reason="no fallback left", attempts=attempts)
+            return False
+        logger.info("reading_first_word_fallback", chat_id=chat_id,
+                    chat_session_id=chat_session_id, attempts=attempts, line=line)
 
     sent = await asyncio.to_thread(_send, chat_id, chat_session_id, line)
     if not sent:
@@ -496,6 +571,8 @@ async def _speak(
         chat_session_id=chat_session_id,
         elapsed_ms=total_ms,
         over_target=total_ms > int(FIRST_WORD_TARGET_SECONDS * 1000),
+        source=source,
+        attempts=len(attempts) + (0 if source == "fallback" else 1),
         words=len(line.split()),
     )
     return True
