@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
@@ -26,6 +27,42 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 MESSAGE_BURST_SILENCE_SECONDS = 6.0
+
+# ---------------------------------------------------------------------------
+# Turn timing.
+#
+# Nothing on the reading path has ever been timed, so "the reading is slow" has
+# never had a number attached to it. These marks answer the only question a
+# waiting client cares about: how long from her message to the first words on
+# her screen.
+#
+# Deliberately inert: a process-local dict of floats, written and read from code
+# that already runs here. No database, no I/O, no await, nothing that can stall
+# the event loop - the failure mode this file has already paid for once.
+# ---------------------------------------------------------------------------
+_TURN_MARKS: Dict[int, float] = {}
+_TURN_MARKS_LIMIT = 512
+
+
+def _mark_message_arrival(chat_session_id: Optional[int]) -> None:
+    """Stamp the first unanswered message of a turn; later ones keep the first."""
+    if chat_session_id is None:
+        return
+    if chat_session_id in _TURN_MARKS:
+        return
+    if len(_TURN_MARKS) >= _TURN_MARKS_LIMIT:
+        # A session that never delivered would otherwise pin its mark forever.
+        _TURN_MARKS.clear()
+    _TURN_MARKS[chat_session_id] = time.perf_counter()
+
+
+def _elapsed_ms_since_arrival(chat_session_id: Optional[int], clear: bool = False) -> Optional[int]:
+    if chat_session_id is None:
+        return None
+    started = _TURN_MARKS.pop(chat_session_id, None) if clear else _TURN_MARKS.get(chat_session_id)
+    if started is None:
+        return None
+    return int((time.perf_counter() - started) * 1000)
 CLIENT_TYPING_EXPIRY_SECONDS = 12.0
 GENERATION_LEASE_SECONDS = 90.0
 GENERATION_HEARTBEAT_SECONDS = 15.0
@@ -284,6 +321,7 @@ async def note_client_message(
         except IntegrityError:
             if attempt:
                 raise
+    _mark_message_arrival(chat_session_id)
     logger.info(
         "reading_burst_message_noted",
         chat_id=chat_id,
@@ -1279,6 +1317,19 @@ async def _deliver_auto_plan(claim: _Claim, state=None, store=None) -> bool:
             )
             if message is None:
                 return False
+            if position == 0:
+                # The number that matters: her message to the first words on her
+                # screen, including the burst wait, both model calls and the
+                # typing simulation.
+                logger.info(
+                    "reading_burst_first_bubble_timed",
+                    chat_id=claim.chat_id,
+                    chat_session_id=claim.chat_session_id,
+                    time_to_first_bubble_ms=_elapsed_ms_since_arrival(
+                        claim.chat_session_id, clear=True
+                    ),
+                    bubbles=len(bubbles),
+                )
             record_sent_message(state, bubbles[position])
             record_commitments(state, bubbles[position])
             if finished:
@@ -1310,6 +1361,7 @@ async def _generate_auto(claim: _Claim) -> None:
     from app.services.ai import reading_duo
 
     store, state, turn, trigger = _working_state(claim)
+    generation_started = time.perf_counter()
     bubbles, reserve, route = await reading_duo._duo_generate(
         claim.chat_id,
         turn,
@@ -1317,6 +1369,16 @@ async def _generate_auto(claim: _Claim) -> None:
         state,
         claim.client_id,
         psychic_id=claim.psychic_id,
+    )
+    # Both model calls, Valentina then Sabri, live inside that await.
+    logger.info(
+        "reading_burst_generation_timed",
+        chat_id=claim.chat_id,
+        chat_session_id=claim.chat_session_id,
+        generation_ms=int((time.perf_counter() - generation_started) * 1000),
+        waiting_ms=_elapsed_ms_since_arrival(claim.chat_session_id),
+        route=route,
+        bubbles=len(bubbles or []),
     )
     if not bubbles:
         raise RuntimeError("Sabri returned no delivery bubbles")
