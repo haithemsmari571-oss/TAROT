@@ -56,6 +56,39 @@ def _mark_message_arrival(chat_session_id: Optional[int]) -> None:
     _TURN_MARKS[chat_session_id] = time.perf_counter()
 
 
+_first_word_tasks: Dict[int, "asyncio.Task"] = {}
+
+
+def _start_first_word(chat_id: int, chat_session_id: Optional[int], arrived_at: float) -> None:
+    """Let the reader react while Valentina reads.
+
+    Fire and forget, deliberately: nothing here is awaited, so the burst window
+    and the generation loop are untouched by it. The task owns its own deadline
+    and swallows its own failures, and if it produces nothing the client simply
+    waits for the reading exactly as she does today.
+    """
+    if chat_session_id is None:
+        return
+    from app.services.ai import reading_first_word
+
+    try:
+        task = asyncio.create_task(
+            reading_first_word.speak_now(chat_id, chat_session_id, arrived_at)
+        )
+    except RuntimeError:
+        # No running loop (synchronous caller): the reading is unaffected.
+        return
+    _first_word_tasks[chat_session_id] = task
+
+    def _done(finished: "asyncio.Task", session_id: int = chat_session_id) -> None:
+        _first_word_tasks.pop(session_id, None)
+        # Retrieve any exception so it is never reported as unhandled.
+        if not finished.cancelled():
+            finished.exception()
+
+    task.add_done_callback(_done)
+
+
 def _elapsed_ms_since_arrival(chat_session_id: Optional[int], clear: bool = False) -> Optional[int]:
     if chat_session_id is None:
         return None
@@ -321,13 +354,20 @@ async def note_client_message(
         except IntegrityError:
             if attempt:
                 raise
+    # First message of this turn? _TURN_MARKS is stamped only when absent, so
+    # asking before stamping distinguishes the opening message of a burst from
+    # the ones that follow it. A three-message burst gets one human response.
+    first_of_turn = chat_session_id is not None and chat_session_id not in _TURN_MARKS
     _mark_message_arrival(chat_session_id)
+    arrived_at = _TURN_MARKS.get(chat_session_id, time.perf_counter())
     logger.info(
         "reading_burst_message_noted",
         chat_id=chat_id,
         chat_session_id=chat_session_id,
         message_id=message_id,
     )
+    if first_of_turn:
+        _start_first_word(chat_id, chat_session_id, arrived_at)
     _wake(chat_session_id)
 
 

@@ -673,6 +673,24 @@ class SessionManager:
                 "reading_cancel_on_end_failed", chat_id=chat_id, error=str(cancel_e)
             )
 
+        # Nobody owned the last thing a client heard: Valentina's prompt bans
+        # closeouts and Sabri had no closing instruction, so a reading simply
+        # stopped. The reader says goodbye here — after generation is cancelled
+        # so nothing races it, and before the chat flips out of ACTIVE, because
+        # every delivery helper refuses a non-active chat. It is awaited so it
+        # cannot lose to the teardown, but it is deadline-bounded and swallows
+        # its own failures, so it can never hold a session open.
+        try:
+            from app.services.ai import reading_first_word
+
+            await reading_first_word.say_goodbye(
+                chat_id, getattr(session_state, "session_id", None)
+            )
+        except Exception as closing_e:  # noqa: BLE001
+            logger.warning(
+                "reading_last_word_skipped", chat_id=chat_id, error=str(closing_e)
+            )
+
         # Remove from cache first (it's in paused_sessions if paused, not active_sessions)
         if chat_id in self.active_sessions:
             del self.active_sessions[chat_id]
