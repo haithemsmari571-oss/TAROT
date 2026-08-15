@@ -1427,6 +1427,17 @@ async def _generate_auto(claim: _Claim) -> None:
         raise RuntimeError("Sabri returned no delivery bubbles")
     if not _store_auto_plan(claim, bubbles, reserve, route):
         return
+    # Bank what Sabri is holding the moment it exists, not when the last bubble
+    # lands. Reserve used to be written only on a finished delivery, and a
+    # follow-up typed while bubbles were still revealing cut the delivery short —
+    # so the reserve was dropped precisely in the case it was needed for, and the
+    # next turn routed against an empty hold. Measured: Sabri held 4,453
+    # characters while the router was told there were none.
+    #
+    # Same guard as the delivery-side write: a CONTINUE that released nothing
+    # must not wipe a good hold.
+    if route == "new" or (reserve or "").strip():
+        state.reserve = reserve
     store.put(state)
     claim.response_bubbles = bubbles
     claim.response_reserve = reserve
