@@ -1555,6 +1555,17 @@ async def websocket_endpoint(
         # 4. Connect to chat room (track user_id so we know who's viewing)
         await manager.connect(websocket, chat_id, user.id)
 
+        # The client is present again: restart the meter she stopped when she
+        # dropped, and cancel the disconnect countdown. Idempotent and a no-op
+        # when she never left, so ordinary connects and extra tabs cost nothing.
+        if user.id == chat.user_id:
+            try:
+                from app.services.session_manager import get_session_manager
+
+                get_session_manager().handle_client_reconnect(int(chat_id))
+            except Exception:  # noqa: BLE001 — presence must never block a socket
+                logger.warning("client_reconnect_hook_failed", chat_id=int(chat_id))
+
         # 4.5. Opening the conversation counts as "seen": mark the other party's
         # messages READ and tell the room, so the sender's receipts flip to the
         # double-check. Best-effort — never let it break the connection.
@@ -1702,6 +1713,17 @@ async def websocket_endpoint(
                 await cancel_delivery(int(chat_id))
                 await cancel_reveal(int(chat_id))       # single-agent paced reveal
                 await cancel_reveal_duo(int(chat_id))   # two-role paced reveal
+
+                # The client has no socket left anywhere: stop the meter and
+                # start the disconnect countdown. This condition already existed
+                # to freeze her place in the reading — the billing side of the
+                # same fact was simply never wired, so a client who closed the
+                # app went on being charged by the minute until her balance ran
+                # out. The session is not ended here; she has the full window to
+                # come back, and the reveal above is preserved for exactly that.
+                from app.services.session_manager import get_session_manager
+
+                get_session_manager().handle_client_disconnect(int(chat_id))
         except Exception:  # noqa: BLE001
             pass
     except jwt.PyJWTError:

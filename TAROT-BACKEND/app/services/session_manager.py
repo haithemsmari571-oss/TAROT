@@ -1354,41 +1354,62 @@ class SessionManager:
             db.close()
 
     def handle_client_disconnect(self, chat_id: int) -> None:
-        """
-        Handle client disconnect event.
+        """The client's last socket went away: stop the meter, start the clock.
 
-        Starts a 30-second timer, after which session will auto-end if not reconnected.
+        Billing is prepaid by the minute off ``started_at``, so leaving the meter
+        running while she is gone bills her for an empty room — and because the
+        session only ends when the balance is exhausted, it could bill her whole
+        balance for a reading she was not in.
 
-        Args:
-            chat_id: The chat ID where client disconnected
+        The meter is frozen the way the top-up pause freezes it: rewound to the
+        last minute she actually paid for, so the unused remainder of that minute
+        is still hers when she comes back.
+
+        This does not end anything. She has
+        ``SESSION_CLIENT_DISCONNECT_TIMEOUT`` seconds to return, and the monitor
+        ends the session only if she does not.
         """
         session_state = self.active_sessions.get(chat_id)
         if not session_state:
             return
+        if session_state.client_disconnected_at is not None:
+            return                      # already away; do not re-freeze or restart the clock
 
         session_state.client_disconnected_at = datetime.now()
+        session_state.paused_elapsed_seconds = session_state.minutes_charged * 60
         logger.info(
             "client_disconnected",
             chat_id=chat_id,
             will_timeout_in=settings.SESSION_CLIENT_DISCONNECT_TIMEOUT,
+            minutes_charged=session_state.minutes_charged,
+            meter_frozen_at_seconds=session_state.paused_elapsed_seconds,
         )
 
     def handle_client_reconnect(self, chat_id: int) -> None:
-        """
-        Handle client reconnect event.
+        """She came back: restart the meter from where it stopped, bill nothing for the gap.
 
-        Cancels the disconnect timeout.
-
-        Args:
-            chat_id: The chat ID where client reconnected
+        Rebasing ``started_at`` is what makes the gap unbilled rather than merely
+        deferred. Without it the elapsed clock would have kept running while she
+        was away, and the very next monitor pass would charge every minute of
+        her absence in one burst the moment she reconnected.
         """
         session_state = self.active_sessions.get(chat_id)
         if not session_state:
             return
 
         if session_state.client_disconnected_at:
+            away = (datetime.now() - session_state.client_disconnected_at).total_seconds()
             session_state.client_disconnected_at = None
-            logger.info("client_reconnected", chat_id=chat_id)
+            if not session_state.is_grace:
+                session_state.started_at = datetime.now() - timedelta(
+                    seconds=session_state.paused_elapsed_seconds
+                )
+            logger.info(
+                "client_reconnected",
+                chat_id=chat_id,
+                away_seconds=round(away, 1),
+                minutes_charged=session_state.minutes_charged,
+            )
 
     def _calculate_session_info(
         self, session_state: SessionState, db: Session
@@ -1822,6 +1843,32 @@ class SessionManager:
                                 min_remaining = min(min_remaining, 1)
                             continue
 
+                        # ── Presence gate: never bill an empty room ────────────
+                        # She is not connected. Charge nothing at all while she is
+                        # away — this is the literal rule, kept here as well as in
+                        # the frozen meter so that neither one alone can bill her
+                        # for time she was not present. If she does not come back
+                        # inside the window the session ends, silently (the reader
+                        # says no goodbye for an ending she may not have chosen).
+                        if session_state.client_disconnected_at:
+                            away = (
+                                datetime.now() - session_state.client_disconnected_at
+                            ).total_seconds()
+                            if away >= settings.SESSION_CLIENT_DISCONNECT_TIMEOUT:
+                                logger.info(
+                                    "client_disconnect_timeout_ending_session",
+                                    chat_id=chat_id,
+                                    disconnect_duration=round(away, 1),
+                                    minutes_charged=session_state.minutes_charged,
+                                )
+                                await self.end_session(
+                                    chat_id, ChatTerminationReason.CLIENT_DISCONNECTED
+                                )
+                            else:
+                                # Hold her place and check back soon.
+                                min_remaining = min(min_remaining, 5)
+                            continue
+
                         # ── Per-minute prepaid charging ────────────────────────
                         # Charge one full minute upfront at each boundary. Before
                         # each charge, check the balance; if it can't cover the
@@ -1873,24 +1920,9 @@ class SessionManager:
                             # refetches balance on every minute charge (spec b).
                             await self._broadcast_minute_charged(chat_id, info)
 
-                        # Check for client disconnect timeout
-                        if session_state.client_disconnected_at:
-                            disconnect_duration = (
-                                datetime.now() - session_state.client_disconnected_at
-                            ).total_seconds()
-                            if (
-                                disconnect_duration
-                                >= settings.SESSION_CLIENT_DISCONNECT_TIMEOUT
-                            ):
-                                logger.info(
-                                    "client_disconnect_timeout_ending_session",
-                                    chat_id=chat_id,
-                                    disconnect_duration=disconnect_duration,
-                                )
-                                await self.end_session(
-                                    chat_id, ChatTerminationReason.CLIENT_DISCONNECTED
-                                )
-                                continue
+                        # (The disconnect timeout is handled by the presence gate
+                        # above, before any charging, so an absent client can
+                        # never be billed on the pass that ends her session.)
 
                         # Send warnings at thresholds
                         await self._check_and_send_warnings(session_state, info, db)
