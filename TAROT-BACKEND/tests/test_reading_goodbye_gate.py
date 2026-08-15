@@ -94,6 +94,20 @@ def test_no_arriving_message_produces_no_dangling_header():
     assert "WHAT SHE JUST WROTE" not in turn
     assert "not written anything" in turn
 
+    # And the closing says the session is over, so the model does not answer a
+    # goodbye with an opener - one live goodbye came back "i'm listening
+    # whenever you want to start."
+    closing = f._build_user_turn(
+        client_message="", transcript=[], previous=[], is_first_message=False,
+        moment="close",
+    )
+    assert "session is over" in closing
+    greeting = f._build_user_turn(
+        client_message="", transcript=[], previous=[], is_first_message=True,
+        moment="greet",
+    )
+    assert "just arrived" in greeting
+
     turn_with = f._build_user_turn(
         client_message="i miss him", transcript=[], previous=[], is_first_message=True
     )

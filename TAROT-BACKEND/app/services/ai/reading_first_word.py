@@ -336,12 +336,23 @@ def _take_spoken_line(text: str) -> str:
     return paragraph.strip()
 
 
+_NO_MESSAGE_FOR = {
+    "close": ("She has not written since. The session is over and you are seeing "
+              "her out; speak to the whole of it, not to a message."),
+    "greet": ("She has just arrived and has not written yet. Greet her; do not "
+              "answer anything."),
+    "open": ("She has not written anything for you to answer. Speak to the "
+             "moment itself, not to a message."),
+}
+
+
 def _build_user_turn(
     *,
     client_message: str,
     transcript: List[dict],
     previous: List[str],
     is_first_message: bool,
+    moment: str = "open",
 ) -> str:
     """Everything that varies goes here, after the cached system block."""
     parts: List[str] = []
@@ -366,10 +377,7 @@ def _build_user_turn(
             else "The session is already under way."
         )
     else:
-        parts.append(
-            "She has not written anything for you to answer. Speak to the moment "
-            "itself, not to a message."
-        )
+        parts.append(_NO_MESSAGE_FOR.get(moment, _NO_MESSAGE_FOR["open"]))
     if previous:
         parts.append(
             "YOU HAVE ALREADY OPENED WITH THESE IN THIS SESSION — do not reuse or "
@@ -575,6 +583,7 @@ async def _speak(
         transcript=context["transcript"],
         previous=previous,
         is_first_message=context["is_first_message"],
+        moment=moment,
     )
 
     from app.services.ai.reading_sabri import sanitize_delivery_text
