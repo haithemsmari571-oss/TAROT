@@ -203,6 +203,16 @@ def _fallback_line(previous: List[str], moment: str) -> str:
     return ""
 
 
+# The model talking about its own instructions instead of to the client. A live
+# goodbye came back as: I'm waiting for what she wrote. The instruction block
+# says "WHAT SHE JUST WROTE:" but there is nothing there. It broke no other rule
+# — no card, no number, short enough — so nothing stopped it reaching her.
+_META_PHRASES = (
+    "instruction", "prompt", "the block", "placeholder", "appears to be empty",
+    "no message", "nothing there", "system message", "what she just wrote",
+    "as an ai", "i'm waiting for what", "im waiting for what",
+)
+
 # Regexes miss what reads as substance without matching a card or a digit.
 _SUBSTANCE_PHRASES = (
     "card", "cards", "spread", "chart", "reading says", "your reading",
@@ -290,6 +300,9 @@ def _reject_reason(candidate: str, previous: List[str]) -> Optional[str]:
     for phrase in _SUBSTANCE_PHRASES:
         if phrase in lowered:
             return f"implies the reading ({phrase})"
+    for phrase in _META_PHRASES:
+        if phrase in lowered:
+            return f"talks about its own prompt ({phrase})"
 
     try:
         from app.services.ai.reading_pipeline import is_return_acknowledgment
@@ -341,12 +354,22 @@ def _build_user_turn(
                 for entry in recent
             )
         )
-    parts.append(f"WHAT SHE JUST WROTE:\n{client_message}")
-    parts.append(
-        "This is her first message of the session."
-        if is_first_message
-        else "The session is already under way."
-    )
+    # Only describe an arriving message when one actually arrived. The goodbye and
+    # the greeting often have none, and an empty "WHAT SHE JUST WROTE:" header
+    # invited the model to narrate the gap: one live goodbye came back as a note
+    # that the instruction block was empty. Say what is true for the moment instead.
+    if (client_message or "").strip():
+        parts.append(f"WHAT SHE JUST WROTE:\n{client_message}")
+        parts.append(
+            "This is her first message of the session."
+            if is_first_message
+            else "The session is already under way."
+        )
+    else:
+        parts.append(
+            "She has not written anything for you to answer. Speak to the moment "
+            "itself, not to a message."
+        )
     if previous:
         parts.append(
             "YOU HAVE ALREADY OPENED WITH THESE IN THIS SESSION — do not reuse or "

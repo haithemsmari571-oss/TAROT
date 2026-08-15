@@ -53,3 +53,48 @@ def test_every_reason_in_the_enum_is_covered():
         if should_say_goodbye(reason, CLIENT, CLIENT)
     }
     assert speaks == {ChatTerminationReason.MANUAL_EXIT}
+
+
+# ── the goodbye must never talk about its own prompt ──────────────────────────
+def test_prompt_meta_commentary_is_rejected():
+    """A live goodbye came back narrating the instruction block.
+
+    It broke no other rule - no card, no number, short enough - so nothing
+    stopped it reaching the client.
+    """
+    from app.services.ai import reading_first_word as f
+
+    leaked = (
+        'I\'m waiting for what she wrote. The instruction block says '
+        '"WHAT SHE JUST WROTE:" but there is nothing there.'
+    )
+    assert f._reject_reason(leaked, []) is not None
+    for line in (
+        "the prompt appears to be empty",
+        "there is no message from her",
+        "as an AI i cannot do that",
+    ):
+        assert f._reject_reason(line, []) is not None, line
+
+
+def test_an_ordinary_goodbye_still_passes():
+    from app.services.ai import reading_first_word as f
+
+    for line in f._FALLBACK_CLOSERS + f._FALLBACK_GREETINGS + f._FALLBACK_OPENERS:
+        assert f._reject_reason(line, []) is None, line
+
+
+def test_no_arriving_message_produces_no_dangling_header():
+    """The empty header is what invited the narration in the first place."""
+    from app.services.ai import reading_first_word as f
+
+    turn = f._build_user_turn(
+        client_message="", transcript=[], previous=[], is_first_message=False
+    )
+    assert "WHAT SHE JUST WROTE" not in turn
+    assert "not written anything" in turn
+
+    turn_with = f._build_user_turn(
+        client_message="i miss him", transcript=[], previous=[], is_first_message=True
+    )
+    assert "WHAT SHE JUST WROTE:\ni miss him" in turn_with
