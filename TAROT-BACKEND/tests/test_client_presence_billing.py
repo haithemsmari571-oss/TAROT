@@ -33,14 +33,36 @@ def _manager(state):
     return manager
 
 
-def test_disconnect_freezes_the_meter_at_the_last_paid_minute():
-    state = _state(minutes_charged=2)
+def test_disconnect_freezes_the_meter_at_the_second_she_left():
+    """Not at the minute boundary: the rest of the minute she paid for is hers.
+
+    Freezing at minutes_charged * 60 silently consumed the paid remainder, so a
+    twenty-second drop billed a fresh minute one second after reconnect and a
+    client who blinked paid the same as one who never left.
+    """
+    # Two minutes paid for, seventy seconds actually used.
+    state = _state(minutes_charged=2, started_minutes_ago=0)
+    state.started_at = datetime.now() - timedelta(seconds=70)
     _manager(state).handle_client_disconnect(state.chat_id)
 
     assert state.client_disconnected_at is not None
-    # Rewound to the boundary she actually paid for, so the unused remainder of
-    # that minute is still hers when she returns.
-    assert state.paused_elapsed_seconds == 120
+    assert 69 <= state.paused_elapsed_seconds <= 71, state.paused_elapsed_seconds
+
+
+def test_a_brief_drop_does_not_consume_the_minute_she_paid_for():
+    """She has 50 unused seconds when she drops; she still has them on return."""
+    state = _state(minutes_charged=1, started_minutes_ago=0)
+    state.started_at = datetime.now() - timedelta(seconds=10)
+    manager = _manager(state)
+    manager.handle_client_disconnect(state.chat_id)
+
+    state.client_disconnected_at = datetime.now() - timedelta(seconds=20)
+    manager.handle_client_reconnect(state.chat_id)
+
+    elapsed = (datetime.now() - state.started_at).total_seconds()
+    assert 9 <= elapsed <= 12, elapsed
+    # Still inside minute one, so nothing new is due yet.
+    assert int(elapsed // 60) + 1 == state.minutes_charged
 
 
 def test_a_second_disconnect_does_not_restart_the_countdown():
@@ -50,11 +72,11 @@ def test_a_second_disconnect_does_not_restart_the_countdown():
     manager.handle_client_disconnect(state.chat_id)
     first = state.client_disconnected_at
 
-    state.minutes_charged = 9          # would corrupt the freeze if re-applied
+    frozen = state.paused_elapsed_seconds
     manager.handle_client_disconnect(state.chat_id)
 
     assert state.client_disconnected_at == first
-    assert state.paused_elapsed_seconds == 120
+    assert state.paused_elapsed_seconds == frozen
 
 
 def test_reconnect_erases_the_gap_instead_of_deferring_it():
@@ -73,7 +95,8 @@ def test_reconnect_erases_the_gap_instead_of_deferring_it():
 
     assert state.client_disconnected_at is None
     elapsed = (datetime.now() - state.started_at).total_seconds()
-    # The meter reads the two minutes she paid for, not the seven that passed.
+    # The meter reads the two minutes that had actually run, not the seven that
+    # passed on the wall clock while she was away.
     assert 118 <= elapsed <= 125, elapsed
     due_minutes = int(elapsed // 60) + 1
     assert due_minutes - state.minutes_charged <= 1, "a catch-up burst would be charged"

@@ -1361,9 +1361,14 @@ class SessionManager:
         session only ends when the balance is exhausted, it could bill her whole
         balance for a reading she was not in.
 
-        The meter is frozen the way the top-up pause freezes it: rewound to the
-        last minute she actually paid for, so the unused remainder of that minute
-        is still hers when she comes back.
+        The meter is frozen at the exact second she left, so the unused remainder
+        of the minute she has already paid for is still hers when she returns.
+
+        Note this is deliberately NOT what the top-up pause does. Grace rewinds
+        to the last whole minute because that minute could not be paid for; here
+        it has been, and rewinding to the boundary would silently consume it. A
+        twenty-second drop then billed a fresh minute one second after she
+        reconnected, so a client who blinked paid the same as one who never left.
 
         This does not end anything. She has
         ``SESSION_CLIENT_DISCONNECT_TIMEOUT`` seconds to return, and the monitor
@@ -1375,14 +1380,21 @@ class SessionManager:
         if session_state.client_disconnected_at is not None:
             return                      # already away; do not re-freeze or restart the clock
 
-        session_state.client_disconnected_at = datetime.now()
-        session_state.paused_elapsed_seconds = session_state.minutes_charged * 60
+        now = datetime.now()
+        session_state.client_disconnected_at = now
+        session_state.paused_elapsed_seconds = max(
+            0, int((now - session_state.started_at).total_seconds())
+        )
         logger.info(
             "client_disconnected",
             chat_id=chat_id,
             will_timeout_in=settings.SESSION_CLIENT_DISCONNECT_TIMEOUT,
             minutes_charged=session_state.minutes_charged,
             meter_frozen_at_seconds=session_state.paused_elapsed_seconds,
+            paid_seconds_still_owed_to_her=max(
+                0, session_state.minutes_charged * 60
+                - session_state.paused_elapsed_seconds
+            ),
         )
 
     def handle_client_reconnect(self, chat_id: int) -> None:
