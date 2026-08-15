@@ -59,7 +59,9 @@ def _mark_message_arrival(chat_session_id: Optional[int]) -> None:
 _first_word_tasks: Dict[int, "asyncio.Task"] = {}
 
 
-def _start_first_word(chat_id: int, chat_session_id: Optional[int], arrived_at: float) -> None:
+def _start_first_word(
+    chat_id: int, chat_session_id: Optional[int], arrived_at: float, message_id: Optional[int] = None
+) -> None:
     """Let the reader react while Valentina reads.
 
     Fire and forget, deliberately: nothing here is awaited, so the burst window
@@ -73,7 +75,7 @@ def _start_first_word(chat_id: int, chat_session_id: Optional[int], arrived_at: 
 
     try:
         task = asyncio.create_task(
-            reading_first_word.speak_now(chat_id, chat_session_id, arrived_at)
+            reading_first_word.speak_now(chat_id, chat_session_id, arrived_at, message_id)
         )
     except RuntimeError:
         # No running loop (synchronous caller): the reading is unaffected.
@@ -365,9 +367,10 @@ async def note_client_message(
         chat_id=chat_id,
         chat_session_id=chat_session_id,
         message_id=message_id,
+        first_of_turn=first_of_turn,
     )
     if first_of_turn:
-        _start_first_word(chat_id, chat_session_id, arrived_at)
+        _start_first_word(chat_id, chat_session_id, arrived_at, message_id)
     _wake(chat_session_id)
 
 

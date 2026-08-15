@@ -41,9 +41,10 @@ FIRST_WORD_DEADLINE_SECONDS = 3.0
 # The goodbye is awaited inline by the session teardown, so it gets its own,
 # looser budget — but it still cannot hold the end of a session open.
 CLOSING_DEADLINE_SECONDS = 4.0
-# A holding line is one short breath. 64 tokens bounds the worst case; output
-# tokens are what wall-clock actually costs here.
-MAX_OUTPUT_TOKENS = 64
+# A holding line is one short breath, but the ceiling has to leave room for the
+# model to finish its sentence: at 64 the goodbye was cut mid-line and discarded
+# as truncated. The validators enforce brevity; this only stops a runaway.
+MAX_OUTPUT_TOKENS = 160
 
 # The immediate human moment. Appended to Sabri's own system prompt so the voice
 # is identical — and, not incidentally, so the system block clears the 4,096-token
@@ -275,30 +276,53 @@ def _resolve_prompt(instruction: str) -> tuple[str, str]:
     return prompt + instruction, settings.CONTENT_MODEL
 
 
-def _load_context(chat_id: int, chat_session_id: Optional[int]) -> Optional[dict]:
-    """One database round trip. Blocking — always call through asyncio.to_thread."""
+def _load_context(
+    chat_id: int,
+    chat_session_id: Optional[int],
+    message_id: Optional[int],
+    require_message: bool = True,
+) -> Optional[dict]:
+    """One database round trip. Blocking — always call through asyncio.to_thread.
+
+    Her message is read from the messages table by id, not from the session
+    transcript: the transcript is written by a different part of the turn and is
+    not guaranteed to contain her line yet at the moment this runs. Reading the
+    row we were handed removes the ordering assumption entirely.
+    """
     from app.database.client import SessionLocal
     from app.enums.chat_status import ChatStatus
     from app.enums.response_mode import ResponseMode
     from app.models.chat import Chat
+    from app.models.message import Message
     from app.services.ai.reading_session import get_session_store
 
     with SessionLocal() as db:
         chat = db.get(Chat, chat_id)
-        if chat is None or chat.status != ChatStatus.ACTIVE:
-            return None
+        if chat is None:
+            return {"skip": "no chat"}
+        if chat.status != ChatStatus.ACTIVE:
+            return {"skip": f"chat is {chat.status}"}
         # Only the automatic reading leaves her waiting on a model. In Hybrid the
         # owner is writing, and in Manual a human is; neither wants a bot
         # answering first.
         if getattr(chat, "response_mode", None) != ResponseMode.SABRI:
-            return None
+            return {"skip": f"mode is {getattr(chat, 'response_mode', None)}"}
+
+        client_message = ""
+        if message_id is not None:
+            row = db.get(Message, message_id)
+            if row is not None and not row.is_system and row.sender_id == chat.user_id:
+                client_message = str(row.content or "")
         state = get_session_store().get(f"chat:{chat_id}")
         transcript = list(getattr(state, "chat_transcript", []) or []) if state else []
-        client_message = ""
-        for entry in reversed(transcript):
-            if entry.get("role") == "client" and entry.get("content"):
-                client_message = str(entry["content"])
-                break
+        if not client_message.strip():
+            # The goodbye has no arriving message; it speaks to the whole session.
+            for entry in reversed(transcript):
+                if entry.get("role") == "client" and entry.get("content"):
+                    client_message = str(entry["content"])
+                    break
+        if require_message and not client_message.strip():
+            return {"skip": "no client message"}
         return {
             "client_message": client_message,
             "transcript": transcript,
@@ -365,13 +389,21 @@ async def _speak(
     *,
     chat_id: int,
     chat_session_id: Optional[int],
+    message_id: Optional[int],
     instruction: str,
     deadline_seconds: float,
     started: float,
     event: str,
+    require_message: bool = True,
 ) -> bool:
-    context = await asyncio.to_thread(_load_context, chat_id, chat_session_id)
-    if not context or not context["client_message"]:
+    context = await asyncio.to_thread(
+        _load_context, chat_id, chat_session_id, message_id, require_message
+    )
+    if context is None or context.get("skip"):
+        # Never fail silently: an unexplained no-op is indistinguishable from a
+        # bug, which is exactly how the first attempt at this hid itself.
+        logger.info("reading_first_word_skipped", chat_id=chat_id,
+                    reason=(context or {}).get("skip", "no context"))
         return False
 
     previous = already_said(chat_session_id)
@@ -422,13 +454,19 @@ async def _speak(
     return True
 
 
-async def speak_now(chat_id: int, chat_session_id: Optional[int], arrived_at: float) -> None:
+async def speak_now(
+    chat_id: int,
+    chat_session_id: Optional[int],
+    arrived_at: float,
+    message_id: Optional[int] = None,
+) -> None:
     """The immediate human response. Never awaited by the caller, never raises."""
     try:
         await asyncio.wait_for(
             _speak(
                 chat_id=chat_id,
                 chat_session_id=chat_session_id,
+                message_id=message_id,
                 instruction=PASS_ONE_INSTRUCTION,
                 deadline_seconds=FIRST_WORD_DEADLINE_SECONDS,
                 started=arrived_at,
@@ -451,7 +489,9 @@ async def say_goodbye(chat_id: int, chat_session_id: Optional[int]) -> None:
             _speak(
                 chat_id=chat_id,
                 chat_session_id=chat_session_id,
+                message_id=None,
                 instruction=CLOSING_INSTRUCTION,
+                require_message=False,
                 deadline_seconds=CLOSING_DEADLINE_SECONDS,
                 started=started,
                 event="reading_last_word_sent",
