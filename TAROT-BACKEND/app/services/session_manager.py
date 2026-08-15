@@ -65,6 +65,31 @@ class SessionNotFoundError(Exception):
     pass
 
 
+def should_say_goodbye(
+    reason: "ChatTerminationReason",
+    ended_by_user_id: Optional[int],
+    client_id: Optional[int],
+) -> bool:
+    """Whether the reader should say goodbye as this session ends.
+
+    Exactly one ending earns one: the client closed the reading herself. Every
+    other route through end_session is a session she may return to — the money
+    ran out and she can top up into the same session, a paused session timed
+    out, the socket stayed down. Saying goodbye there announces an ending that
+    has not happened, and she would resume into a reader who has already said
+    farewell. Staying silent costs nothing and is recoverable.
+
+    The psychic ending the chat is not a goodbye either: that is the operator
+    closing a room, not the client leaving a conversation.
+    """
+    return (
+        reason == ChatTerminationReason.MANUAL_EXIT
+        and ended_by_user_id is not None
+        and client_id is not None
+        and ended_by_user_id == client_id
+    )
+
+
 @dataclass
 class SessionInfo:
     """Session information returned to clients"""
@@ -684,16 +709,57 @@ class SessionManager:
         # every delivery helper refuses a non-active chat. It is awaited so it
         # cannot lose to the teardown, but it is deadline-bounded and swallows
         # its own failures, so it can never hold a session open.
-        try:
-            from app.services.ai import reading_first_word
+        #
+        # It says goodbye for ONE reason only: she closed the reading herself.
+        # This function is also how a session ends when the money runs out, when
+        # a paused session times out, and when the socket stays down — and in
+        # every one of those she may well be coming back, sometimes within
+        # seconds and sometimes without having meant to leave at all. A goodbye
+        # there tells her the reading is over when it is not, and she would then
+        # top up, or reconnect, into a reader who has already said farewell.
+        # Silence is recoverable; a premature goodbye is not.
+        #
+        # The psychic ending the chat is deliberately not a goodbye either: that
+        # is the operator closing a room, not the client leaving a conversation.
+        said_goodbye_because = (
+            "client ended the chat"
+            if should_say_goodbye(
+                reason, ended_by_user_id, getattr(session_state, "client_id", None)
+            )
+            else None
+        )
+        logger.info(
+            "reading_last_word_gate",
+            chat_id=chat_id,
+            reason=reason.value,
+            ended_by_user_id=ended_by_user_id,
+            client_id=getattr(session_state, "client_id", None),
+            will_speak=said_goodbye_because is not None,
+            why=said_goodbye_because or f"{reason.value}: she may be coming back",
+        )
+        if said_goodbye_because:
+            try:
+                from app.services.ai import reading_first_word
 
-            await reading_first_word.say_goodbye(
-                chat_id, getattr(session_state, "session_id", None)
-            )
-        except Exception as closing_e:  # noqa: BLE001
-            logger.warning(
-                "reading_last_word_skipped", chat_id=chat_id, error=str(closing_e)
-            )
+                await reading_first_word.say_goodbye(
+                    chat_id, getattr(session_state, "session_id", None)
+                )
+            except Exception as closing_e:  # noqa: BLE001
+                logger.warning(
+                    "reading_last_word_skipped", chat_id=chat_id, error=str(closing_e)
+                )
+        else:
+            # say_goodbye clears the per-session record of what the reader has
+            # already said; on the silent paths nothing else would, and this is
+            # still a terminal end, so release it here. A resume after a top-up
+            # does not come through end_session at all, so the record survives
+            # exactly where it needs to.
+            try:
+                from app.services.ai import reading_first_word
+
+                reading_first_word.forget(getattr(session_state, "session_id", None))
+            except Exception:  # noqa: BLE001 - bookkeeping must never end a session
+                pass
 
         # Remove from cache first (it's in paused_sessions if paused, not active_sessions)
         if chat_id in self.active_sessions:
