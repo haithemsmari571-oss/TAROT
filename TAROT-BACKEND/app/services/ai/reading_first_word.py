@@ -34,10 +34,17 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Her message should be answered inside this, measured from arrival, not from
-# when this task happened to start. A late line is worse than none: it lands on
-# top of the reading it was supposed to precede.
-FIRST_WORD_DEADLINE_SECONDS = 3.0
+# What good looks like: her message answered inside three seconds, measured from
+# arrival rather than from whenever this task happened to start. Reported on
+# every send so the real distribution is visible.
+FIRST_WORD_TARGET_SECONDS = 3.0
+# When the line stops being worth sending. Measured live it arrives between 2.5s
+# and 3.1s, so discarding at the three-second target threw away a third of the
+# lines for being fifty milliseconds late — and silence is not an improvement on
+# a line that is slightly slower than hoped. The real constraint is that it must
+# clearly precede the reading, and the reading's first bubble lands around 63s,
+# so eight seconds keeps a minute of clearance while making the send near-certain.
+FIRST_WORD_DEADLINE_SECONDS = 8.0
 # The goodbye is awaited inline by the session teardown, so it gets its own,
 # looser budget — but it still cannot hold the end of a session open.
 CLOSING_DEADLINE_SECONDS = 4.0
@@ -482,11 +489,13 @@ async def _speak(
 
     await manager.send_to_chat(message=sent["payload"], chat_id=str(chat_id))
     remember(chat_session_id, line)
+    total_ms = int((time.perf_counter() - started) * 1000)
     logger.info(
         event,
         chat_id=chat_id,
         chat_session_id=chat_session_id,
-        elapsed_ms=int((time.perf_counter() - started) * 1000),
+        elapsed_ms=total_ms,
+        over_target=total_ms > int(FIRST_WORD_TARGET_SECONDS * 1000),
         words=len(line.split()),
     )
     return True
