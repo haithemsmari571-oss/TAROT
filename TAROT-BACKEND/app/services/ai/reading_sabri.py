@@ -357,9 +357,19 @@ def _canonicalize_protected_literals(text: str, *, source_content: str = "", nam
     return result
 
 
+# His prompt still describes the protected-literal tokens and shows one by name, and that
+# paragraph is the owner's to change, not this file's. Nothing shields any more, so there are
+# no real tokens for him to copy \u2014 and on a live turn he reproduced the example from the
+# prompt verbatim, which reached the fact check as a number (0001) she had never written and
+# cost the turn. Machine syntax must never appear on a client's screen under any circumstance,
+# so it is stripped here, before both the check and delivery.
+_KEEP_TOKEN_RE = re.compile(r"\[\[\s*KEEP[_\s]*\d*\s*\]\]", re.IGNORECASE)
+
+
 def sanitize_delivery_text(text: str) -> str:
     """Remove deterministic AI tells from a client-visible bubble without changing meaning."""
-    cleaned = (text or "").replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
+    cleaned = _KEEP_TOKEN_RE.sub("", text or "")
+    cleaned = cleaned.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
     cleaned = cleaned.replace("\ufeff", "").replace("\u00a0", " ")
     cleaned = cleaned.replace("—", ", ").replace("–", "-")
     cleaned = cleaned.replace("**", "").replace("__", "").replace("`", "")

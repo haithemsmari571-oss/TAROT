@@ -414,3 +414,24 @@ def test_a_name_used_mid_sentence_is_protected():
         "i keep coming back to marcus in this", source_content=source
     )
     assert "Marcus" in out
+
+
+def test_a_keep_token_from_the_prompt_never_reaches_the_client():
+    """Live turn 3 of the verification reading was lost to this.
+
+    Sabri's prompt still documents the protected-literal tokens and names [[KEEP_0001]] as
+    its example. Nothing shields any more, so there is no real token to copy — and he
+    reproduced the example. It reached the fact check as the number 0001, which Valentina
+    had obviously never written, and the turn fell back to a single sentence."""
+    raw = "ok so [[KEEP_0001]] the thing about him\n\nis he never said it out loud"
+    bubbles = S.sabri_deliver("x", source_content="he never said it out loud",
+                              sabri_call=lambda _i: raw, max_attempts=1)
+    joined = " ".join(bubbles)
+    assert "KEEP" not in joined
+    assert "0001" not in joined
+    assert bubbles[0] == "ok so the thing about him"       # cleaned, not rejected
+
+
+def test_sanitize_strips_token_variants():
+    for token in ("[[KEEP_0001]]", "[[KEEP_12]]", "[[ KEEP_0007 ]]", "[[KEEP]]"):
+        assert "KEEP" not in S.sanitize_delivery_text(f"hey {token} there")
