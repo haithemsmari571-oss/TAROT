@@ -206,3 +206,20 @@ def test_the_generic_hello_is_skipped_when_a_reading_is_waiting():
     assert "open_first_turn" in source
     assert "if not opened:" in source
     assert source.index("open_first_turn") < source.index("greet_now")
+
+
+def test_the_opening_turn_delivers_the_banked_reading_instead_of_rewriting_it():
+    """Live: the first turn routed "new" and spent another sixty seconds writing a second
+    reading, because the router was asked whether the held material answered her and had no
+    way to know the held material WAS written from her. On this one turn it is not a
+    question."""
+    import inspect
+
+    from app.services.ai import reading_burst
+
+    source = inspect.getsource(reading_burst._generate_auto)
+    assert 'forced = "continue"' in source
+    assert 'pre_reading_message_id' in source
+    assert 'claim.through_message_id' in source
+    # and it is passed positionally as forced_route into _duo_generate
+    assert "claim.client_id,\n        forced," in source

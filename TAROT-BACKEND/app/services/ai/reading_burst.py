@@ -1562,12 +1562,28 @@ async def _generate_auto(claim: _Claim) -> None:
         # stall the loop between generation starting and delivery finishing.
         return (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
 
+    # THE OPENING TURN OF A PRE-SESSION READING. The reserve was written from precisely
+    # this message, while she waited to be accepted, so there is nothing to decide: deliver
+    # it. Left to the router it asks "does the held material answer her?" of a Haiku call
+    # that has no idea the held material IS the answer to her — and live, it said no and
+    # spent another sixty seconds writing a second reading she had already waited for.
+    forced = None
+    if (
+        getattr(state, "pre_reading_status", None) == "READY"
+        and getattr(state, "pre_reading_message_id", None) == claim.through_message_id
+        and (state.reserve or "").strip()
+    ):
+        forced = "continue"
+        logger.info("reading_pre_session_opening_from_reserve", chat_id=claim.chat_id,
+                    reserve_chars=len((state.reserve or "").strip()))
+
     bubbles, reserve, route = await reading_duo._duo_generate(
         claim.chat_id,
         turn,
         trigger,
         state,
         claim.client_id,
+        forced,
         psychic_id=claim.psychic_id,
         waited_seconds=waited_seconds,
         newest_message=newest,
