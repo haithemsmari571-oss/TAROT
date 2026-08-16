@@ -246,8 +246,9 @@ const ClientsDossier = () => {
                 <StatCard label="Readings" value={String(dossier.stats.session_count)} icon="solar:chat-round-line-bold-duotone" />
               </div>
 
-              {/* Astrology */}
-              <div className="grid grid-cols-3 gap-4">
+              {/* Astrology + who she actually is. Gender is display only here: it is hers
+                  to set on her own profile, never the operator's to edit for her. */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Zodiac"
                   value={dossier.client.zodiac || "—"}
@@ -256,6 +257,7 @@ const ClientsDossier = () => {
                 />
                 <StatCard label="Life Path" value={dossier.client.life_path != null ? String(dossier.client.life_path) : "—"} icon="solar:calculator-bold-duotone" />
                 <StatCard label="Date of birth" value={fmtDate(dossier.client.date_of_birth)} icon="solar:cake-bold-duotone" />
+                <StatCard label="Gender" value={dossier.client.gender || "not stated"} icon="solar:user-bold-duotone" />
               </div>
 
               {/* Two columns: session history + notes */}

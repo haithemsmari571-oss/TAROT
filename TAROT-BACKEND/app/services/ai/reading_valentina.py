@@ -19,8 +19,8 @@ from app.config import get_app_settings
 from app.logging_config import get_logger
 from app.services.ai import client as ai_client
 from app.services.ai.runtime_prompts import resolve_runtime_prompt_and_model
+from app.services.ai.reading_client_facts import build_verified_facts_block
 from app.services.ai.reading_reader import (
-    _numerology_block,          # deterministic Life Path / Personal Year injection (reused verbatim)
     thinking_for_turn,          # gated adaptive-thinking kwargs (reused verbatim)
 )
 
@@ -135,6 +135,7 @@ def build_valentina_input(
     current_year=None,
     steering_notes=None,
     unsent_writing=None,
+    gender=None,
 ) -> str:
     """Assemble the single user-content payload for one Valentina turn: the session capsule,
     her own still-unsent writing, the client's message, the dossier (loaded silently), session
@@ -166,9 +167,17 @@ def build_valentina_input(
     parts.append(
         "CLIENT FILE (load silently, never cite):\n" + (client_file or "(none — first session)")
     )
-    numerology = _numerology_block(date_of_birth, current_year, client_message=client_message)
-    if numerology:
-        parts.append(numerology)
+    # Always present, never conditional: the verified block now carries her gender as well as
+    # her astrology, and an unstated gender is written out as "NOT STATED" rather than left
+    # out, because an absent line is what the reader fills in with a guess.
+    parts.append(
+        build_verified_facts_block(
+            date_of_birth=date_of_birth,
+            current_year=current_year,
+            client_message=client_message,
+            gender=gender,
+        )
+    )
     parts.append("SESSION METADATA:\n" + json.dumps(session_metadata or {}, ensure_ascii=False))
     # Two guards, here in the input rather than in her prompt, because they exist to protect
     # her from the volume of history she is now handed and nothing about her craft changed.

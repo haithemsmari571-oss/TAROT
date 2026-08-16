@@ -90,6 +90,7 @@ def build_sabri_input(
     source_content: str,
     waited_seconds=None,
     earlier_messages=(),
+    verified_facts: str = "",
 ) -> str:
     """Assemble Sabri's user-content payload for one turn.
 
@@ -106,6 +107,11 @@ def build_sabri_input(
     arrived, so he can size what he sends to the wait instead of guessing. There is no
     message-count target and no length cap: how much to send is his judgment. Pure."""
     parts = []
+    # The same verified block Valentina gets. He voices what she wrote and he writes his own
+    # connective tissue, and both need to know who they are talking to — an assumed gender
+    # reaches the client through his words just as easily as through hers.
+    if (verified_facts or "").strip():
+        parts.append(verified_facts.strip())
     if (session_memory or "").strip():
         parts.append(
             "ALREADY SEEN BY THE CLIENT — this is the conversation she is looking at. "

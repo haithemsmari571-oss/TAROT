@@ -643,6 +643,23 @@ async def note_mode_change(chat_id: int, db=None) -> None:
     _wake(session_id)
 
 
+def _client_gender(db, client_id: int) -> Optional[str]:
+    """The client's stated gender, read in the caller's already-open session.
+
+    Deliberately called only from _claim_or_delay, which runs BEFORE generation starts.
+    Never call this from inside the generation coroutine."""
+    from app.models.user import User
+
+    try:
+        row = db.query(User.gender).filter(User.id == client_id).first()
+    except Exception:  # noqa: BLE001 — an unreadable gender must never stop a reading
+        logger.warning("reading_client_gender_unreadable", client_id=client_id)
+        return None
+    if row is None or row[0] is None:
+        return None
+    return getattr(row[0], "value", str(row[0]))
+
+
 @dataclass
 class _Claim:
     chat_session_id: int
@@ -654,6 +671,11 @@ class _Claim:
     version: int
     through_message_id: int
     contents: list[str]
+    # Read here, at claim time, because the claim is built OUTSIDE the generation coroutine
+    # in a session that is already open. Reading it later would mean a database call in the
+    # window between generation starting and delivery finishing, which is the one thing this
+    # file is not allowed to do.
+    client_gender: Optional[str] = None
     response_bubbles: Optional[list[str]] = None
     response_reserve: str = ""
     response_route: Optional[str] = None
@@ -800,6 +822,7 @@ def _claim_or_delay(chat_session_id: int) -> _Next:
             version=row.generation_version,
             through_message_id=messages[-1].id,
             contents=[message.content for message in messages],
+            client_gender=_client_gender(db, chat.user_id),
         )
         db.commit()
         return _Next(claim=claim)
@@ -962,6 +985,7 @@ async def _generate_hybrid(claim: _Claim) -> None:
         state,
         claim.client_id,
         psychic_id=claim.psychic_id,
+        gender=claim.client_gender,
     )
     if not (text or "").strip():
         raise RuntimeError("Valentina returned an empty Hybrid draft")
@@ -1549,6 +1573,7 @@ async def _generate_auto(claim: _Claim) -> None:
         newest_message=newest,
         earlier_messages=earlier,
         waited_seconds_now=_waited_now,
+        gender=claim.client_gender,
     )
     # Both model calls, Valentina then Sabri, live inside that await.
     logger.info(

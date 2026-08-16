@@ -260,10 +260,17 @@ def get_client_sessions(db: Session, client_id: int, limit: int = 50) -> list:
 
 
 def get_client_astro(client: User) -> dict:
-    """Zodiac + life path derived from the client's DOB (reuses /oracle utils)."""
+    """Zodiac + life path derived from the client's DOB, plus the gender she stated.
+
+    Gender is not derived from anything — it is exactly what she chose, or "not stated"."""
+    gender = getattr(client, "gender", None)
+    gender_label = getattr(gender, "label", None) or "not stated"
     dob = client.date_of_birth
     if not dob:
-        return {"date_of_birth": None, "zodiac": None, "life_path": None}
+        return {
+            "date_of_birth": None, "zodiac": None, "life_path": None,
+            "gender": gender_label,
+        }
     try:
         zodiac = get_zodiac_sign_from_date(dob)
     except Exception:
@@ -276,6 +283,7 @@ def get_client_astro(client: User) -> dict:
         "date_of_birth": dob.isoformat() if dob else None,
         "zodiac": zodiac,
         "life_path": life_path,
+        "gender": gender_label,
     }
 
 

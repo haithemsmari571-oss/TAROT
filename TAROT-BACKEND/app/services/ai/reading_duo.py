@@ -155,7 +155,7 @@ def accumulate_reserve(previous: str, new_writing: str) -> str:
 
 
 async def _write_valentina_turn(
-    chat_id, message, trigger_entry, state, user_id, psychic_id=None
+    chat_id, message, trigger_entry, state, user_id, psychic_id=None, gender=None
 ) -> str:
     """NEW turn, step 1: load dossier + DOB, build Valentina's input (with injected numerology),
     run her (Opus 4.6 + gated thinking) to a COMPLETE prose reading. Returns her raw text."""
@@ -195,6 +195,7 @@ async def _write_valentina_turn(
         current_year=now.year,
         steering_notes=steering_notes,
         unsent_writing=state.reserve or "",
+        gender=gender,
     )
     if atlas_memory_text:
         valentina_input = (
@@ -221,7 +222,7 @@ async def _write_valentina_turn(
 
 async def _sabri_turn(
     chat_id, message, trigger_entry, state, source_content, waited_seconds=None,
-    earlier_messages=(),
+    earlier_messages=(), verified_facts="",
 ):
     """Sabri delivers: build his input (everything unsent + the capsule) and run him → bubbles.
 
@@ -239,6 +240,7 @@ async def _sabri_turn(
         source_content=source_content,
         waited_seconds=waited_seconds,
         earlier_messages=earlier_messages,
+        verified_facts=verified_facts,
     )
     bubbles = await asyncio.to_thread(
         reading_sabri.sabri_deliver, sabri_input, source_content=source_content,
@@ -256,7 +258,7 @@ async def _sabri_turn(
 async def _duo_generate(
     chat_id, message, trigger_entry, state, user_id, forced_route=None, *, psychic_id=None,
     waited_seconds=None, newest_message=None, earlier_messages=(),
-    waited_seconds_now=None,
+    waited_seconds_now=None, gender=None,
 ):
     """Route → (Valentina if NEW) → Sabri. Returns (bubbles, reserve, route). Nothing reaches the
     client here. bubbles is the paced-reveal payload (ALWAYS non-empty — Sabri guarantees a
@@ -279,8 +281,18 @@ async def _duo_generate(
     answered with the word "yeah".
 
     ``forced_route`` overrides the routing entirely and is now only used by tests."""
+    from app.services.ai.reading_client_facts import build_verified_facts_block
     from app.services.ai.reading_llm import FALLBACK_MESSAGE
 
+    # Built once from data already in hand, and given to BOTH roles. Sabri writes his own
+    # connective tissue around her words, so an assumed gender reaches the client through
+    # him just as easily as through her. Pure string work — no database, no IO.
+    verified_facts = build_verified_facts_block(gender=gender)
+    # Logged so the line that reached the models can be read back off a live turn rather
+    # than inferred. It is one field of the client's own stated data, next to the reading
+    # content this log already carries.
+    logger.info("duo_verified_facts", chat_id=chat_id,
+                gender_line=verified_facts.splitlines()[-1][:120])
     held = (state.reserve or "") if state is not None else ""
     route = forced_route or await _resolve_route(message, held)
     logger.info("duo_routed", chat_id=chat_id, route=route,
@@ -290,14 +302,8 @@ async def _duo_generate(
                 held_head=held.strip()[:120])
     reserve = held
     if route == "new":
-        valentina_text = (
-            await _write_valentina_turn(
-                chat_id, message, trigger_entry, state, user_id, psychic_id
-            )
-            if psychic_id is not None
-            else await _write_valentina_turn(
-                chat_id, message, trigger_entry, state, user_id
-            )
+        valentina_text = await _write_valentina_turn(
+            chat_id, message, trigger_entry, state, user_id, psychic_id, gender=gender
         )
         if not valentina_text.strip():
             # Valentina failed — deliver a fallback line and KEEP everything already unsaid.
@@ -315,6 +321,7 @@ async def _duo_generate(
     bubbles = await _sabri_turn(
         chat_id, newest_message or message, trigger_entry, state, reserve,
         waited_seconds=waited, earlier_messages=earlier_messages,
+        verified_facts=verified_facts,
     )
     logger.info("duo_generated", chat_id=chat_id, route=route, bubbles=len(bubbles),
                 reserve_chars=len(reserve.strip()), waited_seconds=waited)

@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy import Date, Enum, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.enums.gender import Gender
 from app.enums.role import Role
 from app.enums.user_status import UserStatus
 from app.models.base import Base
@@ -46,6 +47,16 @@ class User(Base):
     # Captured (required) at signup for astrology features; nullable so the
     # pre-existing accounts that predate this field are unaffected.
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Stated by the client at signup, alongside her date of birth, and editable afterwards.
+    # Required by the API for new accounts; NOT_STATED is a real answer she can choose, and
+    # is also what every account created before this field defaults to. The reading prompt
+    # says "not stated" out loud rather than omitting the line — see reading_client_facts.
+    gender: Mapped[Gender] = mapped_column(
+        Enum(Gender, name="gender"),
+        default=Gender.NOT_STATED,
+        server_default=Gender.NOT_STATED.value,
+        nullable=False,
+    )
     
     # 💡 Added: Dynamic display order field
     # Default is 9999 so un-ordered psychics go to the end

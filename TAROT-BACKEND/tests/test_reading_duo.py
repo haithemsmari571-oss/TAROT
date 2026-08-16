@@ -94,7 +94,12 @@ def test_valentina_receives_verified_numerology_or_explicit_not_available_signal
         date_of_birth=None,
         current_year=2026,
     )
-    assert "KNOWN NUMEROLOGY" not in absent
+    # The block is now ALWAYS emitted, even with no date of birth, because it also carries
+    # her gender — and an omitted line is what the reader fills in with a guess.
+    assert "KNOWN NUMEROLOGY" in absent
+    assert "Zodiac sign" not in absent          # nothing is invented when there is no DOB
+    assert "Life Path:" not in absent
+    assert "Client's gender: NOT STATED" in absent
     assert "client value not supplied as verified system data is explicitly NOT AVAILABLE" in reading_valentina.VALENTINA_SYSTEM_PROMPT
     assert "This restriction applies only to the client" in reading_valentina.VALENTINA_SYSTEM_PROMPT
     assert "For any OTHER person" in reading_valentina.VALENTINA_SYSTEM_PROMPT
@@ -107,11 +112,11 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
 
     val_calls, sabri_calls = [], []
 
-    async def fake_valentina(chat_id, message, entry, state, user_id):
+    async def fake_valentina(chat_id, message, entry, state, user_id, psychic_id=None, gender=None):
         val_calls.append(message)
         return f"VALENTINA_PROSE::{message}"
 
-    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None, earlier_messages=()):
+    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None, earlier_messages=(), verified_facts=""):
         sabri_calls.append({"source": source_content})
         return [f"b::{message}"]
 
@@ -150,11 +155,11 @@ def test_forced_route_bypasses_classifier(monkeypatch):
 
     val_calls = []
 
-    async def fake_valentina(chat_id, message, entry, state, user_id):
+    async def fake_valentina(chat_id, message, entry, state, user_id, psychic_id=None, gender=None):
         val_calls.append(message)
         return f"VALENTINA::{message}"
 
-    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None, earlier_messages=()):
+    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None, earlier_messages=(), verified_facts=""):
         return [f"b::{message}"]
 
     # the classifier would say "continue" — forced_route="new" must win (no flip to stale reserve)
@@ -174,7 +179,7 @@ def test_valentina_failure_delivers_fallback_keeps_reserve(monkeypatch):
     from app.services.ai.reading_llm import FALLBACK_MESSAGE
     from app.services.ai.reading_session import create_session_state
 
-    async def failed_valentina(chat_id, message, entry, state, user_id):
+    async def failed_valentina(chat_id, message, entry, state, user_id, psychic_id=None, gender=None):
         return ""                           # write_valentina returns "" on SDK error
 
     called = []

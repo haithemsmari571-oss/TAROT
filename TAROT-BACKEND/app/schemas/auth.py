@@ -2,6 +2,8 @@ from datetime import date
 
 from pydantic import BaseModel, EmailStr, field_validator
 
+from app.enums.gender import Gender
+
 
 class AuthBase(BaseModel):
     username: str
@@ -24,6 +26,17 @@ class ResetPasswordReq(BaseModel):
 class UserSignup(AuthBase):
     password: str
     date_of_birth: date
+    # Mandatory, in the same breath as the date of birth. No default: leaving it out is a
+    # 422, so an account cannot be created without an answer. "Prefer not to say" is one of
+    # the answers she can give, and it is recorded as NOT_STATED rather than as a blank.
+    gender: Gender
+
+    @field_validator("gender")
+    @classmethod
+    def validate_gender(cls, v: Gender) -> Gender:
+        if v is None:
+            raise ValueError("Please choose an option")
+        return v
 
     @field_validator("date_of_birth")
     @classmethod

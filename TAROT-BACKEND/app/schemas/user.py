@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.enums.gender import Gender
 from app.enums.role import Role
 from app.enums.user_status import UserStatus
 
@@ -34,6 +35,10 @@ class UserProfileUpdate(BaseModel):
     username: Optional[str] = None
     bio: Optional[str] = None
     date_of_birth: Optional[date] = None
+    # Editable afterwards, in the same place she can already change her date of birth.
+    # Optional here only in the "not supplied, leave it alone" sense — update_user_profile
+    # uses exclude_unset, so omitting it never overwrites what she chose.
+    gender: Optional[Gender] = None
 
     @field_validator("username")
     @classmethod
@@ -75,6 +80,7 @@ class UserProfileRead(BaseModel):
     profile_picture_path: Optional[str] = None
     bio: Optional[str] = None
     date_of_birth: Optional[date] = None
+    gender: Gender = Gender.NOT_STATED
     price_per_second: Optional[float] = None
     created_at: datetime
 

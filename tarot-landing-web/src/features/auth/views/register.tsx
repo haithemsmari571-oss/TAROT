@@ -46,6 +46,9 @@ const RegisterPage = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  // No pre-selection. A default here would quietly answer for her, which is the whole
+  // problem this field exists to fix.
+  const [gender, setGender] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -73,8 +76,13 @@ const RegisterPage = () => {
       return;
     }
 
+    if (!gender) {
+      setPasswordError("Please choose an option for gender");
+      return;
+    }
+
     register(
-      { username, email, password, date_of_birth: dateOfBirth },
+      { username, email, password, date_of_birth: dateOfBirth, gender },
       {
         // Send new signups to the redesigned "Check your email" page instead of
         // an inline panel; pass the email so it can be shown there.
@@ -177,6 +185,46 @@ const RegisterPage = () => {
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* Gender — same step as the date of birth, because it is the same kind of fact:
+                something the reader is told rather than left to work out. */}
+            <div>
+              <label style={labelStyle} className="flex items-center justify-between">
+                Gender
+                <span style={{ fontSize: 9.5, letterSpacing: "1px", color: "var(--gl-accent)" }}>
+                  So your reader never has to guess
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "WOMAN", label: "Woman" },
+                  { value: "MAN", label: "Man" },
+                  { value: "OTHER", label: "Other" },
+                  { value: "NOT_STATED", label: "Prefer not to say" },
+                ].map((option) => {
+                  const selected = gender === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setGender(option.value)}
+                      aria-pressed={selected}
+                      className="gl-pop-input"
+                      style={{
+                        ...inputStyle,
+                        textAlign: "center",
+                        cursor: "pointer",
+                        borderColor: selected ? "var(--gl-accent)" : undefined,
+                        color: selected ? "var(--gl-accent)" : undefined,
+                        fontWeight: selected ? 700 : undefined,
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

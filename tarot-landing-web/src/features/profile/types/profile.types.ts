@@ -14,6 +14,9 @@ export interface UserProfile {
 
 export interface UpdateProfileRequest {
   bio?: string;
+  /** "WOMAN" | "MAN" | "OTHER" | "NOT_STATED". The API accepts it on PATCH /profile/me;
+   *  there is no client-facing screen that edits profile fields yet — see the report. */
+  gender?: string;
 }
 
 export interface ChangePasswordRequest {

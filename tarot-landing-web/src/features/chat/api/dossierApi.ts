@@ -39,6 +39,8 @@ export interface ClientDossier {
     date_of_birth: string | null;
     zodiac: string | null;
     life_path: number | null;
+    /** As the client stated it: "woman" | "man" | "other" | "not stated". Never inferred. */
+    gender?: string | null;
   };
   stats: ClientDossierStats;
   /** Past readings, newest first (superadmin dossier). Absent in older payloads. */
