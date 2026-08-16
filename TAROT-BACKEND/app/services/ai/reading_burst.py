@@ -197,6 +197,33 @@ def _elapsed_ms_since_arrival(chat_session_id: Optional[int], clear: bool = Fals
     if started is None:
         return None
     return int((time.perf_counter() - started) * 1000)
+
+
+def _wait_began_before_the_session(state, claim: "_Claim") -> float:
+    """Seconds she had already been waiting before this turn's clock started.
+
+    The mark above is stamped when a message reaches the session, which is when
+    she sent it — except once. The opening turn of a pre-read session answers the
+    message she submitted with her request, and that message only reaches the
+    session at the moment she is accepted. Her wait began when she pressed send,
+    a minute or two earlier, so measured from the session she looks as though she
+    has waited no time at all and Sabri is told a wait that never happened.
+
+    A datetime subtraction against state already in hand. No database, no IO.
+    """
+    if getattr(state, "pre_reading_message_id", None) != claim.through_message_id:
+        return 0.0
+    requested_at = getattr(state, "pre_reading_requested_at", None)
+    if not requested_at:
+        return 0.0
+    if isinstance(requested_at, str):
+        try:
+            requested_at = datetime.fromisoformat(requested_at)
+        except ValueError:
+            return 0.0
+    if requested_at.tzinfo is None:
+        requested_at = requested_at.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - requested_at).total_seconds())
 CLIENT_TYPING_EXPIRY_SECONDS = 12.0
 GENERATION_LEASE_SECONDS = 90.0
 GENERATION_HEARTBEAT_SECONDS = 15.0
@@ -1548,7 +1575,12 @@ async def _generate_auto(claim: _Claim) -> None:
     from app.services.ai import reading_duo
 
     store, state, turn, trigger = _working_state(claim)
-    waited_seconds = (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
+    turn_elapsed = (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
+    # Her wait is measured from when she sent the thing being answered, which for the
+    # opening turn of a pre-read session is minutes before the session existed.
+    already_waited = _wait_began_before_the_session(state, claim)
+    wait_offset = max(0.0, already_waited - turn_elapsed)
+    waited_seconds = turn_elapsed + wait_offset
     generation_started = time.perf_counter()
     # Several texts sent close together are ONE thing being said, so Valentina reads the whole
     # turn. Sabri answers only the last of them: she is waiting on her newest message, and
@@ -1558,9 +1590,10 @@ async def _generate_auto(claim: _Claim) -> None:
     earlier = contents[:-1]
 
     def _waited_now() -> float:
-        # A dict lookup and a perf_counter read. No database, no IO — nothing that could
-        # stall the loop between generation starting and delivery finishing.
-        return (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
+        # A dict lookup and a perf_counter read, plus a constant. No database, no IO —
+        # nothing that could stall the loop between generation starting and delivery
+        # finishing. The offset carries the wait that predates this session.
+        return (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0 + wait_offset
 
     # THE OPENING TURN OF A PRE-SESSION READING. The reserve was written from precisely
     # this message, while she waited to be accepted, so there is nothing to decide: deliver
@@ -1598,6 +1631,10 @@ async def _generate_auto(claim: _Claim) -> None:
         chat_session_id=claim.chat_session_id,
         generation_ms=int((time.perf_counter() - generation_started) * 1000),
         waiting_ms=_elapsed_ms_since_arrival(claim.chat_session_id),
+        # What Sabri was actually told, which for a pre-read opening turn counts the
+        # wait she served before the session existed.
+        waited_seconds_told=round(_waited_now(), 1),
+        wait_before_session_seconds=round(wait_offset, 1),
         route=route,
         bubbles=len(bubbles or []),
         words=sum(len(b.split()) for b in (bubbles or [])),

@@ -223,3 +223,75 @@ def test_the_opening_turn_delivers_the_banked_reading_instead_of_rewriting_it():
     assert 'claim.through_message_id' in source
     # and it is passed positionally as forced_route into _duo_generate
     assert "claim.client_id,\n        forced," in source
+
+
+# ── the wait clock counts the wait she actually served ───────────────────────
+def _claim(*, chat_id, chat_session_id, through_message_id, contents):
+    from app.services.ai import reading_burst
+
+    return reading_burst._Claim(
+        chat_session_id=chat_session_id,
+        chat_id=chat_id,
+        client_id=10,
+        psychic_id=2,
+        mode="auto",
+        owner="test",
+        version=1,
+        through_message_id=through_message_id,
+        contents=contents,
+    )
+
+
+def test_the_opening_turn_counts_the_wait_that_happened_before_the_session():
+    """She waits while her reading is written, then the message she wrote before that
+    wait reaches the session at the instant she is accepted. Measured from the session
+    she has waited no time at all, so Sabri was being told she had just spoken."""
+    from app.services.ai import reading_burst
+
+    state = _state(chat_id=91)
+    state.pre_reading_message_id = 4242
+    state.pre_reading_requested_at = datetime.now(timezone.utc) - timedelta(seconds=70)
+    claim = _claim(chat_id=91, chat_session_id=5, through_message_id=4242,
+                   contents=["my partner left in february"])
+    waited = reading_burst._wait_began_before_the_session(state, claim)
+    assert 69.0 <= waited <= 75.0
+
+
+def test_a_naive_timestamp_is_read_as_utc_rather_than_crashing_the_turn():
+    from app.services.ai import reading_burst
+
+    state = _state(chat_id=92)
+    state.pre_reading_message_id = 7
+    state.pre_reading_requested_at = datetime.utcnow() - timedelta(seconds=40)
+    claim = _claim(chat_id=92, chat_session_id=6, through_message_id=7, contents=["hello"])
+    assert 39.0 <= reading_burst._wait_began_before_the_session(state, claim) <= 45.0
+
+
+def test_an_ordinary_turn_keeps_the_clock_it_already_had():
+    """Every other message reaches the session when she sends it, so there is nothing
+    to add — and a later turn of a pre-read session must not inherit the old wait."""
+    from app.services.ai import reading_burst
+
+    state = _state(chat_id=93)
+    state.pre_reading_message_id = 11
+    state.pre_reading_requested_at = datetime.now(timezone.utc) - timedelta(seconds=300)
+    later_turn = _claim(chat_id=93, chat_session_id=7, through_message_id=12,
+                        contents=["what about my sister"])
+    assert reading_burst._wait_began_before_the_session(state, later_turn) == 0.0
+
+    never_pre_read = _state(chat_id=94)
+    plain = _claim(chat_id=94, chat_session_id=8, through_message_id=1, contents=["hi"])
+    assert reading_burst._wait_began_before_the_session(never_pre_read, plain) == 0.0
+
+
+def test_the_wait_is_carried_as_an_offset_so_it_keeps_running_during_generation():
+    """The wait is re-read after Valentina finishes, so whatever is added at the start
+    has to still be there at the end — a floor taken once would go stale mid-turn."""
+    import inspect
+
+    from app.services.ai import reading_burst
+
+    source = inspect.getsource(reading_burst._generate_auto)
+    assert "_wait_began_before_the_session(state, claim)" in source
+    assert "wait_offset = max(0.0, already_waited - turn_elapsed)" in source
+    assert "/ 1000.0 + wait_offset" in source
