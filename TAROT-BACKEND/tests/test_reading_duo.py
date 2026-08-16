@@ -76,7 +76,7 @@ def test_router_failure_falls_back_to_a_fresh_reading(monkeypatch):
 def test_valentina_receives_verified_numerology_or_explicit_not_available_signal():
     present = reading_valentina.build_valentina_input(
         client_message="Synthetic question",
-        chat_transcript=[],
+        session_memory="",
         client_file="Synthetic client",
         session_metadata={},
         date_of_birth=date(2002, 12, 1),
@@ -88,7 +88,7 @@ def test_valentina_receives_verified_numerology_or_explicit_not_available_signal
 
     absent = reading_valentina.build_valentina_input(
         client_message="Synthetic question",
-        chat_transcript=[],
+        session_memory="",
         client_file="Synthetic client",
         session_metadata={},
         date_of_birth=None,
@@ -111,9 +111,9 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
         val_calls.append(message)
         return f"VALENTINA_PROSE::{message}"
 
-    async def fake_sabri(chat_id, message, entry, state, source_content, is_new):
-        sabri_calls.append({"source": source_content, "is_new": is_new})
-        return ([f"b::{message}"], f"RESERVE::{message}")
+    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None):
+        sabri_calls.append({"source": source_content})
+        return [f"b::{message}"]
 
     monkeypatch.setattr(reading_duo, "_write_valentina_turn", fake_valentina)
     monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
@@ -125,7 +125,11 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
     b, reserve, route = asyncio.run(reading_duo._duo_generate(1, "will he come back?", None, st, 2))
     assert route == "new"
     assert val_calls == ["will he come back?"]
-    assert sabri_calls[-1] == {"source": "VALENTINA_PROSE::will he come back?", "is_new": True}
+    # Sabri is handed the accumulation: what was already unsaid, plus her new writing.
+    assert sabri_calls[-1] == {
+        "source": "OLD_RESERVE\n\nVALENTINA_PROSE::will he come back?"
+    }
+    assert reserve == "OLD_RESERVE\n\nVALENTINA_PROSE::will he come back?"
 
     # CONTINUE route → Valentina NOT called again, Sabri fed the held reserve
     monkeypatch.setattr(reading_duo, "_resolve_route", lambda m, r="": _coro("continue"))
@@ -133,7 +137,7 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
     b, reserve, route = asyncio.run(reading_duo._duo_generate(1, "wow", None, st, 2))
     assert route == "continue"
     assert val_calls == ["will he come back?"]                       # unchanged — no 2nd Valentina
-    assert sabri_calls[-1] == {"source": "HELD_RESERVE_TEXT", "is_new": False}
+    assert sabri_calls[-1] == {"source": "HELD_RESERVE_TEXT"}
 
 
 async def _coro(v):
@@ -150,8 +154,8 @@ def test_forced_route_bypasses_classifier(monkeypatch):
         val_calls.append(message)
         return f"VALENTINA::{message}"
 
-    async def fake_sabri(chat_id, message, entry, state, source_content, is_new):
-        return ([f"b::{message}"], "R")
+    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None):
+        return [f"b::{message}"]
 
     # the classifier would say "continue" — forced_route="new" must win (no flip to stale reserve)
     monkeypatch.setattr(reading_duo, "_resolve_route", lambda m, r="": _coro("continue"))
@@ -198,15 +202,20 @@ def _install_fakes(monkeypatch, routes, sabri_returns, sabri_seen):
     r = {"i": 0}
 
     async def fake_generate(
-        chat_id, message, entry, state, user_id, forced_route=None, *, psychic_id=None
+        chat_id, message, entry, state, user_id, forced_route=None, *, psychic_id=None,
+        waited_seconds=None,
     ):
+        # Mirrors the real _duo_generate: a NEW turn ADDS her writing to whatever is still
+        # unsaid, a CONTINUE turn hands over the same pile unchanged. Sending never shrinks
+        # it, so the fake returns the accumulation, not whatever Sabri happened to echo.
         route = forced_route or routes[r["i"]]
-        if route == "new":
-            src = f"VALENTINA::{message}"
-        else:
-            src = state.reserve or ""
-        sabri_seen.append({"route": route, "source": src})
-        bubbles, reserve = sabri_returns[r["i"]]
+        held = state.reserve or ""
+        reserve = (
+            reading_duo.accumulate_reserve(held, f"VALENTINA::{message}")
+            if route == "new" else held
+        )
+        sabri_seen.append({"route": route, "source": reserve})
+        bubbles = sabri_returns[r["i"]]
         r["i"] += 1
         return bubbles, reserve, route
 
@@ -226,9 +235,9 @@ def test_reserve_set_on_new_then_released_on_continue(monkeypatch):
     chat_id = 80001
     _reset(chat_id)
     sabri_seen = []
-    # turn 1: NEW → reserve R1 ; turn 2: CONTINUE → Sabri fed R1, returns smaller R2
+    # turn 1: NEW → her writing is banked ; turn 2: CONTINUE → Sabri is fed the same pile
     routes = ["new", "continue"]
-    sabri_returns = [(["b1"], "RESERVE_1"), (["b2"], "RESERVE_2")]
+    sabri_returns = [["b1"], ["b2"]]
 
     async def scenario():
         _install_fakes(monkeypatch, routes, sabri_returns, sabri_seen)
@@ -236,24 +245,30 @@ def test_reserve_set_on_new_then_released_on_continue(monkeypatch):
 
         await reading_duo.handle_client_message(chat_id, "will he come back?", psychic_id=1, user_id=2)
         await asyncio.wait_for(reading_duo._turn_tasks[chat_id], 2)
-        assert store.get(f"chat:{chat_id}").reserve == "RESERVE_1"        # NEW set the reserve
+        assert store.get(f"chat:{chat_id}").reserve == "VALENTINA::will he come back?"
 
         await reading_duo.handle_client_message(chat_id, "wow", psychic_id=1, user_id=2)
         await asyncio.wait_for(reading_duo._turn_tasks[chat_id], 2)
         return store.get(f"chat:{chat_id}").reserve
 
     final_reserve = asyncio.run(scenario())
-    assert sabri_seen[1] == {"route": "continue", "source": "RESERVE_1"}  # CONTINUE released from R1
-    assert final_reserve == "RESERVE_2"                                   # reserve shrank
+    # The CONTINUE turn works from the same unsent pile, and sending does not consume it:
+    # Sabri simply never repeats what the capsule shows she has already read.
+    assert sabri_seen[1] == {"route": "continue", "source": "VALENTINA::will he come back?"}
+    assert final_reserve == "VALENTINA::will he come back?"
 
 
-def test_new_turn_replaces_stale_reserve(monkeypatch):
+def test_new_turn_adds_to_the_reserve_and_never_burns_it(monkeypatch):
+    """The TODO at reading_duo.py:341-344, resolved.
+
+    A second NEW turn used to REPLACE the reserve, so everything Valentina wrote on turn one
+    and Sabri had not yet said was generated, paid for and deleted — around ninety percent of
+    every reading. It accumulates now, oldest first."""
     chat_id = 80002
     _reset(chat_id)
     sabri_seen = []
-    # turn 1: NEW → R1 ; turn 2: NEW (redirect) → Sabri fed FRESH Valentina (not R1), replaces reserve
     routes = ["new", "new"]
-    sabri_returns = [(["b1"], "RESERVE_1"), (["b2"], "RESERVE_FRESH")]
+    sabri_returns = [["b1"], ["b2"]]
 
     async def scenario():
         _install_fakes(monkeypatch, routes, sabri_returns, sabri_seen)
@@ -266,30 +281,33 @@ def test_new_turn_replaces_stale_reserve(monkeypatch):
 
     final = asyncio.run(scenario())
     assert sabri_seen[1]["route"] == "new"
-    assert sabri_seen[1]["source"] == "VALENTINA::what about my career this year?"  # fresh, not R1
-    assert final == "RESERVE_FRESH"                                                 # old reserve dropped
+    # Turn 2 sees BOTH readings — turn one's unsaid writing is still there, in order.
+    both = "VALENTINA::will he come back?\n\nVALENTINA::what about my career this year?"
+    assert sabri_seen[1]["source"] == both
+    assert final == both
 
 
 def test_continue_glue_reply_keeps_prior_reserve(monkeypatch):
-    # Review finding (high): a CONTINUE turn where Sabri gives a glue reply and echoes NO reserve
-    # must NOT wipe the banked content. Prior reserve is retained when a turn releases nothing.
+    # A CONTINUE turn where Sabri just says "mm tell me more" must not cost the session the
+    # writing it is still holding. The old guard tried to infer this from whether he echoed
+    # anything and could not tell a drained reserve from a glue reply; nothing is inferred now.
     chat_id = 80006
     _reset(chat_id)
     sabri_seen = []
     routes = ["new", "continue"]
-    sabri_returns = [(["b1"], "BANKED_RESERVE"), (["mm tell me more"], "")]  # T2 glue reply, empty reserve
+    sabri_returns = [["b1"], ["mm tell me more"]]
 
     async def scenario():
         _install_fakes(monkeypatch, routes, sabri_returns, sabri_seen)
         store = get_session_store()
         await reading_duo.handle_client_message(chat_id, "will he come back?", psychic_id=1, user_id=2)
         await asyncio.wait_for(reading_duo._turn_tasks[chat_id], 2)
-        assert store.get(f"chat:{chat_id}").reserve == "BANKED_RESERVE"
+        assert store.get(f"chat:{chat_id}").reserve == "VALENTINA::will he come back?"
         await reading_duo.handle_client_message(chat_id, "wow ok", psychic_id=1, user_id=2)
         await asyncio.wait_for(reading_duo._turn_tasks[chat_id], 2)
         return store.get(f"chat:{chat_id}").reserve
 
-    assert asyncio.run(scenario()) == "BANKED_RESERVE"     # NOT wiped by the empty-reserve glue turn
+    assert asyncio.run(scenario()) == "VALENTINA::will he come back?"   # NOT wiped
 
 
 # ── mid-reveal: continuer ignored, redirect queued after the current reveal ──
@@ -369,10 +387,11 @@ def test_continuer_midreveal_no_new_generation(monkeypatch):
 
 
 def test_reading_pause_reads_config():
-    # the reading-beat pause comes from DUO_READING_PAUSE_MS (default 2s)
+    # This dead coordinator keeps only the base beat; the real length-aware read pause is
+    # reading_burst.read_pause_ms and is tested in test_reading_client_clock.py.
     from app.config import get_app_settings
-    assert reading_duo._reading_pause_s() == get_app_settings().DUO_READING_PAUSE_MS / 1000.0
-    assert reading_duo._reading_pause_s() == 2.0
+    assert reading_duo._reading_pause_s() == get_app_settings().READ_PAUSE_BASE_MS / 1000.0
+    assert reading_duo._reading_pause_s() == 1.5
 
 
 # ── typing shown before + through generation (no dead silence) ────────────────

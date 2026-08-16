@@ -457,10 +457,9 @@ def test_two_role_atlas_connection_failure_warns_and_still_completes(monkeypatch
     _install_http_client(monkeypatch, connection_error, calls)
     _install_duo_writer(monkeypatch, model_inputs)
 
-    async def fake_sabri(_chat_id, _message, _entry, _state, source_content, is_new):
-        assert is_new is True
+    async def fake_sabri(_chat_id, _message, _entry, _state, source_content, waited_seconds=None):
         sabri_sources.append(source_content)
-        return ["synthetic delivered bubble"], ""
+        return ["synthetic delivered bubble"]
 
     monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
     state = create_session_state("chat:92004", client_id=204, chat_id=92004)
@@ -582,10 +581,9 @@ def test_sabri_receives_only_valentina_prose_never_raw_atlas_memory(monkeypatch)
     )
     _install_duo_writer(monkeypatch, model_inputs, output=valentina_output)
 
-    async def fake_sabri(_chat_id, _message, _entry, _state, source_content, is_new):
-        assert is_new is True
+    async def fake_sabri(_chat_id, _message, _entry, _state, source_content, waited_seconds=None):
         sabri_sources.append(source_content)
-        return ["humanized bubble"], ""
+        return ["humanized bubble"]
 
     monkeypatch.setattr(reading_duo, "_sabri_turn", fake_sabri)
     state = create_session_state("chat:92008", client_id=208, chat_id=92008)

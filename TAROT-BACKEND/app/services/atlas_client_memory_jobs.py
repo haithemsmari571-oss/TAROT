@@ -34,6 +34,12 @@ ATLAS_CLIENT_MEMORY_STALE_PROCESSING_MINUTES = 60
 ATLAS_CLIENT_MEMORY_SWEEP_LIMIT = 20
 ATLAS_CLIENT_MEMORY_MAX_RECOVERY_CYCLES = 3
 ATLAS_CLIENT_MEMORY_RECOVERY_DELAYS_MINUTES = (15, 60, 360)
+# How long a finished reading is left alone before it is folded into the client's long-term
+# memory. Long enough that a client who comes straight back is served from the memory she
+# had, not one being rewritten mid-reading; short enough that the fold still happens while
+# the session is recent. The sweep runs every 60s, so the real delay is this plus under a
+# minute.
+ATLAS_MEMORY_SETTLE_MINUTES = 12
 _active_tasks: dict[int, asyncio.Task] = {}
 
 
@@ -99,7 +105,12 @@ def default_dependencies() -> AtlasClientMemoryJobDependencies:
 
 
 def enqueue_atlas_client_memory_job(db: Session, chat_session_id: int) -> bool:
-    """Add the job to the caller's transaction; never commits independently."""
+    """Add the job to the caller's transaction; never commits independently.
+
+    It is queued for a quarter of an hour's time, not for now. Folding a reading into the
+    client's long-term memory the instant it ends means a client who comes straight back —
+    which is common, and is the behaviour of someone who was enjoying it — starts her second
+    reading against a memory that is being rewritten underneath her from her first."""
     existing = db.get(AtlasClientMemoryJob, chat_session_id)
     if existing is not None:
         return False
@@ -107,9 +118,48 @@ def enqueue_atlas_client_memory_job(db: Session, chat_session_id: int) -> bool:
         chat_session_id=chat_session_id,
         status="PENDING",
         attempts=0,
+        not_before=_for_column(
+            db, datetime.now(timezone.utc) + timedelta(minutes=ATLAS_MEMORY_SETTLE_MINUTES)
+        ),
     ))
     db.flush()
     return True
+
+
+def defer_atlas_memory_for_client(db: Session, client_id: int, psychic_id: int) -> int:
+    """She came back. Push every unfinished summary for this pair out of the way.
+
+    Called when a new reading starts. Deliberately a deferral rather than a cancellation:
+    the earlier reading still has to reach her long-term memory eventually, it just must not
+    happen while she is inside a live session with the same reader. Returns how many jobs
+    moved. Never commits — it joins the caller's transaction."""
+    from app.models.chat import Chat
+
+    rows = (
+        db.query(AtlasClientMemoryJob)
+        .join(ChatSession, ChatSession.id == AtlasClientMemoryJob.chat_session_id)
+        .join(Chat, Chat.id == ChatSession.chat_id)
+        .filter(
+            Chat.user_id == client_id,
+            Chat.psychic_id == psychic_id,
+            AtlasClientMemoryJob.status.in_(("PENDING", "RETRY_PENDING")),
+        )
+        .all()
+    )
+    if not rows:
+        return 0
+    due = _for_column(
+        db, datetime.now(timezone.utc) + timedelta(minutes=ATLAS_MEMORY_SETTLE_MINUTES)
+    )
+    for row in rows:
+        row.not_before = due
+    logger.info(
+        "atlas_client_memory_deferred_client_returned",
+        client_id=client_id,
+        psychic_id=psychic_id,
+        jobs=len(rows),
+    )
+    return len(rows)
 
 
 def _aware(value: datetime) -> datetime:
@@ -413,11 +463,58 @@ def pending_atlas_client_memory_job_ids(
                 ),
             ),
         )
+        .filter(
+            or_(
+                AtlasClientMemoryJob.not_before.is_(None),
+                AtlasClientMemoryJob.not_before <= _for_column(db, current),
+            )
+        )
         .order_by(AtlasClientMemoryJob.created_at.asc(), AtlasClientMemoryJob.chat_session_id.asc())
         .limit(ATLAS_CLIENT_MEMORY_SWEEP_LIMIT)
         .all()
     )
-    return [row.chat_session_id for row in rows]
+    return [
+        row.chat_session_id
+        for row in rows
+        if not _client_is_mid_reading(db, row.chat_session_id)
+    ]
+
+
+def _client_is_mid_reading(db: Session, chat_session_id: int) -> bool:
+    """Is this job's client sitting in a live reading with the same reader right now?
+
+    The settle delay covers the ordinary case of her coming back a few minutes later. This
+    covers the rest: a long second reading that is still running when the delay expires. Her
+    memory is not rewritten while she is inside a session that would read from it."""
+    from app.enums.chat_session_status import ChatSessionStatus
+    from app.models.chat import Chat
+
+    try:
+        pair = (
+            db.query(Chat.user_id, Chat.psychic_id)
+            .join(ChatSession, ChatSession.chat_id == Chat.id)
+            .filter(ChatSession.id == chat_session_id)
+            .first()
+        )
+        if pair is None:
+            return False
+        live = (
+            db.query(ChatSession.id)
+            .join(Chat, Chat.id == ChatSession.chat_id)
+            .filter(
+                Chat.user_id == pair[0],
+                Chat.psychic_id == pair[1],
+                ChatSession.id != chat_session_id,
+                ChatSession.status == ChatSessionStatus.ACTIVE,
+            )
+            .first()
+        )
+        return live is not None
+    except Exception:  # noqa: BLE001 — never let this check block the sweep entirely
+        logger.warning(
+            "atlas_client_memory_live_session_check_failed", chat_session_id=chat_session_id
+        )
+        return False
 
 
 def schedule_atlas_client_memory_sweep() -> int:

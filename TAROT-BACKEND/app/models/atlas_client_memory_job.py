@@ -8,6 +8,7 @@ from app.models.base import Base
 
 class AtlasClientMemoryJob(Base):
     __tablename__ = "atlas_client_memory_jobs"
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('PENDING', 'PROCESSING', 'RETRY_PENDING', 'COMPLETED', 'FAILED')",
@@ -39,6 +40,12 @@ class AtlasClientMemoryJob(Base):
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recovery_cycles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The earliest this finished session may be folded into the client's long-term memory.
+    # Set a quarter of an hour out at enqueue, and pushed out again if she starts another
+    # reading with the same reader inside that window — summarising the reading she has just
+    # had, while she is sitting in the next one, rewrites her memory underneath her. NULL
+    # means eligible immediately, which is every row that predates this column.
+    not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

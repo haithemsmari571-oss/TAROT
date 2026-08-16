@@ -637,6 +637,18 @@ async def _speak(
 
     await manager.send_to_chat(message=sent["payload"], chat_id=str(chat_id))
     remember(chat_session_id, line)
+    # She has said something; from here she is visibly writing until the reading lands. The
+    # client clears its own indicator whenever a message arrives, so this has to come AFTER
+    # the line, not before it, or it would be switched straight back off.
+    if event == "reading_first_word_sent":
+        try:
+            from app.services.ai import reading_executor
+
+            await reading_executor.broadcast_typing(
+                chat_id, True, sent["payload"].get("sender_id")
+            )
+        except Exception:  # noqa: BLE001 — a typing hiccup never breaks the line itself
+            pass
     total_ms = int((time.perf_counter() - started) * 1000)
     logger.info(
         event,
@@ -656,9 +668,18 @@ async def speak_now(
     chat_session_id: Optional[int],
     arrived_at: float,
     message_id: Optional[int] = None,
+    read_pause_seconds: float = 0.0,
 ) -> None:
-    """The immediate human response. Never awaited by the caller, never raises."""
+    """The immediate human response. Never awaited by the caller, never raises.
+
+    It waits out the read pause first. Landing this line in three seconds flat is right for
+    "hey" and wrong for a twenty-line letter — nobody reads all that and reacts inside three
+    seconds, and arriving too fast reads as a machine just as clearly as arriving too slow.
+    The deadline is measured from the end of the pause, not from her message."""
     try:
+        if read_pause_seconds > 0:
+            await asyncio.sleep(read_pause_seconds)
+        started = arrived_at + read_pause_seconds
         await asyncio.wait_for(
             _speak(
                 chat_id=chat_id,
@@ -666,7 +687,7 @@ async def speak_now(
                 message_id=message_id,
                 instruction=PASS_ONE_INSTRUCTION,
                 deadline_seconds=FIRST_WORD_DEADLINE_SECONDS,
-                started=arrived_at,
+                started=started,
                 event="reading_first_word_sent",
             ),
             timeout=FIRST_WORD_DEADLINE_SECONDS + 2.0,

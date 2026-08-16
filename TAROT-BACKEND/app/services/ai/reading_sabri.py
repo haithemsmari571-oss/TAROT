@@ -1,14 +1,19 @@
 """Sabri — the DELIVERY role of the two-role engine (READING_ENGINE=two_role).
 
-Sabri receives Valentina's complete written reading (on a fresh-content turn) OR the
-currently-held reserve (on a follow-up turn), plus the conversation and the client's latest
-message. His entire job is delivery judgment:
+Sabri receives EVERY word Valentina has written this session that the client has not seen —
+this turn's fresh reading and everything still unsent from earlier — plus the session capsule
+(what the client has already read) and her latest message. His entire job is delivery judgment:
 
-  * SELECT + HOLD — pick the best/most-relevant parts to send now; bank the rest in reserve.
+  * SELECT — pick the parts that land now, from anywhere in the unsent writing.
   * VOICE — rewrite the selected parts into real texting voice (lowercase, fragments, fillers,
     no markdown/em-dash/emoji) while PRESERVING every fact/number/name/card VERBATIM.
-  * PACE (turn size) — send about a natural turn's worth, then stop and let the client respond.
-  * FOLLOW-UPS — work from reserve, or give a short glue reply of his own.
+  * PACE (turn size) — HIS judgment, every turn, from what the client is doing and how long she
+    has been waiting. There is no target message count and no message-length cap: both used to
+    be config constants that decided it for him, and both are gone.
+  * FOLLOW-UPS — work from the unsent writing, or give a short glue reply of his own.
+
+He does not report what he held back. Nothing is removed from the unsent pile by sending it;
+he simply never repeats what the capsule shows the client has already read.
 
 He NEVER critiques or redoes Valentina (no quality-gate, no correction loop — that broke the
 retired two_agent engine). Output is PLAIN TEXT (bubbles + optional @@RESERVE@@), never JSON.
@@ -81,48 +86,50 @@ Deliver what lands. Hold the rest. And never, ever change a fact."""
 def build_sabri_input(
     *,
     client_message: str,
-    chat_transcript,
+    session_memory: str,
     source_content: str,
-    is_new: bool,
-    turn_target: int,
+    waited_seconds=None,
 ) -> str:
-    """Assemble Sabri's user-content payload for one turn. ``source_content`` is Valentina's
-    fresh complete reading when ``is_new`` else the currently-held reserve (verbatim). The
-    transcript shows what the client has already seen (so Sabri doesn't repeat held pieces
-    he already released). Pure."""
+    """Assemble Sabri's user-content payload for one turn.
+
+    Two blocks carry the whole design, and confusing them is the only way it fails:
+
+      * ALREADY SEEN — ``session_memory``, the capsule (verbatim facts + running
+        narrative + the recent turns word for word). Everything in it has reached the
+        client's screen. He must never send any of it again.
+      * WRITTEN BUT NEVER SENT — ``source_content``, every word Valentina has written
+        this session that has not been delivered, oldest first, newest last. ALL of it
+        is available to him and he picks freely from any part of it.
+
+    ``waited_seconds`` is how long the client has been waiting since her message
+    arrived, so he can size what he sends to the wait instead of guessing. There is no
+    message-count target and no length cap: how much to send is his judgment. Pure."""
     parts = []
-    tx = chat_transcript or []
-    if tx:
-        lines = [
-            f"{'client' if m.get('role') == 'client' else 'you'}: {m.get('content', '')}"
-            for m in tx[-_TRANSCRIPT_LIMIT:]
-        ]
+    if (session_memory or "").strip():
         parts.append(
-            "CONVERSATION SO FAR (what the client has already seen from you — do not repeat it):\n"
-            + "\n".join(lines)
+            "ALREADY SEEN BY THE CLIENT — this is the conversation she is looking at. "
+            "Every word here has already reached her screen. NEVER send any of it again, "
+            "in any wording:\n" + session_memory.strip()
         )
     parts.append(f"CLIENT'S LATEST MESSAGE:\n{client_message}")
-    if is_new:
+    if (source_content or "").strip():
         parts.append(
-            "VALENTINA'S COMPLETE NEW READING (select the parts that land now, voice them, "
-            "hold the rest in @@RESERVE@@):\n" + (source_content or "").strip()
-        )
-    elif (source_content or "").strip():
-        parts.append(
-            "HELD RESERVE — Valentina's earlier words you are still holding. Deliver the next "
-            "relevant pieces (voiced), or give a short natural reply of your own; keep holding "
-            "whatever you don't send:\n" + source_content.strip()
+            "WRITTEN BUT NEVER SENT — everything Valentina has written this session that "
+            "the client has NOT seen, oldest first. This is yours to choose from, all of "
+            "it, any part of it. Nothing here has reached her:\n" + source_content.strip()
         )
     else:
         parts.append(
-            "(No held reserve and no new reading — the client just reacted or said something "
+            "(Nothing unsent from Valentina — the client just reacted or said something "
             "small. Give a short, natural reply of your own. Do NOT invent any reading substance.)"
         )
-    parts.append(
-        f"GUIDELINE: send only your strongest slice now — about {turn_target} SHORT messages — and "
-        "hold the majority of the reading in reserve. Lead with what lands, then stop and let her "
-        "respond. Erring toward less is right; the rest is for later turns."
-    )
+    if waited_seconds is not None:
+        parts.append(
+            f"SHE HAS BEEN WAITING {int(waited_seconds)} SECONDS since her message arrived. "
+            "Let that inform how much you send: a long wait has earned something substantial, "
+            "a short one has not. How many messages you send, and how long each is, is your "
+            "judgment alone."
+        )
     return "\n\n".join(parts)
 
 
@@ -143,88 +150,12 @@ def run_sabri(sabri_input: str, *, model=None, max_tokens=None) -> str:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Deterministic message-length chunker (landingpage2's approach) — a CODE backstop so
-# no single delivery message can run 50-100+ words, regardless of what Sabri's prompt asked
-# for. Split each of Sabri's messages (a paragraph) on sentence boundaries, greedily group
-# sentences up to max_words, and NEVER merge across a paragraph break. A single sentence that
-# alone exceeds max_words is split on clause punctuation, then hard word-count as a last resort,
-# so the cap is guaranteed. The proportional typing math (1200ms/word, no cap) is untouched —
-# this bounds LENGTH, not speed.
+# There is deliberately NO message-length chunker any more. The old backstop re-split
+# every message to at most SABRI_MAX_MESSAGE_WORDS words, which meant a code constant —
+# not Sabri — decided what a message was. A real person sends a one-word reaction and
+# then a long paragraph; both are now his to choose. Message boundaries come from the
+# blank lines in his own output (parse_sabri_output), and nothing bounds their length.
 # ═════════════════════════════════════════════════════════════════════════════
-_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
-# Lookbehind → clause punctuation is PRESERVED on split. Dashes are deliberately NOT split points
-# (a spaced dash split used to be consumed/dropped); a dash survives as its own atom in the
-# last-resort split below.
-_CLAUSE_BOUNDARY = re.compile(r"(?<=[,;:])\s+")
-_ATOM_RE = None
-
-
-def _atomize(text: str):
-    """Tokenize into words, but keep a known MULTI-WORD term (e.g. 'the Knight of Cups',
-    'wheel of fortune') as ONE unsplittable token — so the last-resort word grouping can never
-    break a card name across two messages. Built lazily (the term vocab is defined below)."""
-    global _ATOM_RE
-    if _ATOM_RE is None:
-        multi = sorted((t for t in _KNOWN_TERMS if " " in t), key=len, reverse=True)
-        _ATOM_RE = re.compile("|".join(re.escape(t) for t in multi) + r"|\S+", re.IGNORECASE)
-    return [m.group(0) for m in _ATOM_RE.finditer(text)]
-
-
-def _greedy_group(units, max_words: int):
-    """Pack units (sentences/clauses/atoms) into ≤max_words groups, in order, without splitting a
-    unit. A unit longer than max_words is emitted alone (callers pre-split so this doesn't happen)."""
-    groups, cur, cw = [], [], 0
-    for u in units:
-        w = len(u.split())
-        if cur and cw + w > max_words:
-            groups.append(" ".join(cur))
-            cur, cw = [], 0
-        cur.append(u)
-        cw += w
-    if cur:
-        groups.append(" ".join(cur))
-    return groups
-
-
-def _split_long_sentence(sentence: str, max_words: int):
-    """A single sentence longer than max_words: split on clause punctuation (,;:), then — as a last
-    resort for a clause that is still too long — group ATOMS (words, with multi-word card names kept
-    whole). No piece exceeds max_words and no card name is ever split across two messages."""
-    clauses = [c.strip() for c in _CLAUSE_BOUNDARY.split(sentence) if c.strip()]
-    out = []
-    for grp in _greedy_group(clauses, max_words):
-        if len(grp.split()) <= max_words:
-            out.append(grp)
-        else:  # a single clause still too long → atom-aware grouping (never splits a card name)
-            out.extend(_greedy_group(_atomize(grp), max_words))
-    return out
-
-
-def chunk_message(text: str, max_words: int):
-    """Split ONE message (a paragraph) into ≤max_words delivery messages on sentence boundaries.
-    Internal whitespace is normalized (a message is one line). Pure."""
-    text = " ".join((text or "").split())
-    if not text:
-        return []
-    sentences = [s.strip() for s in _SENTENCE_BOUNDARY.split(text) if s.strip()]
-    units = []
-    for s in sentences:
-        if len(s.split()) <= max_words:
-            units.append(s)
-        else:
-            units.extend(_split_long_sentence(s, max_words))
-    return _greedy_group(units, max_words)
-
-
-def chunk_bubbles(bubbles, max_words: int):
-    """Re-chunk each of Sabri's messages to ≤max_words, flattened, NEVER merging across a
-    message/paragraph boundary. Pure."""
-    out = []
-    for b in bubbles:
-        out.extend(chunk_message(b, max_words) or ([b] if b.strip() else []))
-    return out
-
-
 def parse_sabri_output(text: str):
     """Split Sabri's raw output into (bubbles, reserve).
 
@@ -246,18 +177,23 @@ def parse_sabri_output(text: str):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Deterministic fact-preservation check — Sabri may MOVE a fact to reserve but never
-# DROP or ALTER one. Compares Valentina's facts against (bubbles + reserve) combined:
-# a number/card/sign/planet present in the source must survive somewhere. MULTISET
-# (Counter) comparison, so a fact that appears N times in the source but fewer times in
-# the delivery is still flagged — e.g. "life path 5" reworded to "life path five" while a
-# separate "5 years older" survives is caught (source has two 5s, delivery one). Catches
-# both drops and the common word-for-digit / renamed-card alterations. The runtime
-# guardrail checks NUMBERS + KNOWN TERMS (cards/signs/planets) — the reliable, load-bearing
-# facts. Protected literals are also shielded before the model call and restored afterward.
-# Any missing token or fact rejects that attempt; bounded retries then use a source-preserving
-# deterministic fallback. Person names may be supplied explicitly and are also conservatively
-# detected from capitalisation in Valentina's source.
+# Deterministic fact check — INVENTION, not omission.
+#
+# This used to check the opposite thing. Sabri was handed three sentences and ordered to
+# deliver all of them, so every number and card in his source was expected to come back,
+# and anything missing meant he had dropped or reworded a fact. Now he is handed the whole
+# unsent reading and chooses a slice of it, so most source facts are SUPPOSED to be absent
+# from what he sends — the old multiset check would fail on every single turn.
+#
+# The danger that remains, and the one that always mattered more, is the other direction: a
+# number, card, sign or planet appearing in what the client reads that Valentina never wrote.
+# So the check now runs the other way round. Every fact in his BUBBLES must be traceable to
+# something he was allowed to see — Valentina's unsent writing, the client's own words, or
+# the conversation already on screen. Anything else is fabricated and rejects the attempt.
+#
+# Also carried over as a special case: the word-for-digit rewrite ("life path 5" -> "life
+# path five"), which the old multiset check caught by accident and which no longer shows up
+# as an invented digit because it contains no digit at all.
 # ═════════════════════════════════════════════════════════════════════════════
 def _tarot_card_terms():
     major = [
@@ -387,44 +323,31 @@ def _protected_spans(source: str, *, names=()):
     return sorted(chosen)
 
 
-def shield_protected_literals(sabri_input: str, source_content: str, *, names=()):
-    """Replace protected source spans with unique opaque tokens only inside the source block."""
+def protected_literals(source_content: str, *, names=()):
+    """Every credibility-critical literal in Valentina's writing, in canonical spelling.
+
+    Sabri's source used to be handed to him with each of these replaced by an opaque
+    [[KEEP_0001]] token, which guaranteed byte-exactness for anything he passed through.
+    That guarantee cost more than it bought once he started receiving the whole reading
+    instead of three sentences: he cannot judge which beat lands when the cards, names and
+    dates he is choosing between have been blanked out, and judging is now his entire job.
+    His prompt also requires every token to be copied into a message OR the reserve, which
+    would have made him re-emit the full unsent corpus verbatim on every turn — minutes of
+    output tokens by the middle of a long session.
+
+    So the literals are no longer hidden from him. They are collected here and enforced
+    afterwards instead: canonical spelling is restored on anything he repeats, and anything
+    he states that is NOT in this list (or in what she has said) is treated as invented."""
     source = (source_content or "").strip()
-    if not source:
-        return sabri_input, {}
-    source_start = (sabri_input or "").rfind(source)
-    if source_start < 0:
-        return sabri_input, {}
-    mapping = {}
-    pieces, cursor = [], 0
-    for index, (start, end) in enumerate(_protected_spans(source, names=names), start=1):
-        token = f"[[KEEP_{index:04d}]]"
-        pieces.extend((source[cursor:start], token))
-        mapping[token] = source[start:end]
-        cursor = end
-    pieces.append(source[cursor:])
-    shielded_source = "".join(pieces)
-    return (
-        sabri_input[:source_start] + shielded_source + sabri_input[source_start + len(source):],
-        mapping,
-    )
+    literals = {source[start:end] for start, end in _protected_spans(source, names=names)}
+    literals.update(str(name) for name in names or () if str(name).strip())
+    return {literal for literal in literals if literal.strip()}
 
 
-def _restore_protected_literals(text: str, mapping) -> str:
-    restored = text or ""
-    for token, literal in mapping.items():
-        restored = restored.replace(token, literal)
-    return restored
-
-
-def _canonicalize_protected_literals(text: str, mapping, *, source_content: str = "", names=()):
-    """Restore canonical spelling/capitalisation if Sabri independently repeats a protected fact."""
-    canonical = set(mapping.values())
-    canonical.update(str(name) for name in names or () if str(name).strip())
-    for match in _auto_name_matches(source_content or ""):
-        canonical.add(match.group(0))
+def _canonicalize_protected_literals(text: str, *, source_content: str = "", names=()):
+    """Restore canonical spelling/capitalisation wherever Sabri repeats a protected fact."""
     result = text or ""
-    for literal in sorted(canonical, key=len, reverse=True):
+    for literal in sorted(protected_literals(source_content, names=names), key=len, reverse=True):
         result = re.sub(
             r"(?<!\w)" + re.escape(literal) + r"(?!\w)",
             lambda _match, exact=literal: exact,
@@ -432,10 +355,6 @@ def _canonicalize_protected_literals(text: str, mapping, *, source_content: str 
             flags=re.IGNORECASE,
         )
     return result
-
-
-def _tokens_preserved_once(text: str, mapping) -> bool:
-    return all((text or "").count(token) == 1 for token in mapping)
 
 
 def sanitize_delivery_text(text: str) -> str:
@@ -451,36 +370,19 @@ def sanitize_delivery_text(text: str) -> str:
     return " ".join(cleaned.split()).strip()
 
 
-def _source_preserving_fallback(source_content: str, max_words: int):
-    """Deliver one source sentence safely and retain the exact remainder when Sabri drifts."""
+def _source_preserving_fallback(source_content: str):
+    """Deliver one exact source sentence when every Sabri attempt fails.
+
+    The rest of the source is NOT consumed or returned: the reserve is owned by the caller
+    now and nothing is removed from it by sending, so a fallback turn costs the session
+    nothing. One true sentence in Valentina's own words beats a generic holding line."""
     source = (source_content or "").strip()
     if not source:
-        return [], ""
+        return []
     match = re.search(r"[.!?…](?:\s+|$)", source)
     cut = match.end() if match else len(source)
     first = sanitize_delivery_text(source[:cut].strip())
-    reserve = source[cut:].strip()
-    return chunk_message(first, max_words), reserve
-
-
-def _next_delivery_slice(source_content: str, sentence_limit: int = 3):
-    """Take the next small, ordered source slice and retain the exact remainder in code.
-
-    Sabri only has to rewrite the slice.  The model is never responsible for copying a long
-    reserve verbatim, which keeps protected-literal enforcement reliable on full readings.
-    """
-    source = (source_content or "").strip()
-    if not source:
-        return "", ""
-    matches = list(re.finditer(r"[.!?…](?:\s+|$)", source))
-    if len(matches) < sentence_limit:
-        return source, ""
-    cut = matches[sentence_limit - 1].end()
-    return source[:cut].strip(), source[cut:].strip()
-
-
-def _append_reserve(model_reserve: str, held_reserve: str) -> str:
-    return "\n\n".join(part for part in (model_reserve.strip(), held_reserve.strip()) if part)
+    return [first] if first else []
 
 
 def _number_counts(text: str) -> Counter:
@@ -497,35 +399,56 @@ def _term_counts(text: str) -> Counter:
     return c
 
 
-def missing_facts(source: str, delivered: str, *, names=()):
-    """Facts in ``source`` (Valentina) absent from ``delivered`` (bubbles + reserve combined).
-    Returns {"numbers": [...], "terms": [...], "names": [...]} — empty lists mean nothing was
-    dropped or altered. MULTISET comparison (Counter difference): a fact present more often in
-    the source than the delivery is flagged, so an altered occurrence isn't masked by an
-    unrelated survivor of the same digit/term. ``names`` (optional, advisory) are person-names
-    to also verify — see the module note; production passes none. Pure."""
-    low_delivered = (delivered or "").lower()
-    num_missing = _number_counts(source) - _number_counts(delivered)
-    term_missing = _term_counts(source) - _term_counts(delivered)
+# A spelled-out number immediately after the two phrases whose digits carry the most
+# credibility. "life path 5" arriving as "life path five" contains no digit at all, so the
+# invented-number check cannot see it; this names the failure directly.
+_NUMBER_WORDS = (
+    "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty[- ]two|"
+    "thirty[- ]three"
+)
+_SPELLED_OUT_VALUE = re.compile(
+    rf"\b(life\s+path|personal\s+year)\s+({_NUMBER_WORDS})\b", re.IGNORECASE
+)
+
+
+def invented_facts(allowed: str, delivered: str):
+    """Facts in ``delivered`` (what the client will actually read) with no basis in ``allowed``.
+
+    ``allowed`` is everything Sabri was legitimately working from: Valentina's unsent writing,
+    the client's own latest message, and the conversation already on her screen. A number,
+    card, sign or planet in his bubbles that appears nowhere in that text was made up by him,
+    and a made-up fact is the one failure this reading cannot survive.
+
+    Returns {"numbers": [...], "terms": [...], "rewrites": [...]} — all empty means clean. Pure."""
+    allowed_numbers = set(_number_counts(allowed))
+    allowed_terms = set(_term_counts(allowed))
+    delivered_terms = set(_term_counts(delivered))
+    rewrites = [
+        match.group(0)
+        for match in _SPELLED_OUT_VALUE.finditer(delivered or "")
+        if not re.search(
+            r"\b" + match.group(1).replace(" ", r"\s+") + r"\s+\d+\b",
+            delivered or "",
+            re.IGNORECASE,
+        )
+    ]
     return {
-        "numbers": sorted(num_missing.elements(), key=lambda x: (len(x), x)),
-        "terms": sorted(term_missing.elements()),
-        "names": sorted(
-            n for n in names
-            if re.search(r"\b" + re.escape(n.lower()) + r"\b", (source or "").lower())
-            and not re.search(r"\b" + re.escape(n.lower()) + r"\b", low_delivered)
+        "numbers": sorted(
+            set(_number_counts(delivered)) - allowed_numbers, key=lambda x: (len(x), x)
         ),
+        "terms": sorted(delivered_terms - allowed_terms),
+        "rewrites": sorted(rewrites),
     }
 
 
-def has_missing_facts(missing) -> bool:
-    return bool(missing["numbers"] or missing["terms"] or missing["names"])
+def has_invented_facts(invented) -> bool:
+    return bool(invented["numbers"] or invented["terms"] or invented["rewrites"])
 
 
-def _audit_sabri_attempt(chat_id, turn_number, attempt, raw, dropped, miss, *, delivered):
+def _audit_sabri_attempt(chat_id, turn_number, attempt, raw, dropped, invented, *, delivered):
     """Append one two_role sabri_delivery audit row for this attempt (the raw Sabri output +
-    advisory notes: any dropped return-acks and fact-drift vs Valentina's draft). Never
-    affects the turn — errors swallowed; only logs when a chat_id context was threaded in."""
+    advisory notes: any dropped return-acks and any fabricated fact). Never affects the
+    turn — errors swallowed; only logs when a chat_id context was threaded in."""
     if chat_id is None:
         return
     try:
@@ -536,8 +459,8 @@ def _audit_sabri_attempt(chat_id, turn_number, attempt, raw, dropped, miss, *, d
         notes = {}
         if dropped:
             notes["dropped_return_acks"] = dropped
-        if miss and has_missing_facts(miss):
-            notes["fact_drift"] = miss
+        if invented and has_invented_facts(invented):
+            notes["invented_facts"] = invented
         get_draft_log().log(
             chat_id=chat_id, turn_number=turn_number, attempt_number=attempt,
             engine="two_role", stage="sabri_delivery", raw_content=raw,
@@ -551,6 +474,7 @@ def sabri_deliver(
     sabri_input: str,
     *,
     source_content: str = "",
+    already_seen: str = "",
     names=(),
     sabri_call=None,
     max_attempts: int = None,
@@ -558,91 +482,66 @@ def sabri_deliver(
     chat_id=None,
     turn_number: int = 0,
 ):
-    """Run one Sabri turn end-to-end → (bubbles, reserve).
+    """Run one Sabri turn end-to-end → the messages to send, in order.
 
-    take the next source slice → shield protected literals → call → validate/restore
-    literals → parse → strip return-acks →
-    remove deterministic AI tells → validate facts → chunk. Missing literals, fact drift, or an
-    empty turn receives a bounded retry. If all attempts fail and source exists, one exact source
-    sentence is delivered and the untouched remainder is retained; otherwise the normal non-empty
-    fallback line is used. ``sabri_call(input) -> raw text`` is injectable for tests."""
+    call → canonicalise any protected fact he repeated → parse → strip return-acks →
+    remove deterministic AI tells → reject fabricated facts. A fabricated fact or an empty
+    turn gets a bounded retry; if every attempt fails, one exact sentence of Valentina's own
+    writing goes out instead, and only if there is none does the generic line.
+
+    What he chose to HOLD is no longer read back out of his reply. The reserve belongs to the
+    caller and accumulates there; his @@RESERVE@@ block is still parsed off so held prose can
+    never leak to the client, and is then discarded. ``already_seen`` is the conversation the
+    client is looking at — passed in only so a fact she was told earlier does not read as
+    invented. ``sabri_call(input) -> raw text`` is injectable for tests."""
     from app.services.ai.reading_pipeline import is_return_acknowledgment
 
     s = get_app_settings()
     attempts = max_attempts or s.SABRI_DELIVERY_MAX_ATTEMPTS
     call = sabri_call or run_sabri
-    delivery_source, held_reserve = _next_delivery_slice(source_content)
-    active_input = sabri_input
-    full_source = (source_content or "").strip()
-    if held_reserve and full_source:
-        source_start = active_input.rfind(full_source)
-        if source_start >= 0:
-            active_input = (
-                active_input[:source_start]
-                + delivery_source
-                + active_input[source_start + len(full_source):]
-                + "\n\nSYSTEM DELIVERY BOUNDARY: Rewrite every part of the source slice above now. "
-                  "Do not output @@RESERVE@@; the untouched remainder is retained by code."
-            )
-    shielded_input, protected = shield_protected_literals(
-        active_input, delivery_source, names=names
-    )
+    source = (source_content or "").strip()
+    # Everything he is allowed to state a fact from: Valentina's unsent writing, plus what is
+    # already on the client's screen (her own words included, so quoting her back is not
+    # "invention"). Anything outside this he made up.
+    allowed = "\n".join(part for part in (source, already_seen or "") if part)
 
     for attempt in range(1, attempts + 1):
         try:
-            raw = call(shielded_input)
+            raw = call(sabri_input)
         except Exception as e:  # noqa: BLE001 — a Sabri failure must never crash the chat
             logger.warning("sabri_call_failed", attempt=attempt, error=str(e))
             continue
-        if protected and not _tokens_preserved_once(raw, protected):
-            missing_tokens = [token for token in protected if (raw or "").count(token) != 1]
-            miss = {"numbers": [], "terms": missing_tokens, "names": []}
-            logger.warning("sabri_protected_literal_drift", attempt=attempt, count=len(missing_tokens))
-            _audit_sabri_attempt(
-                chat_id, turn_number, attempt, raw, [], miss, delivered=False
-            )
-            continue
-        restored_raw = _canonicalize_protected_literals(
-            _restore_protected_literals(raw, protected),
-            protected,
-            source_content=source_content,
-            names=names,
+        canonical_raw = _canonicalize_protected_literals(
+            raw, source_content=source, names=names
         )
-        bubbles, reserve = parse_sabri_output(restored_raw)
-        # Strip return-acks on the UN-chunked messages FIRST — a multi-word ack phrase ("since we
-        # last spoke") must be matched whole, before the length backstop could split it across a
-        # chunk boundary and slip it past the filter. THEN enforce the per-message length cap.
+        bubbles, _held = parse_sabri_output(canonical_raw)
+        # Strip return-acks on the whole message, so a multi-word ack phrase ("since we last
+        # spoke") is matched as one piece rather than across a boundary.
         dropped = [b for b in bubbles if is_return_acknowledgment(b)]
         bubbles = [b for b in bubbles if not is_return_acknowledgment(b)]
         bubbles = [cleaned for b in bubbles if (cleaned := sanitize_delivery_text(b))]
-        bubbles = chunk_bubbles(bubbles, s.SABRI_MAX_MESSAGE_WORDS)
         if dropped:
             logger.warning("sabri_dropped_return_acks", count=len(dropped), dropped=dropped)
-        miss = (
-            missing_facts(delivery_source, " ".join(bubbles) + " " + reserve, names=names)
-            if (bubbles and delivery_source) else None
-        )
-        if miss and has_missing_facts(miss):
-            logger.warning("sabri_fact_drift", attempt=attempt, **miss)
+        invented = invented_facts(allowed, " ".join(bubbles)) if bubbles else None
+        if invented and has_invented_facts(invented):
+            logger.warning("sabri_invented_fact", attempt=attempt, **invented)
             _audit_sabri_attempt(
-                chat_id, turn_number, attempt, restored_raw, dropped, miss, delivered=False
+                chat_id, turn_number, attempt, canonical_raw, dropped, invented, delivered=False
             )
             continue
         _audit_sabri_attempt(
-            chat_id, turn_number, attempt, restored_raw, dropped, miss, delivered=bool(bubbles)
+            chat_id, turn_number, attempt, canonical_raw, dropped, invented,
+            delivered=bool(bubbles),
         )
         if bubbles:
-            reserve = _append_reserve(reserve, held_reserve)
-            logger.info("sabri_turn_ready", bubbles=len(bubbles), reserve_chars=len(reserve),
-                        attempt=attempt)
-            return bubbles, reserve
+            logger.info("sabri_turn_ready", bubbles=len(bubbles),
+                        words=sum(len(b.split()) for b in bubbles), attempt=attempt)
+            return bubbles
         logger.warning("sabri_turn_empty_retrying", attempt=attempt)
 
-    source_bubbles, source_reserve = _source_preserving_fallback(
-        delivery_source, s.SABRI_MAX_MESSAGE_WORDS
-    )
+    source_bubbles = _source_preserving_fallback(source)
     if source_bubbles:
         logger.warning("sabri_turn_source_preserving_fallback")
-        return source_bubbles, _append_reserve(source_reserve, held_reserve)
+        return source_bubbles
     logger.warning("sabri_turn_fallback")
-    return [fallback_message], ""
+    return [fallback_message]

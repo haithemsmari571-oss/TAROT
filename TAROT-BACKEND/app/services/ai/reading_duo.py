@@ -127,6 +127,33 @@ def _transcript_excluding(state, trigger_entry):
     return [e for e in state.chat_transcript if e is not trigger_entry]
 
 
+def _session_memory(state, trigger_entry) -> str:
+    """The capsule, rendered without the message currently being answered.
+
+    The trigger is passed separately as CLIENT MESSAGE, and having it appear twice made both
+    roles treat it as something said twice."""
+    import copy
+
+    from app.services.ai import reading_capsule
+
+    view = copy.copy(state)
+    view.chat_transcript = _transcript_excluding(state, trigger_entry)
+    return reading_capsule.format_capsule(view)
+
+
+def accumulate_reserve(previous: str, new_writing: str) -> str:
+    """Add this turn's writing to everything Valentina has written and not yet had delivered.
+
+    It used to be an assignment, not an addition, so every fresh reading threw away whatever
+    was still unsaid from the last one — around ninety percent of every reading, generated,
+    paid for and deleted. Oldest first so Sabri reads the session in the order she wrote it.
+    Nothing is ever removed by sending: he does not repeat himself because the capsule shows
+    him exactly what the client has already read."""
+    return "\n\n".join(
+        part for part in ((previous or "").strip(), (new_writing or "").strip()) if part
+    )
+
+
 async def _write_valentina_turn(
     chat_id, message, trigger_entry, state, user_id, psychic_id=None
 ) -> str:
@@ -161,13 +188,13 @@ async def _write_valentina_turn(
     now = datetime.now()
     valentina_input = reading_valentina.build_valentina_input(
         client_message=message,
-        chat_transcript=_transcript_excluding(state, trigger_entry),
+        session_memory=_session_memory(state, trigger_entry),
         client_file=client_file,
         session_metadata=compute_metadata(state, now),
         date_of_birth=dob,
         current_year=now.year,
         steering_notes=steering_notes,
-        commitment_ledger=state.commitment_ledger,
+        unsent_writing=state.reserve or "",
     )
     if atlas_memory_text:
         valentina_input = (
@@ -192,39 +219,46 @@ async def _write_valentina_turn(
     return text
 
 
-async def _sabri_turn(chat_id, message, trigger_entry, state, source_content, is_new):
-    """Sabri delivers: build his input (fresh reading OR held reserve + the conversation) and run
-    him → (bubbles, reserve). His output is return-ack-stripped and fact-checked in sabri_deliver."""
-    from app.config import get_app_settings
+async def _sabri_turn(chat_id, message, trigger_entry, state, source_content, waited_seconds=None):
+    """Sabri delivers: build his input (everything unsent + the capsule) and run him → bubbles.
+
+    He is handed ALL of Valentina's undelivered writing and chooses from it. He no longer
+    reports what he held: nothing is consumed by sending, so there is nothing to report."""
     from app.services.ai import reading_sabri
 
-    s = get_app_settings()
+    already_seen = _session_memory(state, trigger_entry)
     sabri_input = reading_sabri.build_sabri_input(
         client_message=message,
-        chat_transcript=_transcript_excluding(state, trigger_entry),
+        session_memory=already_seen,
         source_content=source_content,
-        is_new=is_new,
-        turn_target=s.SABRI_TURN_TARGET_MESSAGES,
+        waited_seconds=waited_seconds,
     )
-    bubbles, reserve = await asyncio.to_thread(
+    bubbles = await asyncio.to_thread(
         reading_sabri.sabri_deliver, sabri_input, source_content=source_content,
-        chat_id=chat_id, turn_number=state.messages_sent_count,
+        already_seen=already_seen, chat_id=chat_id, turn_number=state.messages_sent_count,
     )
     logger.info("duo_sabri_delivered", chat_id=chat_id, bubbles=len(bubbles),
-                reserve_chars=len(reserve), is_new=is_new)
-    return bubbles, reserve
+                words=sum(len(b.split()) for b in bubbles),
+                unsent_chars=len((source_content or "").strip()),
+                waited_seconds=waited_seconds)
+    return bubbles
 
 
 async def _duo_generate(
-    chat_id, message, trigger_entry, state, user_id, forced_route=None, *, psychic_id=None
+    chat_id, message, trigger_entry, state, user_id, forced_route=None, *, psychic_id=None,
+    waited_seconds=None,
 ):
     """Route → (Valentina if NEW) → Sabri. Returns (bubbles, reserve, route). Nothing reaches the
     client here. bubbles is the paced-reveal payload (ALWAYS non-empty — Sabri guarantees a
     fallback line, and a failed Valentina write yields one too, so the client never sees dead
-    silence); reserve is what Sabri is still holding. ``forced_route`` overrides the routing
-    entirely and is now only used by tests — the guard it used to provide (never re-classify a
-    queued message, in case a non-deterministic flip answered a new topic from stale reserve) is
-    what the reserve router does directly, by reading the held material before choosing it."""
+    silence).
+
+    ``reserve`` is now everything Valentina has written this session that has not been
+    delivered, ACCUMULATED — this turn's writing added to what was already unsaid, rather than
+    replacing it. It is returned so the caller can bank it; it is never reduced here, because
+    sending something does not consume it.
+
+    ``forced_route`` overrides the routing entirely and is now only used by tests."""
     from app.services.ai.reading_llm import FALLBACK_MESSAGE
 
     held = (state.reserve or "") if state is not None else ""
@@ -234,6 +268,7 @@ async def _duo_generate(
                 why=("forced" if forced_route is not None
                      else _LAST_ROUTE_REASON.get("why", "unknown")),
                 held_head=held.strip()[:120])
+    reserve = held
     if route == "new":
         valentina_text = (
             await _write_valentina_turn(
@@ -245,17 +280,15 @@ async def _duo_generate(
             )
         )
         if not valentina_text.strip():
-            # Valentina failed — deliver a fallback line and KEEP any prior reserve (don't wipe).
+            # Valentina failed — deliver a fallback line and KEEP everything already unsaid.
             logger.warning("duo_valentina_empty_fallback", chat_id=chat_id)
-            return [FALLBACK_MESSAGE], state.reserve or "", route
-        bubbles, reserve = await _sabri_turn(
-            chat_id, message, trigger_entry, state, valentina_text, is_new=True
-        )
-    else:  # continue — no fresh Valentina; Sabri works from the held reserve (may be empty)
-        bubbles, reserve = await _sabri_turn(
-            chat_id, message, trigger_entry, state, state.reserve or "", is_new=False
-        )
-    logger.info("duo_generated", chat_id=chat_id, route=route, bubbles=len(bubbles))
+            return [FALLBACK_MESSAGE], held, route
+        reserve = accumulate_reserve(held, valentina_text)
+    bubbles = await _sabri_turn(
+        chat_id, message, trigger_entry, state, reserve, waited_seconds=waited_seconds
+    )
+    logger.info("duo_generated", chat_id=chat_id, route=route, bubbles=len(bubbles),
+                reserve_chars=len(reserve.strip()))
     return bubbles, reserve, route
 
 
@@ -314,11 +347,14 @@ async def _chat_active(chat_id) -> bool:
 # ═════════════════════════════════════════════════════════════════════════════
 def _reading_pause_s() -> float:
     """Seconds to hold the typing indicator HIDDEN when a message first arrives — a brief
-    'reading the message' beat before the dots turn on. Reads DUO_READING_PAUSE_MS; monkeypatched
-    to 0 in tests so the turn loop never really sleeps."""
+    'reading the message' beat before the dots turn on.
+
+    This coordinator is not on the live path any more (the burst coordinator calls
+    _duo_generate directly and this turn loop never runs), so this is the base read pause
+    only. The real, length-aware read pause lives in reading_burst.read_pause_ms."""
     from app.config import get_app_settings
 
-    return get_app_settings().DUO_READING_PAUSE_MS / 1000.0
+    return get_app_settings().READ_PAUSE_BASE_MS / 1000.0
 
 
 def _clear_task(chat_id, task) -> None:
@@ -405,16 +441,12 @@ async def _turn_loop(chat_id, message, trigger_entry, psychic_id, user_id) -> No
                 psychic_id=psychic_id,
             )
             await _reveal_turn_duo(chat_id, bubbles, psychic_id, state)  # dots stay on into msg 1
-            # Reserve persistence: on NEW, replace (fresh content — even empty is a legit full
-            # delivery). On CONTINUE, shrink to what Sabri re-held; but if he released nothing
-            # (a glue reply / fallback with no @@RESERVE@@), KEEP the prior reserve rather than
-            # letting an un-echoed turn silently wipe all the banked content.
-            # TODO(phase-3 follow-up, deliberately NOT fixed here): the NEW-route replace
-            # also DISCARDS any prior undelivered reserve — Valentina content the client
-            # never saw vanishes silently. Known issue, separate task; do not widen this
-            # round's blast radius.
-            if route == "new" or reserve.strip():
-                state.reserve = reserve
+            # Reserve persistence, with the old TODO resolved: _duo_generate now returns
+            # everything Valentina has written and not had delivered, ACCUMULATED. The reserve
+            # is only ever added to, so there is no longer any case where writing the result
+            # can lose content the client never saw, and no guard is needed to guess whether an
+            # empty result meant "drained" or "he just said mm yeah".
+            state.reserve = reserve
             store.put(state)
             async with _lock(chat_id):
                 nxt = _pending.pop(chat_id, None)

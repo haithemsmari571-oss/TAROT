@@ -876,21 +876,17 @@ class SessionManager:
                     "The session ended because the connection was lost. You can start a new reading anytime.",
                 )
 
-            # Process the committed, idempotent Atlas job off the reading path.
-            # Model or network failures retry once and never affect this end flow.
+            # The Atlas job is committed but NOT run here any more. It is queued with a
+            # settle delay (see ATLAS_MEMORY_SETTLE_MINUTES) and the periodic sweep, which
+            # runs every sixty seconds, picks it up once that has passed and once the client
+            # is not sitting in another reading with the same reader. Running it inline at
+            # session end is exactly what let a client's finished reading be summarised out
+            # from under her while she was already back in the next one.
             if atlas_memory_job_id is not None:
-                try:
-                    from app.services.atlas_client_memory_jobs import (
-                        schedule_atlas_client_memory_job,
-                    )
-
-                    schedule_atlas_client_memory_job(atlas_memory_job_id)
-                except Exception as atlas_e:  # noqa: BLE001
-                    logger.warning(
-                        "atlas_client_memory_schedule_failed",
-                        chat_session_id=atlas_memory_job_id,
-                        error_type=type(atlas_e).__name__,
-                    )
+                logger.info(
+                    "atlas_client_memory_queued_after_settle",
+                    chat_session_id=atlas_memory_job_id,
+                )
 
         except Exception as e:
             logger.error(

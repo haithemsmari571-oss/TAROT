@@ -128,38 +128,37 @@ She's smarter, more honest, and has lived more than you. She's paying for an exp
 def build_valentina_input(
     *,
     client_message: str,
-    chat_transcript,
+    session_memory: str,
     client_file,
     session_metadata,
     date_of_birth=None,
     current_year=None,
     steering_notes=None,
-    commitment_ledger=None,
+    unsent_writing=None,
 ) -> str:
-    """Assemble the single user-content payload for one Valentina turn: recent transcript,
-    the client's message, the dossier (loaded silently), session metadata, and the injected
-    deterministic numerology. No held-back buffer — holding is Sabri's job now. Pure.
+    """Assemble the single user-content payload for one Valentina turn: the session capsule,
+    her own still-unsent writing, the client's message, the dossier (loaded silently), session
+    metadata, and the injected deterministic numerology. Pure.
 
-    ``steering_notes`` (operator guidance, HYBRID mode only — the caller passes [] in
-    Automatic, so the block is OMITTED there, not rendered empty) and
-    ``commitment_ledger`` (cards/timing already delivered this session) are Phase-3
-    memory: both blocks disappear entirely when there is nothing to say."""
+    ``session_memory`` is the capsule (reading_capsule.format_capsule) and REPLACES the old
+    twenty-entry transcript window — the window is why she forgot the first two hours of a
+    three-hour reading. ``unsent_writing`` is everything she has written that Sabri has not
+    delivered yet: she was previously blind to it and would rewrite the same perception in
+    different words every turn. ``steering_notes`` is operator guidance, HYBRID only (the
+    caller passes [] in Automatic, so the block is OMITTED there, not rendered empty)."""
     import json
 
-    from app.services.ai.reading_ledger import format_ledger_block
     from app.services.ai.reading_steering import format_guidance_block
 
     parts = []
-    tx = chat_transcript or []
-    if tx:
-        lines = [
-            f"{'client' if m.get('role') == 'client' else 'you'}: {m.get('content', '')}"
-            for m in tx[-_TRANSCRIPT_LIMIT:]
-        ]
-        parts.append("RECENT CONVERSATION:\n" + "\n".join(lines))
-    ledger_block = format_ledger_block(commitment_ledger)
-    if ledger_block:
-        parts.append(ledger_block)
+    if (session_memory or "").strip():
+        parts.append(session_memory.strip())
+    if (unsent_writing or "").strip():
+        parts.append(
+            "YOUR OWN WRITING NOT YET DELIVERED (you wrote this earlier in this reading and "
+            "Sabri has not sent it to her yet — she has NOT read it). Do not write it again in "
+            "other words, and do not contradict it. Build past it:\n" + unsent_writing.strip()
+        )
     guidance_block = format_guidance_block(steering_notes or [])
     if guidance_block:
         parts.append(guidance_block)
@@ -171,6 +170,18 @@ def build_valentina_input(
     if numerology:
         parts.append(numerology)
     parts.append("SESSION METADATA:\n" + json.dumps(session_metadata or {}, ensure_ascii=False))
+    # Two guards, here in the input rather than in her prompt, because they exist to protect
+    # her from the volume of history she is now handed and nothing about her craft changed.
+    parts.append(
+        "TWO THINGS ABOUT EVERYTHING ABOVE. First: it is memory, not material. It is there so "
+        "you do not repeat or contradict yourself. Never recap it, summarise it, or hand any of "
+        "it back to her as though it were a new perception — she lived it. Answer what she has "
+        "just said, now, and go past what is already there.\n"
+        "Second: the conversation you can see is written in short lowercase texting voice. That "
+        "is your own writing after Sabri rewrote it for the chat window. It is not how you "
+        "write. Write as you always do: complete, natural prose, full sentences, your own "
+        "voice. Do not imitate the texting register you are reading."
+    )
     return "\n\n".join(parts)
 
 

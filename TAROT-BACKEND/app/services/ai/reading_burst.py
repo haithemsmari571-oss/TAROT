@@ -57,12 +57,77 @@ def _mark_message_arrival(chat_session_id: Optional[int]) -> None:
 
 
 _first_word_tasks: Dict[int, "asyncio.Task"] = {}
+_presence_tasks: Dict[int, "asyncio.Task"] = {}
+
+
+# ---------------------------------------------------------------------------
+# The client clock. Entirely visual: none of it gates when generation runs, which
+# is still the six-second burst guard and nothing else.
+# ---------------------------------------------------------------------------
+def read_pause_ms(text: str) -> int:
+    """How long a reader spends reading the message before she starts to type.
+
+    A fixed beat was wrong in both directions: instant for a twenty-line letter, and a
+    needless wait after "ok". It scales with what she actually wrote, and it is capped,
+    because nobody reads for more than about fifteen seconds before saying anything.
+    Nothing is visible during this pause — no dots, no line."""
+    from app.config import get_app_settings
+
+    settings = get_app_settings()
+    words = len((text or "").split())
+    return min(
+        settings.READ_PAUSE_MAX_MS,
+        settings.READ_PAUSE_BASE_MS + words * settings.READ_PAUSE_PER_WORD_MS,
+    )
+
+
+async def _hold_typing_presence(chat_id: int, chat_session_id: int, delay_seconds: float) -> None:
+    """Turn the typing indicator on after the silence ceiling and leave it on.
+
+    The old coordinator held the dots from the moment a message arrived, through generation,
+    into the reveal. That coordinator is dead code and the burst engine never replaced the
+    behaviour, so a client sat through 45 to 65 seconds of complete silence in the middle of
+    a reading she was paying for by the minute. This restores it.
+
+    Deliberately a separate fire-and-forget task with no database access of any kind: it must
+    never be able to touch the generation coroutine, which is the rule this file has already
+    paid for breaking once. The indicator is cleared by delivery itself (or by the failure
+    path in _execute_claim); the long backstop below only covers a process that dies mid-turn."""
+    from app.config import get_app_settings
+    from app.services.ai import reading_executor
+
+    try:
+        await asyncio.sleep(max(0.0, delay_seconds))
+        with_psychic = _psychic_id_for_presence.get(chat_session_id)
+        await reading_executor.broadcast_typing(chat_id, True, with_psychic)
+        logger.info("reading_typing_presence_on", chat_id=chat_id,
+                    chat_session_id=chat_session_id, after_seconds=round(delay_seconds, 2))
+        await asyncio.sleep(get_app_settings().TYPING_PRESENCE_MAX_MS / 1000.0)
+        # Nothing delivered in four minutes: something died. Do not leave her watching dots.
+        await reading_executor.broadcast_typing(chat_id, False, with_psychic)
+        logger.warning("reading_typing_presence_expired", chat_id=chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:  # noqa: BLE001 — a typing hiccup must never touch a reading
+        logger.warning("reading_typing_presence_failed", chat_id=chat_id,
+                       error_type=type(error).__name__)
+
+
+_psychic_id_for_presence: Dict[int, Optional[int]] = {}
+
+
+def _stop_typing_presence(chat_session_id: Optional[int]) -> None:
+    """Delivery has taken over the indicator (or the turn is over) — stand the watchdog down."""
+    task = _presence_tasks.pop(chat_session_id, None)
+    if task is not None and not task.done():
+        task.cancel()
 
 
 def _start_first_word(
-    chat_id: int, chat_session_id: Optional[int], arrived_at: float, message_id: Optional[int] = None
+    chat_id: int, chat_session_id: Optional[int], arrived_at: float, message_id: Optional[int] = None,
+    client_text: str = "", psychic_id: Optional[int] = None,
 ) -> None:
-    """Let the reader react while Valentina reads.
+    """Let the reader react while Valentina reads, and keep the screen alive after that.
 
     Fire and forget, deliberately: nothing here is awaited, so the burst window
     and the generation loop are untouched by it. The task owns its own deadline
@@ -71,11 +136,16 @@ def _start_first_word(
     """
     if chat_session_id is None:
         return
+    from app.config import get_app_settings
     from app.services.ai import reading_first_word
 
+    pause_seconds = read_pause_ms(client_text) / 1000.0
     try:
         task = asyncio.create_task(
-            reading_first_word.speak_now(chat_id, chat_session_id, arrived_at, message_id)
+            reading_first_word.speak_now(
+                chat_id, chat_session_id, arrived_at, message_id,
+                read_pause_seconds=pause_seconds,
+            )
         )
     except RuntimeError:
         # No running loop (synchronous caller): the reading is unaffected.
@@ -89,6 +159,23 @@ def _start_first_word(
             finished.exception()
 
     task.add_done_callback(_done)
+
+    # The silence ceiling: from the end of the read pause the client has at most this long
+    # before something is on screen. Sabri's line normally lands first and switches the dots
+    # on itself; this is what covers the turn where it is slow, or refused, or fails.
+    _psychic_id_for_presence[chat_session_id] = psychic_id
+    _stop_typing_presence(chat_session_id)
+    ceiling = get_app_settings().SILENCE_CEILING_MS / 1000.0
+    elapsed = max(0.0, time.perf_counter() - arrived_at)
+    presence = asyncio.create_task(
+        _hold_typing_presence(
+            chat_id, chat_session_id, max(0.0, pause_seconds + ceiling - elapsed)
+        )
+    )
+    _presence_tasks[chat_session_id] = presence
+    presence.add_done_callback(
+        lambda done: done.cancelled() or done.exception()
+    )
 
 
 def _elapsed_ms_since_arrival(chat_session_id: Optional[int], clear: bool = False) -> Optional[int]:
@@ -319,9 +406,16 @@ def _discard_pending_hybrid_drafts(db, chat_id: int) -> None:
 
 
 async def note_client_message(
-    chat_id: int, chat_session_id: Optional[int], message_id: int
+    chat_id: int,
+    chat_session_id: Optional[int],
+    message_id: int,
+    content: str = "",
+    psychic_id: Optional[int] = None,
 ) -> None:
-    """Open/reset a burst after the canonical Message row has committed."""
+    """Open/reset a burst after the canonical Message row has committed.
+
+    ``content`` sizes the read pause (a long message takes longer to read) and ``psychic_id``
+    addresses the typing indicator. Both are optional so an older caller still works."""
     if chat_session_id is None:
         return
     from app.database.client import SessionLocal
@@ -368,9 +462,13 @@ async def note_client_message(
         chat_session_id=chat_session_id,
         message_id=message_id,
         first_of_turn=first_of_turn,
+        read_pause_ms=read_pause_ms(content) if first_of_turn else None,
     )
     if first_of_turn:
-        _start_first_word(chat_id, chat_session_id, arrived_at, message_id)
+        _start_first_word(
+            chat_id, chat_session_id, arrived_at, message_id,
+            client_text=content, psychic_id=psychic_id,
+        )
     _wake(chat_session_id)
 
 
@@ -1337,6 +1435,9 @@ async def _deliver_auto_plan(claim: _Claim, state=None, store=None) -> bool:
         chat_id=claim.chat_id,
     )
     config = reading_executor.proportional_reveal_config_from_settings()
+    # Real delivery has started: the presence watchdog's job is done and it must not be left
+    # holding the indicator on behind the reveal's own on/off.
+    _stop_typing_presence(claim.chat_session_id)
     try:
         for position in range(claim.delivery_position, len(bubbles)):
             if position > claim.delivery_position:
@@ -1375,12 +1476,12 @@ async def _deliver_auto_plan(claim: _Claim, state=None, store=None) -> bool:
                 )
             record_sent_message(state, bubbles[position])
             record_commitments(state, bubbles[position])
-            if finished:
-                if claim.response_route == "new" or claim.response_reserve.strip():
-                    state.reserve = claim.response_reserve
-                store.put(state)
-            else:
-                store.put(state)
+            # The reserve was already banked, in full, before this delivery started. There is
+            # nothing to decide here any more: the old guard existed to tell a drained reserve
+            # apart from a glue reply that echoed nothing, could not, and so re-delivered the
+            # tail of a reserve forever. Nothing is consumed by sending, so nothing is written
+            # back on the way out.
+            store.put(state)
             await reading_executor.broadcast_typing(
                 claim.chat_id, False, claim.psychic_id
             )
@@ -1389,7 +1490,14 @@ async def _deliver_auto_plan(claim: _Claim, state=None, store=None) -> bool:
             chat_id=claim.chat_id,
             messages=len(claim.contents),
             bubbles=len(bubbles),
+            words=sum(len(b.split()) for b in bubbles),
         )
+        # BETWEEN turns, with delivery finished and the client now reading: fold the capsule
+        # if it has grown past its size trigger. Fired, never awaited, and deliberately here
+        # rather than anywhere upstream — it must never run during generation.
+        from app.services.ai import reading_capsule
+
+        reading_capsule.schedule_fold(claim.chat_id)
         return True
     finally:
         try:
@@ -1404,6 +1512,7 @@ async def _generate_auto(claim: _Claim) -> None:
     from app.services.ai import reading_duo
 
     store, state, turn, trigger = _working_state(claim)
+    waited_seconds = (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
     generation_started = time.perf_counter()
     bubbles, reserve, route = await reading_duo._duo_generate(
         claim.chat_id,
@@ -1412,6 +1521,7 @@ async def _generate_auto(claim: _Claim) -> None:
         state,
         claim.client_id,
         psychic_id=claim.psychic_id,
+        waited_seconds=waited_seconds,
     )
     # Both model calls, Valentina then Sabri, live inside that await.
     logger.info(
@@ -1422,23 +1532,31 @@ async def _generate_auto(claim: _Claim) -> None:
         waiting_ms=_elapsed_ms_since_arrival(claim.chat_session_id),
         route=route,
         bubbles=len(bubbles or []),
+        words=sum(len(b.split()) for b in (bubbles or [])),
     )
-    if not bubbles:
-        raise RuntimeError("Sabri returned no delivery bubbles")
-    if not _store_auto_plan(claim, bubbles, reserve, route):
-        return
-    # Bank what Sabri is holding the moment it exists, not when the last bubble
-    # lands. Reserve used to be written only on a finished delivery, and a
-    # follow-up typed while bubbles were still revealing cut the delivery short —
-    # so the reserve was dropped precisely in the case it was needed for, and the
-    # next turn routed against an empty hold. Measured: Sabri held 4,453
-    # characters while the router was told there were none.
+    # BANK FIRST, THEN CHECK WHETHER THIS TURN IS STILL WANTED.
     #
-    # Same guard as the delivery-side write: a CONTINUE that released nothing
-    # must not wipe a good hold.
-    if route == "new" or (reserve or "").strip():
-        state.reserve = reserve
+    # These two statements used to be the other way round, and that order destroyed a whole
+    # Opus reading every time the client typed while it was generating: her message bumped
+    # the generation version, _store_auto_plan rejected the now-stale claim, and the function
+    # returned one line above the assignment that would have kept the writing. The reading was
+    # finished and paid for at that point. Whether she happened to type during it has nothing
+    # to do with whether Valentina's words are worth keeping — they are the same words, and
+    # the next turn can send them. So the reserve is banked unconditionally, before the claim
+    # is tested, and only DELIVERY depends on the claim still being valid.
+    #
+    # This is a write to memory plus the session store's existing write-through, in the same
+    # place the store write already happened. No new database call is introduced between the
+    # start of generation and the end of delivery.
+    state.reserve = reserve
     store.put(state)
+    if not _store_auto_plan(claim, bubbles, reserve, route):
+        logger.info(
+            "reading_burst_superseded_writing_kept",
+            chat_id=claim.chat_id,
+            reserve_chars=len((reserve or "").strip()),
+        )
+        return
     claim.response_bubbles = bubbles
     claim.response_reserve = reserve
     claim.response_route = route
@@ -1474,6 +1592,18 @@ async def _execute_claim(claim: _Claim) -> None:
         except (asyncio.CancelledError, Exception):
             pass
         _generating.discard(claim.chat_id)
+        if failed:
+            # The turn died. Whatever put the typing indicator on must not leave her
+            # watching a reader who is never going to type anything.
+            _stop_typing_presence(claim.chat_session_id)
+            try:
+                from app.services.ai import reading_executor
+
+                await reading_executor.broadcast_typing(
+                    claim.chat_id, False, claim.psychic_id
+                )
+            except Exception:  # noqa: BLE001
+                pass
         _release_claim(claim, failed=failed)
 
 

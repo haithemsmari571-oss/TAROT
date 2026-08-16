@@ -36,6 +36,10 @@ from app.services.client_code import (
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
+# The migration this up/down test is about: "silo client_situation_records per (client,
+# psychic)". Named rather than reached via "head" — see test_migration_up_down_on_sqlite.
+SILOING_REVISION = "a2b3c4d5e6f7"
+
 
 # ---------------------------------------------------------------------------
 # A0 — client codes
@@ -126,7 +130,7 @@ def test_migration_up_down_on_sqlite(tmp_path):
     import sqlite3
 
     connection = sqlite3.connect(db_path)
-    # Minimal BEFORE-state schema: just what the new migration touches.
+    # Minimal BEFORE-state schema: just what these two migrations touch.
     connection.executescript(
         """
         CREATE TABLE users (
@@ -144,7 +148,15 @@ def test_migration_up_down_on_sqlite(tmp_path):
     env = {**os.environ, "DATABASE_URL": url}
     stamped = _alembic(env, "stamp", "f7a8b9c0d1e2")
     assert stamped.returncode == 0, stamped.stderr
-    upgraded = _alembic(env, "upgrade", "head")
+    # Upgrade to the siloing migration this test is ABOUT, not to head.
+    #
+    # It used to say "head", which meant the minimal fixture above had to contain every
+    # table that any FUTURE migration would ever alter — tables the stamp deliberately
+    # skips creating. It broke the moment an unrelated migration added a column to
+    # ai_prompts, and had been failing on origin/main ever since, so the up/down check it
+    # exists for was not running at all. Bounding it to its own subject makes it a real
+    # test again and stops the next unrelated migration silently killing it.
+    upgraded = _alembic(env, "upgrade", SILOING_REVISION)
     assert upgraded.returncode == 0, upgraded.stderr
 
     connection = sqlite3.connect(db_path)
@@ -155,7 +167,7 @@ def test_migration_up_down_on_sqlite(tmp_path):
     assert len(set(codes)) == 3  # backfill produced unique codes
     connection.close()
 
-    # head now includes the per-psychic siloing migration, so assert its shape.
+    # this target includes the per-psychic siloing migration, so assert its shape.
     connection = sqlite3.connect(db_path)
     situation_columns = {
         row[1] for row in connection.execute("PRAGMA table_info(client_situation_records)")

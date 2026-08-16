@@ -36,6 +36,16 @@ class ReadingSessionStateRow(Base):
     commitment_ledger: Mapped[str] = mapped_column(
         Text, default="[]", server_default="[]", nullable=False
     )
+    # Session capsule — the additive running summary of the part of the conversation that
+    # has scrolled out of the verbatim window, and how far along chat_transcript it has
+    # consumed. Persisted so a restart mid-reading resumes with its memory intact rather
+    # than starting the second hour of a reading knowing only the last twenty messages.
+    capsule_narrative: Mapped[str] = mapped_column(
+        Text, default="", server_default="", nullable=False
+    )
+    capsule_folded_upto: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     waiting_for_response: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     session_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

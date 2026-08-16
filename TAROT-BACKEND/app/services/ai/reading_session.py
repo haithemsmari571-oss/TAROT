@@ -48,6 +48,14 @@ class ReadingSessionState:
     # by reading_ledger.record_commitments, re-injected into Valentina's next
     # turn so early-session commitments outlive the transcript window.
     commitment_ledger: List[dict] = field(default_factory=list)
+    # ── Session capsule (services/ai/reading_capsule.py) ────────────────────
+    # The running summary of the part of the conversation that has scrolled out of the
+    # verbatim window, and how far along chat_transcript it has consumed. Additive only:
+    # capsule_narrative is only ever appended to, never rewritten, and capsule_folded_upto
+    # only ever moves forward. Both persist, so a restart mid-reading does not amnesia the
+    # first two hours of it.
+    capsule_narrative: str = ""
+    capsule_folded_upto: int = 0
     # True while delivery is parked at a wait_for_response barrier — a reconnect
     # must NOT cross it; only a new client message (which re-plans) may.
     waiting_for_response: bool = False
@@ -88,6 +96,15 @@ def record_client_message(
     state.client_response_lengths.append(len(content or ""))
     state.client_response_times.append(max(0.0, latency))
     state.last_activity_at = now
+    # A name, a date of birth or a sign SHE gives is as load-bearing as one the reader
+    # names, and must survive into the capsule's facts block. Pure regex over the string —
+    # no database, no IO — so this is safe on the inbound path.
+    try:
+        from app.services.ai.reading_ledger import record_client_facts
+
+        record_client_facts(state, content)
+    except Exception:  # noqa: BLE001 — memory upkeep must never reject a client message
+        logger.warning("client_fact_record_failed", session_id=state.session_id)
 
 
 def record_sent_message(
@@ -172,6 +189,8 @@ def _state_to_row_fields(state: ReadingSessionState) -> dict:
         client_response_times=json.dumps(state.client_response_times or []),
         sabri_correction_count=state.sabri_correction_count,
         commitment_ledger=json.dumps(state.commitment_ledger or []),
+        capsule_narrative=state.capsule_narrative or "",
+        capsule_folded_upto=state.capsule_folded_upto or 0,
         waiting_for_response=state.waiting_for_response,
         session_start=state.session_start,
         last_activity_at=state.last_activity_at,
@@ -208,6 +227,8 @@ def _row_to_state(row) -> ReadingSessionState:
         client_response_times=json.loads(row.client_response_times or "[]"),
         sabri_correction_count=row.sabri_correction_count,
         commitment_ledger=json.loads(getattr(row, "commitment_ledger", None) or "[]"),
+        capsule_narrative=getattr(row, "capsule_narrative", None) or "",
+        capsule_folded_upto=int(getattr(row, "capsule_folded_upto", None) or 0),
         waiting_for_response=row.waiting_for_response,
         session_start=_naive_local(row.session_start),
         last_activity_at=_naive_local(row.last_activity_at),

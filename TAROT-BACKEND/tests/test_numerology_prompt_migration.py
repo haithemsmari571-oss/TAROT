@@ -10,6 +10,11 @@ import sys
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
+# The migration under test: "add explicit AI prompt drafts, activation metadata and output
+# contracts". Named rather than reached via "head" — see the note at the upgrade below.
+PROMPT_ACTIVATION_REVISION = "c4e5f6a7b8c9"
+
+
 def _alembic(environment: dict[str, str], *arguments: str):
     return subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
@@ -68,7 +73,11 @@ def test_prompt_activation_migration_preserves_and_versions_existing_text(tmp_pa
     }
     stamped = _alembic(environment, "stamp", "b3c4d5e6f7a8")
     assert stamped.returncode == 0, stamped.stderr
-    upgraded = _alembic(environment, "upgrade", "head")
+    # Bounded to the prompt-activation migration this test is ABOUT, not to head. The
+    # fixture above is a minimal two-table BEFORE state, so upgrading all the way to head
+    # made this test fail on the first later migration to touch any OTHER table — which is
+    # a fact about the fixture, not about the migration under test.
+    upgraded = _alembic(environment, "upgrade", PROMPT_ACTIVATION_REVISION)
     assert upgraded.returncode == 0, upgraded.stderr
 
     connection = sqlite3.connect(database_path)

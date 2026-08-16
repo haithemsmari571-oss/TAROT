@@ -63,7 +63,53 @@ _FUTURE_CUE_RE = re.compile(
     re.I,
 )
 
-MAX_LEDGER_ENTRIES = 40
+# ── The rest of the facts block ──────────────────────────────────────────────
+# The capsule's facts half is built from this same extractor rather than a second one, so
+# there is exactly one definition of "a fact this session established" to keep correct.
+# Cards and timing (above) were always here; the four below are what a psychic reading
+# cannot afford to lose track of over three hours, and what a summariser would blur first.
+_LIFE_PATH_RE = re.compile(r"\b(life\s+path|personal\s+year)\s*:?\s*(\d{1,2})\b", re.I)
+_ZODIAC_RE = re.compile(
+    r"\b(aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|capricorn|"
+    r"aquarius|pisces)\b",
+    re.I,
+)
+_DATE_RE = re.compile(
+    rf"\b(?:\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{_MONTHS})(?:\s+\d{{4}})?"
+    rf"|(?:{_MONTHS})\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?"
+    rf"|\d{{1,2}}[/-]\d{{1,2}}[/-]\d{{2,4}})\b",
+    re.I,
+)
+# A capitalised run that is not sentence-initial, i.e. behaves like somebody's name. The
+# same conservative test reading_sabri uses, kept deliberately narrow: a false positive
+# clutters the facts block, which is cheap, where a false negative loses a person's name.
+_NAME_RE = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z]{2,}\b", re.M)
+_NOT_A_NAME = (
+    {
+        "The", "And", "But", "She", "Her", "His", "You", "Your", "They", "Them", "This",
+        "That", "There", "When", "What", "Where", "Why", "How", "Life", "Path", "Personal",
+        "Year", "Card", "Cards", "Tower", "Moon", "Star", "Sun", "World", "Death", "Justice",
+        "Strength", "Temperance", "Judgement", "Judgment", "Ace", "Page", "Knight", "Queen",
+        "King", "Cups", "Wands", "Swords", "Pentacles", "Coins", "Fool", "Magician", "Empress",
+        "Emperor", "Hierophant", "Lovers", "Chariot", "Hermit", "Wheel", "Fortune", "Hanged",
+        "Devil", "Priestess", "High",
+    }
+    # A month or a sign is already captured as a date, a timing window or a sign. Letting it
+    # through here as well would list "Name: March" in the facts block, which is not a person
+    # and reads to the model as though the client mentioned somebody called March.
+    | {month.capitalize() for month in _MONTHS.split("|")}
+    | {season.capitalize() for season in _SEASONS.split("|")}
+    | {
+        "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio",
+        "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+    }
+)
+
+# Raised from 40 with the extractor's scope: this is now the facts half of the session
+# capsule, holding names, dates, signs and numbers as well as cards and timing, over a
+# reading that can run three hours. It is still a hard cap — the block must stay small
+# enough to sit in front of every prompt — but 40 would have filled inside twenty minutes.
+MAX_LEDGER_ENTRIES = 160
 
 
 def _card_value(match: re.Match, text: str) -> str:
@@ -80,7 +126,12 @@ def _card_value(match: re.Match, text: str) -> str:
 
 
 def extract_commitments(text: str) -> List[dict]:
-    """All card/timing commitments found in one delivered text, in order."""
+    """Every fact one piece of text establishes, in order.
+
+    Cards and timing windows are what this always caught. Life path / personal year values,
+    zodiac signs, dates and people's names are the rest of what the session capsule's facts
+    block must hold exactly for three hours, and they are extracted here so there is one
+    extractor to keep right rather than two that drift apart."""
     if not text:
         return []
     found: List[dict] = []
@@ -95,7 +146,40 @@ def extract_commitments(text: str) -> List[dict]:
             if not _FUTURE_CUE_RE.search(context):
                 continue
         found.append({"kind": "timing", "value": phrase[:60]})
+    for m in _LIFE_PATH_RE.finditer(text):
+        label = "life path" if m.group(1).lower().startswith("life") else "personal year"
+        found.append({"kind": "number", "value": f"{label} {m.group(2)}"})
+    for m in _ZODIAC_RE.finditer(text):
+        found.append({"kind": "sign", "value": m.group(1).capitalize()})
+    for m in _DATE_RE.finditer(text):
+        found.append({"kind": "date", "value": m.group(0).strip()[:40]})
+    for word in _names_in(text):
+        found.append({"kind": "name", "value": word})
     return found
+
+
+def _names_in(text: str) -> List[str]:
+    """People's names, using the delivery layer's own proper-name test where available.
+
+    reading_sabri already had to solve this exact problem — telling "Daniel" from a sentence
+    that happens to start with "For" — and solved it better than a capitalisation rule can:
+    a capital earns the right to be treated as a name if it appears somewhere a full stop
+    does not explain, or if the word is never written in lower case anywhere in the text. That
+    is reused rather than reimplemented, so the two cannot drift apart. The local pattern below
+    is the fallback if that import ever goes away."""
+    try:
+        from app.services.ai.reading_sabri import _auto_name_matches
+
+        candidates = [match.group(0) for match in _auto_name_matches(text)]
+    except Exception:  # noqa: BLE001
+        candidates = [match.group(0) for match in _NAME_RE.finditer(text)]
+    out, seen = [], set()
+    for candidate in candidates:
+        for word in candidate.split():
+            if word not in _NOT_A_NAME and word.casefold() not in seen:
+                seen.add(word.casefold())
+                out.append(word)
+    return out
 
 
 def record_commitments(state, delivered_text: str) -> int:
@@ -116,13 +200,23 @@ def record_commitments(state, delivered_text: str) -> int:
         record_situation(getattr(state, "chat_id", None), None, delivered_text)
     except Exception:  # noqa: BLE001
         pass
+    return record_client_facts(state, delivered_text)
+
+
+def record_client_facts(state, text: str) -> int:
+    """Append new facts from any text — reader-delivered OR the client's own message.
+
+    The client naming her ex, or giving a date of birth, establishes a fact the reader must
+    still have in three hours' time just as firmly as a card the reader named. Same ledger,
+    same dedupe, and deliberately free of the Atlas situation-memory hook above, so it is
+    safe to call on the inbound path: pure regex over a string, no database, no IO."""
     try:
         existing = {
             (e.get("kind"), str(e.get("value", "")).casefold())
             for e in (state.commitment_ledger or [])
         }
         added = 0
-        for entry in extract_commitments(delivered_text):
+        for entry in extract_commitments(text):
             key = (entry["kind"], entry["value"].casefold())
             if key in existing or len(state.commitment_ledger) >= MAX_LEDGER_ENTRIES:
                 continue
@@ -140,8 +234,12 @@ def format_ledger_block(ledger: Optional[List[dict]]) -> str:
     callers must omit the block entirely on ""."""
     if not ledger:
         return ""
+    labels = {
+        "card": "Card", "timing": "Timing", "number": "Number",
+        "sign": "Sign", "date": "Date", "name": "Name",
+    }
     lines = [
-        f"- {'Card' if e.get('kind') == 'card' else 'Timing'}: {e.get('value')}"
+        f"- {labels.get(e.get('kind'), 'Fact')}: {e.get('value')}"
         for e in ledger
     ]
     return (

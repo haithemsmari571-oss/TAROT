@@ -1352,6 +1352,25 @@ async def join_chat_endpoint(
             from app.services.ai import reading_first_word
 
             reading_first_word.greet_now(chat_id, info.chat_session_id)
+
+            # She has come back. Any earlier reading with this reader that is still waiting
+            # to be folded into her long-term memory gets pushed out of the way, so the
+            # memory this reading reads from is not being rewritten while she is in it.
+            try:
+                from app.database.client import SessionLocal
+                from app.services.atlas_client_memory_jobs import (
+                    defer_atlas_memory_for_client,
+                )
+
+                with SessionLocal() as memory_db:
+                    joined_chat = memory_db.query(Chat).filter(Chat.id == chat_id).first()
+                    if joined_chat is not None and joined_chat.psychic_id is not None:
+                        defer_atlas_memory_for_client(
+                            memory_db, joined_chat.user_id, joined_chat.psychic_id
+                        )
+                        memory_db.commit()
+            except Exception:  # noqa: BLE001 — a join must never fail on memory upkeep
+                logger.warning("atlas_memory_defer_failed", chat_id=chat_id)
         return JSONResponse(
             content={
                 "chat_id": info.chat_id,

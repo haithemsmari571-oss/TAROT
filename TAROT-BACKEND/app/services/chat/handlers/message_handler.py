@@ -267,7 +267,11 @@ class MessageHandler(BaseEventHandler):
 
                 if sender_is_paying_client:
                     await reading_burst.note_client_message(
-                        self.chat_id, db_message.chat_session_id, db_message.id
+                        self.chat_id,
+                        db_message.chat_session_id,
+                        db_message.id,
+                        content=content,
+                        psychic_id=chat.psychic_id,
                     )
                 elif user.id != chat.user_id:
                     answered = await reading_burst.note_reader_message(

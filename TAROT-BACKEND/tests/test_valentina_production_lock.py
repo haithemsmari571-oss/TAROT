@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 12 files."""
+"""Verification of the eleven Production Lock Version 13 files."""
 
 from __future__ import annotations
 
@@ -9,7 +9,31 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
-    # Production Lock Version 12: Version 11 plus the routing decision reason.
+    # Production Lock Version 13: Sabri is given the whole reading and his own judgment back.
+    #
+    # FOUR of the eleven files moved; the other seven are byte-identical. NEITHER PROMPT
+    # CONSTANT CHANGED — VALENTINA_SYSTEM_PROMPT and SABRI_SYSTEM_PROMPT are byte-for-byte
+    # what Version 12 shipped, and were verified as such before this was re-cut. Prompt
+    # wording is the owner's and is handled separately; everything below is code.
+    #
+    #   reading_sabri.py       he receives every unsent word Valentina has written instead
+    #                          of the first three sentences, and chooses. The sentence
+    #                          slicer, the 26-word message chunker and the [[KEEP_]]
+    #                          shielding are gone, and the fact check now runs the other way
+    #                          round: it rejects a fact he INVENTED rather than one he chose
+    #                          to hold, because holding is now the whole point.
+    #   reading_duo.py         the reserve accumulates instead of being replaced, so a
+    #                          second reading no longer deletes what the first never said.
+    #                          Valentina is given the session capsule and her own unsent
+    #                          writing, plus two guards against recapping it or drifting
+    #                          into the texting voice she is now reading.
+    #   reading_valentina.py   her input takes the capsule in place of the twenty-entry
+    #                          transcript window, and her still-unsent writing.
+    #   config.py              SABRI_TURN_TARGET_MESSAGES and SABRI_MAX_MESSAGE_WORDS
+    #                          deleted (turn size and message length are his judgment now);
+    #                          typing speed to 60wpm; the read pause and silence ceiling.
+    #
+    # Version 12: Version 11 plus the routing decision reason.
     #
     # Version 11 shipped, and its own log could not say WHY a turn routed the way
     # it did — a reaction, a missing hold and a router verdict all printed the
@@ -33,12 +57,12 @@ LOCKED_SHA256 = {
     #                     That is how "sitting with you For weeks" reached clients.
     #
     # Versions 1-11 stay preserved in Second Brain.
-    "app/config.py": "B760A1DB9ACE63180B1733215A10F63EC92F8CBCC306ADDAF693FC3CA147ADC1",
+    "app/config.py": "D0A674E777C0FD77F1751C17C414EEB47F01AF2D0A9CD17167795FCC25DFDA82",
     "app/services/ai/client.py": "35E42B59265880441751DE0F53A7637A032B51D60A1D9B64A12AAD20865658CB",
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
-    "app/services/ai/reading_duo.py": "79A75F6211C68FF2A62F54418A173E55870CDBFBB71D403E433FBA05ADA3BC12",
-    "app/services/ai/reading_valentina.py": "0CEC02B404AC5842BAEBA68FA97DEA4A0EBDE60FB63994CBAE700FD397B1D2F1",
-    "app/services/ai/reading_sabri.py": "8D5ABED8363102EFCD6D6BBB983CAB76A4A4A102B8AB4D9534DB88C140D9D134",
+    "app/services/ai/reading_duo.py": "1E680AABF2143070930BC7D1CA98DD81EA461FB9628628A67C76948369CC791B",
+    "app/services/ai/reading_valentina.py": "D55907A74DE8C4A377F4D89A8D414EE2A3F7974F1D877D047920581A2F05AB01",
+    "app/services/ai/reading_sabri.py": "BEA755D1465FB2F417D99AB7825FF019570ED99219BD2CAE058F53094E43BEC9",
     "app/services/ai/reading_reveal.py": "F90FBD4FB3A24A3D043E138AEFE17FB54EBCB760C413D4A462D52F39337DC885",
     "app/services/ai/reading_reader.py": "C06D47F6E15D0846BB47F35FB077B9EAB44BAE83ABE703C9C0BCE91192D60A53",
     "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",

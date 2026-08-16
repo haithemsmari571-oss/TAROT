@@ -71,12 +71,13 @@ def test_reader_logs_every_attempt_delivered_on_the_returned_one(monkeypatch):
 
 
 # ── two_role: reading_sabri.sabri_deliver -> sabri_delivery ──────────────────
-def test_sabri_delivery_logged_with_fact_drift_notes(monkeypatch):
+def test_sabri_delivery_logged_with_invented_fact_notes(monkeypatch):
     factory = _install_test_log(monkeypatch)
-    # Valentina's draft carries "life path 7"; Sabri's delivery omits the 7 -> fact-drift note.
-    bubbles, reserve = reading_sabri.sabri_deliver(
-        "SABRI INPUT", source_content="he is a pisces with a life path 7",
-        sabri_call=lambda _i: "he loves you\n\ngive it two weeks",
+    # Valentina never wrote a life path 7; Sabri says it anyway. Holding a fact back is fine
+    # now — making one up is not — so the attempt is rejected and the fabrication recorded.
+    bubbles = reading_sabri.sabri_deliver(
+        "SABRI INPUT", source_content="he is a pisces and the fear is old",
+        sabri_call=lambda _i: "he loves you\n\nhes a life path 7 babe",
         max_attempts=1, chat_id=77, turn_number=4,
     )
     rows = _rows(factory, 77)
@@ -85,9 +86,9 @@ def test_sabri_delivery_logged_with_fact_drift_notes(monkeypatch):
     assert r.engine == "two_role" and r.stage == "sabri_delivery"
     assert r.turn_number == 4 and r.attempt_number == 1 and r.is_delivered is False
     assert "he loves you" in r.raw_content
-    assert "7" in json.loads(r.notes)["fact_drift"]["numbers"]  # Sabri dropped Valentina's life path 7
-    assert bubbles == ["he is a pisces with a life path 7"]
-    assert reserve == ""
+    assert "7" in json.loads(r.notes)["invented_facts"]["numbers"]
+    # ...and she gets one true sentence of Valentina's own instead of the fabrication
+    assert bubbles == ["he is a pisces and the fear is old"]
 
 
 # ── two_role: reading_duo._write_valentina_turn -> valentina_draft ───────────

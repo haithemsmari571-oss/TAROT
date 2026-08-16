@@ -180,34 +180,37 @@ class AppSettings(BaseSettings):
     SABRI_DELIVERY_MAX_TOKENS: int = 8000
     # Bounded retry if Sabri returns empty/malformed output (never spin, always deliver).
     SABRI_DELIVERY_MAX_ATTEMPTS: int = 2
-    # Guideline for how many SHORT messages constitute one natural conversational turn before
-    # Sabri pauses for a response (soft — he reads the moment, not a hard cutoff). Deliberately
-    # low: Sabri curates the strongest slice and holds the MAJORITY of Valentina's reading in
-    # reserve, so a turn is a few sharp beats then a pause, not most of the reading. Drives the
-    # total reveal time down (reveal = words sent × per-word ms).
-    SABRI_TURN_TARGET_MESSAGES: int = 8
-    # DETERMINISTIC message-length backstop (landingpage2's approach). Prompt instructions to
-    # "keep messages short" are unreliable without a code-side guarantee, so after Sabri
-    # generates, each of his messages is re-chunked to at most this many words: split on
-    # sentence boundaries, group sentences up to the cap, never merge across a paragraph break.
-    # Prevents a single 50-100+ word message (one ran 127s at 1200ms/word) — the proportional
-    # typing-speed math is unchanged; this only bounds individual message length.
-    SABRI_MAX_MESSAGE_WORDS: int = 26
+    # There is deliberately NO turn-size target and NO message-length cap. Both existed
+    # (SABRI_TURN_TARGET_MESSAGES = 8, SABRI_MAX_MESSAGE_WORDS = 26) and both decided, in code,
+    # something only Sabri can judge: how much a person says in one breath. A conversation
+    # cannot be run by a constant — sometimes she came to listen for fifteen minutes, sometimes
+    # she wants one line and a question — so how many messages and how long each one is now
+    # comes from him, every turn, informed by how long the client has been waiting.
     # ── Two-role proportional reveal pacing ──────────────────────────────────────
-    # Sabri's chunked messages reveal at real human typing speed: DUO_PER_WORD_MS per word,
-    # scaling DIRECTLY + PROPORTIONALLY with each message's length — NO upper cap (a short
-    # reaction reads fast, a longer message genuinely takes longer). Sabri deliberately
-    # fragments into short texts, so proportional-with-no-cap stays sane. A tiny floor
+    # Sabri's messages reveal at real human typing speed: DUO_PER_WORD_MS per word, scaling
+    # DIRECTLY + PROPORTIONALLY with each message's length, with NO upper cap. An eighty-word
+    # paragraph genuinely takes eighty seconds to type, and that is what a person looks like;
+    # the cap that used to hide this was the 26-word message chunker, now gone. A tiny floor
     # avoids a zero-length wait; a small gap sits between consecutive messages.
-    # 857ms/word ≈ 70 words/min (60000/70).
-    DUO_PER_WORD_MS: int = 857
+    # 1000ms/word = 60 words/min.
+    DUO_PER_WORD_MS: int = 1000
     DUO_MIN_TYPING_MS: int = 300
     DUO_BETWEEN_BUBBLES_MS: int = 500
-    # A brief "reading the message" beat the moment a client message arrives: the typing indicator
-    # is HIDDEN for this long BEFORE the dots turn on (a real person reads a message before they
-    # start typing). After it, the dots stay on continuously through generation and the reveal —
-    # this is the ONLY intentional silence; there is no dead air during the actual thinking/typing.
-    DUO_READING_PAUSE_MS: int = 2000
+    # ── The client clock (visual only — none of this gates when generation runs) ──
+    # THE READ PAUSE. A real reader reads the message before she starts typing, and it takes
+    # her longer when the client wrote more. Nothing at all is visible during this pause: no
+    # dots, no line. Only after it does the reader react.
+    READ_PAUSE_BASE_MS: int = 1500
+    READ_PAUSE_PER_WORD_MS: int = 200
+    READ_PAUSE_MAX_MS: int = 15000
+    # THE SILENCE CEILING. Once the read pause is over, the client never sees more than this
+    # much nothing. Sabri's immediate line normally lands first and the typing indicator comes
+    # on behind it; if that line is slow or fails, the indicator comes on anyway at this mark
+    # and stays on until real delivery begins.
+    SILENCE_CEILING_MS: int = 5000
+    # Backstop: if generation dies without ever delivering, the indicator cannot be left running
+    # forever. Comfortably longer than the slowest observed generation (~66s).
+    TYPING_PRESENCE_MAX_MS: int = 240000
     # Atlas (dossier auto-summary at session end) — Haiku-tier is plenty.
     ATLAS_SUMMARY_MODEL: str = "claude-haiku-4-5-20251001"
     ATLAS_SUMMARY_MAX_TOKENS: int = 512

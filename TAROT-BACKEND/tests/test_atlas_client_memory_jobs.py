@@ -218,12 +218,18 @@ def test_sweep_recovers_a_failed_summary_after_bounded_backoff(db, make_user):
     assert recovered.next_retry_at is None
 
 
-def test_unprotected_session_end_enqueues_before_commit_and_schedules_after_commit():
+def test_session_end_enqueues_before_commit_and_no_longer_runs_it_inline():
+    """The job is committed at session end, then left alone.
+
+    It used to be dispatched the moment the session ended, so a client who came straight back
+    had the reading she had just finished summarised into her long-term memory while she was
+    already sitting in the next one. The periodic sweep picks it up once the settle delay has
+    passed and she is not mid-reading with the same reader."""
     source = inspect.getsource(SessionManager.end_session)
     enqueue = source.index("enqueue_atlas_client_memory_job")
     commit = source.index("db.commit()", enqueue)
-    schedule = source.index("schedule_atlas_client_memory_job", commit)
-    assert enqueue < commit < schedule
+    assert enqueue < commit
+    assert "schedule_atlas_client_memory_job" not in source
     assert "schedule_memory_merge" not in source
 
 
