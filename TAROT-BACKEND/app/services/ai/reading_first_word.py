@@ -211,7 +211,26 @@ _META_PHRASES = (
     "instruction", "prompt", "the block", "placeholder", "appears to be empty",
     "no message", "nothing there", "system message", "what she just wrote",
     "as an ai", "i'm waiting for what", "im waiting for what",
+    # Two more shapes, both seen reaching a live screen when the context it was handed
+    # did not line up with the message that arrived. The first is stage direction — the
+    # model narrating the delivery decision instead of making it ("she's leaning in and
+    # absorbing. this is a nod. continue from where you were cut off, same register").
+    # The second is the model stepping outside the reading to argue with its own input
+    # ("the conversation history you've pasted doesn't match what you're asking me to do").
+    # Sabri speaks TO her and about her life. He never narrates her, and never discusses
+    # the material he was given.
+    "conversation history", "you've pasted", "youve pasted", "you have pasted",
+    "doesn't match what", "doesnt match what", "same register", "same tempo",
+    "where you were cut off", "continue from where", "this is a nod",
+    "she's leaning in", "shes leaning in", "she wants more", "not a question",
+    "be direct with you:", "what you're asking me to do", "what youre asking me to do",
 )
+# He is talking to her, so the person in front of him is "you". A line that describes her
+# in the third person is a direction ABOUT the client rather than a line FOR her, and it is
+# the shape both live leaks took. Deliberately narrow: it only fires when the line never
+# addresses her at all, so "your sister, she means well" is untouched.
+_SECOND_PERSON = re.compile(r"\b(you|your|u|ur|yours)\b", re.IGNORECASE)
+_THIRD_PERSON_CLIENT = re.compile(r"\b(she|her|she's|shes)\b", re.IGNORECASE)
 
 # Regexes miss what reads as substance without matching a card or a digit.
 _SUBSTANCE_PHRASES = (
@@ -303,6 +322,8 @@ def _reject_reason(candidate: str, previous: List[str]) -> Optional[str]:
     for phrase in _META_PHRASES:
         if phrase in lowered:
             return f"talks about its own prompt ({phrase})"
+    if _THIRD_PERSON_CLIENT.search(text) and not _SECOND_PERSON.search(text):
+        return "narrates the client instead of speaking to her"
 
     try:
         from app.services.ai.reading_pipeline import is_return_acknowledgment
