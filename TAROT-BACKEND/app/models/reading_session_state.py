@@ -46,6 +46,18 @@ class ReadingSessionStateRow(Base):
     capsule_folded_upto: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False
     )
+    # The reading written from her request text before the session opened: where it got to,
+    # when it became ready, and which message she wrote it in. NULL on every chat that
+    # predates the pre-session intake, which the acceptance signal reads as "nothing to
+    # wait for" rather than as "not ready".
+    pre_reading_status: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pre_reading_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    pre_reading_ready_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    pre_reading_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     waiting_for_response: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     session_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

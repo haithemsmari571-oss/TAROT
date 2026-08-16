@@ -119,6 +119,22 @@ async def requset_chat_endpoint(
 
     get_session_manager().register_request(chat_id)
 
+    # Write the reading NOW, in the gap before anyone accepts. She is not in a session and
+    # nothing is billed, so this minute is free — it used to be spent on intake with the
+    # meter running. Fire-and-forget: the request returns immediately, and if the model
+    # call fails the session simply opens empty, exactly as it always did.
+    try:
+        from app.enums.response_mode import ResponseMode
+        from app.services.ai import reading_pre_session
+
+        chat_row = db.query(Chat).filter(Chat.id == chat_id).first()
+        if chat_row is not None and chat_row.response_mode == ResponseMode.SABRI:
+            reading_pre_session.schedule_pre_reading(
+                chat_id, user.id, chat_data.psychic_id, chat_data.message,
+            )
+    except Exception:  # noqa: BLE001 — a request must never fail on the pre-reading
+        logger.warning("pre_reading_schedule_failed", chat_id=chat_id)
+
     # Send notification to psychic about new chat request
     from app.notification_manager import notification_manager
     from app.models.notification import Notification
@@ -1305,6 +1321,38 @@ async def resume_paused_chat(
         )
 
 
+@router.get("/{chat_id}/pre-reading")
+def pre_reading_signal_endpoint(
+    chat_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Is this pending request's reading ready, and may it be accepted yet?
+
+    Read by the Second Brain CRM's auto-accept, which claims requests server-side and used
+    to wait a random five to twenty seconds. It waits on this instead: the reading is
+    written during that gap, and acceptance should land when it is done rather than on a
+    dice roll. Acceptance itself deliberately stays in the CRM — two services racing to
+    claim the same request would be worse than the timer ever was.
+
+    The policy lives here, not there, because the state it depends on lives here. Poll it
+    and accept when ``accept_now`` is true; everything else in the payload is for the
+    cockpit to show and for working out why.
+
+    Authentication is the ordinary bearer token the CRM already mints for itself (admin or
+    superadmin) — no new scheme, no shared secret."""
+    from app.enums.role import Role
+    from app.services.ai import reading_pre_session
+
+    if user.role not in (Role.ADMIN, Role.SUPERADMIN):
+        return JSONResponse(content={"detail": "Unauthorized"}, status_code=403)
+
+    signal = reading_pre_session.acceptance_signal(db, chat_id)
+    if not signal.get("found"):
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    return JSONResponse(content=signal)
+
+
 @router.post("/{chat_id}/join")
 async def join_chat_endpoint(
     chat_id: int,
@@ -1349,9 +1397,19 @@ async def join_chat_endpoint(
             # in her own words, so it varies with who she is talking to. Launched,
             # not awaited: the join response must not wait on a model, and if the
             # greeting fails the client simply speaks first.
-            from app.services.ai import reading_first_word
+            from app.services.ai import reading_first_word, reading_pre_session
 
-            reading_first_word.greet_now(chat_id, info.chat_session_id)
+            # If she wrote her question on the request, the reading is already written and
+            # waiting. Open from THAT instead of saying a generic hello: she gets Sabri's
+            # opening line about what she actually wrote, then the pause, then the dots,
+            # then the reading at normal speed. Only when nothing was banked does the plain
+            # greeting still fire, which is every chat that predates this and every one
+            # where the pre-reading failed.
+            opened = await reading_pre_session.open_first_turn(
+                chat_id, info.chat_session_id, chat.psychic_id if chat else None
+            )
+            if not opened:
+                reading_first_word.greet_now(chat_id, info.chat_session_id)
 
             # She has come back. Any earlier reading with this reader that is still waiting
             # to be folded into her long-term memory gets pushed out of the way, so the

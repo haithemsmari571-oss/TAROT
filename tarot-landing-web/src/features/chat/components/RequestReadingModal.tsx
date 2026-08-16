@@ -91,15 +91,20 @@ export default function RequestReadingModal({
       setError(`You need at least ${formatGbp(perMinute)} for one minute with ${psychicName}.`);
       return;
     }
+    if (!question.trim()) {
+      setError("Tell your reader what's going on before you begin.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setNeedsTopUp(false);
     try {
       await requestChat({
         psychic_id: psychicId,
-        // The field is optional; if she submits blank, send a gentle default so
-        // her first message isn't an empty bubble waiting for the psychic.
-        message: question.trim() || "I'm ready to begin my reading.",
+        // Mandatory now, and never substituted. This text is what the reading is written
+        // from while she waits, and it becomes her first message in the thread — a canned
+        // "I'm ready to begin" would mean a reading written from nothing.
+        message: question.trim(),
       });
       setStep("waiting");
     } catch (err: any) {
@@ -117,6 +122,7 @@ export default function RequestReadingModal({
       setSubmitting(false);
     }
   }, [submitting, psychicId, question, cantAfford, perMinute, psychicName]);
+
 
   return (
     <div
@@ -170,14 +176,14 @@ export default function RequestReadingModal({
               {psychicName}
             </h2>
             <p className="text-sm text-white/55 mt-1 mb-6">
-              Share what's on your heart — or simply begin.
+              She'll read this before you speak.
             </p>
 
             <textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               rows={4}
-              placeholder="What would you like your reading to be about? (optional)"
+              placeholder="Tell me what's going on… whatever's sitting heaviest. Names, birthdays, how long it's been going on — anything you give me, I can see with."
               className="w-full rounded-2xl p-4 text-sm text-white placeholder:text-white/35 resize-none focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
               style={{
                 backgroundColor: `${COLORS.neutralWhite}08`,
@@ -218,7 +224,7 @@ export default function RequestReadingModal({
 
             <button
               onClick={handleSubmit}
-              disabled={submitting || cantAfford}
+              disabled={submitting || cantAfford || !question.trim()}
               className="mt-5 w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest text-white transition-transform hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
                 background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,

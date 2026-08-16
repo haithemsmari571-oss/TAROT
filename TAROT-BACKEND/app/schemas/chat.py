@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.enums.chat_status import ChatStatus
 from app.enums.message_status import MessageStatus
@@ -15,7 +15,18 @@ class ChatBase(BaseModel):
 
 class ChatStart(BaseModel):
     psychic_id: int
+    # Mandatory, and the only thing she is asked for. No minimum length and no shape:
+    # "will he come back" is a complete answer. It is what the reading is written from
+    # while she waits, and it becomes her first message in the thread, so a blank one
+    # would mean an empty reading and an empty bubble.
     message: str
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, v: str) -> str:
+        if not (v or "").strip():
+            raise ValueError("Please tell your reader what is going on before you begin.")
+        return v.strip()
 
 
 class ChatUpdate(BaseModel):

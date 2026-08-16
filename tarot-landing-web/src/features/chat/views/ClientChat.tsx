@@ -1597,7 +1597,7 @@ const ClientChat = () => {
                         <p className="text-base font-bold text-white">Waiting for Psychic</p>
                       </div>
                       <p className="text-sm text-white/60 ml-11">
-                        Your chat request is pending. The psychic will join shortly.
+                        Your chat request is pending. Your reading should begin within 3 minutes.
                       </p>
                     </div>
                   </div>
@@ -1788,7 +1788,7 @@ const ClientChat = () => {
                         <div className="w-2 h-2 rounded-full bg-yellow-400" />
                         <div className="w-2 h-2 rounded-full bg-yellow-400" />
                       </div>
-                      <p className="text-xs text-white/50 ml-2">The psychic will respond shortly</p>
+                      <p className="text-xs text-white/50 ml-2">Usually within 3 minutes</p>
                     </div>
                   </div>
                   <button

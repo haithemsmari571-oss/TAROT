@@ -56,6 +56,14 @@ class ReadingSessionState:
     # first two hours of it.
     capsule_narrative: str = ""
     capsule_folded_upto: int = 0
+    # ── Pre-session reading (services/ai/reading_pre_session.py) ────────────
+    # Valentina writes the reading from her request text while she waits to be accepted,
+    # before any session exists and before anything is billed. These record where that got
+    # to, so the CRM's auto-accept can wait on the reading instead of on a random timer.
+    pre_reading_status: Optional[str] = None
+    pre_reading_requested_at: Optional[datetime] = None
+    pre_reading_ready_at: Optional[datetime] = None
+    pre_reading_message_id: Optional[int] = None
     # True while delivery is parked at a wait_for_response barrier — a reconnect
     # must NOT cross it; only a new client message (which re-plans) may.
     waiting_for_response: bool = False
@@ -191,6 +199,10 @@ def _state_to_row_fields(state: ReadingSessionState) -> dict:
         commitment_ledger=json.dumps(state.commitment_ledger or []),
         capsule_narrative=state.capsule_narrative or "",
         capsule_folded_upto=state.capsule_folded_upto or 0,
+        pre_reading_status=state.pre_reading_status,
+        pre_reading_requested_at=state.pre_reading_requested_at,
+        pre_reading_ready_at=state.pre_reading_ready_at,
+        pre_reading_message_id=state.pre_reading_message_id,
         waiting_for_response=state.waiting_for_response,
         session_start=state.session_start,
         last_activity_at=state.last_activity_at,
@@ -229,6 +241,10 @@ def _row_to_state(row) -> ReadingSessionState:
         commitment_ledger=json.loads(getattr(row, "commitment_ledger", None) or "[]"),
         capsule_narrative=getattr(row, "capsule_narrative", None) or "",
         capsule_folded_upto=int(getattr(row, "capsule_folded_upto", None) or 0),
+        pre_reading_status=getattr(row, "pre_reading_status", None),
+        pre_reading_requested_at=_naive_local(getattr(row, "pre_reading_requested_at", None)),
+        pre_reading_ready_at=_naive_local(getattr(row, "pre_reading_ready_at", None)),
+        pre_reading_message_id=getattr(row, "pre_reading_message_id", None),
         waiting_for_response=row.waiting_for_response,
         session_start=_naive_local(row.session_start),
         last_activity_at=_naive_local(row.last_activity_at),
