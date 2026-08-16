@@ -123,7 +123,7 @@ def test_only_the_opening_is_judged():
     ) is False
 
 
-def test_a_token_opening_after_a_long_wait_is_rejected_and_retried():
+def test_a_token_opening_after_a_long_wait_is_retried_and_the_better_reply_wins():
     calls = {"n": 0}
 
     def flaky(_inp):
@@ -163,3 +163,32 @@ def test_the_live_clock_touches_no_database():
     clock = source[source.index("def _waited_now"):source.index("bubbles, reserve, route")]
     for forbidden in ("SessionLocal", "db.query", "db.commit", "_locked_row", "await"):
         assert forbidden not in clock, forbidden
+
+
+# ── the token rule must never make things worse ──────────────────────────────
+def test_a_short_but_substantial_opening_is_allowed():
+    """Live regression: "you're not imagining it." was rejected twice at a five-word floor,
+    and the fallback then shipped the same sentence in worse form. Four words can carry a
+    reading; a token cannot."""
+    assert S.opens_with_a_token_message(["you're not imagining it."], 49) is False
+    assert S.opens_with_a_token_message(["yeah"], 49) is True
+    assert S.opens_with_a_token_message(["mm yeah"], 49) is True
+
+
+def test_a_token_opening_that_survives_the_retry_is_kept_not_replaced():
+    """The nudge is a nudge. Retrying an identical prompt tends to give an identical reply,
+    and shipping one sentence of raw prose instead is worse than what was rejected."""
+    bubbles = S.sabri_deliver(
+        "x", source_content="You are not imagining it. The whole shape of it is off.",
+        sabri_call=lambda _i: "yeah", max_attempts=2, waited_seconds=90,
+    )
+    assert bubbles == ["yeah"]          # his own words, not the raw-prose fallback
+
+
+def test_a_fabricated_fact_is_still_discarded_outright():
+    """The token rule is soft; invention is not."""
+    bubbles = S.sabri_deliver(
+        "x", source_content="the fear is old", sabri_call=lambda _i: "hes a life path 7",
+        max_attempts=2, waited_seconds=90,
+    )
+    assert "life path 7" not in " ".join(bubbles)

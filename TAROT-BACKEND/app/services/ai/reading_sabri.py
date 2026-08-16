@@ -527,13 +527,17 @@ def has_invented_facts(invented) -> bool:
 # Nothing in the prompt can be relied on to prevent that, so it is a rule here: past this
 # much waiting, a turn may not OPEN with a token message.
 LONG_WAIT_SECONDS = 30
-MIN_OPENING_WORDS_AFTER_A_LONG_WAIT = 5
+# A TOKEN is a content-free acknowledgement — "yeah", "ok", "mm yeah". It is deliberately
+# NOT a word count that catches short-but-substantial openings: this floor was 5, and it
+# threw away "you're not imagining it." twice on a live turn before shipping the same
+# sentence in worse form. Four words can carry the whole reading; one cannot.
+MIN_OPENING_WORDS_AFTER_A_LONG_WAIT = 3
 
 
 def opens_with_a_token_message(bubbles, waited_seconds) -> bool:
-    """True when the first thing she reads is too small for how long she waited for it.
+    """True when the first thing she reads is a token, after a wait that earned more.
 
-    Only the OPENING is judged. A short line later in the turn is rhythm; a short line first,
+    Only the OPENING is judged. A short line later in the turn is rhythm; a token first,
     after a long silence, is the whole turn landing as "yeah"."""
     if not bubbles or waited_seconds is None or waited_seconds < LONG_WAIT_SECONDS:
         return False
@@ -600,6 +604,9 @@ def sabri_deliver(
     # already on the client's screen (her own words included, so quoting her back is not
     # "invention"). Anything outside this he made up.
     allowed = "\n".join(part for part in (source, already_seen or "") if part)
+    # The best attempt that failed ONLY the token-opening nudge. Never a fabricated fact —
+    # that rejection is absolute and its output is discarded.
+    best_rejected = None
 
     for attempt in range(1, attempts + 1):
         try:
@@ -633,6 +640,11 @@ def sabri_deliver(
             _audit_sabri_attempt(
                 chat_id, turn_number, attempt, canonical_raw, dropped, invented, delivered=False
             )
+            # Kept, not discarded. Retrying the same prompt tends to produce the same reply,
+            # and a live turn proved what happens when it does: two rejections, then a single
+            # sentence of raw prose that said the same thing worse than the version thrown
+            # away. This is a nudge to do better, never a reason to send her something worse.
+            best_rejected = best_rejected or bubbles
             continue
         _audit_sabri_attempt(
             chat_id, turn_number, attempt, canonical_raw, dropped, invented,
@@ -644,6 +656,10 @@ def sabri_deliver(
             return bubbles
         logger.warning("sabri_turn_empty_retrying", attempt=attempt)
 
+    if best_rejected:
+        logger.info("sabri_turn_short_opening_kept", bubbles=len(best_rejected),
+                    words=sum(len(b.split()) for b in best_rejected))
+        return best_rejected
     source_bubbles = _source_preserving_fallback(source)
     if source_bubbles:
         logger.warning("sabri_turn_source_preserving_fallback")
