@@ -133,12 +133,34 @@ def test_a_number_the_client_herself_gave_is_not_invented():
 
 
 def test_the_word_for_digit_rewrite_is_still_caught():
-    """"life path 5" arriving as "life path five" contains no digit, so the invented-number
-    check cannot see it. It is named directly instead."""
+    """A value she stated as a DIGIT arriving as a word reads as a psychic who is unsure,
+    and contains no digit for the invented-number check to see."""
     src = "her life path 5 rules her"
     assert S.invented_facts(src, "ur life path five rules u")["rewrites"] == ["life path five"]
     # ...and the correct rendering is not flagged
     assert not S.has_invented_facts(S.invented_facts(src, "ur life path 5 rules u"))
+
+
+def test_prose_spelling_and_chat_spelling_are_the_same_fact():
+    """The first live turn after this check shipped was rejected twice for this.
+
+    Valentina writes prose and wrote "Life Path Seven". Sabri writes chat and wrote
+    "life path 7" — the same fact, correctly carried — and the check called the digit
+    fabricated, burning two Sonnet calls and throwing away the whole reading."""
+    src = "Her Life Path Seven can hold more than she thinks."
+    assert not S.has_invented_facts(S.invented_facts(src, "ur life path 7 can hold this"))
+    # and the other way round: she wrote a digit, he spelled it out in ordinary prose
+    assert not S.has_invented_facts(
+        S.invented_facts("he is 7 years older", "hes seven years older babe")
+    )
+    # a value she never mentioned at all is still caught
+    assert S.invented_facts(src, "ur life path 3 says otherwise")["numbers"] == ["3"]
+
+
+def test_life_path_energy_is_not_treated_as_a_value():
+    assert not S.has_invented_facts(
+        S.invented_facts("her life path 5", "ur life path energy is loud")
+    )
 
 
 def test_has_invented_facts():

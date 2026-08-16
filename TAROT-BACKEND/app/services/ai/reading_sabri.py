@@ -399,16 +399,39 @@ def _term_counts(text: str) -> Counter:
     return c
 
 
-# A spelled-out number immediately after the two phrases whose digits carry the most
-# credibility. "life path 5" arriving as "life path five" contains no digit at all, so the
-# invented-number check cannot see it; this names the failure directly.
-_NUMBER_WORDS = (
-    "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty[- ]two|"
-    "thirty[- ]three"
+# Valentina writes prose, so she writes "Life Path Seven"; Sabri writes chat, so he writes
+# "life path 7". Those are the SAME fact, and the first live turn after this check shipped
+# was rejected twice for exactly that — two Sonnet calls burned and the whole reading thrown
+# away for a fallback line, because "7" appeared nowhere in her text as a digit. A number is
+# matched on its VALUE, in either spelling, in both directions.
+_NUMBER_WORD_VALUES = {
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10", "eleven": "11",
+    "twelve": "12", "thirteen": "13", "fourteen": "14", "fifteen": "15",
+    "sixteen": "16", "seventeen": "17", "eighteen": "18", "nineteen": "19",
+    "twenty": "20", "thirty": "30", "forty": "40", "fifty": "50",
+    "twentytwo": "22", "thirtythree": "33",
+}
+_NUMBER_WORD_RE = re.compile(
+    r"\b(" + "|".join(sorted(_NUMBER_WORD_VALUES, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
 )
+# The one rewrite that still matters: a value she stated as a DIGIT arriving as a word.
+# "life path 5" reaching the client as "life path five" reads as a psychic who is not quite
+# sure, and it contains no digit for the check above to catch.
 _SPELLED_OUT_VALUE = re.compile(
-    rf"\b(life\s+path|personal\s+year)\s+({_NUMBER_WORDS})\b", re.IGNORECASE
+    r"\b(life\s+path|personal\s+year)\s+([a-z]+)\b", re.IGNORECASE
 )
+
+
+def _number_values(text: str) -> set:
+    """Every numeric value in the text, however it happens to be spelled."""
+    values = set(_number_counts(text))
+    lowered = (text or "").lower().replace("-", "").replace(" ", "")
+    for word, digits in _NUMBER_WORD_VALUES.items():
+        if word in lowered:
+            values.add(digits)
+    return values
 
 
 def invented_facts(allowed: str, delivered: str):
@@ -420,18 +443,21 @@ def invented_facts(allowed: str, delivered: str):
     and a made-up fact is the one failure this reading cannot survive.
 
     Returns {"numbers": [...], "terms": [...], "rewrites": [...]} — all empty means clean. Pure."""
-    allowed_numbers = set(_number_counts(allowed))
+    allowed_numbers = _number_values(allowed)
     allowed_terms = set(_term_counts(allowed))
     delivered_terms = set(_term_counts(delivered))
-    rewrites = [
-        match.group(0)
-        for match in _SPELLED_OUT_VALUE.finditer(delivered or "")
-        if not re.search(
-            r"\b" + match.group(1).replace(" ", r"\s+") + r"\s+\d+\b",
-            delivered or "",
-            re.IGNORECASE,
+    rewrites = []
+    for match in _SPELLED_OUT_VALUE.finditer(delivered or ""):
+        word = match.group(2).lower()
+        if word not in _NUMBER_WORD_VALUES:
+            continue                       # "life path energy" — not a value at all
+        label = match.group(1).replace(" ", r"\s+")
+        stated_as_digit = re.search(
+            r"\b" + label + r"\s+" + _NUMBER_WORD_VALUES[word] + r"\b",
+            allowed or "", re.IGNORECASE,
         )
-    ]
+        if stated_as_digit:
+            rewrites.append(match.group(0))
     return {
         "numbers": sorted(
             set(_number_counts(delivered)) - allowed_numbers, key=lambda x: (len(x), x)
