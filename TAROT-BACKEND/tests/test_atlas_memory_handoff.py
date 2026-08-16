@@ -639,3 +639,55 @@ def test_pair_siloing_keeps_account_dob_numerology_shared(monkeypatch):
     assert "Life Path: 11" in model_inputs[0]
     assert "KNOWN NUMEROLOGY" in model_inputs[1]
     assert "Life Path: 11" in model_inputs[1]
+
+
+# ── a failed Atlas fetch must not silence her memory for the whole session ────
+def test_a_failed_atlas_fetch_is_retried_not_cached(monkeypatch):
+    """One timeout in the first minute used to cost three hours of memory.
+
+    The result was cached whether it succeeded or not, and nothing retried, so a client
+    with a rich Atlas document was read as though she had none for the rest of the session."""
+    import asyncio
+
+    from app.services.ai import reading_reveal
+    from app.services.ai.reading_session import create_session_state
+
+    calls = {"n": 0}
+
+    async def flaky(_user_id, _psychic_id=None):
+        calls["n"] += 1
+        return "" if calls["n"] == 1 else "HER ATLAS MEMORY"
+
+    monkeypatch.setattr(reading_reveal, "_fetch_atlas_memory_text", flaky)
+    monkeypatch.setattr(reading_reveal, "_atlas_is_configured", lambda: True)
+    state = create_session_state("chat:atlas", chat_id=1)
+
+    first = asyncio.run(reading_reveal._atlas_memory_for_session(state, 5, 7))
+    assert first == ""
+    assert state.atlas_memory_text is None        # the failure was NOT banked
+
+    second = asyncio.run(reading_reveal._atlas_memory_for_session(state, 5, 7))
+    assert second == "HER ATLAS MEMORY"           # the next turn simply asked again
+    assert calls["n"] == 2
+
+
+def test_a_successful_atlas_fetch_is_cached_for_the_session(monkeypatch):
+    import asyncio
+
+    from app.services.ai import reading_reveal
+    from app.services.ai.reading_session import create_session_state
+
+    calls = {"n": 0}
+
+    async def once(_user_id, _psychic_id=None):
+        calls["n"] += 1
+        return "HER ATLAS MEMORY"
+
+    monkeypatch.setattr(reading_reveal, "_fetch_atlas_memory_text", once)
+    monkeypatch.setattr(reading_reveal, "_atlas_is_configured", lambda: True)
+    state = create_session_state("chat:atlas2", chat_id=2)
+    for _ in range(3):
+        assert asyncio.run(
+            reading_reveal._atlas_memory_for_session(state, 5, 7)
+        ) == "HER ATLAS MEMORY"
+    assert calls["n"] == 1                        # fetched once, reused thereafter

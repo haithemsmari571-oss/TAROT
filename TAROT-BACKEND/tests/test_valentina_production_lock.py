@@ -11,7 +11,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 LOCKED_SHA256 = {
     # Production Lock Version 13: Sabri is given the whole reading and his own judgment back.
     #
-    # FOUR of the eleven files moved; the other seven are byte-identical. NEITHER PROMPT
+    # FIVE of the eleven files moved; the other six are byte-identical. NEITHER PROMPT
     # CONSTANT CHANGED — VALENTINA_SYSTEM_PROMPT and SABRI_SYSTEM_PROMPT are byte-for-byte
     # what Version 12 shipped, and were verified as such before this was re-cut. Prompt
     # wording is the owner's and is handled separately; everything below is code.
@@ -29,6 +29,9 @@ LOCKED_SHA256 = {
     #                          into the texting voice she is now reading.
     #   reading_valentina.py   her input takes the capsule in place of the twenty-entry
     #                          transcript window, and her still-unsent writing.
+    #   reading_reveal.py      a failed Atlas fetch is retried on the next turn instead
+    #                          of being cached exactly like a success, which cost a client
+    #                          three hours of long-term memory for one early timeout.
     #   config.py              SABRI_TURN_TARGET_MESSAGES and SABRI_MAX_MESSAGE_WORDS
     #                          deleted (turn size and message length are his judgment now);
     #                          typing speed to 60wpm; the read pause and silence ceiling.
@@ -63,7 +66,7 @@ LOCKED_SHA256 = {
     "app/services/ai/reading_duo.py": "1E680AABF2143070930BC7D1CA98DD81EA461FB9628628A67C76948369CC791B",
     "app/services/ai/reading_valentina.py": "D55907A74DE8C4A377F4D89A8D414EE2A3F7974F1D877D047920581A2F05AB01",
     "app/services/ai/reading_sabri.py": "ABC78BCE6C4396C05A649B1AAD990EE6615902A8A0430689B052B126B45CC578",
-    "app/services/ai/reading_reveal.py": "F90FBD4FB3A24A3D043E138AEFE17FB54EBCB760C413D4A462D52F39337DC885",
+    "app/services/ai/reading_reveal.py": "422150164423E8DA74058D5A390DD992C06DA8E5792F1310194EFE120F7B8AE2",
     "app/services/ai/reading_reader.py": "C06D47F6E15D0846BB47F35FB077B9EAB44BAE83ABE703C9C0BCE91192D60A53",
     "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",
     "app/services/ai/sabri_check.py": "7DEB9C5B38176A87BB57563BF70A9A58522FE1051E1163B72B8D75A106F10960",

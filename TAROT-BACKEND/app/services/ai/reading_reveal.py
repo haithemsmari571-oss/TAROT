@@ -122,11 +122,33 @@ async def _fetch_atlas_memory_text(user_id, psychic_id=None) -> str:
     return text
 
 
+def _atlas_is_configured() -> bool:
+    settings = get_app_settings()
+    return bool(
+        str(getattr(settings, "ATLAS_DOSSIER_BASE_URL", "") or "").strip()
+        and str(getattr(settings, "ATLAS_INTERNAL_KEY", "") or "").strip()
+    )
+
+
 async def _atlas_memory_for_session(state, user_id, psychic_id=None) -> str:
-    """Return the session's cached Atlas text, including cached empty failures."""
-    if state.atlas_memory_text is None:
-        state.atlas_memory_text = await _fetch_atlas_memory_text(user_id, psychic_id)
-    return state.atlas_memory_text
+    """The session's Atlas memory, fetched once and cached — but only once it SUCCEEDS.
+
+    A failure used to be cached exactly like a success, so a single timeout in the first
+    minute meant the reader spent the next three hours with no long-term memory of this
+    client and no way to recover: nothing retried, and nothing said why. A transient empty
+    result is now left uncached, so the next turn simply asks again.
+
+    One exception, and it is the difference between a retry and a pointless one: Atlas being
+    unconfigured is a STATIC fact about the deployment. Asking again cannot change it, so
+    that answer is cached as before and does not warn once a turn for three hours."""
+    if state.atlas_memory_text:
+        return state.atlas_memory_text          # fetched already, reuse it
+    if state.atlas_memory_text == "":
+        return ""                               # cached empty — only ever the static case
+    text = await _fetch_atlas_memory_text(user_id, psychic_id)
+    if text or not _atlas_is_configured():
+        state.atlas_memory_text = text or ""    # a real answer, or a permanent no
+    return text or ""
 
 
 # ═════════════════════════════════════════════════════════════════════════════
