@@ -127,17 +127,29 @@ def _start_first_word(
     chat_id: int, chat_session_id: Optional[int], arrived_at: float, message_id: Optional[int] = None,
     client_text: str = "", psychic_id: Optional[int] = None,
 ) -> None:
-    """Let the reader react while Valentina reads, and keep the screen alive after that.
+    """React to the message that just arrived, and keep the screen alive after that.
 
-    Fire and forget, deliberately: nothing here is awaited, so the burst window
-    and the generation loop are untouched by it. The task owns its own deadline
-    and swallows its own failures, and if it produces nothing the client simply
-    waits for the reading exactly as she does today.
+    Called for EVERY client message, with no first-of-burst gate. The gate used to be
+    ``first_of_turn``, which is true only while no earlier message is still unanswered — and
+    that is exactly backwards. Live: "it is indeed" arrived, got its line, and eight seconds
+    later "when will i leave the country" arrived while the first was still unanswered, so it
+    counted as not-first, took no presence line and armed no indicator. The client watched two
+    minutes of nothing and then received the word "yeah".
+
+    A rapid burst is handled by cancellation instead: each new message cancels the pass that
+    the previous one started, so three texts in five seconds still produce ONE line, and it is
+    about the last of the three rather than the first. Fire and forget — nothing here is
+    awaited, so the burst window and the generation loop are untouched by it.
     """
     if chat_session_id is None:
         return
     from app.config import get_app_settings
     from app.services.ai import reading_first_word
+
+    # Whatever the previous message started is now out of date: she has said something newer.
+    superseded = _first_word_tasks.pop(chat_session_id, None)
+    if superseded is not None and not superseded.done():
+        superseded.cancel()
 
     pause_seconds = read_pause_ms(client_text) / 1000.0
     try:
@@ -450,25 +462,25 @@ async def note_client_message(
         except IntegrityError:
             if attempt:
                 raise
-    # First message of this turn? _TURN_MARKS is stamped only when absent, so
-    # asking before stamping distinguishes the opening message of a burst from
-    # the ones that follow it. A three-message burst gets one human response.
+    # _TURN_MARKS still stamps only the FIRST unanswered message, because that is the honest
+    # answer to "how long has this turn gone unanswered" for the timing logs and for how much
+    # Sabri owes her. It no longer gates whether she gets a presence line — see _start_first_word.
     first_of_turn = chat_session_id is not None and chat_session_id not in _TURN_MARKS
     _mark_message_arrival(chat_session_id)
-    arrived_at = _TURN_MARKS.get(chat_session_id, time.perf_counter())
     logger.info(
         "reading_burst_message_noted",
         chat_id=chat_id,
         chat_session_id=chat_session_id,
         message_id=message_id,
         first_of_turn=first_of_turn,
-        read_pause_ms=read_pause_ms(content) if first_of_turn else None,
+        read_pause_ms=read_pause_ms(content),
     )
-    if first_of_turn:
-        _start_first_word(
-            chat_id, chat_session_id, arrived_at, message_id,
-            client_text=content, psychic_id=psychic_id,
-        )
+    # EVERY message, not only the first of a burst. The read pause and the silence ceiling are
+    # measured from THIS message, because this is the one she is waiting on an answer to.
+    _start_first_word(
+        chat_id, chat_session_id, time.perf_counter(), message_id,
+        client_text=content, psychic_id=psychic_id,
+    )
     _wake(chat_session_id)
 
 
@@ -1514,6 +1526,18 @@ async def _generate_auto(claim: _Claim) -> None:
     store, state, turn, trigger = _working_state(claim)
     waited_seconds = (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
     generation_started = time.perf_counter()
+    # Several texts sent close together are ONE thing being said, so Valentina reads the whole
+    # turn. Sabri answers only the last of them: she is waiting on her newest message, and
+    # answering the one before it is what happened live.
+    contents = [c for c in (claim.contents or []) if (c or "").strip()]
+    newest = contents[-1] if contents else turn
+    earlier = contents[:-1]
+
+    def _waited_now() -> float:
+        # A dict lookup and a perf_counter read. No database, no IO — nothing that could
+        # stall the loop between generation starting and delivery finishing.
+        return (_elapsed_ms_since_arrival(claim.chat_session_id) or 0) / 1000.0
+
     bubbles, reserve, route = await reading_duo._duo_generate(
         claim.chat_id,
         turn,
@@ -1522,6 +1546,9 @@ async def _generate_auto(claim: _Claim) -> None:
         claim.client_id,
         psychic_id=claim.psychic_id,
         waited_seconds=waited_seconds,
+        newest_message=newest,
+        earlier_messages=earlier,
+        waited_seconds_now=_waited_now,
     )
     # Both model calls, Valentina then Sabri, live inside that await.
     logger.info(

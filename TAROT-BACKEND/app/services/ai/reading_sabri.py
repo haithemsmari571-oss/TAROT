@@ -89,6 +89,7 @@ def build_sabri_input(
     session_memory: str,
     source_content: str,
     waited_seconds=None,
+    earlier_messages=(),
 ) -> str:
     """Assemble Sabri's user-content payload for one turn.
 
@@ -111,7 +112,22 @@ def build_sabri_input(
             "Every word here has already reached her screen. NEVER send any of it again, "
             "in any wording:\n" + session_memory.strip()
         )
-    parts.append(f"CLIENT'S LATEST MESSAGE:\n{client_message}")
+    # When several messages arrive close together they are answered as one turn, and the one
+    # that matters is the LAST. Live, they were concatenated oldest-first under this heading
+    # and Sabri answered the older one: she asked "when will i leave the country" and got two
+    # messages about the sentence before it. The newest now stands alone under its own
+    # heading, and anything that came just before it is demoted to context.
+    earlier = [m for m in (earlier_messages or ()) if (m or "").strip()]
+    if earlier:
+        parts.append(
+            "SHE ALSO SENT THESE MOMENTS EARLIER, still unanswered — context only. Do NOT "
+            "make any of them the subject of your reply:\n"
+            + "\n".join(f"- {m.strip()}" for m in earlier)
+        )
+    parts.append(
+        "THE MESSAGE YOU ARE ANSWERING — her newest, the one she is waiting on. Your reply is "
+        f"about THIS and nothing else:\n{client_message}"
+    )
     if (source_content or "").strip():
         parts.append(
             "WRITTEN BUT NEVER SENT — everything Valentina has written this session that "
@@ -500,6 +516,24 @@ def has_invented_facts(invented) -> bool:
     return bool(invented["numbers"] or invented["terms"] or invented["rewrites"])
 
 
+# The longer she waits, the more words are owed. Live, a client waited two minutes for an
+# answer to "when will i leave the country" and the turn opened with the single word "yeah".
+# Nothing in the prompt can be relied on to prevent that, so it is a rule here: past this
+# much waiting, a turn may not OPEN with a token message.
+LONG_WAIT_SECONDS = 30
+MIN_OPENING_WORDS_AFTER_A_LONG_WAIT = 5
+
+
+def opens_with_a_token_message(bubbles, waited_seconds) -> bool:
+    """True when the first thing she reads is too small for how long she waited for it.
+
+    Only the OPENING is judged. A short line later in the turn is rhythm; a short line first,
+    after a long silence, is the whole turn landing as "yeah"."""
+    if not bubbles or waited_seconds is None or waited_seconds < LONG_WAIT_SECONDS:
+        return False
+    return len(bubbles[0].split()) < MIN_OPENING_WORDS_AFTER_A_LONG_WAIT
+
+
 def _audit_sabri_attempt(chat_id, turn_number, attempt, raw, dropped, invented, *, delivered):
     """Append one two_role sabri_delivery audit row for this attempt (the raw Sabri output +
     advisory notes: any dropped return-acks and any fabricated fact). Never affects the
@@ -536,6 +570,7 @@ def sabri_deliver(
     fallback_message: str = FALLBACK_MESSAGE,
     chat_id=None,
     turn_number: int = 0,
+    waited_seconds=None,
 ):
     """Run one Sabri turn end-to-end → the messages to send, in order.
 
@@ -580,6 +615,15 @@ def sabri_deliver(
         invented = invented_facts(allowed, " ".join(bubbles)) if bubbles else None
         if invented and has_invented_facts(invented):
             logger.warning("sabri_invented_fact", attempt=attempt, **invented)
+            _audit_sabri_attempt(
+                chat_id, turn_number, attempt, canonical_raw, dropped, invented, delivered=False
+            )
+            continue
+        if opens_with_a_token_message(bubbles, waited_seconds):
+            logger.warning(
+                "sabri_token_opening_after_long_wait", attempt=attempt,
+                waited_seconds=round(waited_seconds, 1), opening=bubbles[0][:60],
+            )
             _audit_sabri_attempt(
                 chat_id, turn_number, attempt, canonical_raw, dropped, invented, delivered=False
             )

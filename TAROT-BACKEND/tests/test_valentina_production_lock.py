@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 13 files."""
+"""Verification of the eleven Production Lock Version 14 files."""
 
 from __future__ import annotations
 
@@ -9,6 +9,15 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
+    # Production Lock Version 14: the second message of a turn is answered, not the first.
+    #
+    # Two files moved from Version 13, both from one live defect (chat 20, 15:58 UTC): a
+    # client's new question arrived while her previous message was still unanswered, took no
+    # presence line and armed no typing indicator, and was then answered as though it were
+    # the older message. reading_sabri.py takes the newest message as its own labelled block
+    # and refuses a token opening after a long wait; reading_duo.py splits newest from
+    # earlier and re-reads the wait clock after Valentina finishes.
+    #
     # Production Lock Version 13: Sabri is given the whole reading and his own judgment back.
     #
     # FIVE of the eleven files moved; the other six are byte-identical. NEITHER PROMPT
@@ -63,9 +72,9 @@ LOCKED_SHA256 = {
     "app/config.py": "D0A674E777C0FD77F1751C17C414EEB47F01AF2D0A9CD17167795FCC25DFDA82",
     "app/services/ai/client.py": "35E42B59265880441751DE0F53A7637A032B51D60A1D9B64A12AAD20865658CB",
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
-    "app/services/ai/reading_duo.py": "1E680AABF2143070930BC7D1CA98DD81EA461FB9628628A67C76948369CC791B",
+    "app/services/ai/reading_duo.py": "406AAAC3588E0E69B7240F8061F6157CA8101E5B56E484CC2C0CCBA3477598FD",
     "app/services/ai/reading_valentina.py": "D55907A74DE8C4A377F4D89A8D414EE2A3F7974F1D877D047920581A2F05AB01",
-    "app/services/ai/reading_sabri.py": "ABC78BCE6C4396C05A649B1AAD990EE6615902A8A0430689B052B126B45CC578",
+    "app/services/ai/reading_sabri.py": "7461D07DF3E9F128096480562CC07A2FBD7AC23FCABA4B4CCA80535311E41FF6",
     "app/services/ai/reading_reveal.py": "422150164423E8DA74058D5A390DD992C06DA8E5792F1310194EFE120F7B8AE2",
     "app/services/ai/reading_reader.py": "C06D47F6E15D0846BB47F35FB077B9EAB44BAE83ABE703C9C0BCE91192D60A53",
     "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",

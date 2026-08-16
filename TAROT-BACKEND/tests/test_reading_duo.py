@@ -111,7 +111,7 @@ def test_new_turn_calls_valentina_continue_does_not(monkeypatch):
         val_calls.append(message)
         return f"VALENTINA_PROSE::{message}"
 
-    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None):
+    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None, earlier_messages=()):
         sabri_calls.append({"source": source_content})
         return [f"b::{message}"]
 
@@ -154,7 +154,7 @@ def test_forced_route_bypasses_classifier(monkeypatch):
         val_calls.append(message)
         return f"VALENTINA::{message}"
 
-    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None):
+    async def fake_sabri(chat_id, message, entry, state, source_content, waited_seconds=None, earlier_messages=()):
         return [f"b::{message}"]
 
     # the classifier would say "continue" — forced_route="new" must win (no flip to stale reserve)

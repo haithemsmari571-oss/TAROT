@@ -219,11 +219,17 @@ async def _write_valentina_turn(
     return text
 
 
-async def _sabri_turn(chat_id, message, trigger_entry, state, source_content, waited_seconds=None):
+async def _sabri_turn(
+    chat_id, message, trigger_entry, state, source_content, waited_seconds=None,
+    earlier_messages=(),
+):
     """Sabri delivers: build his input (everything unsent + the capsule) and run him → bubbles.
 
     He is handed ALL of Valentina's undelivered writing and chooses from it. He no longer
-    reports what he held: nothing is consumed by sending, so there is nothing to report."""
+    reports what he held: nothing is consumed by sending, so there is nothing to report.
+
+    ``message`` is her NEWEST message and the only thing he is answering; ``earlier_messages``
+    are any that arrived just before it in the same turn and are passed as context only."""
     from app.services.ai import reading_sabri
 
     already_seen = _session_memory(state, trigger_entry)
@@ -232,21 +238,25 @@ async def _sabri_turn(chat_id, message, trigger_entry, state, source_content, wa
         session_memory=already_seen,
         source_content=source_content,
         waited_seconds=waited_seconds,
+        earlier_messages=earlier_messages,
     )
     bubbles = await asyncio.to_thread(
         reading_sabri.sabri_deliver, sabri_input, source_content=source_content,
         already_seen=already_seen, chat_id=chat_id, turn_number=state.messages_sent_count,
+        waited_seconds=waited_seconds,
     )
     logger.info("duo_sabri_delivered", chat_id=chat_id, bubbles=len(bubbles),
                 words=sum(len(b.split()) for b in bubbles),
                 unsent_chars=len((source_content or "").strip()),
-                waited_seconds=waited_seconds)
+                waited_seconds=waited_seconds,
+                opening_words=len(bubbles[0].split()) if bubbles else 0)
     return bubbles
 
 
 async def _duo_generate(
     chat_id, message, trigger_entry, state, user_id, forced_route=None, *, psychic_id=None,
-    waited_seconds=None,
+    waited_seconds=None, newest_message=None, earlier_messages=(),
+    waited_seconds_now=None,
 ):
     """Route → (Valentina if NEW) → Sabri. Returns (bubbles, reserve, route). Nothing reaches the
     client here. bubbles is the paced-reveal payload (ALWAYS non-empty — Sabri guarantees a
@@ -257,6 +267,16 @@ async def _duo_generate(
     delivered, ACCUMULATED — this turn's writing added to what was already unsaid, rather than
     replacing it. It is returned so the caller can bank it; it is never reduced here, because
     sending something does not consume it.
+
+    ``message`` is the whole client turn, which is what VALENTINA should see — several texts
+    sent together are one thing being said. ``newest_message`` is the last of them, which is
+    what SABRI answers; ``earlier_messages`` are the rest, as context only. Splitting the two
+    is what stops a reply to "when will i leave the country" being about the sentence before it.
+
+    ``waited_seconds_now`` is a callable returning the wait SO FAR, read again just before
+    Sabri runs. Reading it once at the top would always say about six seconds — the burst
+    window — no matter how long Valentina then took, which is how a two-minute wait was
+    answered with the word "yeah".
 
     ``forced_route`` overrides the routing entirely and is now only used by tests."""
     from app.services.ai.reading_llm import FALLBACK_MESSAGE
@@ -284,11 +304,20 @@ async def _duo_generate(
             logger.warning("duo_valentina_empty_fallback", chat_id=chat_id)
             return [FALLBACK_MESSAGE], held, route
         reserve = accumulate_reserve(held, valentina_text)
+    # Read the clock AGAIN, here, after Valentina has finished. This is the number that
+    # reflects what the client has actually sat through.
+    waited = waited_seconds
+    if waited_seconds_now is not None:
+        try:
+            waited = waited_seconds_now()
+        except Exception:  # noqa: BLE001 — a clock read must never break a turn
+            waited = waited_seconds
     bubbles = await _sabri_turn(
-        chat_id, message, trigger_entry, state, reserve, waited_seconds=waited_seconds
+        chat_id, newest_message or message, trigger_entry, state, reserve,
+        waited_seconds=waited, earlier_messages=earlier_messages,
     )
     logger.info("duo_generated", chat_id=chat_id, route=route, bubbles=len(bubbles),
-                reserve_chars=len(reserve.strip()))
+                reserve_chars=len(reserve.strip()), waited_seconds=waited)
     return bubbles, reserve, route
 
 
