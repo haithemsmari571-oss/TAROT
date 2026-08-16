@@ -295,3 +295,18 @@ def test_the_wait_is_carried_as_an_offset_so_it_keeps_running_during_generation(
     assert "_wait_began_before_the_session(state, claim)" in source
     assert "wait_offset = max(0.0, already_waited - turn_elapsed)" in source
     assert "/ 1000.0 + wait_offset" in source
+
+
+def test_the_request_endpoint_hands_over_the_id_of_the_message_she_just_sent():
+    """Live: it did not, so pre_reading_message_id was NULL on every session ever written.
+    Both rules that key off it — deliver the banked reading instead of writing a second
+    one, and count the wait she served before the session — were dead in production while
+    reading as shipped."""
+    import inspect
+
+    from app.routers import chats
+
+    source = inspect.getsource(chats.requset_chat_endpoint)   # the spelling in the router
+    assert "message_id=request_message_id" in source
+    assert "Message.sender_id == user.id" in source
+    assert "Message.is_system.is_(False)" in source

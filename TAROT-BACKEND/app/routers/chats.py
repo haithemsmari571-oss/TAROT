@@ -129,8 +129,24 @@ async def requset_chat_endpoint(
 
         chat_row = db.query(Chat).filter(Chat.id == chat_id).first()
         if chat_row is not None and chat_row.response_mode == ResponseMode.SABRI:
+            # The id of the message she just sent, which req_start_chat wrote a moment ago.
+            # Without it the opening turn cannot be told apart from any other turn: the
+            # router is free to spend another minute writing a second reading over the one
+            # she already waited for, and the wait she served reads as zero seconds.
+            request_message_id = (
+                db.query(Message.id)
+                .filter(
+                    Message.chat_id == chat_id,
+                    Message.sender_id == user.id,
+                    Message.is_system.is_(False),
+                )
+                .order_by(Message.id.desc())
+                .limit(1)
+                .scalar()
+            )
             reading_pre_session.schedule_pre_reading(
                 chat_id, user.id, chat_data.psychic_id, chat_data.message,
+                message_id=request_message_id,
             )
     except Exception:  # noqa: BLE001 — a request must never fail on the pre-reading
         logger.warning("pre_reading_schedule_failed", chat_id=chat_id)
