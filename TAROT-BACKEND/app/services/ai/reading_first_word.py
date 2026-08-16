@@ -52,41 +52,57 @@ CLOSING_DEADLINE_SECONDS = 4.0
 # arrived and is still reading the screen — so it can afford to be a little late
 # rather than fall back to a fixed line.
 GREETING_DEADLINE_SECONDS = 6.0
-# A holding line is one short breath, but the ceiling has to leave room for the
-# model to finish its sentence: at 64 the goodbye was cut mid-line and discarded
-# as truncated. The validators enforce brevity; this only stops a runaway.
-MAX_OUTPUT_TOKENS = 160
+# The only bound on length now that the word cap is gone. Generous, because the line is
+# warmth AND an intake question and both have to fit; a runaway is still stopped.
+MAX_OUTPUT_TOKENS = 300
 
-# The immediate human moment. Appended to Sabri's own system prompt so the voice
-# is identical — and, not incidentally, so the system block clears the 4,096-token
-# minimum that makes prompt caching work at all on Haiku. Without this the block
-# measures 4,065 tokens and cache_control is a silent no-op.
+# The immediate human moment. Appended to Sabri's own system prompt so the voice is
+# identical. (It also used to be load-bearing for prompt caching on Haiku's 4,096-token
+# minimum; on Sonnet the minimum is far lower, so that is no longer why it exists.)
+#
+# THE REGISTRY PROMPT IS NOT TOUCHED. This is appended in code, and it is the only part of
+# what Sabri reads for this pass that this file owns.
 PASS_ONE_INSTRUCTION = """
 
 ---
 
-RIGHT NOW: THE IMMEDIATE HUMAN MOMENT ONLY.
+RIGHT NOW: THE FIRST THING SHE READS. WARMTH, AND ONE QUESTION IF YOU NEED IT.
 
-She has just written to you. You have not looked at anything yet — no cards, no
-chart, no numbers. You know nothing except what she just said.
+She has just written to you and the reading itself is being pulled as you write this.
+This line is not filler while she waits. It is the moment she decides whether a real
+person is on the other end.
 
-Send ONE short line. The reflex a real reader has before she reads: the thing
-you say while you are still reaching for the cards.
+Two jobs, in one short message:
 
-Match what she actually said:
-- if it is painful or frightening, the empathy lands first, before anything else
-- if it is a greeting or an opening, warmth
-- if it is a question, tell her you are going to look at it properly
+1. MEET HER WHERE SHE IS. Speak to what she actually just told you, in her own words and
+   about her own situation. Use the names she used. Refer to what she described. If it is
+   heavy, let it land as heavy. This is the difference between "i'm here, give me a
+   moment" — which says nothing and could have been sent to anyone — and something only
+   this client could have received.
 
-Never a scripted opener. Never the same shape twice in one session. Never a
-formula. It should sound like it was written by someone who just read her
-message, because it was.
+2. ASK FOR ONE THING, IF THE READING OBVIOUSLY NEEDS IT. If something is missing that
+   would make the reading real — a date of birth, a name, how long it has been going on,
+   what actually happened — ask for exactly ONE of them, and say why you want it. "tell
+   me his date of birth so i can see how you two actually sit together" reads as a psychic
+   working. A bare demand for data does not.
 
-You have nothing to tell her yet, so do not imply that you do. No cards, no
-numbers, no dates, no signs, no names, no timing, no hints about what is coming.
-Warmth and honesty only. The reading itself comes in a moment.
+   Never ask for something she has already told you, or that is already in the
+   conversation above. If she has given you everything you need, do not invent a question
+   — just meet her, warmly, and let the reading come.
 
-Reply with the line alone. No quotes, no preamble, nothing else.
+This is the shape:
+  "hello there my dear, sit with me because i can feel how heavy you're feeling lately,
+   before we start tell me what's his date of birth"
+
+You MAY say names, dates, numbers, ages, places, and anything else she has just told you.
+Repeating her own facts back is how she knows she was heard.
+
+What you may NOT do, because the reading has not been written yet and you would be
+committing her to something that does not exist: do not name a specific tarot card, do not
+state a Life Path or Personal Year number, and do not give a specific timing ("within ten
+days", "by the end of March"). Everything else is open to you.
+
+One message. No quotes, no preamble, nothing else.
 """
 
 CLOSING_INSTRUCTION = """
@@ -139,9 +155,10 @@ _RETRY_NOTE = """
 
 YOUR PREVIOUS ATTEMPT WAS DISCARDED: {reason}.
 
-Write a different line. Keep it short and plain. Say nothing at all about what
-is in the reading — no cards, no numbers, no dates, no signs, no names, no
-timing. Warmth only.
+Write a different line. Keep everything else the same — still warm, still about her own
+situation, still using her own words and the names and details she gave you. The only
+things that were ever off limits are naming a specific tarot card, stating a Life Path or
+Personal Year number, and promising a specific timing. Fix that one thing and keep the rest.
 """
 
 # The floor. When neither attempt survives, she still hears something human
@@ -225,18 +242,54 @@ _META_PHRASES = (
     "she's leaning in", "shes leaning in", "she wants more", "not a question",
     "be direct with you:", "what you're asking me to do", "what youre asking me to do",
 )
-# He is talking to her, so the person in front of him is "you". A line that describes her
-# in the third person is a direction ABOUT the client rather than a line FOR her, and it is
-# the shape both live leaks took. Deliberately narrow: it only fires when the line never
-# addresses her at all, so "your sister, she means well" is untouched.
-_SECOND_PERSON = re.compile(r"\b(you|your|u|ur|yours)\b", re.IGNORECASE)
-_THIRD_PERSON_CLIENT = re.compile(r"\b(she|her|she's|shes)\b", re.IGNORECASE)
+# ── THE ONE CONTENT RULE ─────────────────────────────────────────────────────
+# The reading has not been written yet, so this line may not commit her to it. That is the
+# whole of it: a named tarot card, a Life Path or Personal Year value, or a specific timing
+# claim. Everything else — her name, his name, dates of birth, ages, places, numbers she
+# just gave, how heavy it feels — is not only allowed, it is the job.
+#
+# What used to be here rejected any bare number, any date, any capitalised name, every
+# zodiac sign and planet, a phrase list containing "card", "chart" and "pulled", and
+# anything over forty words. It reused Valentina's protected vocabulary wholesale, which
+# meant the more a client told the reader, the more certain the reply was to be a template.
+# Live proof: "i want to know about jessica dob 12/12/1999 is she with anyone now" produced
+# two rejected attempts and the fixed fallback line, from two different readers, identically.
+def _tarot_card_pattern():
+    """Card names specific enough to be unmistakable.
 
-# Regexes miss what reads as substance without matching a card or a digit.
-_SUBSTANCE_PHRASES = (
-    "card", "cards", "spread", "chart", "reading says", "your reading",
-    "it says", "i'm seeing", "im seeing", "i am seeing", "i see that",
-    "by then", "coming up", "the cards", "pulled",
+    The bare majors that are also ordinary English — strength, justice, death, temperance,
+    judgement — are deliberately NOT here. Blocking "i can feel the strength in you" to
+    prevent a card reference is exactly the over-rejection being removed."""
+    ranks = ["ace", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+             "page", "knight", "queen", "king"]
+    suits = ["cups", "pentacles", "swords", "wands", "coins"]
+    minor = [rf"{r}\s+of\s+{s}" for r in ranks for s in suits]
+    major = [
+        "the fool", "the magician", "the high priestess", "the empress", "the emperor",
+        "the hierophant", "the lovers", "the chariot", "the hermit", "wheel of fortune",
+        "the hanged man", "the devil", "the tower", "the star", "the moon", "the sun",
+        "the world",
+    ]
+    return re.compile(r"\b(" + "|".join(minor + [re.escape(m) for m in major]) + r")\b",
+                      re.IGNORECASE)
+
+
+_TAROT_CARD = _tarot_card_pattern()
+_NUMEROLOGY_VALUE = re.compile(
+    r"\b(?:life\s*path|personal\s*year)\s*(?:number\s*)?:?\s*"
+    r"(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twenty[-\s]?two|"
+    r"thirty[-\s]?three)\b",
+    re.IGNORECASE,
+)
+_MONTHS_RE = (
+    "january|february|march|april|may|june|july|august|september|october|november|december"
+)
+_TIMING_CLAIM = re.compile(
+    r"\b(?:(?:with)?in\s+(?:the\s+next\s+)?\d+\s+(?:days?|weeks?|months?|years?)"
+    rf"|(?:by|before)\s+the\s+end\s+of\s+(?:this|next|the)?\s*"
+    rf"(?:{_MONTHS_RE}|week|month|year|spring|summer|autumn|winter)"
+    rf"|(?:by|before)\s+(?:{_MONTHS_RE}))\b",
+    re.IGNORECASE,
 )
 
 # What has already been said, per reading session, so a line is never reused.
@@ -251,8 +304,16 @@ def _normalise(text: str) -> str:
     return re.sub(r"[^a-z0-9 ]+", "", (text or "").casefold()).strip()
 
 
+# Near-identical only. At 0.6 this caught ordinary warm phrasing: two different lines that
+# both say "i'm here with you" share most of their small vocabulary and were treated as the
+# same line. Warmth repeats words by nature — the thing worth catching is her being sent the
+# same sentence twice, not two sentences that are both kind.
+_REPEAT_OVERLAP = 0.85
+_REPEAT_MIN_WORDS = 4
+
+
 def _too_similar(candidate: str, previous: List[str]) -> bool:
-    """Same line, or a paraphrase close enough that she would notice."""
+    """The same line again, near enough that she would notice it was the same line."""
     now = _normalise(candidate)
     if not now:
         return True
@@ -264,8 +325,11 @@ def _too_similar(candidate: str, previous: List[str]) -> bool:
         if now == was:
             return True
         was_words = set(was.split())
+        # Two very short lines sharing words is a coincidence, not a repeat.
+        if min(len(now_words), len(was_words)) < _REPEAT_MIN_WORDS:
+            continue
         union = now_words | was_words
-        if union and len(now_words & was_words) / len(union) >= 0.6:
+        if union and len(now_words & was_words) / len(union) >= _REPEAT_OVERLAP:
             return True
     return False
 
@@ -290,40 +354,37 @@ def forget(chat_session_id: Optional[int]) -> None:
 def _reject_reason(candidate: str, previous: List[str]) -> Optional[str]:
     """Why this line must not be sent, or None if it may be.
 
-    The substance checks reuse Valentina's own protected vocabulary, so this
-    stays in step with her terms for free. The capitalised-word proper-name
-    guard inside ``_protected_spans`` is deliberately NOT used: it flags any
-    capitalised word of three or more letters, which would reject ordinary
-    sentence-initial prose.
+    Deliberately almost nothing. Three rules survive, and each one exists because breaking
+    it does real damage:
+
+      * it may not commit her to a reading that has not been written — a named card, a Life
+        Path or Personal Year value, a specific timing window;
+      * it may not talk about how the system works or narrate its own decisions;
+      * it may not repeat, near-verbatim, something already said this session.
+
+    Everything else is allowed, including every name, date, age, place and number the client
+    has just given. Repeating her own facts back is how she knows she was heard.
     """
-    from app.services.ai.reading_sabri import (
-        _KNOWN_TERMS,
-        _PROTECTED_PATTERNS,
-        sanitize_delivery_text,
-    )
+    from app.services.ai.reading_sabri import sanitize_delivery_text
 
     text = sanitize_delivery_text(candidate or "")
     if not text or not text.strip():
         return "empty"
-    if len(text.split()) > 40:
-        return "too long"
+
+    found = _TAROT_CARD.search(text)
+    if found:
+        return f"names a tarot card before the reading exists ({found.group(0)})"
+    found = _NUMEROLOGY_VALUE.search(text)
+    if found:
+        return f"states a numerology value before the reading exists ({found.group(0)})"
+    found = _TIMING_CLAIM.search(text)
+    if found:
+        return f"commits to a timing before the reading exists ({found.group(0)})"
 
     lowered = text.casefold()
-    for term in _KNOWN_TERMS:
-        if re.search(r"\b" + re.escape(term) + r"\b", lowered, re.IGNORECASE):
-            return f"names a protected term ({term})"
-    for pattern in _PROTECTED_PATTERNS:
-        found = pattern.search(text)
-        if found:
-            return f"contains reading substance ({found.group(0)[:32]!r})"
-    for phrase in _SUBSTANCE_PHRASES:
-        if phrase in lowered:
-            return f"implies the reading ({phrase})"
     for phrase in _META_PHRASES:
         if phrase in lowered:
-            return f"talks about its own prompt ({phrase})"
-    if _THIRD_PERSON_CLIENT.search(text) and not _SECOND_PERSON.search(text):
-        return "narrates the client instead of speaking to her"
+            return f"talks about its own prompt or narrates itself ({phrase})"
 
     try:
         from app.services.ai.reading_pipeline import is_return_acknowledgment
@@ -449,9 +510,11 @@ def _resolve_prompt(instruction: str) -> tuple[str, str]:
     prompt, _model = resolve_runtime_prompt_and_model(
         "reading.sabri", SABRI_SYSTEM_PROMPT, settings.SABRI_DELIVERY_MODEL
     )
-    # The voice comes from the prompt, not the model: this pass runs on the fast
-    # model so the line actually arrives while she is still looking at the screen.
-    return prompt + instruction, settings.CONTENT_MODEL
+    # Sonnet, not Haiku. This line is the first thing a paying client reads, and it now has
+    # to do something Haiku is not reliably good at: hear what she actually said and ask the
+    # one question the reading is missing, in her situation, in her words. The extra second
+    # is worth it — and it still lands long before the reading itself.
+    return prompt + instruction, settings.FIRST_WORD_MODEL
 
 
 def _load_context(
@@ -632,8 +695,12 @@ async def _speak(
         reason = _reject_reason(candidate, previous)
         if reason:
             attempts.append(reason)
-            logger.info("reading_first_word_rejected", chat_id=chat_id, reason=reason,
-                        attempt=attempt + 1, candidate=(candidate or "")[:160])
+            # The EXACT text and the EXACT reason. A truncated candidate made it impossible
+            # to tell an over-strict rule from a genuinely bad line, which is how a rule that
+            # rejected every mention of a name survived until a client saw the same canned
+            # sentence from two different readers.
+            logger.warning("reading_first_word_rejected", chat_id=chat_id, reason=reason,
+                           attempt=attempt + 1, candidate=candidate or "")
             continue
         line = sanitize_delivery_text(candidate).strip()
         break
@@ -644,11 +711,14 @@ async def _speak(
         line = _fallback_line(previous, moment)
         source = "fallback"
         if not line:
-            logger.info("reading_first_word_rejected", chat_id=chat_id,
-                        reason="no fallback left", attempts=attempts)
+            logger.error("reading_first_word_rejected", chat_id=chat_id,
+                         reason="no fallback left", attempts=attempts)
             return False
-        logger.info("reading_first_word_fallback", chat_id=chat_id,
-                    chat_session_id=chat_session_id, attempts=attempts, line=line)
+        # LOUD. With the guard stripped back to three rules this should be close to never,
+        # so every occurrence is a signal that something is wrong — not routine.
+        logger.error("reading_first_word_fallback_fired", chat_id=chat_id,
+                     chat_session_id=chat_session_id, attempts=attempts, line=line,
+                     note="a canned line reached a client; the model's own attempts were all rejected")
 
     sent = await asyncio.to_thread(_send, chat_id, chat_session_id, line)
     if not sent:

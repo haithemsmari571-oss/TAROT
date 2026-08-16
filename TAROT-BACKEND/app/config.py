@@ -196,6 +196,12 @@ class AppSettings(BaseSettings):
     DUO_PER_WORD_MS: int = 1000
     DUO_MIN_TYPING_MS: int = 300
     DUO_BETWEEN_BUBBLES_MS: int = 500
+    # The immediate line the client reads within seconds of writing — greeting, first
+    # reaction, goodbye. It ran on the cheap model, which produced canned-sounding warmth
+    # and could not reliably do the intake half of the job (hear what she said, ask for the
+    # one thing the reading is missing). It is the first thing a paying client reads, so it
+    # runs on Sonnet. No thinking, no effort parameter: it must stay fast.
+    FIRST_WORD_MODEL: str = "claude-sonnet-4-6"
     # ── The client clock (visual only — none of this gates when generation runs) ──
     # THE READ PAUSE. A real reader reads the message before she starts typing, and it takes
     # her longer when the client wrote more. Nothing at all is visible during this pause: no
