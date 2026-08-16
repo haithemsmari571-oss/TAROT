@@ -399,11 +399,24 @@ def test_sentence_openers_do_not_rewrite_ordinary_words():
     assert out == delivery, out
 
 
-def test_a_name_at_a_sentence_start_is_still_protected():
-    """A word never written in lower case is a name, wherever it appears."""
+def test_a_name_only_ever_at_a_sentence_start_is_left_alone_now():
+    """A deliberate trade, made after "like Maybe you built it all yourself" reached a client.
+
+    A capital that only ever appears where a full stop explains it is not enough evidence to
+    force that capital into the delivery. The cost is a name arriving lower case inside a
+    message that is already lower case texting voice, which nobody notices; the alternative
+    cost is a capitalised ordinary word mid-sentence, which everybody does."""
     source = "Daniel was born in the spring. The pull here is his."
     out = S._canonicalize_protected_literals(
         "i keep coming back to daniel in this", source_content=source
+    )
+    assert out == "i keep coming back to daniel in this"
+
+
+def test_a_name_known_from_the_dossier_is_still_applied_exactly():
+    source = "Daniel was born in the spring."
+    out = S._canonicalize_protected_literals(
+        "i keep coming back to daniel", source_content=source, names=("Daniel",)
     )
     assert "Daniel" in out
 
@@ -435,3 +448,28 @@ def test_a_keep_token_from_the_prompt_never_reaches_the_client():
 def test_sanitize_strips_token_variants():
     for token in ("[[KEEP_0001]]", "[[KEEP_12]]", "[[ KEEP_0007 ]]", "[[KEEP]]"):
         assert "KEEP" not in S.sanitize_delivery_text(f"hey {token} there")
+
+
+def test_an_ordinary_sentence_opener_is_never_capitalised_mid_sentence():
+    """Live turn one produced: "like Maybe you built it all yourself".
+
+    Valentina writes prose, so "Maybe" opens sentences and may never appear in lower case
+    anywhere in her text. Treating that as evidence of a name and force-applying it to the
+    delivery puts a capital in the middle of the client's sentence. Collecting it as a fact
+    is harmless; applying it to her screen is not."""
+    source = (
+        "Maybe he never said it out loud. Before anything else she needs to hear that. "
+        "Like a door she keeps propped open."
+    )
+    out = S._canonicalize_protected_literals(
+        "like maybe you built it all yourself, before today", source_content=source
+    )
+    assert out == "like maybe you built it all yourself, before today"
+
+
+def test_a_real_name_that_only_opens_sentences_is_still_collected_as_a_fact():
+    """The looser rule stays where it belongs: the facts block, not the client's screen."""
+    from app.services.ai.reading_ledger import extract_commitments
+
+    facts = extract_commitments("Daniel went quiet. Daniel always does this.")
+    assert {"kind": "name", "value": "Daniel"} in facts

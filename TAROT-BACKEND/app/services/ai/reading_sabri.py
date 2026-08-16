@@ -257,7 +257,7 @@ def _sentence_initial(source: str, start: int) -> bool:
     return source[index] in ".!?:;\n"
 
 
-def _auto_name_matches(source: str):
+def _auto_name_matches(source: str, *, earned_only: bool = False):
     """Capitalised runs that behave like names, not like sentence openers.
 
     Valentina writes ordinary prose, so every sentence she began with "For" or
@@ -289,6 +289,8 @@ def _auto_name_matches(source: str):
         literal = match.group(0)
         if literal in earned:
             kept.append(match)
+        elif earned_only:
+            continue
         elif not re.search(
             r"(?<!\w)" + re.escape(literal.lower()) + r"(?!\w)", text
         ):
@@ -296,7 +298,7 @@ def _auto_name_matches(source: str):
     return kept
 
 
-def _protected_spans(source: str, *, names=()):
+def _protected_spans(source: str, *, names=(), earned_names_only: bool = False):
     """Return non-overlapping credibility-critical spans, longest match first at each offset."""
     candidates = []
     for term in _KNOWN_TERMS:
@@ -314,7 +316,7 @@ def _protected_spans(source: str, *, names=()):
     # already explain (see _auto_name_matches). A false negative lets an unknown name
     # drift; a false positive rewrites ordinary words mid-sentence in front of the
     # client, which is the worse of the two and the one that actually shipped.
-    for match in _auto_name_matches(source or ""):
+    for match in _auto_name_matches(source or "", earned_only=earned_names_only):
         candidates.append((match.start(), match.end()))
     chosen = []
     for start, end in sorted(set(candidates), key=lambda span: (span[0], -(span[1] - span[0]))):
@@ -323,7 +325,7 @@ def _protected_spans(source: str, *, names=()):
     return sorted(chosen)
 
 
-def protected_literals(source_content: str, *, names=()):
+def protected_literals(source_content: str, *, names=(), earned_names_only: bool = False):
     """Every credibility-critical literal in Valentina's writing, in canonical spelling.
 
     Sabri's source used to be handed to him with each of these replaced by an opaque
@@ -339,15 +341,32 @@ def protected_literals(source_content: str, *, names=()):
     afterwards instead: canonical spelling is restored on anything he repeats, and anything
     he states that is NOT in this list (or in what she has said) is treated as invented."""
     source = (source_content or "").strip()
-    literals = {source[start:end] for start, end in _protected_spans(source, names=names)}
+    literals = {
+        source[start:end]
+        for start, end in _protected_spans(
+            source, names=names, earned_names_only=earned_names_only
+        )
+    }
     literals.update(str(name) for name in names or () if str(name).strip())
     return {literal for literal in literals if literal.strip()}
 
 
 def _canonicalize_protected_literals(text: str, *, source_content: str = "", names=()):
-    """Restore canonical spelling/capitalisation wherever Sabri repeats a protected fact."""
+    """Restore canonical spelling/capitalisation wherever Sabri repeats a protected fact.
+
+    Auto-detected names are used here in their EARNED form only — a capital that a full stop
+    does not explain. The looser "never written in lower case anywhere" rule is right for
+    collecting facts, where a false positive costs a junk line in a memory block, and wrong
+    here, where it is force-applied to the client's screen: a live turn produced "like Maybe
+    you built it all yourself", because Valentina happened never to write "maybe" mid-sentence.
+    Mid-sentence capitalisation of an ordinary word in front of a paying client is the worse
+    failure, and it is the one that keeps shipping. A name known from the dossier still arrives
+    through ``names`` and is applied exactly."""
     result = text or ""
-    for literal in sorted(protected_literals(source_content, names=names), key=len, reverse=True):
+    for literal in sorted(
+        protected_literals(source_content, names=names, earned_names_only=True),
+        key=len, reverse=True,
+    ):
         result = re.sub(
             r"(?<!\w)" + re.escape(literal) + r"(?!\w)",
             lambda _match, exact=literal: exact,
