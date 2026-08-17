@@ -1,21 +1,15 @@
-/* hall.css carries global rules — html,body{overflow:hidden}, the body
-   background, a bare h1 — so it must not stay live once the hall leaves the
-   screen or it restyles every other page. Each hall screen switches it on when
-   it mounts and off when it unmounts.
+/* The hall stylesheet is no longer toggled, and must not be.
 
-   This lives in one place because it has to be symmetric. When it did not, the
-   entry hall disabled the sheet on its way out and the reading room mounted
-   with no styling at all: the room rendered as bare text on black. Nothing in
-   the stylesheet itself is modified — only whether the browser applies it. */
-export function setHallSheetEnabled(on: boolean) {
-  for (const sheet of Array.from(document.styleSheets)) {
-    let rules: CSSRuleList;
-    try { rules = (sheet as CSSStyleSheet).cssRules; } catch { continue; }
-    for (const r of Array.from(rules)) {
-      if ((r as CSSStyleRule).selectorText === ".orbfix") {
-        (sheet as CSSStyleSheet).disabled = !on;
-        return;
-      }
-    }
-  }
+   It used to be switched off on unmount because hall.css carried global rules
+   that would otherwise restyle the whole site. Those rules are now scoped to
+   html[data-hall] (styles/hall.css), so they cannot escape a hall screen and
+   there is nothing to switch off.
+
+   Toggling is also unsafe now. setHallSheetEnabled located the sheet by looking
+   for a rule whose selector is ".orbfix" — and since the room and the dialogs
+   import hall.css, that is the MAIN stylesheet. Disabling it would strip the
+   CSS from every page on the site. This is kept as a no-op so no caller can
+   reintroduce that behaviour by accident. */
+export function setHallSheetEnabled(_on: boolean): void {
+  /* intentionally does nothing — scoping replaced it */
 }

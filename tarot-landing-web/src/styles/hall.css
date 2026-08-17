@@ -6,9 +6,17 @@
   --display:'Fraunces',Georgia,serif;--ui:'Inter',system-ui,sans-serif;
   --breath:11s;
 }
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
-body{background:#0A0616;color:var(--text);font-family:var(--ui);font-weight:300;
+/* SCOPED ON PURPOSE — these three rules are global in the original design file,
+   and they must never reach the rest of the site. html,body{overflow:hidden}
+   alone stops every other page scrolling, and *{margin:0;padding:0} strips the
+   spacing off every layout. They used to be contained because only the lazy
+   Hall route imported this stylesheet; once the room and the dialogs imported
+   it too it landed in the main bundle and applied to every page from first
+   paint. Scoping to html[data-hall] — which only the hall screens set — makes
+   that impossible regardless of which bundle the file ends up in. */
+html[data-hall] *{box-sizing:border-box;margin:0;padding:0;}
+html[data-hall],html[data-hall] body{height:100%;overflow:hidden;overscroll-behavior:none;}
+html[data-hall] body{background:#0A0616;color:var(--text);font-family:var(--ui);font-weight:300;
   -webkit-font-smoothing:antialiased;touch-action:none;-webkit-user-select:none;user-select:none;}
 
 #gl{position:fixed;inset:0;z-index:0;display:block;}
