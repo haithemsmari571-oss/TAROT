@@ -15,6 +15,7 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
 import HallRoom from "@/features/hall/HallRoom";
+import HallDialog from "@/features/hall/HallDialog";
 import { MessageBubble } from "../components/MessageBubble";
 import { TypingIndicator } from "../components/TypingIndicator";
 import { SessionBar } from "../components/SessionBar";
@@ -1420,103 +1421,48 @@ const ClientChat = () => {
       )}
 
       {/* Reader profile — mobile/tablet bottom sheet (lg shows the sidebar instead) */}
-      {showProfileSheet && selectedChatData && (
-        <div
-          className="fixed inset-0 z-[120] lg:hidden"
-          onClick={() => setShowProfileSheet(false)}
-        >
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 32 }}
-            onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-3xl border-t border-white/10 p-5 pb-8"
-            style={{ backgroundColor: "var(--gl-glass)" }}
-          >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
-            <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-white/40" style={{ fontFamily: "var(--gl-serif)" }}>
-                Your Reader
-              </h3>
-              <button
-                onClick={() => setShowProfileSheet(false)}
-                aria-label="Close"
-                className="p-1 text-white/50 hover:text-white/90 transition-colors"
-              >
-                <Icon icon="solar:close-circle-bold" className="text-2xl" />
-              </button>
-            </div>
-            {loadingPsychic ? (
-              <div className="flex justify-center py-10">
-                <Icon icon="solar:spinner-bold-duotone" className="text-3xl text-primary/60 animate-spin" />
-              </div>
-            ) : (
-              <PsychicProfileCard
-                name={psychicName}
-                avatarUrl={psychicDetails?.profile_picture_url || selectedChatData.user_profile_pic_url}
-                isVerified={psychicDetails?.is_verified}
-                isOnline={psychicDetails?.is_online}
-                bio={psychicDetails?.bio}
-                categories={psychicDetails?.categories}
-                pricePerSecond={psychicDetails?.price_per_second}
-              />
-            )}
-          </motion.div>
-        </div>
-      )}
+      {/* The reader — in the hall's own panel. Same words, same action. */}
+      <HallDialog open={!!(showProfileSheet && selectedChatData)} onClose={() => setShowProfileSheet(false)} labelledBy="dlg-reader">
+        <p className="eyebrow" id="dlg-reader">Your Reader</p>
+        {loadingPsychic ? (
+          <p className="psub">Loading…</p>
+        ) : (
+          <div className="hdlg-body">
+            <PsychicProfileCard
+              name={psychicName}
+              avatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
+              isVerified={psychicDetails?.is_verified}
+              isOnline={psychicDetails?.is_online}
+              bio={psychicDetails?.bio}
+              categories={psychicDetails?.categories}
+              pricePerSecond={psychicDetails?.price_per_second}
+            />
+          </div>
+        )}
+        <button className="quiet" id="dlg-reader-close" onClick={() => setShowProfileSheet(false)}>Close</button>
+      </HallDialog>
 
       {/* Request New Chat Modal */}
-      {showRequestModal && selectedChatData && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="rounded-3xl border border-white/10 p-8 max-w-md w-full relative overflow-hidden" style={{ backgroundColor: "var(--gl-glass)" }}>
-            {/* Decorative gradient */}
-            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none" />
-
-            <div className="relative">
-              <h3 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: "var(--gl-serif)" }}>
-                Request New Session
-              </h3>
-              <p className="text-sm text-white/60 mb-6">
-                Send a message to {selectedChatData.user_name} to request a new reading session.
-              </p>
-
-              {requestError && (
-                <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <p className="text-xs text-red-300/90 font-medium text-center">
-                    {requestError}
-                  </p>
-                </div>
-              )}
-
-
-              <textarea
-                value={requestMessage}
-                onChange={(e) => setRequestMessage(e.target.value)}
-                placeholder="Enter your message..."
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none focus:border-primary/50 mb-4 resize-none"
-                rows={4}
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setRequestError(null); setShowRequestModal(false); }}
-                  className="flex-1 px-6 py-3 rounded-2xl bg-white/5 text-white font-semibold text-sm hover:bg-white/10 transition-opacity border border-white/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleRequestNewChat}
-                  disabled={requestChatMutation.isPending}
-                  className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-lg text-white"
-                  style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}
-                >
-                  {requestChatMutation.isPending ? 'Sending...' : 'Send Request'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Request New Session — every word kept. */}
+      <HallDialog open={!!(showRequestModal && selectedChatData)}
+                  onClose={() => { setRequestError(null); setShowRequestModal(false); }}
+                  labelledBy="dlg-request">
+        <p className="eyebrow">A new reading</p>
+        <h1 className="ptitle" id="dlg-request">Request New Session</h1>
+        <p className="psub">Send a message to {selectedChatData?.user_name} to request a new reading session.</p>
+        {requestError && <p className="legal" role="alert" id="dlg-request-error">{requestError}</p>}
+        <textarea
+          value={requestMessage}
+          onChange={(e) => setRequestMessage(e.target.value)}
+          placeholder="Enter your message..."
+          rows={4}
+          id="dlg-request-text"
+        />
+        <button className="begin" id="dlg-request-send" onClick={handleRequestNewChat} disabled={requestChatMutation.isPending}>
+          {requestChatMutation.isPending ? 'Sending...' : 'Send Request'}
+        </button>
+        <button className="quiet" id="dlg-request-cancel" onClick={() => { setRequestError(null); setShowRequestModal(false); }}>Cancel</button>
+      </HallDialog>
 
       {/* Session Summary Modal */}
       <SessionSummaryModal
@@ -1527,53 +1473,16 @@ const ClientChat = () => {
       />
 
       {/* End Chat Confirmation Modal */}
-      {showEndConfirm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="rounded-3xl border border-red-500/20 p-8 max-w-md w-full relative overflow-hidden" style={{ backgroundColor: "var(--gl-glass)" }}>
-            {/* Decorative gradient */}
-            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-red-500/10 to-transparent pointer-events-none" />
-
-            <div className="relative">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-2xl bg-red-500/20 flex items-center justify-center border border-red-500/30">
-                  <Icon icon="solar:danger-triangle-bold-duotone" className="text-3xl text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "var(--gl-serif)" }}>
-                    End Chat Session?
-                  </h3>
-                  <p className="text-sm text-white/50">
-                    This action cannot be undone
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-sm text-white/60 mb-6">
-                Are you sure you want to end this chat session? You will be charged for the time spent, and the conversation will be closed.
-              </p>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowEndConfirm(false)}
-                  className="flex-1 px-6 py-3 rounded-2xl bg-white/5 text-white font-semibold text-sm hover:bg-white/10 transition-opacity border border-white/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEndChat}
-                  disabled={updateChatStatusMutation.isPending}
-                  className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-white"
-                  style={{
-                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                  }}
-                >
-                  {updateChatStatusMutation.isPending ? 'Ending...' : 'End Chat'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* End Chat Session? — every word kept, both actions kept. */}
+      <HallDialog open={showEndConfirm} onClose={() => setShowEndConfirm(false)} labelledBy="dlg-end">
+        <p className="eyebrow">This action cannot be undone</p>
+        <h1 className="ptitle" id="dlg-end">End Chat Session?</h1>
+        <p className="psub">Are you sure you want to end this chat session? You will be charged for the time spent, and the conversation will be closed.</p>
+        <button className="begin" id="dlg-end-confirm" onClick={handleEndChat} disabled={updateChatStatusMutation.isPending}>
+          {updateChatStatusMutation.isPending ? 'Ending...' : 'End Chat'}
+        </button>
+        <button className="quiet" id="dlg-end-cancel" onClick={() => setShowEndConfirm(false)}>Cancel</button>
+      </HallDialog>
     </div>
   );
 };
@@ -1773,6 +1682,7 @@ const FORCED_STATES = [
 function ForcedRoomState({ mode }: { mode: string }) {
   const [input, setInput] = React.useState("");
   const [log, setLog] = React.useState<string[]>([]);
+  const [dlg, setDlg] = React.useState<string | null>(null);
   const navigate = useNavigate();
   const fire = (what: string) => setLog((l) => [...l, what]);
 
@@ -1845,9 +1755,45 @@ function ForcedRoomState({ mode }: { mode: string }) {
           action: { label: "Cancel Request", onClick: () => fire("cancel request") },
         } : null}
         onBack={() => fire("back")}
-        onOpenProfile={() => fire("open profile")}
-        onEnd={!isEnded ? () => fire("end") : undefined}
+        onOpenProfile={() => { fire("open profile"); setDlg("reader"); }}
+        onEnd={!isEnded ? () => { fire("end"); setDlg("end"); } : undefined}
       />
+
+      {/* the four dialogs, driven with local state so each can be proven */}
+      <HallDialog open={dlg === "reader"} onClose={() => setDlg(null)} labelledBy="dlg-reader">
+        <p className="eyebrow" id="dlg-reader">Your Reader</p>
+        <p className="psub">Valentina</p>
+        <button className="quiet" id="dlg-reader-close" onClick={() => setDlg(null)}>Close</button>
+      </HallDialog>
+
+      <HallDialog open={dlg === "request"} onClose={() => setDlg(null)} labelledBy="dlg-request">
+        <p className="eyebrow">A new reading</p>
+        <h1 className="ptitle" id="dlg-request">Request New Session</h1>
+        <p className="psub">Send a message to Valentina to request a new reading session.</p>
+        <textarea id="dlg-request-text" rows={4} placeholder="Enter your message..." defaultValue="" />
+        <button className="begin" id="dlg-request-send" onClick={() => { fire("send request"); setDlg(null); }}>Send Request</button>
+        <button className="quiet" id="dlg-request-cancel" onClick={() => setDlg(null)}>Cancel</button>
+      </HallDialog>
+
+      <HallDialog open={dlg === "summary"} onClose={() => setDlg(null)} labelledBy="dlg-summary">
+        <p className="eyebrow">Your reading</p>
+        <h1 className="ptitle" id="dlg-summary">Your reading has ended</h1>
+        <p className="psub">We hope it brought you clarity. You're welcome back any time.</p>
+        <div className="hdlg-rows">
+          <div className="hdlg-row"><span className="slab">Duration</span><b>24m 00s</b></div>
+          <div className="hdlg-row"><span className="slab">Stardust spent</span><b>124.80</b></div>
+        </div>
+        <button className="begin" id="dlg-summary-again" onClick={() => { fire("book another"); setDlg(null); }}>Book another reading</button>
+        <button className="quiet" id="dlg-summary-close" onClick={() => setDlg(null)}>Close</button>
+      </HallDialog>
+
+      <HallDialog open={dlg === "end"} onClose={() => setDlg(null)} labelledBy="dlg-end">
+        <p className="eyebrow">This action cannot be undone</p>
+        <h1 className="ptitle" id="dlg-end">End Chat Session?</h1>
+        <p className="psub">Are you sure you want to end this chat session? You will be charged for the time spent, and the conversation will be closed.</p>
+        <button className="begin" id="dlg-end-confirm" onClick={() => { fire("end chat"); setDlg(null); }}>End Chat</button>
+        <button className="quiet" id="dlg-end-cancel" onClick={() => setDlg(null)}>Cancel</button>
+      </HallDialog>
       {/* The harness bar sits at the TOP and the room is pushed down by exactly
           its height, so it can never cover the composer it is meant to prove. */}
       <style>{`#forcebar{top:0;bottom:auto;border-top:0;border-bottom:1px solid rgba(232,200,139,.22);}
@@ -1859,6 +1805,8 @@ function ForcedRoomState({ mode }: { mode: string }) {
         {FORCED_STATES.map((m) => (
           <button key={m} aria-pressed={m === mode} onClick={() => navigate(`/chats?force=${m}`)}>{m}</button>
         ))}
+        <button id="open-request" onClick={() => setDlg("request")}>request modal</button>
+        <button id="open-summary" onClick={() => setDlg("summary")}>summary modal</button>
         <button id="forcelog" data-log={log.join("|")}>fired: {log.length}</button>
       </div>
     </>
