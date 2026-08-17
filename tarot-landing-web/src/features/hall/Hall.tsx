@@ -168,11 +168,11 @@ export default function Hall({ mode = "preview", psychicId }:
         <div className="lname">Valentina <em>has your words</em></div>
         <div className="lstat">Preparing your reading</div>
         <div className="cards" id="cards">
-          <div className="card">She is sitting with what you wrote. <strong>Nothing is being charged yet.</strong></div>
-          <div className="card"><strong>Your minutes do not start until you are in the room with her.</strong></div>
-          <div className="card">The cards are drawn for you and your dates. <strong>Nothing here is a template.</strong></div>
-          <div className="card">She remembers you between readings, so you never have to <strong>explain yourself twice.</strong></div>
-          <div className="card">This opens on its own the moment she is ready. <strong>You do not have to do anything.</strong></div>
+          <div className="card"><span className="cardtext">She is sitting with what you wrote. <strong>Nothing is being charged yet.</strong></span></div>
+          <div className="card"><span className="cardtext"><strong>Your minutes do not start until you are in the room with her.</strong></span></div>
+          <div className="card"><span className="cardtext">The cards are drawn for you and your dates. <strong>Nothing here is a template.</strong></span></div>
+          <div className="card"><span className="cardtext">She remembers you between readings, so you never have to <strong>explain yourself twice.</strong></span></div>
+          <div className="card"><span className="cardtext">This opens on its own the moment she is ready. <strong>You do not have to do anything.</strong></span></div>
         </div>
         <div className="lhint">reach in and move your hand through it</div>
       </div>

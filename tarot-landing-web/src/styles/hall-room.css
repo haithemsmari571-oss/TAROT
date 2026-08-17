@@ -1,0 +1,89 @@
+/* The reading room's own furniture, on top of hall.css.
+   Every value here is already in hall.css — the same gold, glass, faces and
+   easing. Nothing in this file changes an approved screen: all of it is scoped
+   to html[data-hall="room"], which only the live reading sets. */
+
+/* The room is the whole page here, not a stage that fades in behind a panel. */
+html[data-hall="room"] .room{opacity:1;pointer-events:auto;}
+html[data-hall="room"] .thread{pointer-events:auto;}
+html[data-hall="room"][data-state="pausing"] .room,
+html[data-hall="room"][data-state="ended"] .room{pointer-events:none;}
+
+/* header buttons — 48x48 of real hit area, from the composer's own send size */
+html[data-hall="room"] .rbtn{width:44px;height:44px;flex:none;border:0;cursor:pointer;
+  display:grid;place-items:center;padding:0;border-radius:50%;font:inherit;font-size:19px;
+  color:rgba(224,210,190,.9);background:rgba(255,240,214,.05);
+  border:1px solid rgba(255,214,150,.22);
+  transition:background .4s var(--ease),color .4s var(--ease);}
+html[data-hall="room"] .rbtn:hover{background:rgba(255,214,150,.16);color:#fff;}
+html[data-hall="room"] .rend{width:auto;height:44px;border-radius:999px;padding:0 15px;
+  font-size:13px;letter-spacing:.03em;margin-left:4px;}
+html[data-hall="room"] .whobtn{border-radius:50%;padding:0;cursor:pointer;
+  border:1px solid rgba(255,214,150,.22);background:rgba(255,240,214,.05);}
+
+/* the thread */
+html[data-hall="room"] .rnote{align-self:center;font-size:13px;letter-spacing:.04em;
+  color:rgba(190,172,150,.75);padding:10px 0;text-align:center;}
+html[data-hall="room"] .older{align-self:center;margin-bottom:4px;padding:9px 15px;
+  border-radius:999px;cursor:pointer;font:inherit;font-size:13px;
+  background:rgba(255,240,214,.05);border:1px solid rgba(255,214,150,.22);
+  color:rgba(224,210,190,.9);pointer-events:auto;}
+html[data-hall="room"] .older:hover{background:rgba(255,214,150,.16);color:#fff;}
+html[data-hall="room"] .rbanner{align-self:center;max-width:min(420px,92%);margin:10px 0;
+  padding:13px 17px;border-radius:18px;text-align:center;
+  background:rgba(8,4,18,.55);border:1px solid rgba(255,214,150,.20);}
+html[data-hall="room"] .rbanner b{display:block;font-family:var(--display);font-size:19px;
+  font-weight:300;color:#FFFBF2;}
+html[data-hall="room"] .rbanner span{display:block;margin-top:5px;font-size:14.5px;
+  line-height:1.7;color:rgba(220,205,184,.9);}
+
+/* the low-balance line, in the design's own quiet type */
+html[data-hall="room"] .lowbal{display:flex;align-items:center;justify-content:center;
+  flex-wrap:wrap;gap:10px;padding:10px 18px;pointer-events:auto;text-align:center;}
+html[data-hall="room"] .lowbal span{font-size:14.5px;line-height:1.7;
+  color:rgba(220,205,184,.9);text-shadow:0 1px 16px rgba(0,0,0,.85);}
+html[data-hall="room"] .lowbal button{min-height:44px;padding:11px 17px;border:0;
+  border-radius:16px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;
+  letter-spacing:.03em;color:#2A1A10;
+  background:linear-gradient(140deg,#FFECC4,#E6C48C);
+  box-shadow:0 16px 40px -18px rgba(0,0,0,.9),0 0 34px -10px var(--gold);}
+
+/* the composer is a real form now, so the box is an input */
+html[data-hall="room"] .composer{padding:8px 18px calc(18px + env(safe-area-inset-bottom));}
+html[data-hall="room"] .composer .box{flex:1;min-width:0;height:52px;border-radius:26px;
+  padding:0 22px;outline:none;
+  background:linear-gradient(160deg, rgba(30,18,46,.58), rgba(14,8,26,.48));
+  border:1px solid rgba(255,214,150,.24);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  color:#F6EFE2;font-family:var(--display);font-size:16px;font-weight:300;
+  transition:border-color .5s var(--ease),box-shadow .5s var(--ease);}
+html[data-hall="room"] .composer .box::placeholder{color:rgba(214,198,176,.6);font-style:italic;}
+html[data-hall="room"] .composer .box:focus{border-color:rgba(255,214,150,.5);
+  box-shadow:0 0 34px -12px var(--gold);}
+html[data-hall="room"] .composer .box:disabled{opacity:.55;cursor:not-allowed;}
+html[data-hall="room"] .composer .send:disabled{opacity:.35;cursor:not-allowed;}
+
+/* a state with no hall screen of its own keeps its own words, in the hall's
+   structure — eyebrow, title, sub, action, legal. No new copy is invented. */
+html[data-hall="room"] .rnotice{margin:0 auto;width:min(520px,calc(100% - 36px));
+  padding:22px 22px 18px calc(22px);margin-bottom:calc(18px + env(safe-area-inset-bottom));
+  border-radius:26px;pointer-events:auto;text-align:center;
+  background:linear-gradient(165deg, rgba(30,18,48,.60), rgba(12,6,24,.50));
+  border:1px solid rgba(255,214,150,.22);
+  backdrop-filter:blur(26px) saturate(1.2);-webkit-backdrop-filter:blur(26px) saturate(1.2);
+  box-shadow:0 40px 100px -40px rgba(0,0,0,.95), 0 0 60px -34px var(--gold);}
+html[data-hall="room"] .ntitle{margin-top:10px;font-family:var(--display);
+  font-size:clamp(22px,5vw,28px);font-weight:300;letter-spacing:-.02em;line-height:1.15;
+  color:#FFFCF4;}
+html[data-hall="room"] .rnotice .psub{margin-top:9px;}
+html[data-hall="room"] .rnotice .begin{margin-top:16px;}
+
+/* the meter reads "paused" rather than "left" when she is held */
+html[data-hall="room"] .meter b{font-variant-numeric:tabular-nums;}
+
+@media (max-width:430px){
+  html[data-hall="room"] .top{gap:9px;padding-left:14px;padding-right:14px;}
+  html[data-hall="room"] .whotext .nm{font-size:17px;}
+  html[data-hall="room"] .rend{padding:0 12px;font-size:12.5px;}
+  html[data-hall="room"] .lowbal{padding:10px 14px;}
+}

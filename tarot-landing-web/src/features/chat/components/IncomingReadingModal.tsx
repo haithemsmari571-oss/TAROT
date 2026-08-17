@@ -268,7 +268,7 @@ export default function IncomingReadingModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      className="incoming-gate fixed inset-0 z-[200] flex items-center justify-center p-4"
       style={{
         backgroundColor: "rgba(5,5,8,0.92)",
         backdropFilter: "blur(10px)",

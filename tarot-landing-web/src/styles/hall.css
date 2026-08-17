@@ -285,17 +285,16 @@ html[data-state="room"] .room{opacity:1;}
   html[data-state="form"] .orbfix{--os:.38;}
 }
 
-/* phones: the reassurance cards must read as sentences, not columns.
-   .card is a flex container, so each card's plain text and its <strong> become
-   two separate flex items and are laid out SIDE BY SIDE. A wide window has room
-   for that and it reads as one line; at phone widths each half is squeezed into
-   its own narrow column and the sentence breaks in two. Letting the items wrap
-   puts each half on its own centred line. Layout only — no colour, family,
-   weight, duration, easing or timing is touched here, and nothing in this block
-   applies above 430px, so the desktop rendering is unchanged. */
+/* The reassurance cards must read as sentences, not columns, at EVERY width.
+   .card is a flex container, so each card's plain text and its <strong> became
+   two separate flex items laid out SIDE BY SIDE — on a wide screen that showed
+   as one line with a gap punched down the middle, on a phone as two crushed
+   columns. The card's content is now wrapped in a single .cardtext element, so
+   the card has exactly one flex item and the sentence flows as ordinary text.
+   Layout only: no colour, family, weight, duration or easing is touched. */
+.cardtext{max-width:100%;text-align:center;}
 @media (max-width:430px){
   .cards{width:min(420px,94vw);}
-  .card{flex-wrap:wrap;align-content:center;column-gap:.3em;}
 }
 
 .mockbar{position:fixed;z-index:40;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;gap:8px;
@@ -434,6 +433,19 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
   #endpanel .receipt{margin-top:11px;}
   #endpanel .rcell{padding:10px 4px;}
   #endpanel .softbox{margin-top:10px;padding:11px 13px;font-size:13.5px;}
+}
+
+/* THE HANDOFF MUST NEVER GO BLACK.
+   The global Incoming Reading prompt paints its own backdrop at
+   rgba(5,5,8,0.92) (IncomingReadingModal.tsx:262) — 92% opaque, which blots out
+   the sky, the orb and the wheel and leaves the client staring at a black frame
+   with a card floating on it. Wherever the hall is on screen, that backdrop is
+   dropped to a veil so the sky she has been watching stays behind the prompt
+   all the way into the room. !important is required because the modal sets the
+   colour inline. Nothing changes anywhere else on the site. */
+html[data-hall] .incoming-gate{
+  background-color:rgba(5,5,8,.34)!important;
+  backdrop-filter:blur(3px)!important;-webkit-backdrop-filter:blur(3px)!important;
 }
 
 @media (prefers-reduced-motion: reduce){

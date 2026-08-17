@@ -9,9 +9,11 @@ import FRAG from "./hall.frag.glsl?raw";
 /* mode 'preview' = /design-preview: the developer harness and the room stage are
    present and the journey runs on its own timers.
    mode 'entry'   = the real customer flow: no harness, no room stage, and the
-   wait ends when the caller says the psychic accepted, not on a timer. */
+   wait ends when the caller says the psychic accepted, not on a timer.
+   mode 'room'    = the live reading. No request panel and no harness; React owns
+   the thread and the composer, and the caller drives the state. */
 export interface HallOptions {
-  mode?: "preview" | "entry";
+  mode?: "preview" | "entry" | "room";
   /** Entry mode: called when she presses Begin. Return false to stay on the form. */
   onBegin?: (question: string) => boolean | Promise<boolean>;
   /** "Add £N and carry on" — hand straight to the top-up path the app already has. */
@@ -373,7 +375,7 @@ cleanups.push(()=>{cancelAnimationFrame(raf);removeEventListener('resize',size);
 
 /* ══════════════ the journey ══════════════ */
 const HH=document.documentElement;
-HH.setAttribute('data-state','form');
+HH.setAttribute('data-state',MODE==="room"?'room':'form');
 /* The room stage only exists in preview mode, so these may be absent. */
 const thread=document.getElementById('thread'),stEl=document.getElementById('st'),
       nudgeEl=document.getElementById('nudge');
@@ -454,7 +456,8 @@ stages.forEach(s=>s.addEventListener('scroll',pinOrb,{passive:true}));
 cleanups.push(()=>{removeEventListener('resize',pinOrb);
   stages.forEach(s=>s.removeEventListener('scroll',pinOrb));});
 
-const beginBtn=document.getElementById('begin')!;
+/* The request panel does not exist in room mode. */
+const beginBtn=document.getElementById('begin');
 let sending=false;
 const onBegin=async ()=>{
   if(sending)return;
@@ -463,16 +466,16 @@ const onBegin=async ()=>{
   /* Entry mode: the real request must succeed before she is moved off the form. */
   if(!opts.onBegin){toLobby();return;}
   sending=true;
-  beginBtn.setAttribute('aria-busy','true');
+  beginBtn?.setAttribute('aria-busy','true');
   const q=(document.getElementById('q') as HTMLTextAreaElement|null);
   let ok=false;
   try{ ok=await opts.onBegin(q?q.value:""); }finally{
-    sending=false; beginBtn.removeAttribute('aria-busy');
+    sending=false; beginBtn?.removeAttribute('aria-busy');
   }
   if(ok)toLobby();
 };
-beginBtn.addEventListener('click',onBegin);
-cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));
+if(beginBtn){beginBtn.addEventListener('click',onBegin);
+cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));}
 /* ═══════════ 5 · the top-up hold, and 6 · the receipt ═══════════
    Both live in the state machine beside the request, the wait and the arrival.
    They are wired in BOTH modes: /design-preview drives them from the mock bar,
@@ -567,13 +570,13 @@ if(againBtn){againBtn.addEventListener('click',onAgain);
 if(backBtn){backBtn.addEventListener('click',onBack);
   cleanups.push(()=>backBtn.removeEventListener('click',onBack));}
 
-const pillsEl=document.getElementById('pills')!;
+const pillsEl=document.getElementById('pills');
 const onPills=(e:Event)=>{
   const p=(e.target as HTMLElement).closest('.pill');if(!p)return;
   [...document.querySelectorAll('.pill')].forEach(x=>x.setAttribute('aria-pressed',String(x===p)));
   harmonic(.06);};
-pillsEl.addEventListener('click',onPills);
-cleanups.push(()=>pillsEl.removeEventListener('click',onPills));
+if(pillsEl){pillsEl.addEventListener('click',onPills);
+cleanups.push(()=>pillsEl.removeEventListener('click',onPills));}
 
 /* ── the developer harness. /design-preview only — it must never reach a
    customer, and in entry mode none of these elements are rendered at all. ── */

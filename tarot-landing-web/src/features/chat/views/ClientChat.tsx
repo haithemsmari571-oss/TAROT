@@ -14,6 +14,7 @@ import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal } from "../components/SessionSummaryModal";
+import HallRoom from "@/features/hall/HallRoom";
 import { MessageBubble } from "../components/MessageBubble";
 import { TypingIndicator } from "../components/TypingIndicator";
 import { SessionBar } from "../components/SessionBar";
@@ -1034,6 +1035,17 @@ const ClientChat = () => {
     return <ChatStatePreview mode={previewMode} />;
   }
 
+  // ── ROOM STATE INJECTOR (dev only): /chats?force=<state> ──
+  //    Renders the REAL HallRoom with its props set directly, so every state in
+  //    ROOM-STATES.md can be forced without a live session and without touching
+  //    billing. import.meta.env.DEV is replaced by `false` at build time, so
+  //    this branch and ForcedRoomState below are dropped from the production
+  //    bundle entirely. Identifier to grep for: HALLROOM_FORCE_INJECTOR.
+  const forcedRoomState = import.meta.env.DEV ? searchParams.get("force") : null;
+  if (forcedRoomState) {
+    return <ForcedRoomState mode={forcedRoomState} />;
+  }
+
   // --- LOADING STATE ---
   if (loading) {
     return (
@@ -1298,586 +1310,113 @@ const ClientChat = () => {
       </div>
 
       {/* RIGHT SIDE - CHAT WINDOW */}
-      <div className={`${!selectedChat ? 'hidden' : 'flex'} md:flex flex-1 relative z-10 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden`} style={{ backgroundColor: `color-mix(in srgb, var(--gl-base) 13%, transparent)` }}>
-        {!selectedChat ? (
-          // No chat selected
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center px-6">
-              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center mx-auto mb-6 border border-white/10">
-                <Icon icon="solar:chat-round-dots-bold-duotone" className="text-6xl text-primary/60" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: "var(--gl-serif)" }}>
-                Select a conversation
-              </h2>
-              <p className="text-base text-white/50 max-w-sm mx-auto">
-                Choose a chat from the list to start your mystical journey
-              </p>
-            </div>
+      {/* ── THE READING ROOM, DRAWN AS THE HALL ──
+          Presentation only. Every number, every message and every action below
+          is the one ClientChat already computed; this swaps what is drawn, not
+          what is charged. State numbers refer to ROOM-STATES.md. */}
+      {!selectedChat ? (
+        <div className="hidden md:flex flex-1 relative z-10 items-center justify-center">
+          <div className="text-center px-6">
+            <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: "var(--gl-serif)" }}>
+              Select a conversation
+            </h2>
+            <p className="text-base text-white/50 max-w-sm mx-auto">
+              Choose a chat from the list to start your mystical journey
+            </p>
           </div>
-        ) : (
-          <div className="flex-1 flex">
-            {/* CHAT MESSAGES AREA */}
-            <div className="flex-1 flex flex-col">
-              {/* Chat Header - Desktop */}
-              <div className="hidden md:flex items-center justify-between p-5 border-b border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 13%, transparent)` }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border border-white/10">
-                    {selectedChatData?.user_profile_pic_url ? (
-                      <img
-                        src={selectedChatData.user_profile_pic_url}
-                        alt={selectedChatData.user_name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Icon icon="ph:user-fill" className="text-white/80 text-2xl" />
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-white text-lg" style={{ fontFamily: "var(--gl-serif)" }}>
-                        {selectedChatData?.user_name || "Psychic"}
-                      </h2>
-                      {/* Tablet (<lg): open the reader profile sheet; on lg the sidebar shows it. */}
-                      <button
-                        type="button"
-                        onClick={() => setShowProfileSheet(true)}
-                        aria-label="View your reader's profile"
-                        className="lg:hidden w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center flex-shrink-0"
-                      >
-                        <Icon icon="solar:alt-arrow-down-linear" className="text-white/50 text-xs" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isChatActive ? (
-                        <>
-                          <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                          <span className="text-sm text-green-400 font-medium">Active now</span>
-                        </>
-                      ) : isPaused ? (
-                        <>
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "var(--gl-accent)" }} />
-                          <span className="text-sm font-medium" style={{ color: "var(--gl-accent)" }}>Reading paused — add Stardust to resume</span>
-                        </>
-                      ) : currentChatStatus === 'ENDED' ? (
-                        <>
-                          <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                          <span className="text-sm text-red-400 font-medium">Session Ended</span>
-                        </>
-                      ) : currentChatStatus === 'REQUESTED' ? (
-                        <>
-                          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                          <span className="text-sm text-yellow-400 font-medium">Pending</span>
-                        </>
-                      ) : currentChatStatus === 'ARCHIVED' ? (
-                        <>
-                          <div className="w-2.5 h-2.5 rounded-full bg-gray-500" />
-                          <span className="text-sm text-gray-400 font-medium">Cancelled</span>
-                        </>
-                      ) : (
-                        <span className="text-sm text-white/40">
-                          {currentChatStatus || 'Offline'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* End Chat Button for Active/Paused Chats */}
-                  {(isChatActive || isPaused) && (
-                    <button
-                      onClick={() => setShowEndConfirm(true)}
-                      className="px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold transition-opacity hover:opacity-80 flex items-center gap-2"
-                    >
-                      <Icon icon="solar:logout-3-bold-duotone" className="text-base" />
-                      End Chat
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Chat Header - Mobile */}
-              <div className="md:hidden flex items-center justify-between px-3 py-2 border-b border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 13%, transparent)` }}>
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <button
-                    onClick={handleBackToList}
-                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/10"
-                  >
-                    <Icon icon="solar:alt-arrow-left-linear" className="text-white text-base" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowProfileSheet(true)}
-                    className="flex items-center gap-2 min-w-0 flex-1 text-left"
-                    aria-label="View your reader's profile"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border border-white/10 flex-shrink-0">
-                      {selectedChatData?.user_profile_pic_url ? (
-                        <img src={selectedChatData.user_profile_pic_url} alt={selectedChatData.user_name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Icon icon="ph:user-fill" className="text-white/80 text-sm" />
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white text-sm truncate" style={{ fontFamily: "var(--gl-serif)" }}>
-                          {selectedChatData?.user_name || "Psychic"}
-                        </span>
-                        {isChatActive && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />}
-                        <Icon icon="solar:alt-arrow-down-linear" className="text-white/40 text-xs flex-shrink-0" />
-                      </div>
-                      <span className="text-xs text-white/40">
-                        {isChatActive ? 'Active' : isPaused ? 'Paused' : currentChatStatus === 'ENDED' ? 'Ended' : currentChatStatus === 'REQUESTED' ? 'Pending' : currentChatStatus === 'ARCHIVED' ? 'Cancelled' : ''}
-                      </span>
-                    </div>
-                  </button>
-                </div>
-
-                {(isChatActive || isPaused) && (
-                  <button
-                    onClick={() => setShowEndConfirm(true)}
-                    className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-1 flex-shrink-0"
-                  >
-                    <Icon icon="solar:logout-3-bold-duotone" className="text-xs" />
-                    End
-                  </button>
-                )}
-              </div>
-
-              {/* ── Session status bar — Time Left + Stardust lead; tap Stardust to top up ── */}
-              {(isChatActive || isPaused) && (
-                <SessionBar
-                  elapsedSeconds={sessionState.elapsedSeconds}
-                  remainingSeconds={remaining}
-                  minutesLeft={minutesLeft}
-                  stardust={stardustLeft}
-                  isPaused={isPaused}
-                  isConnected={isConnected}
-                  onTopUp={handleAddStardust}
-                />
-              )}
-
-              {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-4">
-                {loadingMessages && (
-                  <div className="flex justify-center py-12">
-                    <div className="flex items-center gap-3 text-white/60 text-sm px-6 py-3 rounded-2xl bg-white/5 border border-white/10">
-                      <Icon icon="solar:spinner-bold-duotone" className="text-xl animate-spin" />
-                      <span>Loading messages...</span>
-                    </div>
-                  </div>
-                )}
-
-                {connectionStatus === 'connecting' && !loadingMessages && (
-                  <div className="flex justify-center py-12">
-                    <div className="flex items-center gap-3 text-white/60 text-sm px-6 py-3 rounded-2xl bg-white/5 border border-white/10">
-                      <Icon icon="solar:spinner-bold-duotone" className="text-xl animate-spin" />
-                      <span>Connecting...</span>
-                    </div>
-                  </div>
-                )}
-
-                {connectionStatus === 'error' && (
-                  <div className="flex justify-center py-12">
-                    <div className="text-center">
-                      <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-3">
-                        <Icon icon="solar:danger-triangle-bold-duotone" className="text-red-400 text-3xl" />
-                      </div>
-                      <p className="text-base font-semibold text-red-400">Connection failed</p>
-                      {wsError && <p className="text-sm text-white/40 mt-2">{wsError}</p>}
-                    </div>
-                  </div>
-                )}
-                {!loadingMessages && messages.length === 0 && connectionStatus === 'connected' && (
-                  <div className="flex justify-center py-16">
-                    <div className="text-center">
-                      <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center mx-auto mb-4 border border-white/10">
-                        <Icon icon="solar:chat-dots-bold-duotone" className="text-5xl text-primary/60" />
-                      </div>
-                      <p className="text-base text-white/50 font-medium">No messages yet</p>
-                      <p className="text-sm text-white/30 mt-1">Start the conversation!</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Load More Button */}
-                {!loadingMessages && allMessages.length > 0 && hasMoreMessages && (
-                  <div className="flex justify-center py-4">
-                    <button
-                      onClick={handleLoadOlderMessages}
-                      disabled={loadingOlderMessages}
-                      className="px-6 py-3 rounded-2xl font-semibold text-sm transition-opacity hover:opacity-80 backdrop-blur-xl border border-white/10"
-                      style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                        color: 'white'
-                      }}
-                    >
-                      {loadingOlderMessages ? (
-                        <div className="flex items-center gap-2">
-                          <Icon icon="solar:spinner-bold-duotone" className="text-lg animate-spin" />
-                          <span>Loading...</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Icon icon="solar:arrow-up-bold-duotone" className="text-lg" />
-                          <span>Load Older Messages</span>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {allMessages.map((msg, i) => {
-                  // System / event messages render as a centred, muted pill.
-                  if (msg.type === 'system' || msg.is_system) {
-                    return (
-                      <div key={msg.id || i} className="flex justify-center my-5">
-                        <div className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-xl max-w-[85%]">
-                          <p className="text-[13px] text-white/55 font-medium text-center">
-                            {msg.content}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  const senderId = msg.sender_id || msg.user_id;
-                  const isMyMessage = senderId === user?.id;
-                  const messageTime = msg.timestamp || msg.created_at;
-
-                  // Group consecutive messages from the same sender: only the first
-                  // in a run shows the avatar + name; the rest tuck in beneath it.
-                  const prev = allMessages[i - 1];
-                  const prevSameSender =
-                    prev &&
-                    !(prev.type === 'system' || prev.is_system) &&
-                    ((prev.sender_id || prev.user_id) === senderId);
-                  const startOfGroup = !prevSameSender;
-
-                  return (
-                    <MessageBubble
-                      key={msg.id || i}
-                      content={msg.content}
-                      timestamp={messageTime}
-                      isOwn={isMyMessage}
-                      isGroupStart={startOfGroup}
-                      senderName={psychicName}
-                      senderAvatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
-                      status={msg.status}
-                    />
-                  );
-                })}
-
-                {/* Chat Ended Banner in Messages Area */}
-                {currentChatStatus === 'ENDED' && messages.length > 0 && (
-                  <div className="flex justify-center my-8">
-                    <div className="px-6 py-4 rounded-2xl bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 backdrop-blur-xl max-w-md">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center flex-shrink-0">
-                          <Icon icon="solar:close-circle-bold-duotone" className="text-red-400 text-xl" />
-                        </div>
-                        <p className="text-base font-bold text-white">Session Ended</p>
-                      </div>
-                      <p className="text-sm text-white/60 ml-11">
-                        This chat session has been concluded. You can request a new session below.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Chat Pending Banner in Messages Area */}
-                {currentChatStatus === 'REQUESTED' && (
-                  <div className="flex justify-center my-8">
-                    <div className="px-6 py-4 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 backdrop-blur-xl max-w-md">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-xl bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center flex-shrink-0 animate-pulse">
-                          <Icon icon="solar:clock-circle-bold-duotone" className="text-yellow-400 text-xl" />
-                        </div>
-                        <p className="text-base font-bold text-white">Waiting for Psychic</p>
-                      </div>
-                      <p className="text-sm text-white/60 ml-11">
-                        Your chat request is pending. Your reading should begin within 3 minutes.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Chat Cancelled/Rejected Banner in Messages Area */}
-                {currentChatStatus === 'ARCHIVED' && (
-                  <div className="flex justify-center my-8">
-                    <div className="px-6 py-4 rounded-2xl bg-gradient-to-r from-gray-500/10 to-gray-600/10 border border-gray-500/20 backdrop-blur-xl max-w-md">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-xl bg-gray-500/20 border border-gray-500/30 flex items-center justify-center flex-shrink-0">
-                          <Icon icon="solar:close-square-bold-duotone" className="text-gray-400 text-xl" />
-                        </div>
-                        <p className="text-base font-bold text-white">Request Not Accepted</p>
-                      </div>
-                      <p className="text-sm text-white/60 ml-11">
-                        This chat request was not accepted. You can try requesting again.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Reader "typing…" indicator while a message is being delivered */}
-                {isReaderTyping && currentChatStatus === 'ACTIVE' && (
-                  <TypingIndicator
-                    avatarUrl={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
-                    name={psychicName}
-                  />
-                )}
-
-                <div ref={scrollRef} />
-              </div>
-
-              {/* ── Calm low-balance banner (~1 minute of reading time left) ── */}
-              {isChatActive && sessionState.showCriticalWarning && (
-                <div className="px-3 sm:px-6 pt-3">
-                  <div
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border px-4 py-3.5"
-                    style={{ borderColor: `color-mix(in srgb, var(--gl-accent) 27%, transparent)`, backgroundColor: `color-mix(in srgb, var(--gl-accent) 8%, transparent)` }}
-                  >
-                    <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}
-                    >
-                      <Icon icon="solar:hourglass-line-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
-                    </div>
-                    <p className="flex-1 text-sm leading-snug text-white/80">
-                      You have <span className="font-bold text-white">{readingTimeLeftLabel}</span> of reading time left. Add Stardust to keep your reading going.
-                    </p>
-                    <button
-                      onClick={handlePauseForTopUp}
-                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                      style={{ backgroundColor: "var(--gl-accent)", color: "var(--gl-base)" }}
-                    >
-                      <Icon icon="ph:sparkle-fill" className="text-base" />
-                      Add Stardust
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Message Input - Only show for ACTIVE chats */}
-              {isChatActive ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
-                  <form onSubmit={handleSendMessage} className="flex items-center gap-3">
-                    <div className="flex-1 relative">
-                      <input
-                        value={input}
-                        onChange={(e) => handleClientInput(e.target.value)}
-                        onBlur={stopClientTyping}
-                        placeholder={
-                          !isConnected
-                            ? "Connecting..."
-                            : sessionState.status === 'ENDED'
-                              ? "Session ended"
-                              : "Type your message..."
-                        }
-                        disabled={!isConnected || sessionState.status === 'ENDED' || !sessionState.isInputEnabled}
-                        className="w-full bg-white/5 border border-white/10 rounded-3xl px-6 py-4 pr-12 text-white text-sm outline-none focus:border-primary/50 focus:bg-white/8 transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-white/30"
-                      />
-                      <Icon icon="ph:star-fill" className="absolute right-4 top-1/2 -translate-y-1/2 text-primary text-xl pointer-events-none" />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={!isConnected || !input.trim() || sessionState.status === 'ENDED' || !sessionState.isInputEnabled}
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center transition-opacity hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0 shadow-lg text-white"
-                      style={{
-                        background: (!isConnected || !input.trim() || sessionState.status === 'ENDED' || !sessionState.isInputEnabled)
-                          ? 'rgba(255, 255, 255, 0.1)'
-                          : `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
-                      }}
-                    >
-                      <Icon icon="solar:plain-2-bold" className="text-xl" />
-                    </button>
-                  </form>
-                  {!isConnected && (
-                    <p className="text-xs text-white/40 mt-3 text-center">
-                      {connectionStatus === 'connecting' ? 'Connecting to chat...' : 'Not connected'}
-                    </p>
-                  )}
-                </div>
-              ) : isPaused ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
-                  <div className="p-5 rounded-2xl border mb-4" style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 7%, transparent)`, borderColor: `color-mix(in srgb, var(--gl-accent) 20%, transparent)` }}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 13%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}>
-                        <Icon icon="solar:pause-circle-bold-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-white">
-                          {isGrace ? 'Out of Stardust' : 'Reading paused'}
-                        </p>
-                        <p className="text-xs text-white/60">
-                          {isGrace
-                            ? `Not enough Stardust for another minute with ${psychicName}.`
-                            : sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
-                              ? 'Your Stardust ran low — add more to keep going.'
-                              : 'Waiting for your reader to resume.'}
-                        </p>
-                      </div>
-                      {isGrace && (
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-2xl font-black tabular-nums" style={{ color: "var(--gl-accent)" }}>
-                            0:{String(Math.max(0, sessionState.graceSecondsLeft)).padStart(2, '0')}
-                          </p>
-                          <p className="text-[10px] uppercase tracking-wider text-white/40">to top up</p>
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-xs text-white/50 mb-4">
-                      {isGrace
-                        ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on — the reading pauses here until you do, and closes on its own if you don't.`
-                        : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn’t resumed.'}
-                    </p>
-                    <div className="flex gap-2 text-xs text-white/40">
-                      <Icon icon="solar:info-circle-bold-duotone" className="text-base flex-shrink-0" />
-                      <span>Session cost so far: {formatGbp(sessionState.estimatedCost || 0)}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={handleResumeChat}
-                      className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg text-white flex items-center justify-center gap-2"
-                      style={{
-                        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
-                      }}
-                    >
-                      <Icon icon="solar:play-circle-bold-duotone" className="text-xl" />
-                      Resume
-                    </button>
-                    <button
-                      onClick={handleTopUpClick}
-                      className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg text-white flex items-center justify-center gap-2"
-                      style={{
-                        background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
-                      }}
-                    >
-                      <Icon icon="ph:sparkle-fill" className="text-lg" />
-                      Add Stardust
-                    </button>
-                    <button
-                      onClick={() => setShowEndConfirm(true)}
-                      className="flex-1 px-6 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] border border-red-500/30 text-red-400 flex items-center justify-center gap-2"
-                      style={{
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)'
-                      }}
-                    >
-                      <Icon icon="solar:logout-3-bold-duotone" className="text-xl" />
-                      End Chat
-                    </button>
-                  </div>
-                </div>
-              ) : currentChatStatus === 'REQUESTED' ? (
-                <div className="p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
-                  <div className="p-5 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 mb-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-2xl bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center flex-shrink-0 animate-pulse">
-                        <Icon icon="solar:clock-circle-bold-duotone" className="text-yellow-400 text-2xl" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-white">Waiting for Psychic</p>
-                        <p className="text-xs text-white/60">Your chat request is pending</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4">
-                      <div className="flex gap-1 animate-pulse">
-                        <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                        <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                        <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                      </div>
-                      <p className="text-xs text-white/50 ml-2">Usually within 3 minutes</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleCancelRequest}
-                    disabled={updateChatStatusMutation.isPending}
-                    className="w-full px-6 py-3 rounded-2xl font-semibold text-sm transition-opacity hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 bg-white/5 text-white border border-white/10"
-                  >
-                    {updateChatStatusMutation.isPending ? (
-                      <>
-                        <Icon icon="solar:spinner-bold-duotone" className="text-lg animate-spin" />
-                        Canceling...
-                      </>
-                    ) : (
-                      <>
-                        <Icon icon="solar:close-circle-bold-duotone" className="text-lg" />
-                        Cancel Request
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : currentChatStatus === 'ENDED' ? (
-                <div className="p-5 sm:p-6 border-t border-white/5 backdrop-blur-xl" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
-                  <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/10">
-                    <div
-                      className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `color-mix(in srgb, var(--gl-accent) 12%, transparent)`, border: `1px solid color-mix(in srgb, var(--gl-accent) 27%, transparent)` }}
-                    >
-                      <Icon icon="solar:moon-stars-bold-duotone" className="text-2xl" style={{ color: "var(--gl-accent)" }} />
-                    </div>
-                    <div>
-                      <p className="text-base font-bold text-white" style={{ fontFamily: "var(--gl-serif)" }}>
-                        Your reading has ended
-                      </p>
-                      <p className="text-sm text-white/55 mt-0.5">
-                        We hope it brought you clarity. You're welcome back any time.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2.5">
-                    <button
-                      onClick={() => { setRequestError(null); setShowRequestModal(true); }}
-                      disabled={requestChatMutation.isPending}
-                      className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg text-white"
-                      style={{ background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)` }}
-                    >
-                      <Icon icon="solar:chat-round-line-bold-duotone" className="text-xl" />
-                      Book another reading
-                    </button>
-                    <button
-                      onClick={() => navigate('/psychics-browse')}
-                      className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-sm transition-colors hover:bg-white/10 flex items-center justify-center gap-2 text-white border border-white/15 bg-white/[0.04]"
-                    >
-                      <Icon icon="solar:users-group-rounded-bold-duotone" className="text-xl" style={{ color: "var(--gl-accent)" }} />
-                      Browse psychics
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {/* RIGHT SIDEBAR — desktop only; mobile/tablet use the profile sheet */}
-            {selectedChatData && (
-              <div className="hidden lg:flex w-80 border-l border-white/5 flex-col backdrop-blur-xl overflow-y-auto" style={{ backgroundColor: `color-mix(in srgb, var(--gl-glass) 87%, transparent)` }}>
-                <div className="p-6">
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-6" style={{ fontFamily: "var(--gl-serif)" }}>
-                    Your Reader
-                  </h3>
-
-                  {loadingPsychic ? (
-                    <div className="flex justify-center py-12">
-                      <Icon icon="solar:spinner-bold-duotone" className="text-3xl text-primary/60 animate-spin" />
-                    </div>
-                  ) : (
-                    <PsychicProfileCard
-                      name={psychicName}
-                      avatarUrl={psychicDetails?.profile_picture_url || selectedChatData.user_profile_pic_url}
-                      isVerified={psychicDetails?.is_verified}
-                      isOnline={psychicDetails?.is_online}
-                      bio={psychicDetails?.bio}
-                      categories={psychicDetails?.categories}
-                      pricePerSecond={psychicDetails?.price_per_second}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <HallRoom
+          phase={currentChatStatus === 'ENDED' ? 'ended' : isPaused ? 'pausing' : 'room'}
+          readerName={psychicName}
+          readerPhoto={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
+          minutesLeft={minutesLeft}
+          isPaused={isPaused}
+          elapsedLabel={`${Math.floor((sessionState.elapsedSeconds || 0) / 60)}:${String(Math.floor((sessionState.elapsedSeconds || 0) % 60)).padStart(2, "0")} elapsed`}
+          isConnected={isConnected}
+          statusWord={isChatActive ? 'reading for you' : isPaused ? 'holding your place' : currentChatStatus === 'ENDED' ? 'ended' : currentChatStatus === 'REQUESTED' ? 'pending' : currentChatStatus === 'ARCHIVED' ? 'cancelled' : ''}
+          messages={allMessages.map((msg: any, i: number) => ({
+            id: msg.id ?? i,
+            mine: (msg.sender_id || msg.user_id) === user?.id,
+            text: msg.content,
+          }))}
+          loadingMessages={loadingMessages}
+          readerTyping={isReaderTyping && currentChatStatus === 'ACTIVE'}
+          hasMore={hasMoreMessages}
+          loadingMore={loadingOlderMessages}
+          onLoadMore={loadOlderMessages}
+          banner={
+            currentChatStatus === 'ENDED' && allMessages.length > 0
+              ? { title: "Session Ended", body: "This chat session has been concluded. You can request a new session below." }
+              : currentChatStatus === 'REQUESTED'
+                ? { title: "Waiting for Psychic", body: "Your chat request is pending. Your reading should begin within 3 minutes." }
+                : currentChatStatus === 'ARCHIVED'
+                  ? { title: "Request Not Accepted", body: "This chat request was not accepted. You can try requesting again." }
+                  : null
+          }
+          input={input}
+          onInput={handleClientInput}
+          onSend={() => handleSendMessage({ preventDefault: () => {} } as any)}
+          composerPlaceholder={!isConnected ? "Connecting..." : sessionState.status === 'ENDED' ? "Session ended" : "Say anything…"}
+          composerDisabled={!isConnected || sessionState.status === 'ENDED' || !sessionState.isInputEnabled}
+          showComposer={!!isChatActive}
+          lowBalance={
+            isChatActive && sessionState.showCriticalWarning
+              ? { text: `You have ${readingTimeLeftLabel} of reading time left. Add Stardust to keep your reading going.`,
+                  action: "Add Stardust", onAction: handlePauseForTopUp }
+              : null
+          }
+          hold={
+            isPaused
+              ? {
+                  title: isGrace ? 'Out of Stardust' : 'Reading paused',
+                  sub: isGrace
+                    ? `Not enough Stardust for another minute with ${psychicName}.`
+                    : sessionState.pauseReason === 'INSUFFICIENT_BALANCE'
+                      ? 'Your Stardust ran low — add more to keep going.'
+                      : 'Waiting for your reader to resume.',
+                  body: isGrace
+                    ? `Add Stardust in the next ${Math.max(0, sessionState.graceSecondsLeft)}s to carry on — the reading pauses here until you do, and closes on its own if you don't.`
+                    : 'Add Stardust to keep going, or resume if you still have Stardust left. Your reading will close on its own after 30 minutes if it isn’t resumed.',
+                  costLine: `Session cost so far: ${formatGbp(sessionState.estimatedCost || 0)}`,
+                  graceSeconds: isGrace ? sessionState.graceSecondsLeft : null,
+                  onResume: isGrace ? undefined : handleResumeChat,
+                  onAddTime: () => handleTopUpClick(),
+                  onEndNow: () => setShowEndConfirm(true),
+                  perMinute: psychicDetails?.price_per_second != null
+                    ? Math.round(psychicDetails.price_per_second * 60 * 100) / 100
+                    : null,
+                }
+              : null
+          }
+          receipt={
+            currentChatStatus === 'ENDED'
+              ? {
+                  minutes: Math.max(0, Math.floor((sessionState.elapsedSeconds || 0) / 60)),
+                  total: formatGbp(sessionState.estimatedCost || 0),
+                  perMinute: psychicDetails?.price_per_second != null
+                    ? formatGbp(Math.round(psychicDetails.price_per_second * 60 * 100) / 100)
+                    : null,
+                  title: sessionState.endReason || 'Your reading has ended',
+                  sub: "We hope it brought you clarity. You're welcome back any time. ",
+                  onAgain: () => { setRequestError(null); setShowRequestModal(true); },
+                  onBack: () => navigate('/psychics-browse'),
+                }
+              : null
+          }
+          notice={
+            currentChatStatus === 'REQUESTED'
+              ? { eyebrow: "Waiting for Psychic", title: "Your chat request is pending",
+                  sub: "Usually within 3 minutes",
+                  action: { label: "Cancel Request", onClick: handleCancelRequest,
+                            pending: updateChatStatusMutation.isPending } }
+              : null
+          }
+          onBack={handleBackToList}
+          onOpenProfile={() => setShowProfileSheet(true)}
+          onEnd={(isChatActive || isPaused) ? () => setShowEndConfirm(true) : undefined}
+        />
+      )}
 
       {/* Reader profile — mobile/tablet bottom sheet (lg shows the sidebar instead) */}
       {showProfileSheet && selectedChatData && (
@@ -2216,3 +1755,111 @@ const ChatStatePreview = ({ mode }: { mode: string }) => {
 };
 
 export default ClientChat;
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HALLROOM_FORCE_INJECTOR — development only, absent from production builds.
+   Drives the real HallRoom component with hand-set props. It calls no API, runs
+   no timer and touches no billing: every "action" below just records that it
+   fired, so a state's controls can be clicked and proven without spending
+   anything. Reached at /chats?force=<state>.
+   ══════════════════════════════════════════════════════════════════════════ */
+const FORCED_STATES = [
+  "active", "empty", "typing", "disconnected", "loading", "older",
+  "lowbalance", "paused", "grace", "ended", "requested", "archived",
+] as const;
+
+function ForcedRoomState({ mode }: { mode: string }) {
+  const [input, setInput] = React.useState("");
+  const [log, setLog] = React.useState<string[]>([]);
+  const navigate = useNavigate();
+  const fire = (what: string) => setLog((l) => [...l, what]);
+
+  const msgs = [
+    { id: 1, mine: true, text: "He stopped answering six weeks ago. Daniel, born 14 August 1992." },
+    { id: 2, mine: false, text: "daniel, six weeks of that silence after something that felt so right" },
+    { id: 3, mine: false, text: "that shift is real and you felt it before you could even name it" },
+  ];
+  const isPaused = mode === "paused" || mode === "grace";
+  const isEnded = mode === "ended";
+  const phase = isEnded ? "ended" : isPaused ? "pausing" : "room";
+
+  return (
+    <>
+      <HallRoom
+        phase={phase as any}
+        readerName="Valentina"
+        readerPhoto={null}
+        minutesLeft={mode === "lowbalance" ? 1 : isPaused ? null : 38}
+        isPaused={isPaused}
+        elapsedLabel="12:04 elapsed"
+        isConnected={mode !== "disconnected"}
+        statusWord={isEnded ? "ended" : isPaused ? "holding your place" : mode === "requested" ? "pending" : "reading for you"}
+        messages={mode === "empty" || mode === "loading" || mode === "requested" ? [] : msgs}
+        loadingMessages={mode === "loading"}
+        readerTyping={mode === "typing"}
+        hasMore={mode === "older"}
+        loadingMore={false}
+        onLoadMore={() => fire("load older")}
+        banner={
+          mode === "ended" ? { title: "Session Ended", body: "This chat session has been concluded. You can request a new session below." }
+          : mode === "requested" ? { title: "Waiting for Psychic", body: "Your chat request is pending. Your reading should begin within 3 minutes." }
+          : mode === "archived" ? { title: "Request Not Accepted", body: "This chat request was not accepted. You can try requesting again." }
+          : null
+        }
+        input={input}
+        onInput={setInput}
+        onSend={() => { fire("send: " + input); setInput(""); }}
+        composerPlaceholder={mode === "disconnected" ? "Connecting..." : isEnded ? "Session ended" : "Say anything…"}
+        composerDisabled={mode === "disconnected"}
+        showComposer={!isPaused && !isEnded && mode !== "requested" && mode !== "archived"}
+        lowBalance={mode === "lowbalance"
+          ? { text: "You have about 1 minute of reading time left. Add Stardust to keep your reading going.",
+              action: "Add Stardust", onAction: () => fire("add stardust (banner)") }
+          : null}
+        hold={isPaused ? {
+          title: mode === "grace" ? "Out of Stardust" : "Reading paused",
+          sub: mode === "grace" ? "Not enough Stardust for another minute with Valentina."
+                                : "Waiting for your reader to resume.",
+          body: mode === "grace"
+            ? "Add Stardust in the next 45s to carry on — the reading pauses here until you do, and closes on its own if you don't."
+            : "Add Stardust to keep going, or resume if you still have Stardust left.",
+          costLine: "Session cost so far: £62.40",
+          graceSeconds: mode === "grace" ? 45 : null,
+          onResume: mode === "grace" ? undefined : () => fire("resume"),
+          onAddTime: (a: number) => fire("top up £" + a),
+          onEndNow: () => fire("end now"),
+          perMinute: 5.2,
+        } : null}
+        receipt={isEnded ? {
+          minutes: 24, total: "£124.80", perMinute: "£5.20",
+          title: "Your reading has ended",
+          sub: "We hope it brought you clarity. You're welcome back any time. ",
+          onAgain: () => fire("book another"), onBack: () => fire("browse psychics"),
+          onRate: (n: number) => fire("rated " + n),
+        } : null}
+        notice={mode === "requested" ? {
+          eyebrow: "Waiting for Psychic", title: "Your chat request is pending",
+          sub: "Usually within 3 minutes",
+          action: { label: "Cancel Request", onClick: () => fire("cancel request") },
+        } : null}
+        onBack={() => fire("back")}
+        onOpenProfile={() => fire("open profile")}
+        onEnd={!isEnded ? () => fire("end") : undefined}
+      />
+      {/* The harness bar sits at the TOP and the room is pushed down by exactly
+          its height, so it can never cover the composer it is meant to prove. */}
+      <style>{`#forcebar{top:0;bottom:auto;border-top:0;border-bottom:1px solid rgba(232,200,139,.22);}
+        html:has(#forcebar) .room{padding-top:var(--forcebar,0px);}`}</style>
+      <div className="mockbar" id="forcebar" ref={(el) => {
+        if (el) document.documentElement.style.setProperty("--forcebar", el.getBoundingClientRect().height + "px");
+      }}>
+        <span>forced state</span>
+        {FORCED_STATES.map((m) => (
+          <button key={m} aria-pressed={m === mode} onClick={() => navigate(`/chats?force=${m}`)}>{m}</button>
+        ))}
+        <button id="forcelog" data-log={log.join("|")}>fired: {log.length}</button>
+      </div>
+    </>
+  );
+}
