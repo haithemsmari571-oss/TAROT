@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react";
 import "../../styles/hall.css";
 import "../../styles/hall-room.css";
 import { startHall, type HallReceipt } from "./startHall";
+import { setHallSheetEnabled } from "./hallSheet";
 
 export type RoomPhase = "room" | "pausing" | "ended";
 
@@ -87,6 +88,9 @@ export default function HallRoom(p: HallRoomProps) {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-hall", "room");
+    /* The entry hall disables this sheet as it unmounts, and she arrives here
+       straight from it — without this the room renders completely unstyled. */
+    setHallSheetEnabled(true);
     const h = startHall({
       mode: "room",
       onAddTime: (a) => p.hold?.onAddTime(a),
@@ -96,7 +100,7 @@ export default function HallRoom(p: HallRoomProps) {
       onBackToReaders: () => p.receipt?.onBack(),
     });
     hall.current = h;
-    return () => { h.stop(); document.documentElement.removeAttribute("data-hall"); };
+    return () => { h.stop(); setHallSheetEnabled(false); document.documentElement.removeAttribute("data-hall"); };
     // startHall builds imperative DOM once; the callbacks read the latest props
     // through the closure above, so it must not be torn down on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

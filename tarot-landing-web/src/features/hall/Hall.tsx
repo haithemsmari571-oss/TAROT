@@ -20,6 +20,7 @@ import "../../styles/hall-entry.css";
 import { startHall } from "./startHall";
 import { loadReader, submitRealRequest, applyReaderToDom, type Reader } from "./hallData";
 import { holdIncoming, releaseIncoming } from "./incomingGate";
+import { setHallSheetEnabled } from "./hallSheet";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
 // the same helper the reader's own page uses (browse/views/PsychicDetails.tsx:63),
@@ -33,23 +34,6 @@ import { formatPerMinuteGbp } from "@/lib/currency";
    arrival is over rather than on top of it. */
 const ARRIVAL_MS = 3600;
 
-/* hall.css carries global rules (html,body{overflow:hidden}, body background, a
-   bare h1). Lazy loading keeps them out of the bundle until the Hall is opened,
-   but once the chunk has loaded the sheet stays live for the rest of the session
-   and would restyle every other page. So it is switched off on unmount. Nothing
-   in the stylesheet itself is modified. */
-function setHallSheetEnabled(on: boolean) {
-  for (const sheet of Array.from(document.styleSheets)) {
-    let rules: CSSRuleList;
-    try { rules = (sheet as CSSStyleSheet).cssRules; } catch { continue; }
-    for (const r of Array.from(rules)) {
-      if ((r as CSSStyleRule).selectorText === ".orbfix") {
-        (sheet as CSSStyleSheet).disabled = !on;
-        return;
-      }
-    }
-  }
-}
 
 export default function Hall({ mode = "preview", psychicId }:
   { mode?: "preview" | "entry"; psychicId?: number }) {
