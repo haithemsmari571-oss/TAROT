@@ -1344,7 +1344,7 @@ const ClientChat = () => {
           readerTyping={isReaderTyping && currentChatStatus === 'ACTIVE'}
           hasMore={hasMoreMessages}
           loadingMore={loadingOlderMessages}
-          onLoadMore={loadOlderMessages}
+          onLoadMore={handleLoadOlderMessages}
           banner={
             currentChatStatus === 'ENDED' && allMessages.length > 0
               ? { title: "Session Ended", body: "This chat session has been concluded. You can request a new session below." }
