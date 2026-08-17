@@ -1,6 +1,6 @@
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
-import { formatStardust } from "../../../lib/currency";
+import { formatStardust, formatMinutesLeft } from "../../../lib/currency";
 
 interface SessionBarProps {
   /** Elapsed reading time (seconds) — shown as a small caption, not a headline. */
@@ -53,11 +53,7 @@ export const SessionBar = ({
         ? GOLD
         : COLORS.neutralWhite;
   // Per-minute prepaid model: show whole minutes remaining ("2 min").
-  const timeValue = isPaused
-    ? "Paused"
-    : minutesLeft == null
-      ? "—"
-      : `${Math.max(0, minutesLeft)} min`;
+  const timeValue = isPaused ? "Paused" : formatMinutesLeft(minutesLeft);
 
   return (
     <div

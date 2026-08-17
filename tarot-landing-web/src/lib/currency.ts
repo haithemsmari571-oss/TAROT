@@ -55,3 +55,26 @@ export function formatStardust(amount: number | null | undefined): string {
 export function formatGbp(amount: number): string {
   return `${GBP}${formatStardust(amount)}`;
 }
+
+/**
+ * Whole minutes of reading time, written so a large balance stays readable.
+ *   under an hour   ->  "38 min"
+ *   an hour or more ->  "2 h 14 min"
+ *   a day or more   ->  "3 d 4 h"
+ *
+ * PRESENTATION ONLY. This formats a number that has already been calculated;
+ * it never rounds, caps or alters the value used for charging.
+ */
+export function formatMinutesLeft(minutes: number | null | undefined): string {
+  if (minutes == null || !Number.isFinite(minutes)) return "—";
+  const m = Math.max(0, Math.floor(minutes));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) {
+    const rem = m % 60;
+    return rem ? `${h} h ${rem} min` : `${h} h`;
+  }
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH ? `${d} d ${remH} h` : `${d} d`;
+}

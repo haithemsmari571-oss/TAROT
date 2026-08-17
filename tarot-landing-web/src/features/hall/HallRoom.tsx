@@ -13,6 +13,7 @@ import "../../styles/hall.css";
 import "../../styles/hall-room.css";
 import { startHall, type HallReceipt } from "./startHall";
 import { setHallSheetEnabled } from "./hallSheet";
+import { formatMinutesLeft } from "@/lib/currency";
 
 export type RoomPhase = "room" | "pausing" | "ended";
 
@@ -132,7 +133,7 @@ export default function HallRoom(p: HallRoomProps) {
     }
   }, [p.readerPhoto]);
 
-  const meter = p.isPaused ? "Paused" : p.minutesLeft == null ? "—" : `${Math.max(0, p.minutesLeft)} min`;
+  const meter = p.isPaused ? "Paused" : formatMinutesLeft(p.minutesLeft);
 
   return (
     <>
