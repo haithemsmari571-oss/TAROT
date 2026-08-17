@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="https://api.iconify.design/ph:eye-duotone.svg?color=%23F2AE40" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is what makes env(safe-area-inset-*) resolve to real
+         numbers on a notched phone; without it those insets are always 0 and
+         edge-pinned furniture sits under the notch and the home indicator.
+         No maximum-scale and no user-scalable=no: pinch-zoom stays available. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
     <!-- Glass design system faces: Fraunces (display serif) + Inter (UI) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
