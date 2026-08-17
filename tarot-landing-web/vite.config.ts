@@ -18,19 +18,30 @@ export default defineConfig({
     },
     // DEV-SERVER ONLY (`server.*` is ignored by `vite build`): when the app
     // runs with a relative API base (VITE_API_URL empty, see
-    // .env.development.local), forward /api reads to the live site so the UI
-    // can be verified against real data. Read-only by construction: anything
-    // but GET/HEAD/OPTIONS is answered with 404 instead of being proxied, so
-    // local dev can never mutate production.
+    // .env.development.local), forward /api to the live site so the flow can be
+    // verified against real data and the real notification websocket.
+    //
+    // Still deliberately narrow. Reads pass. Of the writes, ONLY the three the
+    // reading entry flow actually performs are allowed through — sign in,
+    // refresh the token, request a reading. Every other write is answered 404
+    // instead of being proxied, so nothing else here can change production.
     proxy: {
       "/api": {
         target: "https://askvalentina.co.uk",
         changeOrigin: true,
         secure: true,
-        bypass: (req) =>
-          req.method && !["GET", "HEAD", "OPTIONS"].includes(req.method)
-            ? false
-            : undefined,
+        ws: true,
+        bypass: (req) => {
+          const m = req.method || "";
+          if (["GET", "HEAD", "OPTIONS"].includes(m)) return undefined;
+          const allowed = [
+            "/api/auth/sign-in",
+            "/api/auth/refresh-token",
+            "/api/chat/request",
+          ];
+          const path = (req.url || "").split("?")[0];
+          return m === "POST" && allowed.includes(path) ? undefined : false;
+        },
       },
     },
   },

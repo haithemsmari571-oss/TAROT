@@ -5,7 +5,6 @@ import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency"
 import { sanitizeClaims } from "../../../lib/copy";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
-import RequestReadingModal from "@/features/chat/components/RequestReadingModal";
 import { useToast } from "@/components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { usePsychicDetails, usePsychicReviewSummary, usePsychicReviews, useMyReviews, useChats } from "../hooks/usePsychicDetails";
@@ -51,7 +50,6 @@ const PsychicDetails = () => {
   const totalReviews = reviewSummary?.total_reviews || 0;
   
   // Local state
-  const [showRequestPanel, setShowRequestPanel] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(myReview?.rating || 5);
   const [reviewComment, setReviewComment] = useState(myReview?.comment || "");
@@ -74,15 +72,17 @@ const PsychicDetails = () => {
 
 
 
-  // Handle start reading — open the request panel (it collects her opening
-  // question and sends the request; the reassurance/waiting state lives there).
+  // Handle start reading — open the hall (routes/reading.routes.ts). It collects
+  // her opening question, sends the real request and holds the wait; when the
+  // psychic accepts, the global Incoming Reading prompt (mounted at main.tsx:37)
+  // takes over and carries her into /chats exactly as before.
   const handleStartReading = useCallback(() => {
     if (!psychic || !user) {
       toast.error("Please log in to start a reading");
       navigate("/login");
       return;
     }
-    setShowRequestPanel(true);
+    navigate(`/reading/new/${psychic.id}`);
   }, [psychic, user, toast, navigate]);
 
   // Render star rating
@@ -805,15 +805,6 @@ const PsychicDetails = () => {
           </div>
         </div>
       </div>
-      {showRequestPanel && psychic && (
-        <RequestReadingModal
-          psychicId={psychic.id}
-          psychicName={psychic.username}
-          psychicPhoto={psychic.profile_picture_url}
-          pricePerSecond={psychic.price_per_second}
-          onClose={() => setShowRequestPanel(false)}
-        />
-      )}
     </div>
   );
 };

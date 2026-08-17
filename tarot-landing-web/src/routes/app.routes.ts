@@ -31,6 +31,7 @@ import termsRoutes from "./terms.routes";
 import seoRoutes from "./seo.routes";
 import articlesRoutes from "./articles.routes";
 import designPreviewRoutes from "./design-preview.routes";
+import readingRoutes from "./reading.routes";
 import { UserRole } from "../features/auth/types/auth.types";
 
 
@@ -86,6 +87,7 @@ const routes: RouteConfig[] = [
 ...seoRoutes,
 ...articlesRoutes,
 ...designPreviewRoutes,
+...readingRoutes,
 
 ];
 

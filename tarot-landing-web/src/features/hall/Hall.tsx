@@ -1,32 +1,90 @@
 /* DESIGN-LOCKED-HALL.html moved into the app.
    Same elements, same nesting, same order, same ids and class names. No Tailwind.
    The stylesheet and the fragment shader are the source's own bytes, in
-   src/styles/hall.css and ./hall.frag.glsl. */
+   src/styles/hall.css and ./hall.frag.glsl.
 
-import { useEffect } from "react";
+   Two modes:
+     "preview" — /design-preview. The developer harness (mock bar, palette
+                 swatches) and the room stage render, and the journey runs on
+                 its own timers.
+     "entry"   — the real customer flow. No harness, no room stage. The question
+                 is submitted for real and the wait ends on the CHAT_ACCEPTED
+                 websocket event, after which the existing global Incoming
+                 Reading prompt takes over and carries her to /chats, exactly as
+                 it does today. */
+
+import { useEffect, useRef, useState } from "react";
 import "../../styles/hall.css";
+import "../../styles/hall-preview.css";
 import { startHall } from "./startHall";
-/* ADDED-BEGIN phase 3 — real reader name, photo and rate from the live API. */
-import { wireRealData, submitRealRequest } from "./hallData";
-/* ADDED-END */
+import { loadReader, submitRealRequest, applyReaderToDom } from "./hallData";
+import { useNotifications } from "@/features/notifications/hooks/useNotifications";
+import { NotificationType } from "@/features/notifications/types/notification.types";
 
-export default function Hall() {
+/* hall.css carries global rules (html,body{overflow:hidden}, body background, a
+   bare h1). Lazy loading keeps them out of the bundle until the Hall is opened,
+   but once the chunk has loaded the sheet stays live for the rest of the session
+   and would restyle every other page. So it is switched off on unmount. Nothing
+   in the stylesheet itself is modified. */
+function setHallSheetEnabled(on: boolean) {
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList;
+    try { rules = (sheet as CSSStyleSheet).cssRules; } catch { continue; }
+    for (const r of Array.from(rules)) {
+      if ((r as CSSStyleRule).selectorText === ".orbfix") {
+        (sheet as CSSStyleSheet).disabled = !on;
+        return;
+      }
+    }
+  }
+}
+
+export default function Hall({ mode = "preview", psychicId }:
+  { mode?: "preview" | "entry"; psychicId?: number }) {
+  const preview = mode === "preview";
+  const hallRef = useRef<ReturnType<typeof startHall> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { onNotification } = useNotifications();
+
   useEffect(() => {
-    const stop = startHall();
-    /* ADDED-BEGIN phase 3 */
-    wireRealData();
-    const q = document.getElementById("q") as HTMLTextAreaElement | null;
-    const begin = document.getElementById("begin");
-    const onRealSubmit = () => { submitRealRequest(q ? q.value : ""); };
-    begin?.addEventListener("click", onRealSubmit);
-    /* ADDED-END */
+    setHallSheetEnabled(true);
+    const hall = startHall({
+      mode,
+      onBegin: preview ? undefined : async (question: string) => {
+        setError(null);
+        const r = await submitRealRequest(question);
+        if (!r.ok) { setError(r.error); return false; }
+        return true;
+      },
+    });
+    hallRef.current = hall;
+
+    if (!preview && psychicId) {
+      loadReader(psychicId)
+        .then(applyReaderToDom)
+        .catch((e: Error) => setError(e.message));
+    } else if (preview) {
+      loadReader().then(applyReaderToDom).catch(() => { /* preview keeps the mock face */ });
+    }
+
     return () => {
-      /* ADDED-BEGIN phase 3 */
-      begin?.removeEventListener("click", onRealSubmit);
-      /* ADDED-END */
-      stop();
+      hall.stop();
+      setHallSheetEnabled(false);
+      hallRef.current = null;
     };
-  }, []);
+  }, [mode, preview, psychicId]);
+
+  /* The wait ends when the psychic accepts — the same event the deleted request
+     modal used, and the same one the global gate still listens for
+     (features/chat/components/IncomingReadingModal.tsx:120), which is what
+     actually carries her to /chats. */
+  useEffect(() => {
+    if (preview) return;
+    const off = onNotification(NotificationType.CHAT_ACCEPTED, () => {
+      hallRef.current?.arrive();
+    });
+    return off;
+  }, [preview, onNotification]);
 
   return (
     <>
@@ -61,6 +119,9 @@ export default function Hall() {
             </div>
           </div>
           <button className="begin" id="begin">Begin the reading</button>
+          {/* A failure must be visible, never swallowed. Uses the design's own
+              .legal type so no new styling is introduced. */}
+          {error && <p className="legal" id="hall-error" role="alert">{error}</p>}
           <p className="legal">Readings are for guidance and entertainment.</p>
         </section>
       </main>
@@ -82,38 +143,43 @@ export default function Hall() {
       {/* 3 · she arrives */}
       <div className="arrive"><div className="aname">Valentina</div><div className="ahere">is here</div></div>
 
-      {/* 4 · the reading */}
-      <div className="room">
-        <header className="top">
-          <div className="who"></div>
-          <div className="whotext">
-            <div className="nm">Valentina</div>
-            <div className="st" id="st">reading for you</div>
+      {/* 4 · the reading — /design-preview only. Under option A the real flow
+          hands off to the existing /chats room at this point. */}
+      {preview && (
+        <div className="room">
+          <header className="top">
+            <div className="who"></div>
+            <div className="whotext">
+              <div className="nm">Valentina</div>
+              <div className="st" id="st">reading for you</div>
+            </div>
+            <div className="meter"><b id="mins">38 min</b><i>left</i></div>
+          </header>
+          <div className="threadwrap"><div className="thread" id="thread"></div></div>
+          <div className="nudge" id="nudge">the sky is yours while you wait</div>
+          <div className="composer">
+            <div className="box">Say anything…</div>
+            <button className="send" id="send" aria-label="send">↑</button>
           </div>
-          <div className="meter"><b id="mins">38 min</b><i>left</i></div>
-        </header>
-        <div className="threadwrap"><div className="thread" id="thread"></div></div>
-        <div className="nudge" id="nudge">the sky is yours while you wait</div>
-        <div className="composer">
-          <div className="box">Say anything…</div>
-          <button className="send" id="send" aria-label="send">↑</button>
         </div>
-      </div>
+      )}
 
       <canvas id="touch"></canvas>
 
+      {/* the developer harness — /design-preview only */}
+      {preview && <div className="swatches" id="swatches"></div>}
 
-      <div className="swatches" id="swatches"></div>
-
-      <div className="mockbar">
-        <span>mockup only</span>
-        <button id="sound" aria-pressed="false">sound: off</button>
-        <button id="calm" aria-pressed="false">slower</button>
-        <button id="cycle" aria-pressed="true">colour: drifting</button>
-        <button id="preview" aria-pressed="false">watch the whole turn</button>
-        <button id="send2">she replies</button>
-        <button id="replay">replay from the start</button>
-      </div>
+      {preview && (
+        <div className="mockbar">
+          <span>mockup only</span>
+          <button id="sound" aria-pressed="false">sound: off</button>
+          <button id="calm" aria-pressed="false">slower</button>
+          <button id="cycle" aria-pressed="true">colour: drifting</button>
+          <button id="preview" aria-pressed="false">watch the whole turn</button>
+          <button id="send2">she replies</button>
+          <button id="replay">replay from the start</button>
+        </div>
+      )}
     </>
   );
 }

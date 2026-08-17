@@ -6,7 +6,18 @@
 
 import FRAG from "./hall.frag.glsl?raw";
 
-export function startHall() {
+/* mode 'preview' = /design-preview: the developer harness and the room stage are
+   present and the journey runs on its own timers.
+   mode 'entry'   = the real customer flow: no harness, no room stage, and the
+   wait ends when the caller says the psychic accepted, not on a timer. */
+export interface HallOptions {
+  mode?: "preview" | "entry";
+  /** Entry mode: called when she presses Begin. Return false to stay on the form. */
+  onBegin?: (question: string) => boolean | Promise<boolean>;
+}
+
+export function startHall(opts: HallOptions = {}) {
+  const MODE = opts.mode ?? "preview";
   const cleanups: Array<() => void> = [];
 
 /* ═══════════ the sky ═══════════ */
@@ -347,8 +358,9 @@ cleanups.push(()=>{cancelAnimationFrame(raf);removeEventListener('resize',size);
 /* ══════════════ the journey ══════════════ */
 const HH=document.documentElement;
 HH.setAttribute('data-state','form');
-const thread=document.getElementById('thread')!,stEl=document.getElementById('st')!,
-      nudgeEl=document.getElementById('nudge')!;
+/* The room stage only exists in preview mode, so these may be absent. */
+const thread=document.getElementById('thread'),stEl=document.getElementById('st'),
+      nudgeEl=document.getElementById('nudge');
 let timers:number[]=[],cardT:any=null,ci=0,nudgeT:any=null;
 const cards=[...document.querySelectorAll('.card')];
 function at(ms:number,fn:()=>void){timers.push(window.setTimeout(fn,ms));}
@@ -356,33 +368,41 @@ function showCard(i:number){cards.forEach(c=>c.classList.remove('on'));
   if(i<0)return;at(560,()=>cards.forEach((c,n)=>c.classList.toggle('on',n===i)));}
 
 function bubble(cls:string,txt:string){
+  if(!thread)return;
   const d=document.createElement('div');d.className='bub '+cls;d.textContent=txt;
   thread.appendChild(d);thread.scrollTop=thread.scrollHeight;
   while(thread.children.length>9)thread.removeChild(thread.firstChild!);
 }
 function typingOn(){
+  if(!thread||!stEl||!nudgeEl)return;
   if(thread.querySelector('.typing'))return;
   const t=document.createElement('div');t.className='typing';t.innerHTML='<i></i><i></i><i></i>';
   thread.appendChild(t);thread.scrollTop=thread.scrollHeight;stEl.textContent='typing…';
   clearTimeout(nudgeT);nudgeT=setTimeout(()=>nudgeEl.classList.add('on'),4000);
 }
-function typingOff(){const t=thread.querySelector('.typing');if(t)t.remove();
+function typingOff(){if(!thread||!stEl||!nudgeEl)return;
+  const t=thread.querySelector('.typing');if(t)t.remove();
   stEl.textContent='reading for you';clearTimeout(nudgeT);nudgeEl.classList.remove('on');}
 
 function toLobby(){
   HH.setAttribute('data-state','sending');
   at(700,()=>{HH.setAttribute('data-state','lobby');ci=0;showCard(0);
     cardT=setInterval(()=>{ci=(ci+1)%cards.length;showCard(ci);},5400);});
-  at(12500,toArrival);
+  /* Preview drifts to the arrival on a timer. The real flow waits for the
+     CHAT_ACCEPTED websocket event, which the caller feeds in via arrive(). */
+  if(MODE==="preview")at(12500,toArrival);
 }
 function toArrival(){
   clearInterval(cardT);
   HH.setAttribute('data-state','accepting');
   harmonic(.10);
   FLARE=1;                                   /* the sky brightens with her */
-  at(3600,toRoom);
+  /* Entry mode stops here: the global Incoming Reading prompt takes over and
+     the existing /chats room is the destination, exactly as it is today. */
+  if(MODE==="preview")at(3600,toRoom);
 }
 function toRoom(){
+  if(!thread)return;
   HH.setAttribute('data-state','room');
   thread.innerHTML='';
   bubble('me',"He stopped answering six weeks ago. Daniel, born 14 August 1992. I'm 12/12/1999.");
@@ -391,7 +411,7 @@ function toRoom(){
   at(3600,typingOn);
 }
 function reset(){timers.forEach(clearTimeout);timers=[];clearInterval(cardT);
-  showCard(-1);thread.innerHTML='';FLARE=0;HH.setAttribute('data-state','form');}
+  showCard(-1);if(thread)thread.innerHTML='';FLARE=0;HH.setAttribute('data-state','form');}
 
 /* the orb straddles the top edge of the panel, whatever size the window is */
 function pinOrb(){
@@ -406,7 +426,22 @@ cleanups.push(()=>{removeEventListener('resize',pinOrb);
   if(stageEl)stageEl.removeEventListener('scroll',pinOrb);});
 
 const beginBtn=document.getElementById('begin')!;
-const onBegin=()=>{boot();toLobby();};
+let sending=false;
+const onBegin=async ()=>{
+  if(sending)return;
+  boot();
+  if(MODE==="preview"){toLobby();return;}
+  /* Entry mode: the real request must succeed before she is moved off the form. */
+  if(!opts.onBegin){toLobby();return;}
+  sending=true;
+  beginBtn.setAttribute('aria-busy','true');
+  const q=(document.getElementById('q') as HTMLTextAreaElement|null);
+  let ok=false;
+  try{ ok=await opts.onBegin(q?q.value:""); }finally{
+    sending=false; beginBtn.removeAttribute('aria-busy');
+  }
+  if(ok)toLobby();
+};
 beginBtn.addEventListener('click',onBegin);
 cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));
 const pillsEl=document.getElementById('pills')!;
@@ -417,6 +452,9 @@ const onPills=(e:Event)=>{
 pillsEl.addEventListener('click',onPills);
 cleanups.push(()=>pillsEl.removeEventListener('click',onPills));
 
+/* ── the developer harness. /design-preview only — it must never reach a
+   customer, and in entry mode none of these elements are rendered at all. ── */
+if(MODE==="preview"){
 const REPLIES=[
  "there's a reason he went quiet and it isn't the one you've been telling yourself",
  "the eight of cups keeps turning up for him. a man walking away from something he still wants",
@@ -482,10 +520,17 @@ const onPreview=()=>{PREVIEW=!PREVIEW;pvBtn.setAttribute('aria-pressed',String(P
   if(PREVIEW&&!AUTO){AUTO=true;cyBtn.setAttribute('aria-pressed','true');cyBtn.textContent='colour: drifting';}};
 pvBtn.addEventListener('click',onPreview);
 cleanups.push(()=>pvBtn.removeEventListener('click',onPreview));
+}
+/* ── end of the developer harness ── */
 
   /* Teardown — the source page never unmounts, so it has no equivalent. */
   cleanups.push(()=>{ timers.forEach(clearTimeout); clearInterval(cardT); clearTimeout(nudgeT);
     HH.removeAttribute('data-state'); HH.style.removeProperty('--panelTop'); HH.style.removeProperty('--gold');
     try{ stopBed(); if(ctx) ctx.close(); }catch(e){} });
-  return () => { cleanups.forEach(f=>{try{f();}catch(e){}}); };
+  return {
+    stop: () => { cleanups.forEach(f=>{try{f();}catch(e){}}); },
+    /* Entry mode: the caller fires this when CHAT_ACCEPTED arrives. */
+    arrive: () => { if(HH.getAttribute('data-state')==='lobby'||HH.getAttribute('data-state')==='sending') toArrival(); },
+    state: () => HH.getAttribute('data-state'),
+  };
 }

@@ -122,7 +122,15 @@
   color: var(--gl-text);
   white-space: nowrap;
 }
-.gl-links { display: flex; gap: 28px; margin-left: 16px; }
+/* `display:flex` was unconditional here. Its only user is
+   <nav class="gl-links hidden lg:flex"> (layouts/Navbar.tsx:96). `.gl-links` and
+   Tailwind's `.hidden` have identical specificity (0,1,0), and glass.css is
+   bundled after the utilities, so this rule won on source order and the desktop
+   nav rendered on every phone — eating 377px of a 400px row and pushing the
+   mobile controls off-screen. Scoped to the same breakpoint `lg:flex` targets,
+   so `.hidden` wins below it and desktop is unchanged. */
+.gl-links { gap: 28px; margin-left: 16px; }
+@media (min-width: 1024px) { .gl-links { display: flex; } }
 .gl-navlink {
   font-family: var(--gl-sans);
   font-size: 11.5px;

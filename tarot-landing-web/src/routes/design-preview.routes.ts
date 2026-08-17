@@ -6,7 +6,8 @@ import type { RouteConfig } from "./app.routes";
 // on the site would lose scrolling. Loading it as its own chunk means those rules
 // only ever reach the browser when /design-preview is actually opened.
 const Hall = lazy(() => import("../features/hall/Hall"));
-const HallRoute = () => createElement(Suspense, { fallback: null }, createElement(Hall));
+const HallRoute = () =>
+  createElement(Suspense, { fallback: null }, createElement(Hall, { mode: "preview" as const }));
 
 // layout: "guest" renders with NO layout wrapper at all — no offer line, no
 // navbar, no footer, no padding — which is what the locked design requires.

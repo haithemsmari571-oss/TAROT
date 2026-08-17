@@ -1,91 +1,90 @@
-/* PHASE 3 — real data behind /design-preview.
-   Nothing here is invented: every call is one the live client already makes.
-     psychic name / photo / rate  ->  psychicsApi.getPsychics  (GET /psychic/)
-     submitting the question      ->  requestChat              (POST /chat/request)
-     the session meter            ->  getChatSessionTime       (GET /chat/{id}/session-time)
-     readiness + live messages    ->  NotificationType.CHAT_ACCEPTED + ChatWebSocket
-   Where a value cannot be had (no session, not signed in, API down) the design's
-   mock value stays and the reason is recorded in window.__hallData.fellBack. */
+/* Real data for the Hall entry flow.
+   Every call here is one the live client already makes — nothing invented:
+     the reader   ->  GET /psychic/{id}   (features/chat/api/chatApi.ts:251)
+                      GET /psychic/       (features/browse/api/psychicsApi.ts:33)
+     the question ->  POST /chat/request  (features/chat/api/chatApi.ts:111)
+   There are no silent fallbacks. If a call fails the caller is given the error
+   so the UI can show it. */
 
 import { psychicsApi } from "../browse/api/psychicsApi";
-import { requestChat } from "../chat/api/chatApi";
-import { getToken } from "../auth/utils";
+import { getPsychicDetails, requestChat } from "../chat/api/chatApi";
 
-export interface HallDataReport {
-  real: string[];
-  fellBack: { what: string; why: string }[];
-  psychic: { id: number; name: string; photo: string | null; pricePerMinute: number | null } | null;
+export interface Reader {
+  id: number;
+  name: string;
+  photo: string | null;
+  pricePerMinute: number | null;
 }
 
-const report: HallDataReport = { real: [], fellBack: [], psychic: null };
-const fall = (what: string, why: string) => { report.fellBack.push({ what, why }); console.info(`[hall] fell back: ${what} — ${why}`); };
+let current: Reader | null = null;
+export const currentReader = () => current;
 
-/** Swap the leading "Valentina" text node for the real reader's name. */
-function renameTo(name: string) {
-  const targets = [".ptitle", ".lname", ".aname", ".top .nm"];
-  for (const sel of targets) {
+const toReader = (p: any): Reader => ({
+  id: p.id,
+  name: p.username,
+  photo: p.profile_picture_url ?? null,
+  pricePerMinute: p.price_per_second != null
+    ? Math.round(p.price_per_second * 60 * 100) / 100
+    : null,
+});
+
+/** The real reader. With an id it is that psychic; without, the first listed. */
+export async function loadReader(psychicId?: number): Promise<Reader> {
+  if (psychicId) {
+    const p = await getPsychicDetails(psychicId);
+    if (!p) throw new Error("We could not load this reader. Please go back and try again.");
+    current = toReader(p);
+    return current;
+  }
+  let page = await psychicsApi.getPsychics({ is_online: true, limit: 1 });
+  if (!page?.items?.length) page = await psychicsApi.getPsychics({ limit: 1 });
+  const first = page?.items?.[0];
+  if (!first) throw new Error("No readers are available right now.");
+  current = toReader(first);
+  return current;
+}
+
+/** Put the real reader into the design's own elements. No new markup, no new CSS. */
+export function applyReaderToDom(r: Reader) {
+  for (const sel of [".ptitle", ".lname", ".aname", ".top .nm"]) {
     const el = document.querySelector(sel);
     if (!el) continue;
-    const t = [...el.childNodes].find(n => n.nodeType === 3 && (n.textContent || "").trim().length);
-    if (t) t.textContent = (t.textContent || "").replace(/Valentina/, name);
-    else if (!el.querySelector("*")) el.textContent = name;
+    const t = Array.from(el.childNodes).find(
+      (n) => n.nodeType === 3 && (n.textContent || "").trim().length
+    );
+    if (t) t.textContent = (t.textContent || "").replace(/Valentina/, r.name);
+    else if (!el.querySelector("*")) el.textContent = r.name;
+  }
+  const photo = document.querySelector<HTMLElement>(".orb .photo");
+  if (photo && r.photo) {
+    // the design's gradient stays underneath, so a slow or missing image still reads
+    photo.style.backgroundImage = `url("${r.photo}"), ${getComputedStyle(photo).backgroundImage}`;
+    photo.style.backgroundSize = "cover";
+    photo.style.backgroundPosition = "center";
   }
 }
 
-export async function wireRealData() {
-  (window as any).__hallData = report;
+export type SubmitResult = { ok: true } | { ok: false; error: string };
 
-  // ── the reader: real name, real photo in the orb, real per-minute rate ──
+/** The real reading request. Never pretends to have succeeded. */
+export async function submitRealRequest(question: string): Promise<SubmitResult> {
+  if (!current) return { ok: false, error: "We could not load this reader. Please go back and try again." };
   try {
-    let page = await psychicsApi.getPsychics({ is_online: true, limit: 1 });
-    if (!page?.items?.length) page = await psychicsApi.getPsychics({ limit: 1 });
-    const p: any = page?.items?.[0];
-    if (!p) {
-      fall("psychic name / photo / rate", "the psychics endpoint returned no readers");
-    } else {
-      const perMin = p.price_per_second != null ? Math.round(p.price_per_second * 60 * 100) / 100 : null;
-      report.psychic = { id: p.id, name: p.username, photo: p.profile_picture_url ?? null, pricePerMinute: perMin };
-      if (p.username) { renameTo(p.username); report.real.push("psychic name"); }
-      const photoEl = document.querySelector<HTMLElement>(".orb .photo");
-      if (photoEl && p.profile_picture_url) {
-        // keep the design's gradient underneath so a slow or missing image still reads
-        photoEl.style.backgroundImage = `url("${p.profile_picture_url}"), ${getComputedStyle(photoEl).backgroundImage}`;
-        photoEl.style.backgroundSize = "cover";
-        photoEl.style.backgroundPosition = "center";
-        report.real.push("psychic photo in the orb");
-      } else fall("psychic photo", "this reader has no profile picture set");
-      if (perMin != null) report.real.push(`per-minute rate (£${perMin.toFixed(2)}/min)`);
-      else fall("per-minute rate", "the reader record has no price_per_second");
+    await requestChat({
+      psychic_id: current.id,
+      // the field is optional in the design; send a gentle default rather than an
+      // empty first message, matching what the old modal did
+      message: question.trim() || "I'm ready to begin my reading.",
+    });
+    return { ok: true };
+  } catch (e: any) {
+    const status = e?.response?.status;
+    const detail = e?.response?.data?.detail ?? e?.response?.data?.message;
+    if (status === 401 || status === 403) return { ok: false, error: "Please sign in again to start a reading." };
+    if (status === 402) return { ok: false, error: detail || "You need a little more Stardust to begin this reading." };
+    if (status === 400 && /already have an active/i.test(String(detail))) {
+      return { ok: false, error: detail };
     }
-  } catch (e: any) {
-    fall("psychic name / photo / rate", "GET /psychic/ failed: " + (e?.response?.status || e?.message || e));
-  }
-
-  // ── the meter, the readiness signal and the live thread all need a session ──
-  const signedIn = !!getToken();
-  if (!signedIn) {
-    fall("real reading request", "not signed in, so POST /chat/request would be rejected");
-    fall("pre-reading readiness signal", "needs an authenticated notifications socket");
-    fall("live WebSocket thread + typing", "needs an authenticated chat socket and a chat id");
-    fall("session meter (minutes left, balance)", "needs an active chat id for GET /chat/{id}/session-time");
-  } else {
-    report.real.push("signed in — request submission is live");
-  }
-
-  return report;
-}
-
-/** Submit the real reading request, if we have a reader and a session. */
-export async function submitRealRequest(text: string) {
-  const p = report.psychic;
-  if (!p) { fall("submit request", "no real reader resolved"); return false; }
-  if (!getToken()) { fall("submit request", "not signed in"); return false; }
-  try {
-    await requestChat({ psychic_id: p.id, message: text.trim() || "I'm ready to begin my reading." });
-    report.real.push("reading request submitted");
-    return true;
-  } catch (e: any) {
-    fall("submit request", "POST /chat/request failed: " + (e?.response?.status || e?.message || e));
-    return false;
+    return { ok: false, error: detail || "We could not send your request. Please try again." };
   }
 }
