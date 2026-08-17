@@ -285,6 +285,19 @@ html[data-state="room"] .room{opacity:1;}
   html[data-state="form"] .orbfix{--os:.38;}
 }
 
+/* phones: the reassurance cards must read as sentences, not columns.
+   .card is a flex container, so each card's plain text and its <strong> become
+   two separate flex items and are laid out SIDE BY SIDE. A wide window has room
+   for that and it reads as one line; at phone widths each half is squeezed into
+   its own narrow column and the sentence breaks in two. Letting the items wrap
+   puts each half on its own centred line. Layout only — no colour, family,
+   weight, duration, easing or timing is touched here, and nothing in this block
+   applies above 430px, so the desktop rendering is unchanged. */
+@media (max-width:430px){
+  .cards{width:min(420px,94vw);}
+  .card{flex-wrap:wrap;align-content:center;column-gap:.3em;}
+}
+
 .mockbar{position:fixed;z-index:40;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;gap:8px;
   align-items:center;justify-content:center;padding:9px 14px calc(9px + env(safe-area-inset-bottom));
   background:rgba(8,4,16,.74);border-top:1px solid rgba(232,200,139,.22);backdrop-filter:blur(12px);
@@ -294,6 +307,134 @@ html[data-state="room"] .room{opacity:1;}
   border-radius:8px;padding:6px 11px;cursor:pointer;font:inherit;letter-spacing:.06em;}
 .mockbar button:hover{background:rgba(232,200,139,.2);color:#fff;}
 .mockbar button[aria-pressed="true"]{background:rgba(232,200,139,.26);color:#fff;}
+
+/* ══════════ 5 · her minutes run out (state: pausing) ══════════
+   ══════════ 6 · the reading ends      (state: ended)   ══════════
+   Both screens are built from values already above: the same panel gradient,
+   border, blur and shadow (.panel), the same gold, the same display face, the
+   same easing. Nothing here restyles anything that came before it. */
+
+/* The room recedes rather than closing, so she can see she has not lost it. */
+html[data-state="pausing"] .room{opacity:.22;filter:blur(7px) saturate(.8);}
+
+/* The orb comes back up and straddles the top edge of whichever panel is out. */
+html[data-state="pausing"] .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
+html[data-state="ended"]   .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
+
+/* Two more stages beside the request stage. They carry .stage so they inherit
+   its scrolling and its fade, and .stage2 to stay dark until their own state. */
+.stage2{opacity:0;pointer-events:none;}
+/* .panel sets pointer-events:auto on itself (line 124), which re-enables hit
+   testing even inside a stage set to none. Without this the invisible hold and
+   receipt panels sit at the same z-6 and swallow every click meant for the
+   request panel underneath. Off by default; switched on only in their own state. */
+.stage2 .panel{pointer-events:none;}
+html[data-state="pausing"] .stage,html[data-state="ended"] .stage{opacity:0;pointer-events:none;}
+html[data-state="pausing"] #pausestage{opacity:1;pointer-events:auto;}
+html[data-state="ended"]   #endstage{opacity:1;pointer-events:auto;}
+
+/* A faded-out stage must not keep catching taps. .panel carries
+   pointer-events:auto of its own (line 124), and that re-enables hit testing
+   even when its stage is set to none — so an invisible panel sits on top of
+   everything at z-6 and swallows the touch. That is why the sky could not be
+   touched during the wait, and why the receipt was catching the hold screen's
+   buttons. Nothing here moves or recolours a pixel. */
+html[data-state="lobby"] .stage .panel,
+html[data-state="accepting"] .stage .panel,
+html[data-state="room"] .stage .panel,
+html[data-state="pausing"] .stage .panel,
+html[data-state="ended"] .stage .panel{pointer-events:none;}
+html[data-state="pausing"] #pausestage .panel,
+html[data-state="ended"] #endstage .panel{pointer-events:auto;}
+
+/* the countdown */
+.cd{margin-top:22px;text-align:center;}
+.cdnum{font-family:var(--display);font-size:clamp(28px,6.6vw,40px);font-weight:300;
+  letter-spacing:-.02em;line-height:1.1;color:#FFFCF4;font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1;}
+.cd .slab{display:block;margin-top:6px;}
+.cdbar{margin-top:11px;height:2px;border-radius:999px;overflow:hidden;
+  background:rgba(255,214,150,.20);}
+.cdfill{display:block;height:100%;width:100%;border-radius:999px;
+  background:linear-gradient(90deg,var(--gilt),var(--gold));
+  transition:width 1s linear;}
+
+/* the three amounts. .amt rides on .pill so the selected treatment is the
+   design's own — no second definition of what "chosen" looks like. */
+.amts{display:flex;gap:8px;margin-top:20px;}
+.amt{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;
+  align-items:center;gap:3px;padding:13px 6px;border-radius:18px;}
+.amt b{font-family:var(--display);font-size:19px;font-weight:300;color:#FFFBF2;}
+.amt i{font-style:normal;font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(226,210,186,.6);white-space:nowrap;}
+.amt[aria-pressed="true"] b{color:#fff;}
+.tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;
+  padding:3px 9px;border-radius:999px;font-size:9.5px;letter-spacing:.28em;
+  text-transform:uppercase;color:#2A1A10;
+  background:linear-gradient(140deg,#FFECC4,#E6C48C);
+  box-shadow:0 16px 40px -18px rgba(0,0,0,.9),0 0 34px -10px var(--gold);}
+
+/* the quiet way out, under every primary button */
+.quiet{display:block;width:100%;margin-top:13px;padding:9px 15px;border:0;background:none;
+  cursor:pointer;font:inherit;font-size:13px;letter-spacing:.03em;
+  color:rgba(224,210,190,.9);text-decoration:underline;text-underline-offset:3px;
+  transition:color .4s var(--ease);}
+.quiet:hover{color:#fff;}
+
+/* the receipt: three equal cells on the same inset the textarea uses */
+.receipt{display:flex;margin-top:22px;border-radius:18px;overflow:hidden;
+  background:rgba(8,4,18,.55);border:1px solid rgba(255,214,150,.20);}
+.rcell{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;
+  gap:4px;padding:15px 6px;border-left:1px solid rgba(255,214,150,.20);}
+.rcell:first-child{border-left:0;}
+.rnum{font-family:var(--display);font-size:19px;font-weight:300;color:#FFFBF2;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.rcell .slab{text-align:center;line-height:1.3;}
+
+/* what she keeps */
+.softbox{margin-top:16px;padding:17px 18px;border-radius:18px;
+  background:rgba(8,4,18,.55);border:1px solid rgba(255,214,150,.20);
+  font-size:14.5px;line-height:1.7;color:rgba(220,205,184,.9);text-align:center;}
+.softbox strong{color:#FFF7E8;font-weight:400;}
+
+/* five stars, 44x44 of real tap area each */
+.stars{display:flex;gap:8px;margin-top:11px;justify-content:center;}
+.star{width:44px;height:44px;flex:none;display:grid;place-items:center;padding:0;
+  border:0;background:none;cursor:pointer;font-size:19px;line-height:1;
+  color:rgba(255,226,170,.26);
+  transition:color .4s var(--ease),transform .3s var(--ease);}
+.star[aria-pressed="true"]{color:var(--gilt);filter:drop-shadow(0 0 10px var(--gold));}
+.star:active{transform:scale(.94);}
+
+@media (max-width:430px){
+  .amt i{letter-spacing:.14em;}
+  .rnum{font-size:17px;}
+  .rcell{padding:13px 4px;}
+}
+
+/* short windows: like the request panel above, these two must fit rather than
+   crop. Spacing only, and only on the two new panels — the approved screens are
+   not touched. The stars keep their full 44x44 tap area at every size. */
+@media (max-height:740px){
+  #pausepanel .cd{margin-top:14px;}
+  #pausepanel .cdbar{margin-top:8px;}
+  #pausepanel .amts{margin-top:16px;}
+  #pausepanel .amt{padding:10px 5px;}
+  #endpanel .receipt{margin-top:14px;}
+  #endpanel .rcell{padding:12px 5px;}
+  #endpanel .softbox{margin-top:12px;padding:13px 15px;}
+  #endpanel .stars{margin-top:8px;}
+  #pausepanel .quiet,#endpanel .quiet{margin-top:10px;padding:7px 12px;}
+}
+@media (max-height:620px){
+  #pausepanel .cd{margin-top:10px;}
+  #pausepanel .amts{margin-top:13px;}
+  #pausepanel .amt{padding:8px 4px;}
+  #endpanel .receipt{margin-top:11px;}
+  #endpanel .rcell{padding:10px 4px;}
+  #endpanel .softbox{margin-top:10px;padding:11px 13px;font-size:13.5px;}
+}
 
 @media (prefers-reduced-motion: reduce){
   .wheel,.wheel2,.orb,.orb .aura,.orb .halo,.orb .halo2{animation:none!important;}

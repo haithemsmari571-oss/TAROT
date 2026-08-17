@@ -10,6 +10,7 @@ import { paymentApi } from "@/features/payment/api/paymentApi";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { formatGbp } from "@/lib/currency";
 import { COLORS, TYPOGRAPHY } from "@/theme";
+import { isIncomingHeld, queueIncoming } from "@/features/hall/incomingGate";
 
 interface Incoming {
   chatId: number;
@@ -48,6 +49,8 @@ export default function IncomingReadingModal() {
   // flicker). A fresh CHAT_ACCEPTED clears the entry so a reused chat row (repeat
   // reading with the same psychic) still prompts next time.
   const handledRef = useRef<Set<number>>(new Set());
+  // Lets a held prompt re-enter through the current showFor once released.
+  const showForRef = useRef<((base: Incoming, ring: boolean) => void) | null>(null);
 
   const stopRing = useCallback(() => {
     if (audioRef.current) {
@@ -84,6 +87,13 @@ export default function IncomingReadingModal() {
     (base: Incoming, ring: boolean) => {
       // Don't re-surface a chat already joined/dismissed this session.
       if (handledRef.current.has(base.chatId)) return;
+      // Inside the hall entry flow the prompt is held back for the length of the
+      // hall's own arrival, then shown untouched (features/hall/incomingGate.ts).
+      // Held, never cancelled — and Join is still the only thing that bills.
+      if (isIncomingHeld()) {
+        queueIncoming(() => showForRef.current?.(base, ring));
+        return;
+      }
       setIncoming((cur) => cur ?? base);
       if (ring) playRing();
       // Enrich with the psychic's real photo/name.
@@ -110,6 +120,7 @@ export default function IncomingReadingModal() {
     },
     [playRing]
   );
+  showForRef.current = showFor;
 
   // ── Real-time: psychic accepted (fires wherever she is on the site) ──
   useEffect(() => {

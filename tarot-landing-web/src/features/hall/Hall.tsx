@@ -16,10 +16,22 @@
 import { useEffect, useRef, useState } from "react";
 import "../../styles/hall.css";
 import "../../styles/hall-preview.css";
+import "../../styles/hall-entry.css";
 import { startHall } from "./startHall";
-import { loadReader, submitRealRequest, applyReaderToDom } from "./hallData";
+import { loadReader, submitRealRequest, applyReaderToDom, type Reader } from "./hallData";
+import { holdIncoming, releaseIncoming } from "./incomingGate";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
+// the same helper the reader's own page uses (browse/views/PsychicDetails.tsx:63),
+// so the price in the hall and the price on her card can never disagree
+import { formatPerMinuteGbp } from "@/lib/currency";
+
+/* How long the arrival takes to play. hall.css:189 runs the `arr` animation for
+   2700ms after an 800ms delay, so the sequence is finished at 3500ms; the
+   design's own preview waits 3600ms before moving on (startHall.ts). The global
+   prompt is released at the same 3600ms mark, so it appears the moment the
+   arrival is over rather than on top of it. */
+const ARRIVAL_MS = 3600;
 
 /* hall.css carries global rules (html,body{overflow:hidden}, body background, a
    bare h1). Lazy loading keeps them out of the bundle until the Hall is opened,
@@ -44,9 +56,13 @@ export default function Hall({ mode = "preview", psychicId }:
   const preview = mode === "preview";
   const hallRef = useRef<ReturnType<typeof startHall> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reader, setReader] = useState<Reader | null>(null);
   const { onNotification } = useNotifications();
 
   useEffect(() => {
+    /* Marks which mode is on screen so the two companion sheets can scope
+       themselves structurally instead of guessing from the markup. */
+    document.documentElement.setAttribute("data-hall", mode);
     setHallSheetEnabled(true);
     const hall = startHall({
       mode,
@@ -59,32 +75,51 @@ export default function Hall({ mode = "preview", psychicId }:
     });
     hallRef.current = hall;
 
+    /* The rate reaches the amount buttons the moment the reader lands, so
+       "£25" can say how many minutes that actually buys with her. */
+    const took = (r: Reader) => { applyReaderToDom(r); setReader(r); hall.setRate(r.pricePerMinute); };
     if (!preview && psychicId) {
-      loadReader(psychicId)
-        .then(applyReaderToDom)
-        .catch((e: Error) => setError(e.message));
+      loadReader(psychicId).then(took).catch((e: Error) => setError(e.message));
     } else if (preview) {
-      loadReader().then(applyReaderToDom).catch(() => { /* preview keeps the mock face */ });
+      loadReader().then(took).catch(() => { /* preview keeps the mock face */ });
     }
 
     return () => {
       hall.stop();
       setHallSheetEnabled(false);
+      document.documentElement.removeAttribute("data-hall");
       hallRef.current = null;
     };
   }, [mode, preview, psychicId]);
 
-  /* The wait ends when the psychic accepts — the same event the deleted request
+  /* The wait ends when the reader accepts — the same event the deleted request
      modal used, and the same one the global gate still listens for
      (features/chat/components/IncomingReadingModal.tsx:120), which is what
-     actually carries her to /chats. */
+     actually carries her to /chats.
+
+     That prompt is held for the length of the arrival so it cannot land on top
+     of it, then released untouched. The hold is dropped on unmount too, so
+     leaving this page early can never strand it. */
   useEffect(() => {
     if (preview) return;
+    holdIncoming();
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const off = onNotification(NotificationType.CHAT_ACCEPTED, () => {
       hallRef.current?.arrive();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(releaseIncoming, ARRIVAL_MS);
     });
-    return off;
+    return () => {
+      off();
+      if (timer) clearTimeout(timer);
+      releaseIncoming();
+    };
   }, [preview, onNotification]);
+
+  /* Her price, before she can press the button — never a hardcoded number. */
+  const rate = reader?.pricePerMinute != null && reader.pricePerMinute > 0
+    ? `${formatPerMinuteGbp(reader.pricePerMinute)} per minute`
+    : null;
 
   return (
     <>
@@ -119,6 +154,8 @@ export default function Hall({ mode = "preview", psychicId }:
             </div>
           </div>
           <button className="begin" id="begin">Begin the reading</button>
+          {/* Her rate, in the design's own label treatment. */}
+          {rate && <p className="eyebrow rate" id="hall-rate">{rate}</p>}
           {/* A failure must be visible, never swallowed. Uses the design's own
               .legal type so no new styling is introduced. */}
           {error && <p className="legal" id="hall-error" role="alert">{error}</p>}
@@ -164,6 +201,64 @@ export default function Hall({ mode = "preview", psychicId }:
         </div>
       )}
 
+      {/* 5 · her minutes run out, and 6 · the receipt.
+          /design-preview only for now. They are built and driveable, but the
+          live reading room has NOT been moved onto them yet, so rendering them
+          in the customer flow would put two unwired panels on the screen where
+          money is charged. They go into the flow with that work, not before. */}
+      {preview && (<>
+      <main className="stage stage2" id="pausestage">
+        <section className="panel" id="pausepanel">
+          <p className="eyebrow">Your minutes have run out</p>
+          <h1 className="ptitle">Valentina <em>is holding your place</em></h1>
+          <p className="psub">Nothing is lost. Everything you told her is still there, exactly where you left it.</p>
+          <div className="cd">
+            <div className="cdnum" id="cdnum">5:00</div>
+            <span className="slab">she can wait this long</span>
+            <div className="cdbar"><i className="cdfill" id="cdfill"></i></div>
+          </div>
+          <div className="sound">
+            <span className="slab">Add time</span>
+            <div className="amts" id="amts">
+              <button className="pill amt" data-amt="10" aria-pressed="false"><b>£10</b><i></i></button>
+              <button className="pill amt" data-amt="25" aria-pressed="true"><span className="tag">most chosen</span><b>£25</b><i></i></button>
+              <button className="pill amt" data-amt="50" aria-pressed="false"><b>£50</b><i></i></button>
+            </div>
+          </div>
+          <button className="begin" id="addtime">Add £25 and carry on</button>
+          <button className="quiet" id="endinstead">End the reading here instead</button>
+          <p className="legal">You are charged for the minutes you use, nothing more.</p>
+        </section>
+      </main>
+
+      {/* 6 · the reading ends */}
+      <main className="stage stage2" id="endstage">
+        <section className="panel" id="endpanel">
+          <p className="eyebrow">Your reading has ended</p>
+          <h1 className="ptitle">Valentina <em>will remember this</em></h1>
+          <div className="receipt">
+            <div className="rcell"><b className="rnum" id="rmins">—</b><span className="slab">minutes</span></div>
+            <div className="rcell"><b className="rnum" id="rtotal">—</b><span className="slab">total</span></div>
+            <div className="rcell"><b className="rnum" id="rrate">—</b><span className="slab">per minute</span></div>
+          </div>
+          <div className="softbox">She keeps what you told her tonight. Next time you sit down with her, <strong>you start where you finished.</strong></div>
+          <div className="sound">
+            <span className="slab">How was she?</span>
+            <div className="stars" id="stars">
+              <button className="star" data-star="1" aria-pressed="false" aria-label="1 star">★</button>
+              <button className="star" data-star="2" aria-pressed="false" aria-label="2 stars">★</button>
+              <button className="star" data-star="3" aria-pressed="false" aria-label="3 stars">★</button>
+              <button className="star" data-star="4" aria-pressed="false" aria-label="4 stars">★</button>
+              <button className="star" data-star="5" aria-pressed="false" aria-label="5 stars">★</button>
+            </div>
+          </div>
+          <button className="begin" id="again">Read with her again</button>
+          <button className="quiet" id="backtoreaders">Back to the readers</button>
+          <p className="legal">Readings are for guidance and entertainment.</p>
+        </section>
+      </main>
+      </>)}
+
       <canvas id="touch"></canvas>
 
       {/* the developer harness — /design-preview only */}
@@ -177,6 +272,8 @@ export default function Hall({ mode = "preview", psychicId }:
           <button id="cycle" aria-pressed="true">colour: drifting</button>
           <button id="preview" aria-pressed="false">watch the whole turn</button>
           <button id="send2">she replies</button>
+          <button id="mkpause">credit runs out</button>
+          <button id="mkend">reading ends</button>
           <button id="replay">replay from the start</button>
         </div>
       )}

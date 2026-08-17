@@ -1,21 +1,29 @@
 /* Preview-only spacing corrections.
-   hall.css is byte-identical to the approved file and is not touched. These two
-   rules exist only where the developer harness is present, which is
-   /design-preview alone — the `:has(.mockbar)` guard makes that structural, so
-   they can never reach the customer entry flow, which renders no mock bar.
+   hall.css holds the approved design. These two rules exist only where the
+   developer harness is present, which is /design-preview alone — Hall.tsx sets
+   html[data-hall="preview"] there and nowhere else, so they can never reach the
+   customer entry flow.
 
    1. The room's composer is position:fixed with pointer-events:auto even while
       the room is invisible, so at short window heights (1366x700) it sat over
-      the "Begin the reading" button and swallowed the click. This is a fault in
-      the approved file too.
+      the "Begin the reading" button and swallowed the click.
    2. The palette swatches are fixed at bottom:118px and overlapped the panel's
       closing copy at the same short heights.
 
    Both are fixed by giving the panel clearance at the bottom. Nothing is moved,
    recoloured or restyled. */
 
-html:has(.mockbar) .stage { padding-bottom: 208px; }
+html[data-hall="preview"] .stage { padding-bottom: 208px; }
 
 @media (max-height: 740px) {
-  html:has(.mockbar) .stage { padding-bottom: 196px; }
+  html[data-hall="preview"] .stage { padding-bottom: 196px; }
+}
+
+/* The two extra jump buttons make the mock bar wrap to three rows on a narrow
+   screen, and the palette balls — fixed at bottom:118px — landed on top of it.
+   Harness furniture only; nothing a customer ever sees. */
+@media (max-width: 560px) {
+  html[data-hall="preview"] .swatches { bottom: 178px; }
+  html[data-hall="preview"] .swname   { bottom: 206px; }
+  html[data-hall="preview"] .stage    { padding-bottom: 252px; }
 }

@@ -1,0 +1,36 @@
+/* Customer-entry additions. Scoped to html[data-hall="entry"], which Hall.tsx
+   sets only for the real reading flow, so /design-preview keeps the approved
+   file exactly as approved.
+
+   One thing lives here: her price, directly under "Begin the reading", so she
+   reads it before she can press the button.
+
+   It reuses .eyebrow — the design's own small-caps label treatment, already on
+   "A NEW READING" and "WHAT YOU'LL HEAR". Nothing new is invented: same colour,
+   same weight, same family, same uppercase, same centring. Only two things are
+   set here. The size goes from 10px to 14px, because 10px is below the readable
+   minimum for a price. The letter-spacing comes down from .42em to .18em,
+   because at 14px the wider tracking pushes the line past the panel on a 320px
+   screen and it breaks in two. */
+
+html[data-hall="entry"] .rate{
+  margin-top:12px;
+  font-size:14px;
+  letter-spacing:.18em;
+}
+
+/* Very short windows (a 320x568 phone is the case that matters): the panel has
+   to end above the fold or she scrolls to find the price, which defeats the
+   point of putting it there. Spacing only — nothing moves on a normal phone,
+   and /design-preview is untouched either way. */
+@media (max-height:620px){
+  html[data-hall="entry"] .stage{padding:40px 18px 44px;}
+  html[data-hall="entry"] .panel{padding:40px 18px 16px;}
+  html[data-hall="entry"] .panel textarea{min-height:58px;margin-top:13px;}
+  html[data-hall="entry"] .sound{margin-top:13px;}
+  html[data-hall="entry"] .pills{margin-top:8px;}
+  html[data-hall="entry"] .pill{padding:7px 12px;}
+  html[data-hall="entry"] .begin{margin-top:14px;padding:13px;}
+  html[data-hall="entry"] .rate{margin-top:9px;}
+  html[data-hall="entry"] .legal{margin-top:8px;}
+}

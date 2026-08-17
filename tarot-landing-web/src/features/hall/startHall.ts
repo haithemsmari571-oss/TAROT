@@ -14,6 +14,22 @@ export interface HallOptions {
   mode?: "preview" | "entry";
   /** Entry mode: called when she presses Begin. Return false to stay on the form. */
   onBegin?: (question: string) => boolean | Promise<boolean>;
+  /** "Add £N and carry on" — hand straight to the top-up path the app already has. */
+  onAddTime?: (amountGbp: number) => void;
+  /** "End the reading here instead" on the hold screen. */
+  onEndNow?: () => void;
+  /** A star was pressed on the receipt. */
+  onRate?: (stars: number) => void;
+  /** "Read with her again" / "Back to the readers" on the receipt. */
+  onAgain?: () => void;
+  onBackToReaders?: () => void;
+}
+
+/** What the receipt shows. Every field comes from the real session. */
+export interface HallReceipt {
+  minutes: number | null;
+  total: string | null;      // already formatted, e.g. "£124.80"
+  perMinute: string | null;  // already formatted, e.g. "£5.20"
 }
 
 export function startHall(opts: HallOptions = {}) {
@@ -413,17 +429,30 @@ function toRoom(){
 function reset(){timers.forEach(clearTimeout);timers=[];clearInterval(cardT);
   showCard(-1);if(thread)thread.innerHTML='';FLARE=0;HH.setAttribute('data-state','form');}
 
-/* the orb straddles the top edge of the panel, whatever size the window is */
+/* the orb straddles the top edge of the panel, whatever size the window is.
+   There are three panels now — the request, the top-up hold and the receipt —
+   and only ever one on screen. This is the ONLY writer of --panelTop: it picks
+   the panel that belongs to the current state and measures that one, so the
+   panels can never fight each other over the variable. */
+function activePanel():HTMLElement|null{
+  const st=HH.getAttribute('data-state');
+  if(st==='pausing')return document.getElementById('pausepanel');
+  if(st==='ended')return document.getElementById('endpanel');
+  return document.getElementById('panel');
+}
 function pinOrb(){
-  const p=document.getElementById('panel');if(!p)return;
+  const p=activePanel();if(!p)return;
   const r=p.getBoundingClientRect();
   if(r.height>0)document.documentElement.style.setProperty('--panelTop',Math.round(r.top)+'px');
 }
+/* after a state change the new panel has to be laid out before it can be
+   measured, so re-pin on the next frame and again once the fade has settled */
+function repin(){requestAnimationFrame(pinOrb);at(120,pinOrb);at(700,pinOrb);}
 pinOrb();addEventListener('resize',pinOrb);setTimeout(pinOrb,120);setTimeout(pinOrb,600);
-const stageEl=document.querySelector('.stage');
-if(stageEl)stageEl.addEventListener('scroll',pinOrb,{passive:true});
+const stages=[...document.querySelectorAll('.stage')] as HTMLElement[];
+stages.forEach(s=>s.addEventListener('scroll',pinOrb,{passive:true}));
 cleanups.push(()=>{removeEventListener('resize',pinOrb);
-  if(stageEl)stageEl.removeEventListener('scroll',pinOrb);});
+  stages.forEach(s=>s.removeEventListener('scroll',pinOrb));});
 
 const beginBtn=document.getElementById('begin')!;
 let sending=false;
@@ -444,6 +473,100 @@ const onBegin=async ()=>{
 };
 beginBtn.addEventListener('click',onBegin);
 cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));
+/* ═══════════ 5 · the top-up hold, and 6 · the receipt ═══════════
+   Both live in the state machine beside the request, the wait and the arrival.
+   They are wired in BOTH modes: /design-preview drives them from the mock bar,
+   the real room drives them from its own billing states. Nothing here decides
+   anything about money — pressing "Add" hands straight back out to the caller,
+   which uses the top-up path the app already has. */
+
+const cdNum=document.getElementById('cdnum'),cdFill=document.getElementById('cdfill');
+const amtsEl=document.getElementById('amts'),addBtn=document.getElementById('addtime');
+let cdT:any=null,cdLeft=0,cdSpan=300,amount=25,perMin:number|null=null;
+
+const mmss=(s:number)=>Math.floor(s/60)+':'+String(Math.max(0,Math.floor(s%60))).padStart(2,'0');
+
+function paintAmounts(){
+  [...document.querySelectorAll('.amt')].forEach(b=>{
+    const a=Number((b as HTMLElement).dataset.amt);
+    b.setAttribute('aria-pressed',String(a===amount));
+    const i=b.querySelector('i');
+    /* the minutes each amount buys, at her reader's real rate — never a guess.
+       Rounded DOWN so the number can never over-promise. */
+    if(i)i.textContent=perMin&&perMin>0?Math.floor(a/perMin)+' min':'';
+  });
+  if(addBtn)addBtn.textContent='Add £'+amount+' and carry on';
+}
+paintAmounts();
+
+const onAmts=(e:Event)=>{
+  const b=(e.target as HTMLElement).closest('.amt');if(!b)return;
+  amount=Number((b as HTMLElement).dataset.amt)||amount;paintAmounts();harmonic(.06);};
+if(amtsEl){amtsEl.addEventListener('click',onAmts);
+  cleanups.push(()=>amtsEl.removeEventListener('click',onAmts));}
+
+const onAdd=()=>{opts.onAddTime?.(amount);if(MODE==="preview")toRoom();};
+if(addBtn){addBtn.addEventListener('click',onAdd);
+  cleanups.push(()=>addBtn.removeEventListener('click',onAdd));}
+
+const endInstead=document.getElementById('endinstead');
+const onEndNow=()=>{opts.onEndNow?.();if(MODE==="preview")toEnded();};
+if(endInstead){endInstead.addEventListener('click',onEndNow);
+  cleanups.push(()=>endInstead.removeEventListener('click',onEndNow));}
+
+function stopCd(){if(cdT){clearInterval(cdT);cdT=null;}}
+cleanups.push(stopCd);
+
+function tickCd(){
+  if(cdNum)cdNum.textContent=mmss(cdLeft);
+  if(cdFill)cdFill.style.width=(cdSpan>0?Math.max(0,Math.min(100,(cdLeft/cdSpan)*100)):0)+'%';
+}
+
+/** The hold screen. seconds = the server's real grace period. */
+function toPausing(seconds?:number){
+  stopCd();
+  cdSpan=seconds&&seconds>0?Math.round(seconds):300;   /* 5:00 only when the server gives nothing */
+  cdLeft=cdSpan;
+  tickCd();
+  HH.setAttribute('data-state','pausing');
+  repin();
+  cdT=setInterval(()=>{
+    cdLeft=Math.max(0,cdLeft-1);tickCd();
+    if(cdLeft<=0){stopCd();toEnded();}
+  },1000);
+}
+
+/** The receipt. Everything on it is the session's own numbers. */
+function toEnded(r?:HallReceipt){
+  stopCd();
+  if(r){
+    const set=(id:string,v:string|number|null)=>{const e=document.getElementById(id);
+      if(e)e.textContent=v==null?'—':String(v);};
+    set('rmins',r.minutes);set('rtotal',r.total);set('rrate',r.perMinute);
+  }
+  HH.setAttribute('data-state','ended');
+  repin();
+}
+
+const starsEl=document.getElementById('stars');
+let rated=0;
+const paintStars=()=>[...document.querySelectorAll('.star')].forEach(s=>
+  s.setAttribute('aria-pressed',String(Number((s as HTMLElement).dataset.star)<=rated)));
+const onStars=(e:Event)=>{
+  const s=(e.target as HTMLElement).closest('.star');if(!s)return;
+  rated=Number((s as HTMLElement).dataset.star)||0;paintStars();harmonic(.08);
+  opts.onRate?.(rated);};
+if(starsEl){starsEl.addEventListener('click',onStars);
+  cleanups.push(()=>starsEl.removeEventListener('click',onStars));}
+
+const againBtn=document.getElementById('again'),backBtn=document.getElementById('backtoreaders');
+const onAgain=()=>{opts.onAgain?.();if(MODE==="preview")reset();};
+const onBack=()=>{opts.onBackToReaders?.();};
+if(againBtn){againBtn.addEventListener('click',onAgain);
+  cleanups.push(()=>againBtn.removeEventListener('click',onAgain));}
+if(backBtn){backBtn.addEventListener('click',onBack);
+  cleanups.push(()=>backBtn.removeEventListener('click',onBack));}
+
 const pillsEl=document.getElementById('pills')!;
 const onPills=(e:Event)=>{
   const p=(e.target as HTMLElement).closest('.pill');if(!p)return;
@@ -505,6 +628,19 @@ const replyBtn=document.getElementById('send2')!;
 const onReplyClick=()=>document.getElementById('send')!.click();
 replyBtn.addEventListener('click',onReplyClick);
 cleanups.push(()=>replyBtn.removeEventListener('click',onReplyClick));
+/* Two jumps so the new screens can be looked at without waiting for a real
+   session to run out of money or end. Harness only — they do not exist in the
+   customer flow. The receipt numbers here are stand-ins for the look; the real
+   room passes the session's own figures into toEnded(). */
+const mkPause=document.getElementById('mkpause')!;
+const onMkPause=()=>{boot();toPausing();};
+mkPause.addEventListener('click',onMkPause);
+cleanups.push(()=>mkPause.removeEventListener('click',onMkPause));
+const mkEnd=document.getElementById('mkend')!;
+const onMkEnd=()=>{boot();toEnded({minutes:24,total:'£124.80',perMinute:'£5.20'});};
+mkEnd.addEventListener('click',onMkEnd);
+cleanups.push(()=>mkEnd.removeEventListener('click',onMkEnd));
+
 const replayBtn=document.getElementById('replay')!;
 const onReplay=()=>{reset();at(400,toLobby);};
 replayBtn.addEventListener('click',onReplay);
@@ -532,5 +668,14 @@ cleanups.push(()=>pvBtn.removeEventListener('click',onPreview));
     /* Entry mode: the caller fires this when CHAT_ACCEPTED arrives. */
     arrive: () => { if(HH.getAttribute('data-state')==='lobby'||HH.getAttribute('data-state')==='sending') toArrival(); },
     state: () => HH.getAttribute('data-state'),
+    /** Her reader's real per-minute rate, so the amount buttons can say what
+        each one buys. Arrives after the panel is already on screen. */
+    setRate: (gbpPerMinute: number | null) => { perMin = gbpPerMinute; paintAmounts(); },
+    /** The billing states the room drives. */
+    pausing: (graceSeconds?: number) => toPausing(graceSeconds),
+    ended: (r?: HallReceipt) => toEnded(r),
+    room: () => { HH.setAttribute('data-state','room'); repin(); },
+    /** Whatever the current grace countdown has left, in seconds. */
+    graceLeft: () => cdLeft,
   };
 }
