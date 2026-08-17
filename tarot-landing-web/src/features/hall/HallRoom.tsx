@@ -21,6 +21,9 @@ export interface HallRoomMessage {
   mine: boolean;
   text: string;
   time?: string;
+  /** #22 — a system/event line ("Valentina accepted the chat request"). The old
+      room drew these as a centred muted pill, never as the reader speaking. */
+  system?: boolean;
 }
 
 export interface HallRoomProps {
@@ -176,7 +179,9 @@ export default function HallRoom(p: HallRoomProps) {
               <div className="rnote">No messages yet. Say anything — she is listening.</div>
             )}
             {p.messages.map((m) => (
-              <div key={m.id} className={"bub " + (m.mine ? "me" : "her")}>{m.text}</div>
+              m.system
+                ? <div key={m.id} className="rnote rsys">{m.text}</div>
+                : <div key={m.id} className={"bub " + (m.mine ? "me" : "her")}>{m.text}</div>
             ))}
             {/* #23 */}
             {p.readerTyping && <div className="typing"><i></i><i></i><i></i></div>}

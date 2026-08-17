@@ -1339,6 +1339,7 @@ const ClientChat = () => {
             id: msg.id ?? i,
             mine: (msg.sender_id || msg.user_id) === user?.id,
             text: msg.content,
+            system: msg.type === 'system' || msg.is_system,
           }))}
           loadingMessages={loadingMessages}
           readerTyping={isReaderTyping && currentChatStatus === 'ACTIVE'}

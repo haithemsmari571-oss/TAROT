@@ -24,6 +24,8 @@ html[data-hall="room"] .whobtn{border-radius:50%;padding:0;cursor:pointer;
 /* the thread */
 html[data-hall="room"] .rnote{align-self:center;font-size:13px;letter-spacing:.04em;
   color:rgba(190,172,150,.75);padding:10px 0;text-align:center;}
+html[data-hall="room"] .rsys{max-width:min(420px,88%);margin:6px auto;padding:9px 15px;
+  border-radius:999px;background:rgba(8,4,18,.55);border:1px solid rgba(255,214,150,.20);}
 html[data-hall="room"] .older{align-self:center;margin-bottom:4px;padding:9px 15px;
   border-radius:999px;cursor:pointer;font:inherit;font-size:13px;
   background:rgba(255,240,214,.05);border:1px solid rgba(255,214,150,.22);
