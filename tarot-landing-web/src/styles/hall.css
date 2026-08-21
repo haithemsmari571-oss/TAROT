@@ -14,7 +14,7 @@
    it too it landed in the main bundle and applied to every page from first
    paint. Scoping to html[data-hall] — which only the hall screens set — makes
    that impossible regardless of which bundle the file ends up in. */
-html[data-hall] *{box-sizing:border-box;margin:0;padding:0;}
+:where(html[data-hall]) *{box-sizing:border-box;margin:0;padding:0;}
 html[data-hall],html[data-hall] body{height:100%;overflow:hidden;overscroll-behavior:none;}
 html[data-hall] body{background:#0A0616;color:var(--text);font-family:var(--ui);font-weight:300;
   -webkit-font-smoothing:antialiased;touch-action:none;-webkit-user-select:none;user-select:none;}
@@ -212,8 +212,15 @@ html[data-state="room"] .room{opacity:1;}
 
 .room{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;pointer-events:none;}
 
-.top{display:flex;align-items:center;gap:13px;
+/* FIX 2 — the header is a nowrap row whose only flexible cell is the reader's
+   name. Without min-width:0 the name refuses to shrink and pushes the trailing
+   controls past the right edge (measured 25.1px over at 320px). The controls
+   are flex:none so they keep their size; the name truncates instead. */
+.top{display:flex;align-items:center;gap:13px;flex-wrap:nowrap;min-width:0;
   padding:calc(14px + env(safe-area-inset-top)) 20px 12px;pointer-events:auto;}
+.top .whotext{min-width:0;flex:1 1 auto;overflow:hidden;}
+.top .whotext .nm,.top .whotext .st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.top .rbtn,.top .meter,.top .who{flex:0 0 auto;}
 .who{width:52px;height:52px;flex:none;}
 
 .whotext .nm{font-family:var(--display);font-size:19px;font-weight:300;letter-spacing:-.01em;

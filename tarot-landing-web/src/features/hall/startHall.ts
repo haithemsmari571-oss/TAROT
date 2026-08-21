@@ -458,15 +458,62 @@ function activePanel():HTMLElement|null{
   if(st==='ended')return document.getElementById('endpanel');
   return document.getElementById('panel');
 }
+/* FIX 1 — the orb straddles the panel's top edge, but the panel's own top
+   padding varies per breakpoint, so at some sizes the orb's aura reached past
+   it and landed on the heading. Rather than tune a number per breakpoint, the
+   pin is now computed from measured geometry: take the panel's top edge, and if
+   that would leave less than ORB_CLEARANCE between the BOTTOM OF THE AURA and
+   the top of the panel's first heading, lift the orb until it does. Every value
+   is read from the live layout, so it holds at any viewport size. */
+const ORB_CLEARANCE=12;
 function pinOrb(){
   const p=activePanel();if(!p)return;
   const r=p.getBoundingClientRect();
-  if(r.height>0)document.documentElement.style.setProperty('--panelTop',Math.round(r.top)+'px');
+  if(r.height<=0)return;
+  let top=r.top;
+  /* the aura is the widest ring on the orb, so it decides the real bottom edge */
+  const aura=document.querySelector('.orb .aura') as HTMLElement|null;
+  const fix=document.querySelector('.orbfix') as HTMLElement|null;
+  const head=p.querySelector('.eyebrow')||p.querySelector('.ptitle')||p.firstElementChild;
+  if(aura&&fix&&head){
+    /* .orbfix carries a 1500ms transition on transform, so getBoundingClientRect
+       reports a MID-FLIGHT size while the orb is still scaling and the lift comes
+       out short. offsetHeight is the untransformed box and --os is a custom
+       property, which changes instantly, so together they give the settled size
+       no matter when this runs. */
+    /* REVERTED to offsetHeight * --os. The measured rect is read while .orbfix
+       is still running its own 1500ms transform (hall.css:116), so it is wrong
+       by transition phase; this form is wrong by a scale-composition factor but
+       is stable, and it produced no overlap anywhere. The floor is now "must not
+       overlap", not a fixed 12px, so the stable-but-approximate term is correct. */
+    const os=parseFloat(getComputedStyle(fix).getPropertyValue('--os'))||1;
+    const half=(aura.offsetHeight*os)/2;               /* orb is centred on `top` */
+    const headTop=head.getBoundingClientRect().top;
+    const maxTop=headTop-half-ORB_CLEARANCE;
+    if(top>maxTop)top=maxTop;
+  }
+  document.documentElement.style.setProperty('--panelTop',Math.round(top)+'px');
 }
 /* after a state change the new panel has to be laid out before it can be
    measured, so re-pin on the next frame and again once the fade has settled */
-function repin(){requestAnimationFrame(pinOrb);at(120,pinOrb);at(700,pinOrb);}
+/* FIX 1 — the 700ms pin lands while .panel is still running its 900ms
+   transform (hall.css:139), so it measures a heading that is still moving. The
+   panel's own transitionend, filtered to `transform`, re-pins the moment it has
+   actually settled; the 1000ms pin is the safety net for when the transition is
+   cancelled or never fires at all, as under prefers-reduced-motion. */
+function repinOnSettle(){
+  const p=activePanel();if(!p)return;
+  const once=(e:Event)=>{
+    if((e as TransitionEvent).propertyName!=='transform')return;
+    p.removeEventListener('transitionend',once);pinOrb();
+  };
+  p.addEventListener('transitionend',once);
+  cleanups.push(()=>p.removeEventListener('transitionend',once));
+}
+function repin(){requestAnimationFrame(pinOrb);at(120,pinOrb);at(700,pinOrb);
+  repinOnSettle();at(1000,pinOrb);}
 pinOrb();addEventListener('resize',pinOrb);setTimeout(pinOrb,120);setTimeout(pinOrb,600);
+repinOnSettle();setTimeout(pinOrb,1000);
 const stages=[...document.querySelectorAll('.stage')] as HTMLElement[];
 stages.forEach(s=>s.addEventListener('scroll',pinOrb,{passive:true}));
 cleanups.push(()=>{removeEventListener('resize',pinOrb);

@@ -27,6 +27,12 @@ html[data-hall] .hlist {
   transition: opacity 700ms var(--ease), transform 900ms var(--ease);
 }
 
+/* FIX 3 — the orb is the reader you are with. On the list there is no reader,
+   so it is not drawn at all; this removes the header collision at source rather
+   than reserving space around it. :has() keys off the list's own presence, so
+   the orb returns by itself the moment a conversation is opened. */
+html[data-hall]:has(.hlist) .orbfix{display:none;}
+
 /* leaving for the room — the hall's own crossfade, then it unmounts */
 html[data-hall] .hlist.is-leaving {
   opacity: 0;
@@ -35,7 +41,9 @@ html[data-hall] .hlist.is-leaving {
 }
 
 html[data-hall] .hlist-inner {
-  width: min(560px, 100%);
+  width: min(640px, 100%);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -49,7 +57,8 @@ html[data-hall] .hlist-head {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 4px 14px;
+  padding: 0 4px 12px;
+  flex: none;
 }
 html[data-hall] .hlist-eyebrow {
   font: 600 11px/1.4 var(--ui);
@@ -59,7 +68,7 @@ html[data-hall] .hlist-eyebrow {
   margin-bottom: 6px;
 }
 html[data-hall] .hlist-title {
-  font: 300 30px/1.1 var(--display);
+  font: 300 26px/1.1 var(--display);
   color: var(--text);
   letter-spacing: .01em;
 }
@@ -101,20 +110,25 @@ html[data-hall] .hlist-scroll {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px 4px calc(10px + var(--hpager-h));
+  gap: 6px;
+  /* padding-top IS the gap between the header's bottom edge and the first row,
+     because the first row is this container's first child. The header's own
+     padding-bottom cannot widen it — that grows the header box instead. */
+  padding: 14px 4px calc(8px + var(--hpager-h));
 }
 
 html[data-hall] .hrow {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 11px;
   width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   text-align: left;
   appearance: none;
   cursor: pointer;
-  padding: 13px 14px;
-  border-radius: 18px;
+  padding: 8px 12px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 214, 150, .18);
   background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
   backdrop-filter: blur(18px) saturate(1.15);
@@ -128,7 +142,7 @@ html[data-hall] .hrow:hover {
 }
 
 html[data-hall] .hrow-face {
-  width: 52px; height: 52px; flex: none;
+  width: 44px; height: 44px; flex: none;
   border-radius: 50%;
   overflow: hidden;
   border: 1px solid rgba(232, 200, 139, .4);
@@ -136,23 +150,29 @@ html[data-hall] .hrow-face {
   display: flex; align-items: center; justify-content: center;
 }
 html[data-hall] .hrow-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
-html[data-hall] .hrow-face span { font-size: 20px; color: var(--gold); }
+html[data-hall] .hrow-face span { font-size: 17px; color: var(--gold); }
 
 html[data-hall] .hrow-body { flex: 1; min-width: 0; }
 html[data-hall] .hrow-top {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
 }
 html[data-hall] .hrow-name {
-  font: 400 17px/1.2 var(--display);
+  font: 400 16px/1.2 var(--display);
   color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* one line, never wrapped, always ellipsised at the container edge */
 html[data-hall] .hrow-last {
-  font: 300 13px/1.45 var(--ui);
+  display: block;
+  max-width: 100%;
+  font: 300 12.5px/1.35 var(--ui);
   color: var(--text-mute);
-  margin-top: 3px;
+  margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+html[data-hall] .hrow-body { overflow: hidden; }
+html[data-hall] .hrow-top { min-width: 0; }
+html[data-hall] .hrow-name { max-width: 100%; }
 
 /* status badge — the hall's gold vocabulary, one tone per state */
 html[data-hall] .hbadge {
@@ -223,8 +243,30 @@ html[data-hall] .rbanner.hbanner span {
 }
 
 @media (max-width: 560px) {
+  html[data-hall] { --hpager-h: 46px; }
   html[data-hall] .hlist { padding-left: 12px; padding-right: 12px; }
-  html[data-hall] .hlist-title { font-size: 26px; }
-  html[data-hall] .hrow { padding: 11px 12px; gap: 11px; }
-  html[data-hall] .hrow-face { width: 46px; height: 46px; }
+  html[data-hall] .hlist-title { font-size: 22px; }
+  html[data-hall] .hlist-sub { font-size: 12px; }
+  html[data-hall] .hrow { padding: 7px 11px; gap: 10px; }
+  html[data-hall] .hrow-face { width: 40px; height: 40px; }
+  html[data-hall] .hrow-name { font-size: 15px; }
+  html[data-hall] .hrow-last { font-size: 12px; }
+  html[data-hall] .hbadge { font-size: 9px; padding: 4px 7px; letter-spacing: .12em; }
+}
+/* very short windows: trim the header so more rows clear the pager */
+@media (max-height: 660px) {
+  html[data-hall] .hlist { padding-top: calc(10px + env(safe-area-inset-top)); }
+  html[data-hall] .hlist-sub { display: none; }
+  /* FIX 3 — clear space between the header and the first row, and stop the
+     refresh control sliding under READERS. The header is its own row with a
+     min-height, the tools sit on their own baseline and cannot overlap. */
+  html[data-hall] .hlist-head {
+    padding-bottom: 14px;
+    align-items: center;
+    min-height: 44px;
+    column-gap: 10px;
+  }
+  html[data-hall] .hlist-tools { flex: 0 0 auto; gap: 8px; }
+  html[data-hall] .hlist-head > div:first-child { min-width: 0; flex: 1 1 auto; }
+  html[data-hall] .hlist-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
