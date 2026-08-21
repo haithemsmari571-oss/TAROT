@@ -4,10 +4,30 @@
    to html[data-hall="room"], which only the live reading sets. */
 
 /* The room is the whole page here, not a stage that fades in behind a panel. */
-html[data-hall="room"] .room{opacity:1;pointer-events:auto;}
+html[data-hall="room"] .room{opacity:1;pointer-events:auto;visibility:visible;}
 html[data-hall="room"] .thread{pointer-events:auto;}
 html[data-hall="room"][data-state="pausing"] .room,
 html[data-hall="room"][data-state="ended"] .room{pointer-events:none;}
+/* FIX B — while the hold or the receipt is up, the room behind them is scenery
+   on this host (it stays visible as the backdrop, so visibility cannot help).
+   Its interactive children re-enable hit testing past the room's own
+   pointer-events:none, so each one is switched off explicitly in those states. */
+html[data-hall="room"][data-state="pausing"] .room .top,
+html[data-hall="room"][data-state="ended"] .room .top,
+html[data-hall="room"][data-state="pausing"] .room .thread,
+html[data-hall="room"][data-state="ended"] .room .thread,
+html[data-hall="room"][data-state="pausing"] .room .bub,
+html[data-hall="room"][data-state="ended"] .room .bub,
+html[data-hall="room"][data-state="pausing"] .room .composer,
+html[data-hall="room"][data-state="ended"] .room .composer,
+html[data-hall="room"][data-state="pausing"] .room .lowbal,
+html[data-hall="room"][data-state="ended"] .room .lowbal,
+html[data-hall="room"][data-state="pausing"] .room .older,
+html[data-hall="room"][data-state="ended"] .room .older,
+html[data-hall="room"][data-state="pausing"] .room .rbanner,
+html[data-hall="room"][data-state="ended"] .room .rbanner,
+html[data-hall="room"][data-state="pausing"] .room .rnotice,
+html[data-hall="room"][data-state="ended"] .room .rnotice{pointer-events:none;}
 
 /* header buttons — 48x48 of real hit area, from the composer's own send size */
 html[data-hall="room"] .rbtn{width:44px;height:44px;flex:none;border:0;cursor:pointer;

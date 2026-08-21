@@ -546,8 +546,8 @@ cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));}
    anything about money — pressing "Add" hands straight back out to the caller,
    which uses the top-up path the app already has. */
 
-const cdNum=document.getElementById('cdnum'),cdFill=document.getElementById('cdfill');
-const amtsEl=document.getElementById('amts'),addBtn=document.getElementById('addtime');
+let cdNum=document.getElementById('cdnum'),cdFill=document.getElementById('cdfill');
+let amtsEl=document.getElementById('amts'),addBtn=document.getElementById('addtime');
 let cdT:any=null,cdLeft=0,cdSpan=300,amount=25,perMin:number|null=null;
 
 const mmss=(s:number)=>Math.floor(s/60)+':'+String(Math.max(0,Math.floor(s%60))).padStart(2,'0');
@@ -568,17 +568,11 @@ paintAmounts();
 const onAmts=(e:Event)=>{
   const b=(e.target as HTMLElement).closest('.amt');if(!b)return;
   amount=Number((b as HTMLElement).dataset.amt)||amount;paintAmounts();harmonic(.06);};
-if(amtsEl){amtsEl.addEventListener('click',onAmts);
-  cleanups.push(()=>amtsEl.removeEventListener('click',onAmts));}
 
 const onAdd=()=>{opts.onAddTime?.(amount);if(MODE==="preview")toRoom();};
-if(addBtn){addBtn.addEventListener('click',onAdd);
-  cleanups.push(()=>addBtn.removeEventListener('click',onAdd));}
 
-const endInstead=document.getElementById('endinstead');
+let endInstead=document.getElementById('endinstead');
 const onEndNow=()=>{opts.onEndNow?.();if(MODE==="preview")toEnded();};
-if(endInstead){endInstead.addEventListener('click',onEndNow);
-  cleanups.push(()=>endInstead.removeEventListener('click',onEndNow));}
 
 function stopCd(){if(cdT){clearInterval(cdT);cdT=null;}}
 cleanups.push(stopCd);
@@ -614,7 +608,7 @@ function toEnded(r?:HallReceipt){
   repin();
 }
 
-const starsEl=document.getElementById('stars');
+let starsEl=document.getElementById('stars');
 let rated=0;
 const paintStars=()=>[...document.querySelectorAll('.star')].forEach(s=>
   s.setAttribute('aria-pressed',String(Number((s as HTMLElement).dataset.star)<=rated)));
@@ -622,16 +616,34 @@ const onStars=(e:Event)=>{
   const s=(e.target as HTMLElement).closest('.star');if(!s)return;
   rated=Number((s as HTMLElement).dataset.star)||0;paintStars();harmonic(.08);
   opts.onRate?.(rated);};
-if(starsEl){starsEl.addEventListener('click',onStars);
-  cleanups.push(()=>starsEl.removeEventListener('click',onStars));}
-
-const againBtn=document.getElementById('again'),backBtn=document.getElementById('backtoreaders');
+let againBtn=document.getElementById('again'),backBtn=document.getElementById('backtoreaders');
 const onAgain=()=>{opts.onAgain?.();if(MODE==="preview")reset();};
 const onBack=()=>{opts.onBackToReaders?.();};
-if(againBtn){againBtn.addEventListener('click',onAgain);
-  cleanups.push(()=>againBtn.removeEventListener('click',onAgain));}
-if(backBtn){backBtn.addEventListener('click',onBack);
-  cleanups.push(()=>backBtn.removeEventListener('click',onBack));}
+
+/* FIX A — the receipt and hold controls used to be wired ONCE, right here, by
+   getElementById inside if-guards. On /chats the hall now starts while the
+   conversation LIST is showing, so none of those elements existed yet: every
+   guard skipped silently and the closing card rendered with no listeners at
+   all (CDP measured 0 click listeners on /chats against 1 on /design-preview).
+   The wiring lives in wireRoomControls(), which unbinds, re-queries and
+   rebinds — idempotent — and is exposed on the API so HallRoom can call it the
+   moment its DOM is actually mounted. */
+let roomWired:Array<[Element,EventListener]>=[];
+function unwireRoomControls(){for(const [el,fn] of roomWired)el.removeEventListener('click',fn);roomWired=[];}
+cleanups.push(unwireRoomControls);
+function wireRoomControls(){
+  unwireRoomControls();
+  cdNum=document.getElementById('cdnum');cdFill=document.getElementById('cdfill');
+  amtsEl=document.getElementById('amts');addBtn=document.getElementById('addtime');
+  endInstead=document.getElementById('endinstead');
+  starsEl=document.getElementById('stars');
+  againBtn=document.getElementById('again');backBtn=document.getElementById('backtoreaders');
+  const bind=(el:Element|null,fn:EventListener)=>{if(el){el.addEventListener('click',fn);roomWired.push([el,fn]);}};
+  bind(amtsEl,onAmts);bind(addBtn,onAdd);bind(endInstead,onEndNow);
+  bind(starsEl,onStars);bind(againBtn,onAgain);bind(backBtn,onBack);
+  paintAmounts();paintStars();tickCd();
+}
+wireRoomControls();
 
 const pillsEl=document.getElementById('pills');
 const onPills=(e:Event)=>{
@@ -737,6 +749,10 @@ cleanups.push(()=>pvBtn.removeEventListener('click',onPreview));
     try{ stopBed(); if(ctx) ctx.close(); }catch(e){} });
   return {
     stop: () => { cleanups.forEach(f=>{try{f();}catch(e){}}); },
+    /** Re-binds the receipt/hold controls against the CURRENT DOM. HallRoom
+        calls this on mount, because on /chats the hall starts before the room
+        exists and the one-shot wiring above finds nothing. */
+    wireRoom: wireRoomControls,
     /* Entry mode: the caller fires this when CHAT_ACCEPTED arrives. */
     arrive: () => { if(HH.getAttribute('data-state')==='lobby'||HH.getAttribute('data-state')==='sending') toArrival(); },
     state: () => HH.getAttribute('data-state'),

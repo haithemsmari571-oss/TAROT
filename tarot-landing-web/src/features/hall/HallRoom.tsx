@@ -118,6 +118,13 @@ export default function HallRoom(p: HallRoomProps) {
     };
   });
 
+  /* FIX A — startHall wired the receipt/hold controls when HallStage mounted,
+     which on /chats is the LIST view: this room's DOM did not exist yet, every
+     guarded getElementById skipped, and the closing card rendered with zero
+     click listeners (CDP-measured). Re-wire against the real DOM now that the
+     room is mounted. Idempotent — unbinds before it binds. */
+  useEffect(() => { hallInstance?.wireRoom?.(); }, [hallInstance]);
+
   /* the caller's phase drives the hall's own state machine */
   useEffect(() => {
     const h = hallInstance; if (!h) return;

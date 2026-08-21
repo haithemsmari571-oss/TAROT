@@ -142,7 +142,7 @@ html[data-state="form"] .stage,html[data-state="sending"] .stage{pointer-events:
              0 1px 0 rgba(255,240,210,.2) inset;
   transition:opacity 700ms var(--ease),transform 900ms var(--ease),filter 700ms var(--ease);}
 html[data-state="sending"] .panel{opacity:0;transform:scale(1.03) translateY(-10px);filter:blur(9px);pointer-events:none;}
-html[data-state="lobby"] .stage,html[data-state="accepting"] .stage,html[data-state="room"] .stage{opacity:0;pointer-events:none;}
+html[data-state="lobby"] .stage,html[data-state="accepting"] .stage,html[data-state="room"] .stage{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 700ms var(--ease),visibility 0s 700ms;}
 .stage{transition:opacity 700ms var(--ease);}
 .eyebrow{text-align:center;font-size:10px;font-weight:500;letter-spacing:.42em;text-transform:uppercase;
   color:var(--gold);opacity:.9;}
@@ -206,8 +206,11 @@ html[data-state="accepting"] .arrive{animation:arr 2700ms var(--ease) 800ms forw
 .ahere{margin-top:10px;font-size:11px;letter-spacing:.42em;text-transform:uppercase;color:var(--gold);}
 
 /* ══════════ 4 · the room ══════════ */
-.room{opacity:0;pointer-events:none;transition:opacity 1200ms var(--ease);}
-html[data-state="room"] .room{opacity:1;}
+/* FIX B — opacity:0 leaves children hit-testable when they set their own
+   pointer-events (a child's auto beats a parent's none). visibility inherits
+   and blocks hit testing outright; the delay keeps the 1200ms fade-out. */
+.room{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 1200ms var(--ease),visibility 0s 1200ms;}
+html[data-state="room"] .room{opacity:1;visibility:visible;transition:opacity 1200ms var(--ease);}
 .room .top .who{width:52px;height:52px;flex:none;}
 
 .room{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;pointer-events:none;}
@@ -333,7 +336,7 @@ html[data-state="room"] .room{opacity:1;}
    same easing. Nothing here restyles anything that came before it. */
 
 /* The room recedes rather than closing, so she can see she has not lost it. */
-html[data-state="pausing"] .room{opacity:.22;filter:blur(7px) saturate(.8);}
+html[data-state="pausing"] .room{opacity:.22;filter:blur(7px) saturate(.8);visibility:visible;transition:opacity 1200ms var(--ease);}
 
 /* The orb comes back up and straddles the top edge of whichever panel is out. */
 html[data-state="pausing"] .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
@@ -341,15 +344,15 @@ html[data-state="ended"]   .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
 
 /* Two more stages beside the request stage. They carry .stage so they inherit
    its scrolling and its fade, and .stage2 to stay dark until their own state. */
-.stage2{opacity:0;pointer-events:none;}
+.stage2{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 700ms var(--ease),visibility 0s 700ms;}
 /* .panel sets pointer-events:auto on itself (line 124), which re-enables hit
    testing even inside a stage set to none. Without this the invisible hold and
    receipt panels sit at the same z-6 and swallow every click meant for the
    request panel underneath. Off by default; switched on only in their own state. */
 .stage2 .panel{pointer-events:none;}
-html[data-state="pausing"] .stage,html[data-state="ended"] .stage{opacity:0;pointer-events:none;}
-html[data-state="pausing"] #pausestage{opacity:1;pointer-events:auto;}
-html[data-state="ended"]   #endstage{opacity:1;pointer-events:auto;}
+html[data-state="pausing"] .stage,html[data-state="ended"] .stage{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 700ms var(--ease),visibility 0s 700ms;}
+html[data-state="pausing"] #pausestage{opacity:1;pointer-events:auto;visibility:visible;transition:opacity 700ms var(--ease);}
+html[data-state="ended"]   #endstage{opacity:1;pointer-events:auto;visibility:visible;transition:opacity 700ms var(--ease);}
 
 /* A faded-out stage must not keep catching taps. .panel carries
    pointer-events:auto of its own (line 124), and that re-enables hit testing

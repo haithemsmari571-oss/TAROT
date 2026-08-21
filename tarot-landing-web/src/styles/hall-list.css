@@ -38,6 +38,8 @@ html[data-hall] .hlist.is-leaving {
   opacity: 0;
   transform: translateY(-10px);
   pointer-events: none;
+  visibility: hidden;
+  transition: opacity 700ms var(--ease), transform 900ms var(--ease), visibility 0s 700ms;
 }
 
 html[data-hall] .hlist-inner {
