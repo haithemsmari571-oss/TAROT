@@ -195,9 +195,17 @@ if(!ok){
 }
 /* ADDED-END */
 
-/* ═══════════ sound ═══════════ */
+/* ═══════════ sound ═══════════
+   Everything is GENERATED — oscillators and noise buffers, no files, no
+   library. The four pills on the request form (data-snd) drive this directly:
+   each choice builds its own bed, "Silence" explicitly stops whatever plays,
+   and the choice is kept in sessionStorage so it survives into the room's own
+   hall instance. The pill click is itself the user gesture the autoplay
+   policy needs, so boot()'s resume() runs gesture-qualified. */
+const SOUND_KEY='hall-sound';
 let ctx:any=null,bedGain:any=null,uiGain:any=null,breathGain:any=null,soundOn=false,bedNodes:any[]=[];
 let flowSrc:any=null,flowGain:any=null,flowFilt:any=null;
+let bedKind:string=(()=>{try{return sessionStorage.getItem(SOUND_KEY)||'none';}catch(e){return 'none';}})();
 function boot(){
   if(ctx)return;
   ctx=new (window.AudioContext||(window as any).webkitAudioContext)({latencyHint:'playback'});
@@ -221,21 +229,61 @@ function boot(){
   flowSrc.start();
   if(ctx.state!=='running')ctx.resume();
 }
-function startBed(){
+/* One bed per choice, all from the same primitives already here.
+   'bowls' is the design's original harmonic stack; 'rain' is shaped noise
+   (the flow-noise idiom); 'hum' is a low sine drone. Spectrally distinct on
+   purpose: rain sits high and broadband, bowls in the mids, hum at the bottom. */
+function startBed(kind:string='bowls'){
   boot();bedNodes.forEach(n=>{try{n.stop()}catch(e){}});bedNodes=[];
   const out=ctx.createGain();out.gain.value=1;out.connect(bedGain);
-  [65.41,98,130.81,196,261.63,392].forEach((f,i)=>{
-    const o=ctx.createOscillator();o.type='sine';o.frequency.value=f;
-    const g=ctx.createGain();g.gain.value=[.22,.14,.09,.05,.024,.012][i];
-    const l=ctx.createOscillator();l.frequency.value=.011+i*.0045;
-    const lg=ctx.createGain();lg.gain.value=g.gain.value*.7;
+  if(kind==='rain'){
+    const n=ctx.sampleRate*4,nb=ctx.createBuffer(1,n,ctx.sampleRate),nd=nb.getChannelData(0);
+    for(let i=0;i<n;i++)nd[i]=Math.random()*2-1;
+    const src=ctx.createBufferSource();src.buffer=nb;src.loop=true;
+    const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=400;
+    const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2400;lp.Q.value=.4;
+    const g=ctx.createGain();g.gain.value=.30;
+    /* a slow swell so it reads as weather, not static */
+    const l=ctx.createOscillator();l.frequency.value=.06;
+    const lg=ctx.createGain();lg.gain.value=.07;
     l.connect(lg);lg.connect(g.gain);l.start();
-    o.connect(g);g.connect(out);o.start();bedNodes.push(o,l);});
+    src.connect(hp);hp.connect(lp);lp.connect(g);g.connect(out);src.start();
+    bedNodes.push(src,l);
+  }else if(kind==='hum'){
+    [55,110,164.81].forEach((f,i)=>{
+      const o=ctx.createOscillator();o.type='sine';o.frequency.value=f;
+      const g=ctx.createGain();g.gain.value=[.34,.12,.045][i];
+      const l=ctx.createOscillator();l.frequency.value=.017+i*.006;
+      const lg=ctx.createGain();lg.gain.value=g.gain.value*.5;
+      l.connect(lg);lg.connect(g.gain);l.start();
+      o.connect(g);g.connect(out);o.start();bedNodes.push(o,l);});
+  }else{ /* singing bowls — the original stack */
+    [65.41,98,130.81,196,261.63,392].forEach((f,i)=>{
+      const o=ctx.createOscillator();o.type='sine';o.frequency.value=f;
+      const g=ctx.createGain();g.gain.value=[.22,.14,.09,.05,.024,.012][i];
+      const l=ctx.createOscillator();l.frequency.value=.011+i*.0045;
+      const lg=ctx.createGain();lg.gain.value=g.gain.value*.7;
+      l.connect(lg);lg.connect(g.gain);l.start();
+      o.connect(g);g.connect(out);o.start();bedNodes.push(o,l);});
+  }
   bedGain.gain.setTargetAtTime(.2,ctx.currentTime,4);
 }
 function stopBed(){if(!ctx)return;bedGain.gain.setTargetAtTime(0,ctx.currentTime,1.2);
   bedNodes.forEach(n=>{try{n.stop()}catch(e){}});bedNodes=[];
   if(flowGain)flowGain.gain.setTargetAtTime(0,ctx.currentTime,.3);}
+
+/* The single entry point for the four choices. Silence is an explicit stop of
+   whatever is playing, never just an unstarted engine; anything else builds
+   its bed right now, inside the click that authorises audio. */
+function selectSound(kind:string){
+  bedKind=kind;
+  try{sessionStorage.setItem(SOUND_KEY,kind);}catch(e){}
+  soundOn=kind!=='none';
+  if(!soundOn){stopBed();return;}
+  boot();
+  if(ctx.state!=='running')ctx.resume();
+  startBed(kind);
+}
 const HARM=[130.81,196,261.63,392,523.25,659.25,784];
 let lastH=0;
 function harmonic(v:number){
@@ -288,6 +336,9 @@ let wi=0,lastWake=0;
    unchanged; setPointerCapture is dropped because listening on window keeps a
    drag alive by construction, which is the only thing the capture provided. */
 const onPtrDown=(e:PointerEvent)=>{down=true;px=e.clientX;py=e.clientY;
+  /* autoplay safety: a bed chosen before a fresh page load sits suspended
+     until the first real gesture — this is that gesture */
+  if(soundOn&&ctx&&ctx.state!=='running')ctx.resume();
   harmonic(.075);};
 const onPtrMove=(e:PointerEvent)=>{
   px=e.clientX;py=e.clientY;
@@ -670,12 +721,26 @@ function wireRoomControls(){
 wireRoomControls();
 
 const pillsEl=document.getElementById('pills');
+const paintPills=()=>{if(!pillsEl)return;
+  [...pillsEl.querySelectorAll('.pill')].forEach(x=>
+    x.setAttribute('aria-pressed',String((x as HTMLElement).dataset.snd===bedKind)));};
 const onPills=(e:Event)=>{
-  const p=(e.target as HTMLElement).closest('.pill');if(!p)return;
-  [...document.querySelectorAll('.pill')].forEach(x=>x.setAttribute('aria-pressed',String(x===p)));
+  const p=(e.target as HTMLElement).closest('.pill') as HTMLElement|null;
+  /* scoped to THIS container — the hold panel's amount pills also carry .pill */
+  if(!p||!pillsEl?.contains(p))return;
+  selectSound(p.dataset.snd||'none');
+  paintPills();
   harmonic(.06);};
 if(pillsEl){pillsEl.addEventListener('click',onPills);
 cleanups.push(()=>pillsEl.removeEventListener('click',onPills));}
+
+/* A choice made earlier in this tab (the entry form) starts here too — this is
+   how Rain picked before the reading is still Rain inside the room. Client-side
+   navigation keeps the tab's user activation, so the context may start at once;
+   if the browser still holds it suspended (a fresh page load), the first
+   pointer-down below resumes it. */
+paintPills();
+if(bedKind!=='none'){soundOn=true;try{startBed(bedKind);}catch(e){}}
 
 /* ── the developer harness. /design-preview only — it must never reach a
    customer, and in entry mode none of these elements are rendered at all. ── */
@@ -701,8 +766,11 @@ const minsT=setInterval(()=>{mins=Math.max(0,mins-1);const m=document.getElement
 cleanups.push(()=>clearInterval(minsT));
 
 const sBtn=document.getElementById('sound')!;
-const onSound=()=>{soundOn=!soundOn;sBtn.textContent='sound: '+(soundOn?'on':'off');
-  sBtn.setAttribute('aria-pressed',String(soundOn));if(soundOn){boot();startBed();}else stopBed();};
+const onSound=()=>{const on=!soundOn;
+  selectSound(on?(bedKind!=='none'?bedKind:'bowls'):'none');
+  paintPills();
+  sBtn.textContent='sound: '+(on?'on':'off');
+  sBtn.setAttribute('aria-pressed',String(on));};
 sBtn.addEventListener('click',onSound);
 cleanups.push(()=>sBtn.removeEventListener('click',onSound));
 const swWrap=document.getElementById('swatches')!;
