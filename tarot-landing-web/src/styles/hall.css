@@ -224,12 +224,40 @@ html[data-state="room"] .room{opacity:1;visibility:visible;transition:opacity 12
 .top .whotext{min-width:0;flex:1 1 auto;overflow:hidden;}
 .top .whotext .nm,.top .whotext .st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .top .rbtn,.top .meter,.top .who{flex:0 0 auto;}
+/* DEFECT 1+2, narrow widths — the header cannot hold the name, two controls and
+   three numbers on one line, so it becomes rows: reader on the first, controls
+   on the next, numbers on their own shelf. Nothing truncates; names wrap. */
+@media (max-width:700px){
+  .top{flex-wrap:wrap;row-gap:8px;}
+  .top .whotext{flex:1 1 auto;overflow:visible;}
+  .top .whotext .nm,.top .whotext .st{white-space:normal;overflow:visible;text-overflow:clip;}
+  /* the trailing controls hug the right edge of their row — Readers takes the
+     push itself when End is absent, so it can never land under the orb at left */
+  .top .rend{margin-left:auto;}
+  .top .rleave{margin-left:auto;}
+  .top .rend~.rleave{margin-left:0;}
+  /* .top .stats, not .stats — this media block sits EARLIER in the file than
+     the .stats base rule, so at equal specificity the base re-overrides it.
+     The ancestor bumps it to (0,2,0) and the shelf wins regardless of order. */
+  .top .stats{order:10;flex:1 1 100%;justify-content:space-between;margin-left:0;
+    padding-top:7px;border-top:1px solid rgba(232,200,139,.16);}
+}
 .who{width:52px;height:52px;flex:none;}
 
 .whotext .nm{font-family:var(--display);font-size:19px;font-weight:300;letter-spacing:-.01em;
   color:#FFFBF2;line-height:1.15;text-shadow:0 1px 14px rgba(0,0,0,.7);}
 .whotext .st{font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;
   color:var(--gold);opacity:.9;margin-top:3px;transition:opacity .6s var(--ease);}
+/* DEFECT 2 — the header's numbers. SPENT leads: it is the number a paying
+   customer watches and the one she will dispute, so it takes the .meter's old
+   prominence while elapsed and remaining sit smaller beside it. */
+.stats{margin-left:auto;display:flex;gap:15px;align-items:flex-end;text-align:right;flex:0 0 auto;}
+.stat b{display:block;font-family:var(--display);font-size:14.5px;font-weight:300;color:#FFFBF2;
+  line-height:1.1;text-shadow:0 1px 14px rgba(0,0,0,.7);white-space:nowrap;}
+.stat i{font-style:normal;font-size:8.5px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--gold);opacity:.85;white-space:nowrap;}
+.stat.spent b{font-size:19px;color:var(--gilt);}
+
 .meter{margin-left:auto;text-align:right;}
 .meter b{display:block;font-family:var(--display);font-size:19px;font-weight:300;color:#FFFBF2;
   text-shadow:0 1px 14px rgba(0,0,0,.7);}

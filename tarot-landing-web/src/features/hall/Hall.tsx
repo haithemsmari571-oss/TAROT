@@ -174,7 +174,17 @@ export default function Hall({ mode = "preview", psychicId }:
               <div className="nm">Valentina</div>
               <div className="st" id="st">reading for you</div>
             </div>
-            <div className="meter"><b id="mins">38 min</b><i>left</i></div>
+            {/* DEFECT 2 — spent leads, mirroring the live room. Stand-in
+                numbers, like every figure on this harness. */}
+            <div className="stats">
+              <div className="stat spent"><b id="pvspent">£4.20</b><i>spent</i></div>
+              <div className="stat"><b id="pvelapsed">12:04</b><i>elapsed</i></div>
+              <div className="stat"><b id="mins">38 min</b><i>left</i></div>
+            </div>
+            {/* DEFECT 1 — the preview room had NO End control at all; the
+                harness relied on the mock bar. Mirrors the live room's End and
+                drives the same toEnded the mock bar uses. */}
+            <button className="rbtn rend" id="pvend" aria-label="End the reading">End</button>
           </header>
           <div className="threadwrap"><div className="thread" id="thread"></div></div>
           <div className="nudge" id="nudge">the sky is yours while you wait</div>

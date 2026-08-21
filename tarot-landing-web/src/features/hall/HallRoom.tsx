@@ -38,6 +38,10 @@ export interface HallRoomProps {
   minutesLeft: number | null;
   isPaused: boolean;
   elapsedLabel: string;
+  /** DEFECT 2 — what she has spent so far, already formatted ("£4.20").
+      Read from sessionState.estimatedCost, the SAME field the closing card
+      latches — one constant, one source. */
+  spentLabel?: string | null;
 
   /* the connection — #15, #16 */
   isConnected: boolean;
@@ -168,12 +172,19 @@ export default function HallRoom(p: HallRoomProps) {
               {p.isConnected ? p.statusWord : "Reconnecting…"}
             </div>
           </div>
-          <div className="meter"><b id="mins">{meter}</b><i>{p.isPaused ? "paused" : "left"}</i></div>
+          {/* DEFECT 2 — the money leads. Spent is the number she will dispute,
+              so it is first and largest; elapsed and remaining follow. All three
+              read what the session already reports — nothing is computed here. */}
+          <div className="stats">
+            <div className="stat spent"><b id="spent">{p.spentLabel ?? "£0.00"}</b><i>spent</i></div>
+            <div className="stat"><b id="elapsed">{(p.elapsedLabel || "").replace(/\s*elapsed\s*$/, "") || "0:00"}</b><i>elapsed</i></div>
+            <div className="stat"><b id="mins">{meter}</b><i>{p.isPaused ? "paused" : "left"}</i></div>
+          </div>
           {p.onEnd && (
             <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading">End</button>
           )}
           {p.onLeave && (
-            <button className="rbtn" onClick={p.onLeave} aria-label="Leave for the readers">Readers</button>
+            <button className="rbtn rleave" onClick={p.onLeave} aria-label="Leave for the readers">Readers</button>
           )}
         </header>
 

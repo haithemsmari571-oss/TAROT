@@ -1170,6 +1170,7 @@ const ClientChat = () => {
           minutesLeft={minutesLeft}
           isPaused={isPaused}
           elapsedLabel={`${Math.floor((sessionState.elapsedSeconds || 0) / 60)}:${String(Math.floor((sessionState.elapsedSeconds || 0) % 60)).padStart(2, "0")} elapsed`}
+          spentLabel={formatGbp(sessionState.estimatedCost || 0)}
           isConnected={isConnected}
           statusWord={isChatActive ? 'reading for you' : isPaused ? 'holding your place' : currentChatStatus === 'ENDED' ? 'ended' : currentChatStatus === 'REQUESTED' ? 'pending' : currentChatStatus === 'ARCHIVED' ? 'cancelled' : ''}
           messages={allMessages.map((msg: any, i: number) => ({
@@ -1552,6 +1553,7 @@ function ForcedRoomState({ mode }: { mode: string }) {
         minutesLeft={mode === "lowbalance" ? 1 : isPaused ? null : 38}
         isPaused={isPaused}
         elapsedLabel="12:04 elapsed"
+        spentLabel="£4.20"
         isConnected={mode !== "disconnected"}
         statusWord={isEnded ? "ended" : isPaused ? "holding your place" : mode === "requested" ? "pending" : "reading for you"}
         messages={mode === "empty" || mode === "loading" || mode === "requested" ? [] : msgs}

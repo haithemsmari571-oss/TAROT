@@ -30,6 +30,11 @@ html[data-hall="room"][data-state="pausing"] .room .rnotice,
 html[data-hall="room"][data-state="ended"] .room .rnotice{pointer-events:none;}
 
 /* header buttons — 48x48 of real hit area, from the composer's own send size */
+/* The Readers control carries a word, not a glyph — the 44px circle below
+   clipped its label at every width (scrollWidth 72 in a 42px box). It becomes
+   a pill; the circle stays for ‹ and End. */
+html[data-hall="room"] .rbtn.rleave{width:auto;padding:0 13px;border-radius:22px;
+  font-size:12px;letter-spacing:.08em;text-transform:uppercase;}
 html[data-hall="room"] .rbtn{width:44px;height:44px;flex:none;border:0;cursor:pointer;
   display:grid;place-items:center;padding:0;border-radius:50%;font:inherit;font-size:19px;
   color:rgba(224,210,190,.9);background:rgba(255,240,214,.05);

@@ -724,6 +724,10 @@ const mkEnd=document.getElementById('mkend')!;
 const onMkEnd=()=>{boot();toEnded({minutes:24,total:'£124.80',perMinute:'£5.20'});};
 mkEnd.addEventListener('click',onMkEnd);
 cleanups.push(()=>mkEnd.removeEventListener('click',onMkEnd));
+/* the preview room's own End control drives the same jump as the mock bar */
+const pvEnd=document.getElementById('pvend');
+if(pvEnd){pvEnd.addEventListener('click',onMkEnd);
+  cleanups.push(()=>pvEnd.removeEventListener('click',onMkEnd));}
 
 const replayBtn=document.getElementById('replay')!;
 const onReplay=()=>{reset();at(400,toLobby);};
