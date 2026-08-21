@@ -13,6 +13,10 @@ export interface NotificationContextType {
   clearNotifications: () => void;
   markAllAsRead: () => void;
   onNotification: (type: NotificationType, handler: NotificationHandler) => () => void;
+  /** Feed a locally-detected event through the exact dispatch a socket message
+      takes, so a poll-discovered acceptance and a socket-delivered one share
+      one arrival path (same handlers, same order) instead of growing a second. */
+  emitLocal: (notification: NotificationMessage) => void;
 }
 
 export const NotificationContext = createContext<
@@ -58,6 +62,11 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
 
   // Handle incoming notifications
   const handleNotification = useCallback((notification: NotificationMessage) => {
+    console.log(
+      "[notifications] dispatch:",
+      notification.notification_type,
+      notification.data?.chat_id ?? ""
+    );
     // Add to notifications list
     addNotification(notification);
 
@@ -86,6 +95,7 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
     clearNotifications,
     markAllAsRead,
     onNotification,
+    emitLocal: handleNotification,
   };
 
   return (

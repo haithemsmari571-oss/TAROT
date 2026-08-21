@@ -21,6 +21,8 @@ import { startHall } from "./startHall";
 import { loadReader, submitRealRequest, applyReaderToDom, type Reader } from "./hallData";
 import { holdIncoming, releaseIncoming } from "./incomingGate";
 import { setHallSheetEnabled } from "./hallSheet";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { getMyChatsWithDetails } from "@/features/chat/api/chatApi";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
 // the same helper the reader's own page uses (browse/views/PsychicDetails.tsx:63),
@@ -34,6 +36,21 @@ import { formatPerMinuteGbp } from "@/lib/currency";
    arrival is over rather than on top of it. */
 const ARRIVAL_MS = 3600;
 
+/* The wait must not hang on one socket message. Chat 88 was accepted server-side
+   in 21s while the notification socket had died 3s after the request; the
+   customer would have sat on "preparing" forever. So while the request is
+   outstanding the chat's status is also polled, and the socket coming back
+   triggers an immediate re-check. A hit is fed through the notification
+   context's own dispatch (emitLocal), so the arrival still runs through the
+   exact handlers the socket message uses — one arrival path, not two. */
+const ACCEPT_POLL_MS = 5000;
+/* Stop polling here. Auto-accept always answers within its own 120s ceiling
+   (TAROT-BACKEND/app/services/ai/reading_pre_session.py:34), so ten minutes is
+   that many times over plus any plausible human accept; past it the customer
+   has left this screen in practice, and the gate's own mount fallback
+   (IncomingReadingModal.tsx:171) still catches the chat on the next page load. */
+const ACCEPT_POLL_BOUND_MS = 10 * 60 * 1000;
+
 
 export default function Hall({ mode = "preview", psychicId }:
   { mode?: "preview" | "entry"; psychicId?: number }) {
@@ -41,7 +58,14 @@ export default function Hall({ mode = "preview", psychicId }:
   const hallRef = useRef<ReturnType<typeof startHall> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reader, setReader] = useState<Reader | null>(null);
-  const { onNotification } = useNotifications();
+  /* Set when the request lands, cleared on arrival or at the bound — the
+     acceptance poller runs exactly while this holds a timestamp. */
+  const [waitingSince, setWaitingSince] = useState<number | null>(null);
+  /* Flipped by the CHAT_ACCEPTED handler itself — real or synthetic — so the
+     poller can never dispatch a second arrival after the first. */
+  const acceptedRef = useRef(false);
+  const { user } = useAuth();
+  const { onNotification, isConnected, emitLocal } = useNotifications();
 
   useEffect(() => {
     /* Marks which mode is on screen so the two companion sheets can scope
@@ -54,6 +78,7 @@ export default function Hall({ mode = "preview", psychicId }:
         setError(null);
         const r = await submitRealRequest(question);
         if (!r.ok) { setError(r.error); return false; }
+        setWaitingSince(Date.now());
         return true;
       },
     });
@@ -89,6 +114,8 @@ export default function Hall({ mode = "preview", psychicId }:
     holdIncoming();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const off = onNotification(NotificationType.CHAT_ACCEPTED, () => {
+      acceptedRef.current = true;
+      setWaitingSince(null); // the poller's job is done
       hallRef.current?.arrive();
       if (timer) clearTimeout(timer);
       timer = setTimeout(releaseIncoming, ARRIVAL_MS);
@@ -99,6 +126,71 @@ export default function Hall({ mode = "preview", psychicId }:
       releaseIncoming();
     };
   }, [preview, onNotification]);
+
+  /* The acceptance poller. Runs only between the request landing and the
+     arrival; each tick asks /chat/my-chats (already coalesced + 2s-cached in
+     chatApi.ts) whether this reader's chat has gone ACTIVE without a join. A
+     hit becomes a synthetic CHAT_ACCEPTED through emitLocal, so the handler
+     above and the global gate fire exactly as they do for the socket message.
+     acceptedRef — set by that handler, synchronously, for real and synthetic
+     events alike — is checked before dispatching, so the two paths can race
+     and the customer still arrives once. */
+  const pollTickRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (preview || waitingSince == null || !psychicId) return;
+    let stopped = false;
+    const tick = async () => {
+      if (stopped || acceptedRef.current) return;
+      if (Date.now() - waitingSince > ACCEPT_POLL_BOUND_MS) {
+        setWaitingSince(null);
+        return;
+      }
+      try {
+        const chats = await getMyChatsWithDetails();
+        if (stopped || acceptedRef.current) return;
+        const mine = (chats || []).find(
+          (c: any) =>
+            (!user || c.user_id === user.id) &&
+            c.psychic_id === psychicId &&
+            c.status === "ACTIVE" &&
+            !c.client_joined_at
+        );
+        if (mine) {
+          emitLocal({
+            type: "notification",
+            notification_type: NotificationType.CHAT_ACCEPTED,
+            title: "Reading accepted",
+            message: `${mine.psychic_username || "Your psychic"} is ready to begin your reading.`,
+            data: {
+              chat_id: mine.id,
+              psychic_id: mine.psychic_id,
+              psychic_name: mine.psychic_username,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch {
+        /* transient failure — the next tick simply asks again */
+      }
+    };
+    pollTickRef.current = tick;
+    const id = setInterval(tick, ACCEPT_POLL_MS);
+    tick(); // first check now, not an interval from now
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      pollTickRef.current = () => {};
+    };
+  }, [preview, waitingSince, psychicId, user, emitLocal]);
+
+  /* The socket coming back is the strongest moment to re-check: an accept
+     while it was down is exactly what would have been missed. */
+  const prevConnectedRef = useRef(isConnected);
+  useEffect(() => {
+    const was = prevConnectedRef.current;
+    prevConnectedRef.current = isConnected;
+    if (isConnected && !was) pollTickRef.current();
+  }, [isConnected]);
 
   /* Her price, before she can press the button — never a hardcoded number. */
   const rate = reader?.pricePerMinute != null && reader.pricePerMinute > 0

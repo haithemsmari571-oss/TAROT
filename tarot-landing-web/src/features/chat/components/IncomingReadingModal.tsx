@@ -71,6 +71,12 @@ export default function IncomingReadingModal() {
 
   const playRing = useCallback(() => {
     try {
+      // Never stack rings: a duplicate accept signal (socket and status poll
+      // racing) must not leave two loops playing over each other.
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
       const a = new Audio("/sounds/request-alert.mp3");
       a.loop = true;
       a.volume = 0.6;
