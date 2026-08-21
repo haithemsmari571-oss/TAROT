@@ -13,8 +13,10 @@ import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
-import { SessionSummaryModal } from "../components/SessionSummaryModal";
+import { SessionSummaryModal, formatDuration } from "../components/SessionSummaryModal";
 import HallRoom from "@/features/hall/HallRoom";
+import HallStage from "@/features/hall/HallStage";
+import HallList from "@/features/hall/HallList";
 import HallDialog from "@/features/hall/HallDialog";
 import { MessageBubble } from "../components/MessageBubble";
 import { TypingIndicator } from "../components/TypingIndicator";
@@ -61,6 +63,10 @@ const ClientChat = () => {
   const [requestError, setRequestError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
+  /* Presentation only: holds the list on screen for the hall's own crossfade
+     (opacity 700ms, hall.css:142) while the room fades in behind it. It does
+     not gate, delay or reorder handleEnterChat — that fires immediately. */
+  const [leavingList, setLeavingList] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [olderMessages, setOlderMessages] = useState<any[]>([]);
@@ -1012,6 +1018,12 @@ const ClientChat = () => {
     }
   }, [searchParams, navigate]);
 
+  useEffect(() => {
+    if (!selectedChat) { setLeavingList(false); return; }
+    const t = setTimeout(() => setLeavingList(false), 700);   /* hall.css:142 */
+    return () => clearTimeout(t);
+  }, [selectedChat]);
+
   // Show WebSocket errors
   useEffect(() => {
     if (wsError) {
@@ -1047,41 +1059,32 @@ const ClientChat = () => {
     return <ForcedRoomState mode={forcedRoomState} />;
   }
 
-  // --- LOADING STATE ---
+  // --- LOADING STATE, in the hall's own language. Wording kept. ---
   if (loading) {
     return (
-      <div className="h-[calc(100dvh-80px)] flex items-center justify-center relative overflow-hidden" style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}>
-        <div className="text-center relative z-10">
-          <div className="w-20 h-20 rounded-3xl border-4 border-white/10 border-t-primary mx-auto mb-6 animate-spin" />
-          <p className="text-base text-white/60 font-semibold">Loading your messages...</p>
-        </div>
-      </div>
+      <HallStage>
+        <HallList
+          chats={[]} onOpen={() => {}} onRefresh={refetch}
+          onLeave={() => navigate('/psychics-browse')}
+          page={1} totalPages={1} onPage={() => {}} showPager={false}
+          note={{ title: "Loading your messages...", sub: "One moment while the hall opens." }}
+        />
+      </HallStage>
     );
   }
 
-  // --- ERROR STATE ---
+  // --- ERROR STATE, in the hall's own language. Wording kept. ---
   if (error) {
     return (
-      <div className="h-[calc(100dvh-80px)] flex items-center justify-center relative overflow-hidden" style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}>
-        <div className="text-center max-w-md px-6 relative z-10">
-          <div className="w-20 h-20 rounded-3xl bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center mx-auto mb-6">
-            <Icon icon="solar:danger-triangle-bold-duotone" className="text-4xl text-red-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: "var(--gl-serif)" }}>
-            Unable to Load Chats
-          </h2>
-          <p className="text-base text-white/60 mb-8">{error}</p>
-          <button
-            onClick={refetch}
-            className="px-8 py-4 rounded-2xl font-bold text-sm transition-opacity hover:opacity-90 shadow-lg text-white"
-            style={{
-              background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
-            }}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
+      <HallStage>
+        <HallList
+          chats={[]} onOpen={() => {}} onRefresh={refetch}
+          onLeave={() => navigate('/psychics-browse')}
+          page={1} totalPages={1} onPage={() => {}} showPager={false}
+          note={{ title: "Unable to Load Chats", sub: String(error),
+                  action: { label: "Try Again", onClick: refetch } }}
+        />
+      </HallStage>
     );
   }
 
@@ -1102,6 +1105,14 @@ const ClientChat = () => {
 
   // Human-friendly "reading time left" for the low-balance banner — derived from
   // the live whole minutes remaining, not hardcoded, so it tracks reality.
+  /* The hall's closing card is shown only when this visit actually latched a
+     session end (duration or cost recorded at :334 / :384 / :664). Opening an
+     already-ended conversation from the list latches nothing, so the card stays
+     away and the banner is the single ended-state surface there. */
+  const showsClosingCard =
+    currentChatStatus === 'ENDED' &&
+    (sessionSummaryData.duration > 0 || sessionSummaryData.cost > 0);
+
   const readingTimeLeftLabel = (() => {
     if (minutesLeft <= 0) {
       return remaining != null && remaining <= 60 ? "less than a minute" : "very little time";
@@ -1109,226 +1120,51 @@ const ClientChat = () => {
     return `about ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}`;
   })();
 
-  // --- MESSENGER-STYLE 2-COLUMN LAYOUT ---
+  /* ── THE HALL IS THE PAGE ──
+     One HallStage, two views inside it: the conversation list and the room.
+     The old two-column shell, PageBackground, starfield, Messages sidebar,
+     empty-list card, rows, pagination and "Select a conversation" are gone —
+     the list is now a hall surface laid out in the hall's own sky, and the room
+     has the whole viewport with nothing beside it. Presentation only; every
+     handler below is the one ClientChat already ran. */
   return (
-    <div
-      className="h-[calc(100dvh-80px)] flex gap-2 md:gap-4 p-2 sm:p-3 md:p-4 relative overflow-hidden"
-      style={{ fontFamily: "var(--gl-sans)", backgroundColor: "var(--gl-base)" }}
-    >
-      {/* Faint dimmed scene — texture only; kept well below message legibility */}
-      <PageBackground images={chatBackground} variant="glass" />
-
-      {/* Starfield Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="starfield"></div>
-        <div className="starfield-dense"></div>
-      </div>
-
-      {/* LEFT SIDEBAR - CHAT LIST */}
-      <div className={`${selectedChat ? 'hidden' : 'flex'} md:flex w-full md:w-80 lg:w-96 flex-col relative z-10 backdrop-blur-xl rounded-3xl border border-white/10`} style={{ backgroundColor: `color-mix(in srgb, var(--gl-base) 13%, transparent)` }}>
-        {/* Header */}
-        <div className="p-6 border-b border-white/5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: "var(--gl-serif)" }}>
-                Messages
-              </h1>
-              <p className="text-sm text-white/40">Connect with your psychics</p>
-            </div>
-            <button
-              onClick={refetch}
-              className="w-11 h-11 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/10"
-              title="Refresh"
-            >
-              <Icon icon="solar:refresh-linear" className="text-white/60 text-xl" />
-            </button>
-          </div>
-        </div>
-
-        {/* Chat List */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-3 py-4 space-y-2">
-          {chats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full px-6 text-center">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-6 border border-white/10">
-                <Icon icon="solar:chat-dots-bold-duotone" className="text-5xl text-primary" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2" style={{ fontFamily: "var(--gl-serif)" }}>
-                No messages yet
-              </h3>
-              <p className="text-sm text-white/50 mb-6 max-w-[240px]">
-                Start a conversation with a psychic and unlock your destiny
-              </p>
-              <button
-                onClick={() => window.location.href = '/psychics-browse'}
-                className="px-8 py-3 rounded-full font-semibold text-sm transition-opacity hover:opacity-90 shadow-lg text-white"
-                style={{
-                  background: `linear-gradient(135deg, var(--gl-accent) 0%, var(--gl-accent) 100%)`
-                }}
-              >
-                Browse Psychics
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {paginatedChats.map((chat, index) => {
-                // Use real-time status for selected chat if available
-                const displayStatus = chat.id === selectedChat && sessionState.chatId === selectedChat && sessionState.status
-                  ? sessionState.status
-                  : chat.status;
-
-                return (
-                  <div
-                    key={chat.id}
-                    onClick={() => handleEnterChat(chat.id)}
-                    className={`flex items-center gap-3 p-4 cursor-pointer transition-all rounded-2xl border ${selectedChat === chat.id
-                      ? 'bg-white/10 border-primary/30 shadow-lg shadow-primary/10'
-                      : 'bg-white/5 border-white/5 hover:bg-white/8 hover:border-white/10'
-                      }`}
-                  >
-                    {/* Avatar */}
-                    <div className="relative flex-shrink-0">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center overflow-hidden border border-white/10">
-                        {chat.user_profile_pic_url ? (
-                          <img
-                            src={chat.user_profile_pic_url}
-                            alt={chat.user_name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Icon icon="ph:user-fill" className="text-white/80 text-3xl" />
-                        )}
-                      </div>
-                      {displayStatus === 'ACTIVE' && (
-                        <div
-                          className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 flex items-center justify-center"
-                          style={{ borderColor: selectedChat === chat.id ? 'rgba(255,255,255,0.1)' : "var(--gl-glass)" }}
-                        >
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        </div>
-                      )}
-                      {displayStatus === 'PAUSED' && (
-                        <div
-                          className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-orange-500 border-2 flex items-center justify-center"
-                          style={{ borderColor: selectedChat === chat.id ? 'rgba(255,255,255,0.1)' : "var(--gl-glass)" }}
-                        >
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline justify-between gap-2 mb-1">
-                        <span className="font-bold text-white text-base truncate" style={{ fontFamily: "var(--gl-serif)" }}>
-                          {chat.user_name}
-                        </span>
-                        {displayStatus === 'ACTIVE' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 flex-shrink-0">
-                            Active
-                          </span>
-                        )}
-                        {displayStatus === 'PAUSED' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 flex-shrink-0">
-                            Paused
-                          </span>
-                        )}
-                        {displayStatus === 'ENDED' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 flex-shrink-0">
-                            Ended
-                          </span>
-                        )}
-                        {displayStatus === 'REQUESTED' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0">
-                            Pending
-                          </span>
-                        )}
-                        {displayStatus === 'ARCHIVED' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400 flex-shrink-0">
-                            Cancelled
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-white/60 truncate">
-                        {chat.last_message}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Pagination */}
-          {chats.length > CHATS_PER_PAGE && (
-            <div className="flex items-center justify-center gap-2 pt-2 pb-1">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center border border-white/10 transition-all"
-              >
-                <Icon icon="solar:alt-arrow-left-linear" className="text-white/70 text-lg" />
-              </button>
-              {(() => {
-                const pages: (number | string)[] = [];
-                const maxVisible = 5;
-                if (totalPages <= maxVisible) {
-                  for (let i = 1; i <= totalPages; i++) pages.push(i);
-                } else {
-                  pages.push(1);
-                  if (currentPage > 3) pages.push('...');
-                  for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
-                  if (currentPage < totalPages - 2) pages.push('...');
-                  pages.push(totalPages);
-                }
-                return pages.map((p, i) =>
-                  typeof p === 'string' ? (
-                    <span key={`e${i}`} className="text-white/30 text-xs px-1">···</span>
-                  ) : (
-                    <button
-                      key={p}
-                      onClick={() => setCurrentPage(p)}
-                      className={`min-w-[36px] h-9 rounded-xl text-sm font-semibold transition-all border ${
-                        currentPage === p
-                          ? 'bg-primary/20 border-primary/40 text-primary'
-                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  )
-                );
-              })()}
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center border border-white/10 transition-all"
-              >
-                <Icon icon="solar:alt-arrow-right-linear" className="text-white/70 text-lg" />
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT SIDE - CHAT WINDOW */}
-      {/* ── THE READING ROOM, DRAWN AS THE HALL ──
-          Presentation only. Every number, every message and every action below
-          is the one ClientChat already computed; this swaps what is drawn, not
-          what is charged. State numbers refer to ROOM-STATES.md. */}
+    <HallStage>
       {!selectedChat ? (
-        <div className="hidden md:flex flex-1 relative z-10 items-center justify-center">
-          <div className="text-center px-6">
-            <h2 className="text-2xl font-bold text-white mb-3" style={{ fontFamily: "var(--gl-serif)" }}>
-              Select a conversation
-            </h2>
-            <p className="text-base text-white/50 max-w-sm mx-auto">
-              Choose a chat from the list to start your mystical journey
-            </p>
-          </div>
-        </div>
+        <HallList
+          leaving={leavingList}
+          chats={paginatedChats.map((chat: any) => ({
+            id: chat.id,
+            name: chat.user_name,
+            avatarUrl: chat.user_profile_pic_url,
+            status:
+              chat.id === selectedChat && sessionState.chatId === selectedChat && sessionState.status
+                ? sessionState.status
+                : chat.status,
+            lastMessage: chat.last_message,
+          }))}
+          onOpen={(id) => { setLeavingList(true); handleEnterChat(id); }}
+          onRefresh={refetch}
+          onLeave={() => navigate('/psychics-browse')}
+          page={currentPage}
+          totalPages={totalPages}
+          onPage={(n) => setCurrentPage(n)}
+          showPager={chats.length > CHATS_PER_PAGE}
+          note={
+            chats.length === 0
+              ? { title: "Select a conversation",
+                  sub: "Choose a chat from the list to start your mystical journey",
+                  action: { label: "Browse psychics", onClick: () => navigate('/psychics-browse') } }
+              : null
+          }
+        />
       ) : (
         <HallRoom
-          phase={currentChatStatus === 'ENDED' ? 'ended' : isPaused ? 'pausing' : 'room'}
+          /* FIX 1: the ended PHASE is gated on the same flag as the receipt
+             data. Without this the hall drove itself to 'ended' from the chat
+             status alone and drew the closing card with no values in it. A
+             conversation that ended in an earlier visit latched nothing, so it
+             stays in 'room' and shows the banner instead. No new server call. */
+          phase={showsClosingCard ? 'ended' : isPaused ? 'pausing' : 'room'}
           readerName={psychicName}
           readerPhoto={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
           minutesLeft={minutesLeft}
@@ -1348,7 +1184,15 @@ const ClientChat = () => {
           loadingMore={loadingOlderMessages}
           onLoadMore={handleLoadOlderMessages}
           banner={
-            currentChatStatus === 'ENDED' && allMessages.length > 0
+            /* Exactly one ended-state surface. The hall's closing card is the
+               ended surface whenever it renders, so the banner is suppressed
+               then; it survives only for a conversation opened from the list
+               that ended in an earlier visit, where no card is shown. Wording
+               unchanged; hall typography via .hbanner (hall-list.css). */
+            /* FIX 1: the allMessages.length > 0 requirement is gone — an ended
+               conversation with an empty thread still has an ended state to
+               show. Still mutually exclusive with the closing card. */
+            currentChatStatus === 'ENDED' && !showsClosingCard
               ? { title: "Session Ended", body: "This chat session has been concluded. You can request a new session below." }
               : currentChatStatus === 'REQUESTED'
                 ? { title: "Waiting for Psychic", body: "Your chat request is pending. Your reading should begin within 3 minutes." }
@@ -1392,10 +1236,17 @@ const ClientChat = () => {
               : null
           }
           receipt={
-            currentChatStatus === 'ENDED'
+            /* DECISION 1 — one constant, one source. The card reads the SAME
+               latched values the old modal read (set at :334, :384 and :664
+               from sessionState.elapsedSeconds / estimatedCost), not a live
+               re-read, so a reading that has already ended still shows what it
+               cost. Duration is rendered by formatDuration, the modal's own
+               formatter — no second formatting function — so 35 seconds reads
+               0:35 rather than flooring to 0. */
+            showsClosingCard
               ? {
-                  minutes: Math.max(0, Math.floor((sessionState.elapsedSeconds || 0) / 60)),
-                  total: formatGbp(sessionState.estimatedCost || 0),
+                  minutes: formatDuration(sessionSummaryData.duration),
+                  total: formatGbp(sessionSummaryData.cost || 0),
                   perMinute: psychicDetails?.price_per_second != null
                     ? formatGbp(Math.round(psychicDetails.price_per_second * 60 * 100) / 100)
                     : null,
@@ -1415,6 +1266,7 @@ const ClientChat = () => {
               : null
           }
           onBack={handleBackToList}
+          onLeave={() => navigate('/psychics-browse')}
           onOpenProfile={() => setShowProfileSheet(true)}
           onEnd={(isChatActive || isPaused) ? () => setShowEndConfirm(true) : undefined}
         />
@@ -1464,13 +1316,9 @@ const ClientChat = () => {
         <button className="quiet" id="dlg-request-cancel" onClick={() => { setRequestError(null); setShowRequestModal(false); }}>Cancel</button>
       </HallDialog>
 
-      {/* Session Summary Modal */}
-      <SessionSummaryModal
-        isOpen={showSessionSummaryModal}
-        onClose={() => setShowSessionSummaryModal(false)}
-        sessionData={sessionSummaryData}
-        onTopUp={() => openTopUp({ returnUrl: "/chats?topup=1" })}
-      />
+      {/* The old "Your reading has ended" modal is gone from this route. The
+          hall's own closing card is the single ended-state surface, fed from
+          the same latched values this modal used. */}
 
       {/* End Chat Confirmation Modal */}
       {/* End Chat Session? — every word kept, both actions kept. */}
@@ -1483,7 +1331,7 @@ const ClientChat = () => {
         </button>
         <button className="quiet" id="dlg-end-cancel" onClick={() => setShowEndConfirm(false)}>Cancel</button>
       </HallDialog>
-    </div>
+    </HallStage>
   );
 };
 

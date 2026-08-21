@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Captured login session - never commit
+scripts/.auth-state.json

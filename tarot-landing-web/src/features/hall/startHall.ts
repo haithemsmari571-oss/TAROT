@@ -29,7 +29,8 @@ export interface HallOptions {
 
 /** What the receipt shows. Every field comes from the real session. */
 export interface HallReceipt {
-  minutes: number | null;
+  /** Preformatted duration, e.g. "0:35" — rendered verbatim under DURATION. */
+  minutes: number | string | null;
   total: string | null;      // already formatted, e.g. "£124.80"
   perMinute: string | null;  // already formatted, e.g. "£5.20"
 }
@@ -39,8 +40,11 @@ export function startHall(opts: HallOptions = {}) {
   const cleanups: Array<() => void> = [];
 
 /* ═══════════ the sky ═══════════ */
+/* NULL-TOLERANT: the sky canvas belongs to whichever component hosts the hall.
+   If it is absent the shader sky simply never draws (ok stays false) and every
+   other part of startHall still runs. */
 const gl_c=document.getElementById('gl') as HTMLCanvasElement;
-const gl=gl_c.getContext('webgl',{antialias:false,alpha:false,powerPreference:'high-performance'}) as WebGLRenderingContext;
+const gl=(gl_c?gl_c.getContext('webgl',{antialias:false,alpha:false,powerPreference:'high-performance'}):null) as WebGLRenderingContext;
 let ok=!!gl;
 const VS='attribute vec2 a;void main(){gl_Position=vec4(a,0.0,1.0);}';
 function sh(t:number,s:string){const o=gl.createShader(t)!;gl.shaderSource(o,s);gl.compileShader(o);
@@ -95,8 +99,10 @@ function wheel(svg:Element,rO:number,rI:number,glyphs:boolean,cls?:string){
       y2:(50+Math.sin(A)*(rI-(i%6===0?5.4:4.2))).toFixed(2),class:'tick'}));
   }
 }
-wheel(document.getElementById('w1')!,48,41,true);
-wheel(document.getElementById('w2')!,46,38,true);
+/* NULL-TOLERANT: each wheel is drawn only if its host svg is on the page. A
+   missing wheel costs that wheel, nothing else. */
+const w1El=document.getElementById('w1');if(w1El)wheel(w1El,48,41,true);
+const w2El=document.getElementById('w2');if(w2El)wheel(w2El,46,38,true);
 
 
 /* ═══════════ palettes ═══════════ */
@@ -245,7 +251,10 @@ function harmonic(v:number){
 }
 
 /* ═══════════ dust and touch ═══════════ */
-const dc=document.getElementById('dust') as HTMLCanvasElement,D=dc.getContext('2d')!;
+/* NULL-TOLERANT: dust needs its own canvas and the pointer wake needs the touch
+   canvas. Either may be absent; each disables only itself. */
+const dc=document.getElementById('dust') as HTMLCanvasElement;
+const D=(dc?dc.getContext('2d'):null) as CanvasRenderingContext2D;
 const tc=document.getElementById('touch') as HTMLCanvasElement;
 let W=0,H=0,DPR=1,DUST:any[]=[];
 function seed(){
@@ -258,20 +267,26 @@ function seed(){
 }
 function size(){
   DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
-  gl_c.width=Math.floor(W*Math.min(DPR,1.5));gl_c.height=Math.floor(H*Math.min(DPR,1.5));
-  gl_c.style.width=W+'px';gl_c.style.height=H+'px';
-  if(ok)gl.viewport(0,0,gl_c.width,gl_c.height);
-  dc.width=W*DPR;dc.height=H*DPR;dc.style.width=W+'px';dc.style.height=H+'px';
-  D.setTransform(DPR,0,0,DPR,0,0);
-  tc.width=1;tc.height=1;tc.style.width=W+'px';tc.style.height=H+'px';
+  if(gl_c){
+    gl_c.width=Math.floor(W*Math.min(DPR,1.5));gl_c.height=Math.floor(H*Math.min(DPR,1.5));
+    gl_c.style.width=W+'px';gl_c.style.height=H+'px';
+    if(ok)gl.viewport(0,0,gl_c.width,gl_c.height);
+  }
+  if(dc){dc.width=W*DPR;dc.height=H*DPR;dc.style.width=W+'px';dc.style.height=H+'px';}
+  if(D)D.setTransform(DPR,0,0,DPR,0,0);
+  if(tc){tc.width=1;tc.height=1;tc.style.width=W+'px';tc.style.height=H+'px';}
   seed();
 }
 
 let px=-999,py=-999,down=false,ptrS=0,CALM=false;
 const WAKE:any[]=[];for(let i=0;i<8;i++)WAKE.push({x:0,y:0,l:0});
 let wi=0,lastWake=0;
+/* FIX 2: the wake now listens on window, not on #touch. window already
+   receives every pointer event in the viewport, so the wake behaviour is
+   unchanged; setPointerCapture is dropped because listening on window keeps a
+   drag alive by construction, which is the only thing the capture provided. */
 const onPtrDown=(e:PointerEvent)=>{down=true;px=e.clientX;py=e.clientY;
-  tc.setPointerCapture(e.pointerId);harmonic(.075);};
+  harmonic(.075);};
 const onPtrMove=(e:PointerEvent)=>{
   px=e.clientX;py=e.clientY;
   if(down){
@@ -283,14 +298,14 @@ const onPtrMove=(e:PointerEvent)=>{
 const onPtrUp=()=>down=false;
 const onPtrCancel=()=>down=false;
 const onPtrLeave=()=>{down=false;px=py=-999;};
-tc.addEventListener('pointerdown',onPtrDown);
-tc.addEventListener('pointermove',onPtrMove);
-tc.addEventListener('pointerup',onPtrUp);
-tc.addEventListener('pointercancel',onPtrCancel);
-tc.addEventListener('pointerleave',onPtrLeave);
-cleanups.push(()=>{tc.removeEventListener('pointerdown',onPtrDown);tc.removeEventListener('pointermove',onPtrMove);
-  tc.removeEventListener('pointerup',onPtrUp);tc.removeEventListener('pointercancel',onPtrCancel);
-  tc.removeEventListener('pointerleave',onPtrLeave);});
+window.addEventListener('pointerdown',onPtrDown);
+window.addEventListener('pointermove',onPtrMove);
+window.addEventListener('pointerup',onPtrUp);
+window.addEventListener('pointercancel',onPtrCancel);
+window.addEventListener('pointerleave',onPtrLeave);
+cleanups.push(()=>{window.removeEventListener('pointerdown',onPtrDown);window.removeEventListener('pointermove',onPtrMove);
+  window.removeEventListener('pointerup',onPtrUp);window.removeEventListener('pointercancel',onPtrCancel);
+  window.removeEventListener('pointerleave',onPtrLeave);});
 
 
 
@@ -340,6 +355,7 @@ function frame(now:number){
     }
   }
 
+  if(!D){raf=requestAnimationFrame(frame);return;}
   D.clearRect(0,0,W,H);
   for(const p of DUST){
     p.ph+=dt*.00014*p.sw*S;
@@ -587,12 +603,15 @@ const REPLIES=[
  "august, around the 14th. watch what happens near his birthday",
  "you already know. you're waiting for me to say it so it's allowed to be true"];
 let ri=0;
-const sendBtn=document.getElementById('send')!;
+/* NULL-TOLERANT: the harness composer only exists on /design-preview. */
+const sendBtn=document.getElementById('send');
 const onSend=()=>{
   typingOff();bubble('her',REPLIES[ri%REPLIES.length]);ri++;harmonic(.08);
   at(2800,typingOn);};
-sendBtn.addEventListener('click',onSend);
-cleanups.push(()=>sendBtn.removeEventListener('click',onSend));
+if(sendBtn){
+  sendBtn.addEventListener('click',onSend);
+  cleanups.push(()=>sendBtn.removeEventListener('click',onSend));
+}
 let mins=38;
 const minsT=setInterval(()=>{mins=Math.max(0,mins-1);const m=document.getElementById('mins');
   if(m)m.textContent=mins+' min';},24000);
@@ -627,10 +646,13 @@ const onCalm=()=>{CALM=!CALM;cBtn.setAttribute('aria-pressed',String(CALM));};
 cBtn.addEventListener('click',onCalm);
 cleanups.push(()=>cBtn.removeEventListener('click',onCalm));
 
-const replyBtn=document.getElementById('send2')!;
-const onReplyClick=()=>document.getElementById('send')!.click();
-replyBtn.addEventListener('click',onReplyClick);
-cleanups.push(()=>replyBtn.removeEventListener('click',onReplyClick));
+/* NULL-TOLERANT: harness-only reply button and its target composer. */
+const replyBtn=document.getElementById('send2');
+const onReplyClick=()=>document.getElementById('send')?.click();
+if(replyBtn){
+  replyBtn.addEventListener('click',onReplyClick);
+  cleanups.push(()=>replyBtn.removeEventListener('click',onReplyClick));
+}
 /* Two jumps so the new screens can be looked at without waiting for a real
    session to run out of money or end. Harness only — they do not exist in the
    customer flow. The receipt numbers here are stand-ins for the look; the real

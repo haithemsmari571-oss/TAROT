@@ -1,0 +1,230 @@
+/* THE CONVERSATION LIST, AS A HALL SURFACE.
+
+   Every rule here is scoped behind html[data-hall], the same flag hall.css uses,
+   so nothing can apply on a route where the hall is not mounted. The subject of
+   every selector is a class — there is no rule targeting html, body or *.
+
+   Motion values are the hall's own, read from hall.css:
+     --ease            cubic-bezier(.37,0,.36,1)   hall.css:5
+     opacity  700ms    hall.css:139 / :142
+     transform 900ms   hall.css:139
+   Nothing new is invented and no library is involved. */
+
+/* The surface sits IN the hall's layout — a centred column between the sky and
+   the viewport edges. It is not a panel laid over the room: when a conversation
+   is open this element is not rendered at all. */
+html[data-hall] .hlist {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+  pointer-events: none;
+  opacity: 1;
+  transform: none;
+  transition: opacity 700ms var(--ease), transform 900ms var(--ease);
+}
+
+/* leaving for the room — the hall's own crossfade, then it unmounts */
+html[data-hall] .hlist.is-leaving {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+html[data-hall] .hlist-inner {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  pointer-events: auto;
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+html[data-hall] .hlist-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px 14px;
+}
+html[data-hall] .hlist-eyebrow {
+  font: 600 11px/1.4 var(--ui);
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+html[data-hall] .hlist-title {
+  font: 300 30px/1.1 var(--display);
+  color: var(--text);
+  letter-spacing: .01em;
+}
+html[data-hall] .hlist-sub {
+  font: 300 13px/1.5 var(--ui);
+  color: var(--text-mute);
+  margin-top: 4px;
+}
+html[data-hall] .hlist-tools { display: flex; align-items: center; gap: 8px; flex: none; }
+
+html[data-hall] .hbtn {
+  appearance: none;
+  border: 1px solid rgba(232, 200, 139, .3);
+  background: rgba(255, 240, 214, .07);
+  color: var(--text-soft);
+  border-radius: 12px;
+  padding: 9px 13px;
+  font: 500 12px/1 var(--ui);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 300ms var(--ease), color 300ms var(--ease), border-color 300ms var(--ease);
+}
+html[data-hall] .hbtn:hover { background: rgba(232, 200, 139, .2); color: var(--text); }
+html[data-hall] .hbtn:disabled { opacity: .3; cursor: not-allowed; }
+html[data-hall] .hbtn-icon { padding: 9px 11px; font-size: 14px; line-height: 1; }
+
+/* ── the rows ───────────────────────────────────────────────────────────── */
+/* FIX 2: the pager is taken out of the scroll flow (flex:none, fixed height)
+   AND the scroll area carries bottom padding of exactly that height, so the
+   last row can scroll clear of it instead of ending up underneath. Both, not
+   one — the padding is what lets the final row reach its own centre. */
+html[data-hall] { --hpager-h: 56px; }
+
+html[data-hall] .hlist-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 4px calc(10px + var(--hpager-h));
+}
+
+html[data-hall] .hrow {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  cursor: pointer;
+  padding: 13px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 214, 150, .18);
+  background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--text);
+  transition: transform 300ms var(--ease), border-color 300ms var(--ease), background 300ms var(--ease);
+}
+html[data-hall] .hrow:hover {
+  transform: translateY(-1px);
+  border-color: rgba(232, 200, 139, .42);
+}
+
+html[data-hall] .hrow-face {
+  width: 52px; height: 52px; flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(232, 200, 139, .4);
+  background: rgba(232, 200, 139, .12);
+  display: flex; align-items: center; justify-content: center;
+}
+html[data-hall] .hrow-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-hall] .hrow-face span { font-size: 20px; color: var(--gold); }
+
+html[data-hall] .hrow-body { flex: 1; min-width: 0; }
+html[data-hall] .hrow-top {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+html[data-hall] .hrow-name {
+  font: 400 17px/1.2 var(--display);
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-hall] .hrow-last {
+  font: 300 13px/1.45 var(--ui);
+  color: var(--text-mute);
+  margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* status badge — the hall's gold vocabulary, one tone per state */
+html[data-hall] .hbadge {
+  flex: none;
+  font: 600 10px/1 var(--ui);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: .95;
+}
+html[data-hall] .hbadge.is-active { color: #7FD1A6; }
+html[data-hall] .hbadge.is-paused { color: #E8B26B; }
+html[data-hall] .hbadge.is-ended { color: #C08A8A; }
+html[data-hall] .hbadge.is-pending { color: var(--gold); }
+html[data-hall] .hbadge.is-cancelled { color: var(--text-mute); }
+
+/* ── pagination ─────────────────────────────────────────────────────────── */
+html[data-hall] .hpager {
+  flex: 0 0 var(--hpager-h);
+  height: var(--hpager-h);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 0 2px;
+}
+html[data-hall] .hpager-count {
+  font: 500 11px/1 var(--ui);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+
+/* ── empty / loading / error, all in the hall's own type ────────────────── */
+html[data-hall] .hnote {
+  margin: auto;
+  text-align: center;
+  max-width: 30ch;
+  padding: 26px 18px;
+}
+html[data-hall] .hnote-title {
+  font: 300 25px/1.2 var(--display);
+  color: var(--text);
+  margin-bottom: 9px;
+}
+html[data-hall] .hnote-sub {
+  font: 300 14px/1.6 var(--ui);
+  color: var(--text-mute);
+}
+html[data-hall] .hnote .hbtn { margin-top: 18px; }
+
+/* the ended-state line inside the thread, in the hall's language */
+html[data-hall] .rbanner.hbanner {
+  border: 1px solid rgba(232, 200, 139, .26);
+  background: rgba(8, 4, 18, .55);
+  border-radius: 16px;
+  padding: 13px 15px;
+  text-align: center;
+}
+html[data-hall] .rbanner.hbanner b {
+  display: block;
+  font: 400 15px/1.3 var(--display);
+  color: var(--text);
+  margin-bottom: 4px;
+}
+html[data-hall] .rbanner.hbanner span {
+  font: 300 13px/1.5 var(--ui);
+  color: var(--text-mute);
+}
+
+@media (max-width: 560px) {
+  html[data-hall] .hlist { padding-left: 12px; padding-right: 12px; }
+  html[data-hall] .hlist-title { font-size: 26px; }
+  html[data-hall] .hrow { padding: 11px 12px; gap: 11px; }
+  html[data-hall] .hrow-face { width: 46px; height: 46px; }
+}

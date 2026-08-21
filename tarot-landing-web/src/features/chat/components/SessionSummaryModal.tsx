@@ -16,7 +16,9 @@ interface SessionSummaryModalProps {
   onTopUp?: () => void;
 }
 
-const formatDuration = (seconds: number): string => {
+/* Exported so the hall's closing card renders duration with this exact
+   function — one formatter, one source. */
+export const formatDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;

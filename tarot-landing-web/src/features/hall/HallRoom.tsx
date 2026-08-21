@@ -8,10 +8,12 @@
 
    The states it covers are numbered against ROOM-STATES.md. */
 
-import { useEffect, useRef } from "react";
+import { useContext, useEffect, useRef } from "react";
 import "../../styles/hall.css";
 import "../../styles/hall-room.css";
-import { startHall, type HallReceipt } from "./startHall";
+import "../../styles/hall-list.css";
+import { type HallReceipt } from "./startHall";
+import { HallRuntimeContext } from "./HallStage";
 import { setHallSheetEnabled } from "./hallSheet";
 import { formatMinutesLeft } from "@/lib/currency";
 
@@ -81,44 +83,50 @@ export interface HallRoomProps {
 
   /* #5,#8 header actions */
   onBack: () => void;
+  /** Leaves /chats entirely. There was no way out of this route before. */
+  onLeave?: () => void;
   onOpenProfile: () => void;
   onEnd?: () => void;
   statusWord: string;
 }
 
 export default function HallRoom(p: HallRoomProps) {
-  const hall = useRef<ReturnType<typeof startHall> | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-hall", "room");
     /* The entry hall disables this sheet as it unmounts, and she arrives here
        straight from it — without this the room renders completely unstyled. */
     setHallSheetEnabled(true);
-    const h = startHall({
-      mode: "room",
+    return () => { setHallSheetEnabled(false); };
+  }, []);
+
+  /* The sky and the runtime now belong to HallStage above. This component
+     renders .room and drives the running instance; it no longer creates one. */
+  const runtime = useContext(HallRuntimeContext);
+  const hallInstance = runtime?.hall ?? null;
+
+  /* Kept in a ref on every render so startHall's closures — which live in
+     HallStage now — still read the latest props, exactly as before. */
+  useEffect(() => {
+    if (!runtime) return;
+    runtime.handlers.current = {
       onAddTime: (a) => p.hold?.onAddTime(a),
       onEndNow: () => p.hold?.onEndNow(),
       onRate: (s) => p.receipt?.onRate?.(s),
       onAgain: () => p.receipt?.onAgain(),
       onBackToReaders: () => p.receipt?.onBack(),
-    });
-    hall.current = h;
-    return () => { h.stop(); setHallSheetEnabled(false); document.documentElement.removeAttribute("data-hall"); };
-    // startHall builds imperative DOM once; the callbacks read the latest props
-    // through the closure above, so it must not be torn down on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    };
+  });
 
   /* the caller's phase drives the hall's own state machine */
   useEffect(() => {
-    const h = hall.current; if (!h) return;
+    const h = hallInstance; if (!h) return;
     if (p.phase === "pausing") h.pausing(p.hold?.graceSeconds ?? undefined);
     else if (p.phase === "ended") h.ended(p.receipt ?? undefined);
     else h.room();
-  }, [p.phase, p.hold?.graceSeconds, p.receipt?.minutes, p.receipt?.total, p.receipt?.perMinute]);
+  }, [hallInstance, p.phase, p.hold?.graceSeconds, p.receipt?.minutes, p.receipt?.total, p.receipt?.perMinute]);
 
-  useEffect(() => { hall.current?.setRate(p.hold?.perMinute ?? null); }, [p.hold?.perMinute]);
+  useEffect(() => { hallInstance?.setRate(p.hold?.perMinute ?? null); }, [hallInstance, p.hold?.perMinute]);
 
   /* keep the newest message in view, the way a chat should */
   useEffect(() => {
@@ -137,16 +145,9 @@ export default function HallRoom(p: HallRoomProps) {
 
   return (
     <>
-      <canvas id="gl"></canvas>
-      <div className="wheel"><svg id="w1" viewBox="0 0 100 100"></svg></div>
-      <div className="wheel2"><svg id="w2" viewBox="0 0 100 100"></svg></div>
-      <canvas id="dust"></canvas>
-      <div className="grain"></div>
-      <div className="orbfix"><div className="orb" id="orb">
-        <div className="aura"></div><div className="halo2"></div><div className="halo"></div>
-        <div className="photo"></div>
-      </div></div>
-      <div className="flash"></div>
+      {/* The sky — #gl, #w1, #w2, #dust, #touch, .grain, .orbfix, .flash — and
+          the startHall runtime now live in HallStage above this component, so a
+          view with no room still gets the real sky. This renders .room only. */}
 
       {/* ══ the room ══ */}
       <div className="room">
@@ -163,6 +164,9 @@ export default function HallRoom(p: HallRoomProps) {
           <div className="meter"><b id="mins">{meter}</b><i>{p.isPaused ? "paused" : "left"}</i></div>
           {p.onEnd && (
             <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading">End</button>
+          )}
+          {p.onLeave && (
+            <button className="rbtn" onClick={p.onLeave} aria-label="Leave for the readers">Readers</button>
           )}
         </header>
 
@@ -188,7 +192,7 @@ export default function HallRoom(p: HallRoomProps) {
             {p.readerTyping && <div className="typing"><i></i><i></i><i></i></div>}
             {/* #24,#25,#26 — the banner keeps that state's own words */}
             {p.banner && (
-              <div className="rbanner">
+              <div className="rbanner hbanner">
                 <b>{p.banner.title}</b>
                 <span>{p.banner.body}</span>
               </div>
@@ -273,7 +277,7 @@ export default function HallRoom(p: HallRoomProps) {
           <p className="eyebrow">{p.receipt?.title ?? "Your reading has ended"}</p>
           <h1 className="ptitle">{p.readerName} <em>will remember this</em></h1>
           <div className="receipt">
-            <div className="rcell"><b className="rnum" id="rmins">—</b><span className="slab">minutes</span></div>
+            <div className="rcell"><b className="rnum" id="rmins">—</b><span className="slab">duration</span></div>
             <div className="rcell"><b className="rnum" id="rtotal">—</b><span className="slab">total</span></div>
             <div className="rcell"><b className="rnum" id="rrate">—</b><span className="slab">per minute</span></div>
           </div>
@@ -293,7 +297,6 @@ export default function HallRoom(p: HallRoomProps) {
         </section>
       </main>
 
-      <canvas id="touch"></canvas>
     </>
   );
 }

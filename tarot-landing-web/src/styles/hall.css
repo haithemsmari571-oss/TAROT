@@ -21,7 +21,11 @@ html[data-hall] body{background:#0A0616;color:var(--text);font-family:var(--ui);
 
 #gl{position:fixed;inset:0;z-index:0;display:block;}
 #dust{position:fixed;inset:0;z-index:2;pointer-events:none;}
-#touch{position:fixed;inset:0;z-index:5;touch-action:none;}
+/* FIX 2: the wake canvas is a paint surface, never a hit target. It used to
+   own the pointer listeners, which meant a full-viewport z-5 canvas sat over
+   the conversation list and swallowed rows. The listeners now live on window
+   (startHall.ts) and this element is inert. */
+#touch{position:fixed;inset:0;z-index:5;touch-action:none;pointer-events:none;}
 
 .grain{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:.16;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='4' stitchTiles='stitch'/></filter><rect width='150' height='150' filter='url(%23p)' opacity='.42'/></svg>");}
