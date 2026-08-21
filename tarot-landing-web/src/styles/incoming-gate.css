@@ -1,0 +1,75 @@
+/* THE INCOMING READING GATE, in the hall's own language.
+
+   Self-contained on purpose: the gate appears over ANY page (the unexpected
+   case — a reader accepts while the client is elsewhere on the site), where
+   hall.css may not be loaded and html[data-hall] is not set. So the hall's
+   tokens are restated here as literal values (source: src/styles/hall.css:2-7
+   — gold #E8C88B, gilt #FFE9B8, text #F8F1E4, soft #DCCDB8, the .37,0,.36,1
+   easing, Fraunces display over Inter) rather than var() references that
+   would resolve to nothing outside the hall.
+
+   The scrim is the gate's specification: rgba(5,5,8,.92) + blur(10px). The
+   hall.css override that used to thin it to .34/3px is gone with this change —
+   the requester never sees this gate over the hall any more, so there is no
+   arrival left to keep visible behind it. */
+
+.incoming-gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+  padding:22px;background:rgba(5,5,8,.92);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  font-family:'Inter',system-ui,sans-serif;font-weight:300;
+  -webkit-font-smoothing:antialiased;}
+
+.igate-panel{width:min(400px,100%);padding:40px 26px 20px;border-radius:30px;text-align:center;
+  background:linear-gradient(165deg, rgba(30,18,48,.60), rgba(12,6,24,.50));
+  border:1px solid rgba(255,214,150,.22);
+  box-shadow:0 40px 100px -40px rgba(0,0,0,.95), 0 0 60px -34px #E8C88B,
+             0 1px 0 rgba(255,240,210,.2) inset;}
+
+/* her reader, as the hall draws her: a gold-rimmed orb with a breathing aura */
+.igate-orb{position:relative;width:112px;height:112px;margin:0 auto 22px;border-radius:50%;}
+.igate-aura{position:absolute;inset:-26%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side, rgba(255,214,150,.5), rgba(210,120,190,.2) 46%, transparent 76%);
+  animation:igate-breath 11s cubic-bezier(.37,0,.36,1) infinite;}
+@keyframes igate-breath{0%{opacity:.55;transform:scale(.96);}50%{opacity:1;transform:scale(1.07);}100%{opacity:.55;transform:scale(.96);}}
+.igate-photo{position:absolute;inset:0;border-radius:50%;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 35% 30%, #3A2B55, #14081F 78%);
+  box-shadow:0 26px 70px -22px rgba(0,0,0,.85),
+             0 0 0 2px rgba(255,226,170,.75) inset,
+             0 0 46px -6px rgba(255,206,140,.55);}
+.igate-photo img{width:100%;height:100%;object-fit:cover;}
+.igate-spark{font-size:44px;color:#E8C88B;}
+
+.igate-eyebrow{margin:0;font-size:10px;font-weight:500;letter-spacing:.42em;text-transform:uppercase;
+  color:#E8C88B;opacity:.9;}
+.igate-name{margin:12px 0 0;font-family:'Fraunces',Georgia,serif;font-size:clamp(26px,6vw,34px);
+  font-weight:300;letter-spacing:-.02em;line-height:1.12;color:#FFFCF4;}
+.igate-sub{margin:10px auto 26px;max-width:30ch;font-size:14px;line-height:1.65;
+  color:rgba(220,205,184,.9);}
+
+/* the one action, in the hall's .begin treatment */
+.igate-join{width:100%;padding:16px;border:0;border-radius:16px;cursor:pointer;
+  font-family:'Inter',system-ui,sans-serif;font-size:15px;font-weight:600;letter-spacing:.03em;
+  color:#2A1A10;background:linear-gradient(140deg,#FFECC4,#E6C48C);
+  box-shadow:0 16px 40px -18px rgba(0,0,0,.9),0 0 34px -10px #E8C88B;
+  transition:transform .2s cubic-bezier(.37,0,.36,1),filter .3s cubic-bezier(.37,0,.36,1);}
+.igate-join:active{transform:scale(.985);}
+.igate-join:disabled{opacity:.6;cursor:default;}
+
+.igate-quiet{display:inline-block;margin-top:14px;padding:8px 14px;background:none;border:0;cursor:pointer;
+  font-family:'Inter',system-ui,sans-serif;font-size:12.5px;letter-spacing:.04em;
+  color:rgba(220,205,184,.55);text-decoration:underline;text-underline-offset:3px;
+  transition:color .3s cubic-bezier(.37,0,.36,1);}
+.igate-quiet:hover{color:rgba(248,241,228,.85);}
+
+/* the affordability note, in the hall's soft-box voice */
+.igate-note{margin:0 0 14px;padding:12px 14px;border-radius:16px;font-size:13px;line-height:1.6;
+  text-align:center;color:rgba(220,205,184,.9);
+  background:rgba(255,240,214,.05);border:1px solid rgba(255,214,150,.22);}
+.igate-note b{color:#FFF7E8;font-weight:500;}
+
+@media (max-height:620px){
+  .igate-orb{width:92px;height:92px;margin-bottom:16px;}
+  .igate-panel{padding:30px 22px 16px;}
+  .igate-sub{margin-bottom:20px;}
+}

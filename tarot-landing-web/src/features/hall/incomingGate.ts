@@ -40,3 +40,22 @@ export const onIncomingHoldChange = (fn: () => void) => {
   subs.add(fn);
   return () => { subs.delete(fn); };
 };
+
+/* ── the requester's own acceptance ────────────────────────────────────────
+   She clicked Begin in THIS browser session; being shown a Join prompt for the
+   very reading she just asked for is a second confirmation that should not
+   exist. While the entry hall's request is outstanding it registers the
+   expectation here; the prompt's one shared funnel (showFor) consults it and,
+   on a match, anchors the join directly — the same joinChat call, the same
+   navigation, just not behind a second button. Cleared when she leaves the
+   hall or its wait passes the poll bound, so an acceptance landing anywhere
+   else on the site still prompts (the unexpected case keeps its gate). */
+let expected: { psychicId: number } | null = null;
+
+export const expectIncoming = (psychicId: number) => { expected = { psychicId }; };
+export const clearExpectedIncoming = () => { expected = null; };
+/** True when this session is waiting on this reading. An event that carries no
+    psychic id matches whatever is expected — with at most one outstanding
+    request per client, an anonymous acceptance mid-wait can only be ours. */
+export const isIncomingExpected = (psychicId?: number) =>
+  expected != null && (psychicId == null || psychicId === expected.psychicId);

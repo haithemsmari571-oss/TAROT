@@ -19,7 +19,9 @@ import "../../styles/hall-preview.css";
 import "../../styles/hall-entry.css";
 import { startHall } from "./startHall";
 import { loadReader, submitRealRequest, applyReaderToDom, type Reader } from "./hallData";
-import { holdIncoming, releaseIncoming } from "./incomingGate";
+import {
+  holdIncoming, releaseIncoming, expectIncoming, clearExpectedIncoming,
+} from "./incomingGate";
 import { setHallSheetEnabled } from "./hallSheet";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { getMyChatsWithDetails } from "@/features/chat/api/chatApi";
@@ -80,6 +82,9 @@ export default function Hall({ mode = "preview", psychicId }:
         const r = await submitRealRequest(question);
         if (!r.ok) { setError(r.error); return false; }
         setWaitingSince(Date.now());
+        // This session is now the requester: its own acceptance must carry her
+        // straight in, not prompt her to accept a second time.
+        if (psychicId) expectIncoming(psychicId);
         return true;
       },
     });
@@ -125,6 +130,9 @@ export default function Hall({ mode = "preview", psychicId }:
       off();
       if (timer) clearTimeout(timer);
       releaseIncoming();
+      // Leaving the hall ends the requester claim: an acceptance that lands
+      // while she is elsewhere on the site goes back to prompting her.
+      clearExpectedIncoming();
     };
   }, [preview, onNotification]);
 
@@ -144,6 +152,7 @@ export default function Hall({ mode = "preview", psychicId }:
       if (stopped || acceptedRef.current) return;
       if (Date.now() - waitingSince > ACCEPT_POLL_BOUND_MS) {
         setWaitingSince(null);
+        clearExpectedIncoming(); // past the bound, an acceptance prompts again
         return;
       }
       try {

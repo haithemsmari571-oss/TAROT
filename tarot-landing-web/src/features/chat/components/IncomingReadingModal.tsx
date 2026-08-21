@@ -9,8 +9,11 @@ import { joinChat, getMyChatsWithDetails, getPsychicDetails } from "../api/chatA
 import { paymentApi } from "@/features/payment/api/paymentApi";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { formatGbp } from "@/lib/currency";
-import { COLORS, TYPOGRAPHY } from "@/theme";
-import { isIncomingHeld, queueIncoming } from "@/features/hall/incomingGate";
+import {
+  isIncomingHeld, queueIncoming, isIncomingExpected,
+} from "@/features/hall/incomingGate";
+import "@/styles/incoming-gate.css";
+
 
 interface Incoming {
   chatId: number;
@@ -89,6 +92,34 @@ export default function IncomingReadingModal() {
     }
   }, []);
 
+  // ── THE billing anchor ── shared verbatim by the JOIN button and the
+  // requester's gateless arrival: mark handled, enter the room, then anchor
+  // billing in the background. joinChat is idempotent server-side, so it
+  // retries to survive a transient failure. One join path, not two.
+  const anchorJoin = useCallback(
+    async (chatId: number) => {
+      handledRef.current.add(chatId);
+      navigate(`/chats?chat_id=${chatId}`);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await joinChat(chatId);
+          // Refresh the chats query so ClientChat sees the chat as ACTIVE and
+          // initialises its session meter — otherwise the meter can sit frozen
+          // at 0:00 and the reading looks stuck.
+          queryClient.invalidateQueries({ queryKey: ["chats"] });
+          break;
+        } catch (e) {
+          if (attempt === 2) {
+            console.error("[IncomingReading] join failed after retries:", e);
+          } else {
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+      }
+    },
+    [navigate, queryClient]
+  );
+
   const showFor = useCallback(
     (base: Incoming, ring: boolean) => {
       // Don't re-surface a chat already joined/dismissed this session.
@@ -98,6 +129,16 @@ export default function IncomingReadingModal() {
       // Held, never cancelled — and Join is still the only thing that bills.
       if (isIncomingHeld()) {
         queueIncoming(() => showForRef.current?.(base, ring));
+        return;
+      }
+      // The requester's own acceptance: she clicked Begin in this session, so
+      // asking her to accept a second time is a step that should not exist.
+      // Both arrival paths — the socket CHAT_ACCEPTED and the status poll's
+      // synthetic one — land here through the same dispatch, so this one check
+      // covers them both. Same join anchor, just not behind a second button.
+      // An acceptance she is NOT waiting on still prompts below.
+      if (isIncomingExpected(base.psychicId)) {
+        void anchorJoin(base.chatId);
         return;
       }
       setIncoming((cur) => cur ?? base);
@@ -124,7 +165,7 @@ export default function IncomingReadingModal() {
           .catch(() => {});
       }
     },
-    [playRing]
+    [playRing, anchorJoin]
   );
   showForRef.current = showFor;
 
@@ -209,6 +250,17 @@ export default function IncomingReadingModal() {
   // Safety: stop the ring if this ever unmounts.
   useEffect(() => () => stopRing(), [stopRing]);
 
+  // Escape dismisses the prompt, exactly like the Dismiss control — local
+  // only, no server call, and the reload fallback can still re-surface it.
+  useEffect(() => {
+    if (!incoming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clear();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [incoming, clear]);
+
   // Load the client's live balance whenever a join prompt appears, so we can
   // gate Join on affordability (one full minute at the reader's rate).
   useEffect(() => {
@@ -234,35 +286,13 @@ export default function IncomingReadingModal() {
     if (!incoming || joining) return;
     const id = incoming.chatId;
     setJoining(true);
-
-    // ── THE ONLY billing trigger ── this explicit click. But don't hang the UI
-    // on the network round-trip (which now also charges minute 1): dismiss the
-    // prompt and enter the chat immediately, then anchor billing in the
-    // background. joinChat stays click-driven (never navigation-driven) and is
-    // idempotent server-side, so we retry to survive a transient failure.
-    handledRef.current.add(id);
+    // Dismiss the prompt and enter immediately; anchorJoin (above) enters the
+    // room and anchors billing in the background — the same anchor the
+    // requester's gateless arrival uses.
     clear();
-    navigate(`/chats?chat_id=${id}`);
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await joinChat(id);
-        // Billing is now anchored + minute 1 charged. Refresh the chats query so
-        // ClientChat sees the chat as ACTIVE and initialises its session meter —
-        // otherwise the client's meter can sit frozen at 0:00 (stale status →
-        // the session-time init/sync never runs) and the reading looks stuck.
-        queryClient.invalidateQueries({ queryKey: ["chats"] });
-        break;
-      } catch (e) {
-        if (attempt === 2) {
-          console.error("[IncomingReading] join failed after retries:", e);
-        } else {
-          await new Promise((r) => setTimeout(r, 500));
-        }
-      }
-    }
+    await anchorJoin(id);
     setJoining(false);
-  }, [incoming, joining, clear, navigate, queryClient]);
+  }, [incoming, joining, clear, anchorJoin]);
 
   if (!incoming) return null;
 
@@ -272,101 +302,52 @@ export default function IncomingReadingModal() {
   const cantAffordJoin =
     perMin != null && perMin > 0 && balance != null && balance < perMin;
 
+  /* The gate, in the hall's own language — src/styles/incoming-gate.css
+     restates the hall's tokens as literal values because this can render over
+     any page, where hall.css may not be loaded and html[data-hall] is unset. */
   return (
-    <div
-      className="incoming-gate fixed inset-0 z-[200] flex items-center justify-center p-4"
-      style={{
-        backgroundColor: "rgba(5,5,8,0.92)",
-        backdropFilter: "blur(10px)",
-        fontFamily: TYPOGRAPHY.fontFamily.body,
-      }}
-    >
-      <div
-        className="w-full max-w-sm rounded-[28px] border p-8 text-center relative"
-        style={{ backgroundColor: COLORS.surface, borderColor: `${COLORS.primary}44` }}
-      >
-        {/* Pulsing avatar */}
-        <div className="relative mx-auto mb-6 w-28 h-28">
-          <div
-            className="absolute inset-0 rounded-full animate-ping"
-            style={{ backgroundColor: `${COLORS.primary}33` }}
-          />
-          <div
-            className="relative w-28 h-28 rounded-full overflow-hidden border-2 flex items-center justify-center"
-            style={{ borderColor: `${COLORS.primary}66`, backgroundColor: `${COLORS.primary}14` }}
-          >
+    <div className="incoming-gate" role="dialog" aria-modal="true" aria-label="Incoming reading">
+      <div className="igate-panel">
+        <div className="igate-orb">
+          <div className="igate-aura" />
+          <div className="igate-photo">
             {incoming.photo ? (
-              <img
-                src={incoming.photo}
-                alt={incoming.psychicName}
-                className="w-full h-full object-cover"
-              />
+              <img src={incoming.photo} alt={incoming.psychicName} />
             ) : (
-              <Icon icon="ph:sparkle-fill" className="text-5xl" style={{ color: COLORS.primary }} />
+              <Icon icon="ph:sparkle-fill" className="igate-spark" />
             )}
           </div>
         </div>
 
-        <div
-          className="text-[11px] font-black uppercase tracking-[0.28em] mb-2"
-          style={{ color: COLORS.starGold }}
-        >
-          Incoming Reading
-        </div>
-        <h2
-          className="text-2xl font-black"
-          style={{ fontFamily: TYPOGRAPHY.fontFamily.heading, color: COLORS.neutralWhite }}
-        >
-          {incoming.psychicName}
-        </h2>
-        <p className="text-sm text-white/55 mt-1 mb-8">is ready to begin your reading</p>
+        <p className="igate-eyebrow">Incoming reading</p>
+        <h2 className="igate-name">{incoming.psychicName}</h2>
+        <p className="igate-sub">is ready to begin your reading</p>
 
         {cantAffordJoin ? (
           <>
-            <div className="mb-4 text-sm rounded-2xl p-3.5 text-white/80 bg-white/[0.04] border border-white/10">
-              You need at least{" "}
-              <span className="font-bold text-white">{formatGbp(perMin!)}</span> for one
-              minute with {incoming.psychicName}.
+            <div className="igate-note">
+              You need at least <b>{formatGbp(perMin!)}</b> for one minute with{" "}
+              {incoming.psychicName}.
             </div>
             <button
+              className="igate-join"
               onClick={() =>
                 openTopUp({
                   returnUrl: `/chats?chat_id=${incoming.chatId}`,
                   reason: `Add Stardust to begin your reading with ${incoming.psychicName}.`,
                 })
               }
-              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest transition-transform hover:scale-[1.02]"
-              style={{ backgroundColor: COLORS.starGold, color: COLORS.dark }}
             >
-              <Icon icon="ph:sparkle-fill" className="text-lg" /> Add Stardust
+              Add Stardust
             </button>
           </>
         ) : (
-          <button
-            onClick={onJoin}
-            disabled={joining}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black uppercase text-sm tracking-widest text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
-            style={{
-              background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`,
-              boxShadow: `0 12px 34px ${COLORS.primary}55`,
-            }}
-          >
-            {joining ? (
-              <>
-                <Icon icon="svg-spinners:3-dots-fade" className="text-base" /> Joining…
-              </>
-            ) : (
-              <>
-                <Icon icon="solar:chat-round-dots-bold" className="text-lg" /> Join {incoming.psychicName}
-              </>
-            )}
+          <button className="igate-join" onClick={onJoin} disabled={joining}>
+            {joining ? "Joining…" : `Join ${incoming.psychicName}`}
           </button>
         )}
 
-        <button
-          onClick={clear}
-          className="mt-4 text-sm font-semibold text-white/50 hover:text-white/80 transition-colors"
-        >
+        <button className="igate-quiet" onClick={clear}>
           Dismiss
         </button>
       </div>

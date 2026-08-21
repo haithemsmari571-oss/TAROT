@@ -490,18 +490,12 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
   #endpanel .softbox{margin-top:10px;padding:11px 13px;font-size:13.5px;}
 }
 
-/* THE HANDOFF MUST NEVER GO BLACK.
-   The global Incoming Reading prompt paints its own backdrop at
-   rgba(5,5,8,0.92) (IncomingReadingModal.tsx:262) — 92% opaque, which blots out
-   the sky, the orb and the wheel and leaves the client staring at a black frame
-   with a card floating on it. Wherever the hall is on screen, that backdrop is
-   dropped to a veil so the sky she has been watching stays behind the prompt
-   all the way into the room. !important is required because the modal sets the
-   colour inline. Nothing changes anywhere else on the site. */
-html[data-hall] .incoming-gate{
-  background-color:rgba(5,5,8,.34)!important;
-  backdrop-filter:blur(3px)!important;-webkit-backdrop-filter:blur(3px)!important;
-}
+/* The old "handoff must never go black" override that thinned the Incoming
+   Reading prompt's backdrop to rgba(5,5,8,.34)/blur(3px) over the hall is
+   gone: the requester no longer sees that prompt over the arrival at all
+   (features/hall/incomingGate.ts, expectIncoming), so the gate renders its
+   own specified scrim — rgba(5,5,8,.92)/blur(10px), styles/incoming-gate.css
+   — wherever it still appears. */
 
 @media (prefers-reduced-motion: reduce){
   .wheel,.wheel2,.orb,.orb .aura,.orb .halo,.orb .halo2{animation:none!important;}
