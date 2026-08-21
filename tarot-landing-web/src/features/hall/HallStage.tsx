@@ -21,6 +21,7 @@ import { startHall } from "./startHall";
     latest props — exactly as the original in-HallRoom closures did. */
 export interface HallHandlers {
   onAddTime?: (amountGbp: number) => void;
+  onMoreAmounts?: () => void;
   onEndNow?: () => void;
   onRate?: (stars: number) => void;
   onAgain?: () => void;
@@ -45,6 +46,7 @@ export default function HallStage({ children }: { children: ReactNode }) {
     const h = startHall({
       mode: "room",
       onAddTime: (a) => handlers.current.onAddTime?.(a),
+      onMoreAmounts: () => handlers.current.onMoreAmounts?.(),
       onEndNow: () => handlers.current.onEndNow?.(),
       onRate: (s) => handlers.current.onRate?.(s),
       onAgain: () => handlers.current.onAgain?.(),

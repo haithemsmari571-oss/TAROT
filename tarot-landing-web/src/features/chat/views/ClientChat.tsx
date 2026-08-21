@@ -9,6 +9,7 @@ import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
 import { getChatMessages, getChatSessionTime, resumeChat, pauseChatManual, pauseChat, Chat } from "../api/chatApi";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
+import { usePayment } from "@/features/payment/hooks/usePayment";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -898,6 +899,32 @@ const ClientChat = () => {
   const handlePauseForTopUp = handleAddStardust;
   const handleTopUpClick = handleAddStardust;
 
+  // The hold panel's preset path: she picked one of the panel's amounts (all
+  // rendered from stardustTiers, the same source as /billing's glider), so go
+  // straight to checkout at that amount — the same pause step and the same
+  // checkout call the glider modal makes, with only the amount differing.
+  // "A larger offering" (onMoreOffering) still opens that glider modal.
+  const { createStardustCheckoutSession } = usePayment();
+  const handleAddStardustAt = useCallback(async (amountUsd: number) => {
+    if (!selectedChat) return;
+    const chatId = selectedChat;
+    const inGrace = sessionState.sessionStatus === 'GRACE';
+    try {
+      // Mirror of the glider modal's onBeforeCheckout (above): pause the clock
+      // before leaving for Stripe, or extend the grace hold while she pays.
+      if (inGrace) await pauseChat(chatId).catch(() => {});
+      else await pauseChatManual(chatId);
+      // Redirects to Stripe; nothing runs after this on success.
+      await createStardustCheckoutSession({
+        amount_usd: amountUsd,
+        return_url: `/chats?chat_id=${chatId}&resume=1`,
+      });
+    } catch {
+      // Never strand her mid-hold: the glider modal has its own error surface.
+      handleAddStardust();
+    }
+  }, [selectedChat, sessionState.sessionStatus, createStardustCheckoutSession, handleAddStardust]);
+
   const handleResumeChat = async () => {
     if (!selectedChat) return;
 
@@ -1165,6 +1192,7 @@ const ClientChat = () => {
              conversation that ended in an earlier visit latched nothing, so it
              stays in 'room' and shows the banner instead. No new server call. */
           phase={showsClosingCard ? 'ended' : isPaused ? 'pausing' : 'room'}
+          onMoreOffering={handleTopUpClick}
           readerName={psychicName}
           readerPhoto={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
           minutesLeft={minutesLeft}
@@ -1228,7 +1256,7 @@ const ClientChat = () => {
                   costLine: `Session cost so far: ${formatGbp(sessionState.estimatedCost || 0)}`,
                   graceSeconds: isGrace ? sessionState.graceSecondsLeft : null,
                   onResume: isGrace ? undefined : handleResumeChat,
-                  onAddTime: () => handleTopUpClick(),
+                  onAddTime: (a: number) => handleAddStardustAt(a),
                   onEndNow: () => setShowEndConfirm(true),
                   perMinute: psychicDetails?.price_per_second != null
                     ? Math.round(psychicDetails.price_per_second * 60 * 100) / 100
@@ -1604,6 +1632,7 @@ function ForcedRoomState({ mode }: { mode: string }) {
           sub: "Usually within 3 minutes",
           action: { label: "Cancel Request", onClick: () => fire("cancel request") },
         } : null}
+        onMoreOffering={() => fire("larger offering")}
         onBack={() => fire("back")}
         onOpenProfile={() => { fire("open profile"); setDlg("reader"); }}
         onEnd={!isEnded ? () => { fire("end"); setDlg("end"); } : undefined}

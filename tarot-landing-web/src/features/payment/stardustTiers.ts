@@ -39,6 +39,18 @@ export const STARDUST_TIERS: {
   { key: "devotion", name: "Devotion", bonusPct: 0.6, minUsd: 450, maxUsd: 999 },
 ];
 
+/* The in-reading hold panel's preset amounts. Derived, not copied: the site
+   minimum, the panel's own quick step (the one number this panel chooses), and
+   the first bonus threshold — so a customer topping up mid-reading can reach a
+   bonus at all. The panel renders these through calculateStardustQuote below,
+   the same function the /billing glider renders from, so the two surfaces can
+   never disagree on what a pound buys. */
+export const STARDUST_HOLD_PRESETS: number[] = [
+  STARDUST_MIN_USD,
+  50,
+  STARDUST_TIERS[0].minUsd,
+];
+
 export const clampStardustAmount = (amount: number): number =>
   Math.min(STARDUST_MAX_USD, Math.max(STARDUST_MIN_USD, Math.round(amount)));
 

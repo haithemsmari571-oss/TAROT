@@ -18,6 +18,8 @@ export interface HallOptions {
   onBegin?: (question: string) => boolean | Promise<boolean>;
   /** "Add £N and carry on" — hand straight to the top-up path the app already has. */
   onAddTime?: (amountGbp: number) => void;
+  /** "A larger offering" beneath the amounts — opens the same glider /billing uses. */
+  onMoreAmounts?: () => void;
   /** "End the reading here instead" on the hold screen. */
   onEndNow?: () => void;
   /** A star was pressed on the receipt. */
@@ -548,7 +550,9 @@ cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));}
 
 let cdNum=document.getElementById('cdnum'),cdFill=document.getElementById('cdfill');
 let amtsEl=document.getElementById('amts'),addBtn=document.getElementById('addtime');
-let cdT:any=null,cdLeft=0,cdSpan=300,amount=25,perMin:number|null=null;
+/* amount starts unset and is adopted from the markup's chosen pill on wire —
+   the presets live in stardustTiers.ts, never here. */
+let cdT:any=null,cdLeft=0,cdSpan=300,amount=0,perMin:number|null=null;
 
 const mmss=(s:number)=>Math.floor(s/60)+':'+String(Math.max(0,Math.floor(s%60))).padStart(2,'0');
 
@@ -556,10 +560,16 @@ function paintAmounts(){
   [...document.querySelectorAll('.amt')].forEach(b=>{
     const a=Number((b as HTMLElement).dataset.amt);
     b.setAttribute('aria-pressed',String(a===amount));
-    const i=b.querySelector('i');
-    /* the minutes each amount buys, at her reader's real rate — never a guess.
-       Rounded DOWN so the number can never over-promise. */
-    if(i)i.textContent=perMin&&perMin>0?Math.floor(a/perMin)+' min':'';
+    const i=b.querySelector('i') as HTMLElement|null;
+    /* The Stardust figure is React's (computed from the billing source and
+       carried on data-star — never re-derived here); this only appends the
+       minutes that amount buys at her reader's real rate. Rounded DOWN so the
+       number can never over-promise. */
+    if(i){
+      const st=i.dataset.star||'';
+      const mins=perMin&&perMin>0?Math.floor(a/perMin)+' min':'';
+      i.textContent=st&&mins?st+' · '+mins:(st||mins);
+    }
   });
   if(addBtn)addBtn.textContent='Add £'+amount+' and carry on';
 }
@@ -570,6 +580,10 @@ const onAmts=(e:Event)=>{
   amount=Number((b as HTMLElement).dataset.amt)||amount;paintAmounts();harmonic(.06);};
 
 const onAdd=()=>{opts.onAddTime?.(amount);if(MODE==="preview")toRoom();};
+
+/* "A larger offering" — the door to the full glider. Decides nothing itself. */
+let moreBtn=document.getElementById('moreamts');
+const onMore=()=>{opts.onMoreAmounts?.();};
 
 let endInstead=document.getElementById('endinstead');
 const onEndNow=()=>{opts.onEndNow?.();if(MODE==="preview")toEnded();};
@@ -635,11 +649,21 @@ function wireRoomControls(){
   unwireRoomControls();
   cdNum=document.getElementById('cdnum');cdFill=document.getElementById('cdfill');
   amtsEl=document.getElementById('amts');addBtn=document.getElementById('addtime');
+  moreBtn=document.getElementById('moreamts');
   endInstead=document.getElementById('endinstead');
   starsEl=document.getElementById('stars');
   againBtn=document.getElementById('again');backBtn=document.getElementById('backtoreaders');
+  /* The amounts are the markup's own (rendered from the billing source). If the
+     current selection is not among them — first wire, or the presets changed —
+     adopt the pill the markup marks as its default (data-default: stable,
+     unlike aria-pressed which paintAmounts itself repaints). */
+  if(amtsEl&&!amtsEl.querySelector(`.amt[data-amt="${amount}"]`)){
+    const def=(amtsEl.querySelector('.amt[data-default]')||amtsEl.querySelector('.amt')) as HTMLElement|null;
+    const adopted=Number(def?.dataset.amt);
+    if(adopted>0)amount=adopted;
+  }
   const bind=(el:Element|null,fn:EventListener)=>{if(el){el.addEventListener('click',fn);roomWired.push([el,fn]);}};
-  bind(amtsEl,onAmts);bind(addBtn,onAdd);bind(endInstead,onEndNow);
+  bind(amtsEl,onAmts);bind(addBtn,onAdd);bind(moreBtn,onMore);bind(endInstead,onEndNow);
   bind(starsEl,onStars);bind(againBtn,onAgain);bind(backBtn,onBack);
   paintAmounts();paintStars();tickCd();
 }

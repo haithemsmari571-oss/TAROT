@@ -23,6 +23,7 @@ import { holdIncoming, releaseIncoming } from "./incomingGate";
 import { setHallSheetEnabled } from "./hallSheet";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { getMyChatsWithDetails } from "@/features/chat/api/chatApi";
+import HoldAmounts from "./HoldAmounts";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
 // the same helper the reader's own page uses (browse/views/PsychicDetails.tsx:63),
@@ -305,13 +306,11 @@ export default function Hall({ mode = "preview", psychicId }:
           </div>
           <div className="sound">
             <span className="slab">Add time</span>
-            <div className="amts" id="amts">
-              <button className="pill amt" data-amt="10" aria-pressed="false"><b>£10</b><i></i></button>
-              <button className="pill amt" data-amt="25" aria-pressed="true"><span className="tag">most chosen</span><b>£25</b><i></i></button>
-              <button className="pill amt" data-amt="50" aria-pressed="false"><b>£50</b><i></i></button>
-            </div>
+            {/* the same one-source pills the live room renders */}
+            <HoldAmounts />
           </div>
-          <button className="begin" id="addtime">Add £25 and carry on</button>
+          <button className="begin" id="addtime">Add £50 and carry on</button>
+          <button className="quiet" id="moreamts">A larger offering</button>
           <button className="quiet" id="endinstead">End the reading here instead</button>
           <p className="legal">You are charged for the minutes you use, nothing more.</p>
         </section>

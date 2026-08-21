@@ -414,8 +414,10 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
 .amt{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;
   align-items:center;gap:3px;padding:13px 6px;border-radius:18px;}
 .amt b{font-family:var(--display);font-size:19px;font-weight:300;color:#FFFBF2;}
+/* wraps — the line now carries the Stardust received and the minutes it buys
+   ("125 stardust · 19 min"), which nowrap clipped at every width */
 .amt i{font-style:normal;font-size:10px;letter-spacing:.24em;text-transform:uppercase;
-  color:rgba(226,210,186,.6);white-space:nowrap;}
+  color:rgba(226,210,186,.6);white-space:normal;text-align:center;line-height:1.6;max-width:100%;}
 .amt[aria-pressed="true"] b{color:#fff;}
 .tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;
   padding:3px 9px;border-radius:999px;font-size:9.5px;letter-spacing:.28em;
@@ -458,6 +460,9 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
 
 @media (max-width:430px){
   .amt i{letter-spacing:.14em;}
+  /* the bonus badge must stay inside its pill's column — at .28em it spans
+     wider than a narrow pill and crossed the panel's edge */
+  .amt .tag{letter-spacing:.1em;font-size:8px;padding:3px 6px;}
   .rnum{font-size:17px;}
   .rcell{padding:13px 4px;}
 }

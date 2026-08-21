@@ -14,6 +14,7 @@ import "../../styles/hall-room.css";
 import "../../styles/hall-list.css";
 import { type HallReceipt } from "./startHall";
 import { HallRuntimeContext } from "./HallStage";
+import HoldAmounts from "./HoldAmounts";
 import { setHallSheetEnabled } from "./hallSheet";
 import { formatMinutesLeft } from "@/lib/currency";
 
@@ -85,6 +86,13 @@ export interface HallRoomProps {
   notice?: { eyebrow: string; title: string; sub: string; legal?: string;
              action?: { label: string; onClick: () => void; pending?: boolean } } | null;
 
+  /** "A larger offering" beneath the hold amounts — opens the same glider
+      /billing uses, in place, so she never loses her seat in the reading.
+      Room-level (not inside `hold`) so the door works whenever the panel can
+      be seen; it only opens a modal, and nothing bills without a further
+      explicit purchase. */
+  onMoreOffering?: () => void;
+
   /* #5,#8 header actions */
   onBack: () => void;
   /** Leaves /chats entirely. There was no way out of this route before. */
@@ -115,6 +123,7 @@ export default function HallRoom(p: HallRoomProps) {
     if (!runtime) return;
     runtime.handlers.current = {
       onAddTime: (a) => p.hold?.onAddTime(a),
+      onMoreAmounts: () => p.onMoreOffering?.(),
       onEndNow: () => p.hold?.onEndNow(),
       onRate: (s) => p.receipt?.onRate?.(s),
       onAgain: () => p.receipt?.onAgain(),
@@ -271,13 +280,10 @@ export default function HallRoom(p: HallRoomProps) {
           </div>
           <div className="sound">
             <span className="slab">Add time</span>
-            <div className="amts" id="amts">
-              <button type="button" className="pill amt" data-amt="10" aria-pressed="false"><b>£10</b><i></i></button>
-              <button type="button" className="pill amt" data-amt="25" aria-pressed="true"><span className="tag">most chosen</span><b>£25</b><i></i></button>
-              <button type="button" className="pill amt" data-amt="50" aria-pressed="false"><b>£50</b><i></i></button>
-            </div>
+            <HoldAmounts />
           </div>
-          <button className="begin" id="addtime" type="button">Add £25 and carry on</button>
+          <button className="begin" id="addtime" type="button">Add £50 and carry on</button>
+          <button className="quiet" id="moreamts" type="button">A larger offering</button>
           {/* #31 keeps Resume, which only the paused (not grace) state offers */}
           {p.hold?.onResume && (
             <button className="quiet" id="resumeread" type="button" onClick={p.hold.onResume}>
