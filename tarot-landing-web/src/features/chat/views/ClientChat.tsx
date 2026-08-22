@@ -15,6 +15,7 @@ import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
 import { SessionSummaryModal, formatDuration } from "../components/SessionSummaryModal";
+import { endReasonEyebrow } from "../endReasonCopy";
 import HallRoom from "@/features/hall/HallRoom";
 import HallStage from "@/features/hall/HallStage";
 import HallList from "@/features/hall/HallList";
@@ -1279,7 +1280,9 @@ const ClientChat = () => {
                   perMinute: psychicDetails?.price_per_second != null
                     ? formatGbp(Math.round(psychicDetails.price_per_second * 60 * 100) / 100)
                     : null,
-                  title: sessionState.endReason || 'Your reading has ended',
+                  // the server's termination reason, in words — never the raw
+                  // enum value (endReasonCopy.ts); "" means no eyebrow at all
+                  title: endReasonEyebrow(sessionState.endReason),
                   sub: "We hope it brought you clarity. You're welcome back any time. ",
                   onAgain: () => { setRequestError(null); setShowRequestModal(true); },
                   onBack: () => navigate('/psychics-browse'),
@@ -1622,7 +1625,9 @@ function ForcedRoomState({ mode }: { mode: string }) {
         } : null}
         receipt={isEnded ? {
           minutes: 24, total: "£124.80", perMinute: "£5.20",
-          title: "Your reading has ended",
+          /* ?reason=<value> runs the real mapping so every end reason can be
+             driven through the real card (dev-only injector, like the rest) */
+          title: endReasonEyebrow(new URLSearchParams(window.location.search).get("reason")),
           sub: "We hope it brought you clarity. You're welcome back any time. ",
           onAgain: () => fire("book another"), onBack: () => fire("browse psychics"),
           onRate: (n: number) => fire("rated " + n),

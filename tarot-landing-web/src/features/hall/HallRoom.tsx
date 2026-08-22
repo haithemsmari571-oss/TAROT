@@ -298,7 +298,10 @@ export default function HallRoom(p: HallRoomProps) {
       {/* ══ 6 · the receipt ══ */}
       <main className="stage stage2" id="endstage">
         <section className="panel" id="endpanel">
-          <p className="eyebrow">{p.receipt?.title ?? "Your reading has ended"}</p>
+          {/* "" means the reason has no words for a customer: no eyebrow, not a blank line */}
+          {(p.receipt?.title ?? "Your reading has ended") !== "" && (
+            <p className="eyebrow">{p.receipt?.title ?? "Your reading has ended"}</p>
+          )}
           <h1 className="ptitle">{p.readerName} <em>will remember this</em></h1>
           <div className="receipt">
             <div className="rcell"><b className="rnum" id="rmins">—</b><span className="slab">duration</span></div>

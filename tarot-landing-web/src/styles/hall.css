@@ -56,12 +56,21 @@ html[data-hall] body{background:#0A0616;color:var(--text);font-family:var(--ui);
   background:radial-gradient(closest-side, rgba(255,214,150,.55), rgba(210,120,190,.22) 46%, transparent 76%);
   animation:aura var(--breath) var(--ease) infinite;}
 @keyframes aura{0%{opacity:.55;transform:scale(.96);}50%{opacity:1;transform:scale(1.07);}100%{opacity:.55;transform:scale(.96);}}
+/* THE HALO DRIFTS. Its stops used to be literal golds, so while every other
+   gilt line in the hall (wheel rims, eyebrows, the orb's own glow) followed
+   --gold through the sky's palette journey (startHall.ts lerpPal/cssGold —
+   amethyst, sapphire, copper, jade, wine; 195s per accent, a 16-minute turn,
+   held still under reduced motion), the ring alone sat fixed. The bright tone
+   is the drifting accent warmed toward --gilt, the soft tone the accent itself;
+   nothing outside the design's own tokens, and the alphas are the original
+   ones minus a little on the peak so the ring stays under her face. */
 .orb .halo{position:absolute;inset:-7%;border-radius:50%;
+  --halo-bright:color-mix(in srgb,var(--gold) 55%,var(--gilt));
   background:conic-gradient(from 0deg,
-    rgba(255,235,190,0) 0deg, rgba(255,235,190,.95) 46deg,
-    rgba(232,200,139,.5) 96deg, rgba(255,235,190,0) 150deg,
-    rgba(255,235,190,0) 210deg, rgba(255,225,170,.8) 258deg,
-    rgba(255,235,190,0) 320deg);
+    transparent 0deg, color-mix(in srgb,var(--halo-bright) 82%,transparent) 46deg,
+    color-mix(in srgb,var(--gold) 46%,transparent) 96deg, transparent 150deg,
+    transparent 210deg, color-mix(in srgb,var(--halo-bright) 70%,transparent) 258deg,
+    transparent 320deg);
   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.2px),#000 calc(100% - 2.2px));
   mask:radial-gradient(farthest-side,transparent calc(100% - 2.2px),#000 calc(100% - 2.2px));
   animation:turn 74s linear infinite;}
@@ -130,7 +139,7 @@ html[data-state="accepting"] .flash{animation:fl 1700ms var(--ease) forwards;}
 @keyframes fl{0%{opacity:0;}16%{opacity:1;}100%{opacity:0;}}
 
 /* ══════════ 1 · the request ══════════ */
-.stage{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;
+.stage{position:fixed;inset:0;z-index:6;display:flex;align-items:safe center;justify-content:center;
   padding:96px 22px 150px;pointer-events:none;overflow-y:auto;overscroll-behavior:contain;}
 html[data-state="form"] .stage,html[data-state="sending"] .stage{pointer-events:auto;}
 .panel{width:min(520px,100%);flex:none;pointer-events:auto;
@@ -369,6 +378,17 @@ html[data-state="pausing"] .room{opacity:.22;filter:blur(7px) saturate(.8);visib
 /* The orb comes back up and straddles the top edge of whichever panel is out. */
 html[data-state="pausing"] .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
 html[data-state="ended"]   .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
+/* The hold and the receipt follow the same height reduction the form has
+   always had (hall.css form rules: .52 → .44 under 900px → .38 under 740px).
+   A flat .52 at every height put the photograph over the heading on short
+   laptops. Placed AFTER the base rules above: at equal specificity the later
+   declaration wins, so these would be dead inside the earlier media blocks. */
+@media (max-height:900px){
+  html[data-state="pausing"] .orbfix,html[data-state="ended"] .orbfix{--os:.44;}
+}
+@media (max-height:740px){
+  html[data-state="pausing"] .orbfix,html[data-state="ended"] .orbfix{--os:.38;}
+}
 
 /* Two more stages beside the request stage. They carry .stage so they inherit
    its scrolling and its fade, and .stage2 to stay dark until their own state. */
