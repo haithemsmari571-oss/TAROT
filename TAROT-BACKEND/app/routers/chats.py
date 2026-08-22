@@ -469,6 +469,59 @@ def get_chat_messages_endpoint(
     )
 
 
+def _session_info_json(session_info) -> dict:
+    """The session-time shape. /reflect and /reflect/return answer with it too,
+    so the room has one reader for every figure the server reports."""
+    return {
+        "elapsed_seconds": session_info.elapsed_seconds,
+        "estimated_cost": session_info.estimated_cost,
+        "price_per_second": session_info.rate_per_second,
+        "rate_per_minute": session_info.rate_per_minute,
+        "client_balance": session_info.client_balance,
+        "credit_balance": session_info.credit_balance,
+        "paid_balance": session_info.paid_balance,
+        "remaining_seconds": session_info.remaining_seconds,
+        "remaining_minutes": session_info.remaining_minutes,
+        "minutes_charged": session_info.minutes_charged,
+        "total_seconds": session_info.elapsed_seconds,  # For backwards compatibility
+        # AWAITING_JOIN before the client joins; ACTIVE while billing; GRACE
+        # during the out-of-balance top-up hold; REFLECTING while she sits with
+        # it (meter frozen, nothing charged, chat still ACTIVE). Drives the UI.
+        "session_status": session_info.session_status,
+        # Grace countdown (only meaningful while session_status == "GRACE").
+        "grace_seconds_left": session_info.grace_seconds_left,
+        "is_topping_up": session_info.is_topping_up,
+        # Reflection budget — the server's figure, reported in every state.
+        "reflect_remaining_seconds": session_info.reflect_remaining_seconds,
+        "reflect_seconds_used": session_info.reflect_seconds_used,
+        "reflecting_since": session_info.reflecting_since,
+    }
+
+
+def _no_session_json(chat) -> dict:
+    """The session-time shape when the chat has no live session."""
+    credit_balance = float(chat.user.credit_balance) if chat.user else 0.0
+    paid_balance = float(chat.user.balance) if chat.user else 0.0
+    rate = chat.psychic.price_per_second or 0.0
+    per_min = round(rate * 60, 2)
+    total = credit_balance + paid_balance
+    return {
+        "elapsed_seconds": 0,
+        "estimated_cost": 0.0,
+        "price_per_second": rate,
+        "rate_per_minute": per_min,
+        "client_balance": total,
+        "credit_balance": credit_balance,
+        "paid_balance": paid_balance,
+        "remaining_seconds": 0,
+        "remaining_minutes": int(total / per_min) if per_min > 0 else 0,
+        "minutes_charged": 0,
+        "reflect_remaining_seconds": 0,
+        "reflect_seconds_used": 0,
+        "reflecting_since": None,
+    }
+
+
 @router.get("/{chat_id}/session-time")
 def get_chat_session_time_endpoint(
     chat_id: int,
@@ -495,50 +548,10 @@ def get_chat_session_time_endpoint(
 
     if not session_info:
         # No active session
-        credit_balance = float(chat.user.credit_balance) if chat.user else 0.0
-        paid_balance = float(chat.user.balance) if chat.user else 0.0
-        rate = chat.psychic.price_per_second or 0.0
-        per_min = round(rate * 60, 2)
-        total = credit_balance + paid_balance
-        return JSONResponse(
-            content={
-                "elapsed_seconds": 0,
-                "estimated_cost": 0.0,
-                "price_per_second": rate,
-                "rate_per_minute": per_min,
-                "client_balance": total,
-                "credit_balance": credit_balance,
-                "paid_balance": paid_balance,
-                "remaining_seconds": 0,
-                "remaining_minutes": int(total / per_min) if per_min > 0 else 0,
-                "minutes_charged": 0,
-            },
-            status_code=200,
-        )
+        return JSONResponse(content=_no_session_json(chat), status_code=200)
 
     # Return session info from SessionManager
-    return JSONResponse(
-        content={
-            "elapsed_seconds": session_info.elapsed_seconds,
-            "estimated_cost": session_info.estimated_cost,
-            "price_per_second": session_info.rate_per_second,
-            "rate_per_minute": session_info.rate_per_minute,
-            "client_balance": session_info.client_balance,
-            "credit_balance": session_info.credit_balance,
-            "paid_balance": session_info.paid_balance,
-            "remaining_seconds": session_info.remaining_seconds,
-            "remaining_minutes": session_info.remaining_minutes,
-            "minutes_charged": session_info.minutes_charged,
-            "total_seconds": session_info.elapsed_seconds,  # For backwards compatibility
-            # AWAITING_JOIN before the client joins; ACTIVE while billing; GRACE
-            # during the out-of-balance top-up hold. Drives the cockpit/client UI.
-            "session_status": session_info.session_status,
-            # Grace countdown (only meaningful while session_status == "GRACE").
-            "grace_seconds_left": session_info.grace_seconds_left,
-            "is_topping_up": session_info.is_topping_up,
-        },
-        status_code=200,
-    )
+    return JSONResponse(content=_session_info_json(session_info), status_code=200)
 
 
 # TODO: allow only psychic
@@ -1472,6 +1485,107 @@ async def join_chat_endpoint(
         )
 
 
+@router.post("/{chat_id}/reflect")
+async def reflect_chat(
+    chat_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    The client pauses to sit with what she said. The meter and the charge stop
+    at this exact second; the chat stays ACTIVE so the reader keeps writing and
+    delivering (the website holds those lines until she returns). The budget —
+    two minutes, plus two at every fifteen-minute mark of paid time, banked —
+    is app/services/reflect_budget.py, the server's copy of the website's
+    arithmetic. Client of the chat only.
+
+    409 when the session is not ACTIVE, awaiting her join, in the out-of-balance
+    grace, already reflecting, or out of budget; the body names the reason.
+    """
+    from app.services.session_manager import (
+        get_session_manager,
+        ReflectionRefused,
+        SessionNotFoundError,
+    )
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if user.id != chat.user_id:
+        return JSONResponse(
+            content={"detail": "Only the client can reflect in her reading"},
+            status_code=403,
+        )
+    if chat.status != ChatStatus.ACTIVE:
+        return JSONResponse(
+            content={
+                "detail": f"Cannot reflect in a chat with status {chat.status.value}",
+                "reason": "not_active",
+            },
+            status_code=409,
+        )
+
+    session_mgr = get_session_manager()
+    try:
+        info = session_mgr.begin_reflection(chat_id)
+    except SessionNotFoundError:
+        return JSONResponse(
+            content={"detail": "No active session for this chat", "reason": "not_active"},
+            status_code=409,
+        )
+    except ReflectionRefused as refused:
+        return JSONResponse(
+            content={"detail": f"Cannot reflect right now ({refused.reason})",
+                     "reason": refused.reason},
+            status_code=409,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.error("error_starting_reflection", chat_id=chat_id, error=str(e), exc_info=True)
+        return JSONResponse(content={"detail": "Failed to start reflection"}, status_code=500)
+
+    await session_mgr._broadcast_session_reflecting(chat_id, info)
+    return JSONResponse(content=_session_info_json(info), status_code=200)
+
+
+@router.post("/{chat_id}/reflect/return")
+async def reflect_return_chat(
+    chat_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    She returns from the reflection: the meter runs again from the frozen
+    second, the seconds she sat with it go onto the reading's total. Idempotent
+    — when she is not reflecting nothing changes and the current figures come
+    back with 200, never an error. Client of the chat only.
+    """
+    from app.services.session_manager import get_session_manager
+
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
+    if user.id != chat.user_id:
+        return JSONResponse(
+            content={"detail": "Only the client can return from her reflection"},
+            status_code=403,
+        )
+
+    session_mgr = get_session_manager()
+    try:
+        info, was_reflecting = session_mgr.end_reflection(chat_id, "return")
+    except Exception as e:  # noqa: BLE001
+        logger.error("error_ending_reflection", chat_id=chat_id, error=str(e), exc_info=True)
+        return JSONResponse(content={"detail": "Failed to end reflection"}, status_code=500)
+
+    if info is None:
+        # No live session at all (the reading has ended): the current figures,
+        # which are the no-session ones. Still 200 — Return is never an error.
+        return JSONResponse(content=_no_session_json(chat), status_code=200)
+    if was_reflecting:
+        await session_mgr._broadcast_session_reflect_ended(chat_id, info, "return")
+    return JSONResponse(content=_session_info_json(info), status_code=200)
+
+
 @router.post("/{chat_id}/pause")
 async def pause_chat_manual(
     chat_id: int,
@@ -1736,6 +1850,10 @@ async def websocket_endpoint(
                             "session_status": session_info.session_status,
                             "started_at": session_info.started_at,
                             "rate_per_second": session_info.rate_per_second,
+                            # a refresh mid-reflection learns it from here
+                            "reflect_remaining_seconds": session_info.reflect_remaining_seconds,
+                            "reflect_seconds_used": session_info.reflect_seconds_used,
+                            "reflecting_since": session_info.reflecting_since,
                         },
                     }
                 )

@@ -11,7 +11,7 @@ This manager:
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -34,6 +34,10 @@ from app.services.stardust_rewards import (
     get_earned_stardust_balance,
     get_spendable_stardust,
 )
+from app.services.reflect_budget import (
+    reflect_overdue_seconds,
+    reflect_remaining_seconds,
+)
 
 logger = get_logger(__name__)
 settings = get_app_settings()
@@ -46,6 +50,26 @@ settings = get_app_settings()
 # minute the session enters a GRACE pause (below) instead of ending instantly.
 GRACE_SECONDS = 60  # client has 60s to top up before the session ends
 TOPUP_HOLD_CAP_SECONDS = 300  # …extended to 5 min total once they start a top-up
+
+# ── Reflection ───────────────────────────────────────────────────────────────
+# The customer pauses to sit with what she said: the meter and the charge stop,
+# the chat stays ACTIVE so the reader keeps writing and delivering, and the
+# budget (reflect_budget.py — the one arithmetic, mirrored from the website)
+# decides how long. Once it is spent the monitor waits this long before ending
+# the reflection itself, so her own "your time is up" beat can play first.
+REFLECT_TIME_UP_GRACE = 3
+
+
+def _reflecting_since_iso(session_state) -> Optional[str]:
+    """The reflection's start as an explicit UTC ISO string ("…Z"), the same
+    shape the messages' created_at takes, so the website can compare the two.
+    The in-memory clock is naive local time; astimezone() reads it as such."""
+    since = getattr(session_state, "reflecting_since", None)
+    if since is None:
+        return None
+    if since.tzinfo is None:
+        since = since.astimezone()            # naive local → aware local
+    return since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _per_minute_rate(rate_per_second: float) -> float:
@@ -63,6 +87,15 @@ class SessionNotFoundError(Exception):
     """Raised when trying to operate on a non-existent session"""
 
     pass
+
+
+class ReflectionRefused(Exception):
+    """Reflection cannot begin right now. `reason` is one of: not_active,
+    awaiting_join, grace, already_reflecting, no_budget."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 def should_say_goodbye(
@@ -113,6 +146,13 @@ class SessionInfo:
     # Grace/top-up state (only meaningful while session_status == "GRACE").
     grace_seconds_left: int = 0  # countdown before the session auto-ends
     is_topping_up: bool = False
+    # Reflection. session_status == "REFLECTING" while she sits with it; the
+    # budget figures are reported in every state so the room can show the bank.
+    reflect_remaining_seconds: int = 0
+    reflect_seconds_used: int = 0
+    # ISO timestamp of the reflection in progress, None otherwise — a refresh
+    # mid-reflection uses it to hold the lines that arrived after it began.
+    reflecting_since: Optional[str] = None
     # True only for the first successful client-join transition of this paid
     # ChatSession. The join route uses it to send one reader greeting; ordinary
     # mounts and WebSocket reconnects receive False.
@@ -179,6 +219,14 @@ class SessionState:
     grace_entry_balance: float = 0.0
     # Amount added between grace entry and resume (for the transcript line).
     last_topup_amount: float = 0.0
+
+    # ── Reflection ──────────────────────────────────────────────────────────
+    # Set while she reflects: the meter is frozen in paused_elapsed_seconds at
+    # the exact second she pressed Reflect (the disconnect path's way, never
+    # the minute boundary), the chat stays ACTIVE, and nothing is charged.
+    # Both fields are persisted on chat_sessions (migration d1e2f3a4b5c6).
+    reflecting_since: Optional[datetime] = None
+    reflection_seconds_used: int = 0
 
 
 class SessionManager:
@@ -291,6 +339,31 @@ class SessionManager:
 
                 # Calculate elapsed time and remaining session time
                 elapsed = int((datetime.now() - interval.started_at).total_seconds())
+
+                # Reflection survives the restart: every reflected second in this
+                # reading is excluded from the meter, and a reflection still in
+                # progress keeps the meter frozen where it was. (Reflection time
+                # that fell inside an EARLIER interval is also subtracted here —
+                # conservative: a restart can under-count, never re-bill.)
+                reflection_used = int(getattr(session, "reflection_seconds_used", 0) or 0)
+                reflecting_since = getattr(session, "reflecting_since", None)
+                paused_elapsed_seconds = 0
+                if reflecting_since is not None:
+                    frozen = max(
+                        0,
+                        int((reflecting_since - interval.started_at).total_seconds())
+                        - reflection_used,
+                    )
+                    paused_elapsed_seconds = frozen
+                    elapsed = frozen
+                    # started_at sits BEFORE the reflection, as it does in a live
+                    # reflection: _end_reflection rebases it from the frozen meter.
+                    session_started_at = reflecting_since - timedelta(seconds=frozen)
+                else:
+                    elapsed = max(0, elapsed - reflection_used)
+                    session_started_at = interval.started_at + timedelta(
+                        seconds=reflection_used
+                    )
                 # For existing sessions, estimate max duration from current state
                 # max_duration = elapsed + (spendable_balance / rate)
                 spendable = get_spendable_stardust(db, user)
@@ -310,7 +383,7 @@ class SessionManager:
                     chat_id=chat.id,
                     session_id=session.id,
                     interval_id=interval.id,
-                    started_at=interval.started_at,
+                    started_at=session_started_at,
                     client_id=chat.user_id,
                     psychic_id=chat.psychic_id,
                     rate_per_second=chat.psychic.price_per_second,
@@ -321,6 +394,9 @@ class SessionManager:
                     awaiting_join=(chat.client_joined_at is None),
                     client_joined_at=chat.client_joined_at,
                     minutes_charged=already_charged,
+                    paused_elapsed_seconds=paused_elapsed_seconds,
+                    reflecting_since=reflecting_since,
+                    reflection_seconds_used=reflection_used,
                 )
 
                 self.active_sessions[chat.id] = session_state
@@ -685,6 +761,17 @@ class SessionManager:
             interval_id=session_state.interval_id,
             session_id=session_state.session_id,
         )
+
+        # A reflection in progress ends with the session, through the one exit
+        # every reflection takes, so the seconds she sat with it are on the
+        # reading's row before anything below reads the final figures.
+        if getattr(session_state, "reflecting_since", None) is not None:
+            try:
+                self._end_reflection(session_state, "session_ended")
+            except Exception as reflect_e:  # noqa: BLE001 — ending must go on
+                logger.warning(
+                    "reflection_close_on_end_failed", chat_id=chat_id, error=str(reflect_e)
+                )
 
         # Post-end cancellation: stop any in-flight AI reading work immediately so
         # a Sabri/Valentina reply is never generated or delivered into a chat that
@@ -1378,9 +1465,13 @@ class SessionManager:
 
         now = datetime.now()
         session_state.client_disconnected_at = now
-        session_state.paused_elapsed_seconds = max(
-            0, int((now - session_state.started_at).total_seconds())
-        )
+        # Reflecting: the meter is already frozen at the second she pressed
+        # Reflect and started_at has not been rebased yet, so measuring from it
+        # now would fold the reflected seconds into the meter. Keep the freeze.
+        if session_state.reflecting_since is None:
+            session_state.paused_elapsed_seconds = max(
+                0, int((now - session_state.started_at).total_seconds())
+            )
         logger.info(
             "client_disconnected",
             chat_id=chat_id,
@@ -1408,7 +1499,9 @@ class SessionManager:
         if session_state.client_disconnected_at:
             away = (datetime.now() - session_state.client_disconnected_at).total_seconds()
             session_state.client_disconnected_at = None
-            if not session_state.is_grace:
+            # Not while reflecting: the rebase belongs to _end_reflection, which
+            # runs when she returns from the panel (or the budget runs out).
+            if not session_state.is_grace and session_state.reflecting_since is None:
                 session_state.started_at = datetime.now() - timedelta(
                     seconds=session_state.paused_elapsed_seconds
                 )
@@ -1459,6 +1552,9 @@ class SessionManager:
                 rate_per_minute=per_min,
                 minutes_charged=0,
                 remaining_minutes=affordable_minutes,
+                reflect_remaining_seconds=self._reflect_remaining(session_state),
+                reflect_seconds_used=self._reflect_used_total(session_state),
+                reflecting_since=_reflecting_since_iso(session_state),
             )
 
         # Live balances from DB (earned + free credit + paid). Earned Stardust
@@ -1509,6 +1605,39 @@ class SessionManager:
                 remaining_minutes=affordable_future_minutes,
                 grace_seconds_left=grace_left,
                 is_topping_up=session_state.topping_up,
+                reflect_remaining_seconds=self._reflect_remaining(session_state),
+                reflect_seconds_used=self._reflect_used_total(session_state),
+                reflecting_since=_reflecting_since_iso(session_state),
+            )
+
+        # ── Reflection (meter frozen, nothing charged, chat still ACTIVE) ───
+        # Elapsed is the frozen meter; cost is exactly the minutes already
+        # charged; the remaining figures are the same sums the active branch
+        # makes, off the frozen elapsed. The budget is the server's figure.
+        if session_state.reflecting_since is not None:
+            elapsed_seconds = session_state.paused_elapsed_seconds
+            estimated_cost = round(session_state.minutes_charged * per_min, 2)
+            prepaid_remaining = max(0, session_state.minutes_charged * 60 - elapsed_seconds)
+            return SessionInfo(
+                chat_id=session_state.chat_id,
+                chat_session_id=session_state.session_id,
+                elapsed_seconds=elapsed_seconds,
+                estimated_cost=estimated_cost,
+                remaining_seconds=prepaid_remaining + affordable_future_minutes * 60,
+                client_balance=round(current_balance, 2),
+                credit_balance=round(credit_balance, 2),
+                paid_balance=round(paid_balance, 2),
+                chat_status=chat.status.value if chat else "ACTIVE",
+                session_status="REFLECTING",
+                started_at=session_state.started_at.isoformat(),
+                rate_per_second=rate,
+                rate_per_minute=per_min,
+                minutes_charged=session_state.minutes_charged,
+                remaining_minutes=affordable_future_minutes
+                + (1 if prepaid_remaining > 0 else 0),
+                reflect_remaining_seconds=self._reflect_remaining(session_state),
+                reflect_seconds_used=self._reflect_used_total(session_state),
+                reflecting_since=_reflecting_since_iso(session_state),
             )
 
         # ── Active billing ──────────────────────────────────────────────────
@@ -1546,7 +1675,204 @@ class SessionManager:
             rate_per_minute=per_min,
             minutes_charged=session_state.minutes_charged,
             remaining_minutes=remaining_minutes,
+            reflect_remaining_seconds=self._reflect_remaining(session_state),
+            reflect_seconds_used=self._reflect_used_total(session_state),
+            reflecting_since=_reflecting_since_iso(session_state),
         )
+
+    # ── Reflection ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _reflect_paid_seconds(session_state: SessionState) -> int:
+        """Paid session time the budget is earned on. The frozen meter whenever
+        the meter is frozen (reflecting, grace, disconnected); live otherwise;
+        zero before she joins."""
+        if session_state.awaiting_join:
+            return 0
+        if (
+            session_state.reflecting_since is not None
+            or session_state.is_grace
+            or session_state.client_disconnected_at is not None
+        ):
+            return max(0, int(session_state.paused_elapsed_seconds))
+        return max(0, int((datetime.now() - session_state.started_at).total_seconds()))
+
+    @staticmethod
+    def _reflect_live_seconds(session_state: SessionState) -> int:
+        """Seconds of the reflection in progress, 0 when not reflecting."""
+        if session_state.reflecting_since is None:
+            return 0
+        return max(0, int((datetime.now() - session_state.reflecting_since).total_seconds()))
+
+    def _reflect_used_total(self, session_state: SessionState) -> int:
+        return int(session_state.reflection_seconds_used) + self._reflect_live_seconds(
+            session_state
+        )
+
+    def _reflect_remaining(self, session_state: SessionState) -> int:
+        return reflect_remaining_seconds(
+            self._reflect_paid_seconds(session_state),
+            session_state.reflection_seconds_used,
+            self._reflect_live_seconds(session_state),
+        )
+
+    def _reflect_overdue(self, session_state: SessionState) -> int:
+        return reflect_overdue_seconds(
+            self._reflect_paid_seconds(session_state),
+            session_state.reflection_seconds_used,
+            self._reflect_live_seconds(session_state),
+        )
+
+    @staticmethod
+    def _persist_reflection(db: Session, session_state: SessionState) -> None:
+        """Write both reflection columns onto the reading's chat_sessions row."""
+        row = (
+            db.query(ChatSession)
+            .filter(ChatSession.id == session_state.session_id)
+            .first()
+        )
+        if row is None:
+            logger.warning(
+                "reflection_persist_no_chat_session",
+                chat_id=session_state.chat_id,
+                session_id=session_state.session_id,
+            )
+            return
+        row.reflection_seconds_used = int(session_state.reflection_seconds_used)
+        row.reflecting_since = session_state.reflecting_since
+        db.commit()
+
+    def begin_reflection(
+        self, chat_id: int, db: Optional[Session] = None
+    ) -> SessionInfo:
+        """She pressed Reflect. Freeze the meter at this exact second (the
+        disconnect path's way, never the minute boundary), mark the reflection,
+        persist it, and return the room's figures. The chat stays ACTIVE and no
+        interval is touched, so the reader keeps writing and delivering.
+
+        Raises SessionNotFoundError when there is no active session, and
+        ReflectionRefused(reason) for every other refusal."""
+        from app.database.client import SessionLocal
+
+        session_state = self.active_sessions.get(chat_id)
+        if not session_state:
+            raise SessionNotFoundError(f"No active session for chat {chat_id}")
+        if session_state.awaiting_join:
+            raise ReflectionRefused("awaiting_join")
+        if session_state.is_grace:
+            raise ReflectionRefused("grace")
+        if session_state.reflecting_since is not None:
+            raise ReflectionRefused("already_reflecting")
+        if self._reflect_remaining(session_state) <= 0:
+            raise ReflectionRefused("no_budget")
+
+        own_db = db is None
+        db = db or SessionLocal()
+        try:
+            chat = db.query(Chat).filter(Chat.id == chat_id).first()
+            if chat is None or chat.status != ChatStatus.ACTIVE:
+                raise ReflectionRefused("not_active")
+
+            now = datetime.now()
+            # Freeze at the exact second. If she is (briefly) disconnected the
+            # meter is already frozen at the second she left; keep that.
+            if session_state.client_disconnected_at is None:
+                session_state.paused_elapsed_seconds = max(
+                    0, int((now - session_state.started_at).total_seconds())
+                )
+            session_state.reflecting_since = now
+            self._persist_reflection(db, session_state)
+
+            info = self._calculate_session_info(session_state, db)
+            logger.info(
+                "reflection_started",
+                chat_id=chat_id,
+                frozen_at_seconds=session_state.paused_elapsed_seconds,
+                minutes_charged=session_state.minutes_charged,
+                reflect_remaining_seconds=info.reflect_remaining_seconds,
+            )
+            return info
+        finally:
+            if own_db:
+                db.close()
+
+    def _end_reflection(
+        self, session_state: SessionState, reason: str, db: Optional[Session] = None
+    ) -> int:
+        """The ONE exit every reflection takes — her Return, the budget running
+        out, the session ending. Adds the seconds she sat with it to the
+        reading's total, rebases started_at so not one reflected second is ever
+        billed, clears the state and persists both columns. Returns the seconds
+        of the reflection just ended (0 when there was none: idempotent)."""
+        from app.database.client import SessionLocal
+
+        if session_state.reflecting_since is None:
+            return 0
+
+        now = datetime.now()
+        live = max(0, int((now - session_state.reflecting_since).total_seconds()))
+        session_state.reflection_seconds_used += live
+        session_state.reflecting_since = None
+
+        # Continue the meter from the frozen second — exactly the reconnect
+        # rebase. Not while she is away or in grace: those paths own the rebase
+        # and will make it from the same frozen value when they resume.
+        if session_state.client_disconnected_at is None and not session_state.is_grace:
+            session_state.started_at = now - timedelta(
+                seconds=session_state.paused_elapsed_seconds
+            )
+
+        own_db = db is None
+        db = db or SessionLocal()
+        try:
+            self._persist_reflection(db, session_state)
+        finally:
+            if own_db:
+                db.close()
+
+        logger.info(
+            "reflection_ended",
+            chat_id=session_state.chat_id,
+            reason=reason,
+            seconds=live,
+            reflection_seconds_used=session_state.reflection_seconds_used,
+            meter_resumes_at_seconds=session_state.paused_elapsed_seconds,
+        )
+        return live
+
+    def end_reflection(
+        self, chat_id: int, reason: str = "return", db: Optional[Session] = None
+    ):
+        """Her Return. Idempotent: when she is not reflecting nothing changes and
+        the current figures come back. Returns (SessionInfo | None, was_reflecting);
+        None when the chat has no active session at all."""
+        from app.database.client import SessionLocal
+
+        session_state = self.active_sessions.get(chat_id)
+        if not session_state:
+            return None, False
+        was_reflecting = session_state.reflecting_since is not None
+        own_db = db is None
+        db = db or SessionLocal()
+        try:
+            if was_reflecting:
+                self._end_reflection(session_state, reason, db)
+            return self._calculate_session_info(session_state, db), was_reflecting
+        finally:
+            if own_db:
+                db.close()
+
+    async def _tick_reflection(
+        self, chat_id: int, session_state: SessionState, db: Session
+    ) -> None:
+        """The monitor's reflection gate. Nothing is charged while she reflects.
+        Once the budget is spent the reflection is ended by the server itself,
+        REFLECT_TIME_UP_GRACE seconds after remaining reached zero, through the
+        same _end_reflection her Return uses."""
+        if self._reflect_overdue(session_state) >= REFLECT_TIME_UP_GRACE:
+            self._end_reflection(session_state, "budget", db)
+            info = self._calculate_session_info(session_state, db)
+            await self._broadcast_session_reflect_ended(chat_id, info, "budget")
 
     # ── Per-minute prepaid billing helpers ──────────────────────────────────
 
@@ -1877,6 +2203,18 @@ class SessionManager:
                                 min_remaining = min(min_remaining, 5)
                             continue
 
+                        # ── Reflection gate: never charge while she reflects ───
+                        # After the presence gate (a client who left mid-reflection
+                        # still ends at the disconnect timeout) and before any
+                        # charging. The budget running out ends the reflection
+                        # from here; the meter stays frozen until then.
+                        if session_state.reflecting_since is not None:
+                            await self._tick_reflection(chat_id, session_state, db)
+                            if session_state.reflecting_since is not None:
+                                min_remaining = min(min_remaining, 1)
+                                continue
+                            # ended just now: fall through to the normal pass
+
                         # ── Per-minute prepaid charging ────────────────────────
                         # Charge one full minute upfront at each boundary. Before
                         # each charge, check the balance; if it can't cover the
@@ -2093,6 +2431,59 @@ class SessionManager:
                     "session_status": "GRACE",
                     "reader_name": reader_name,
                     "grace_seconds": info.grace_seconds_left,
+                    "minutes_charged": info.minutes_charged,
+                    "estimated_cost": info.estimated_cost,
+                    "client_balance": info.client_balance,
+                    "credit_balance": info.credit_balance,
+                    "paid_balance": info.paid_balance,
+                    "rate_per_minute": info.rate_per_minute,
+                },
+            },
+            str(chat_id),
+        )
+
+    async def _broadcast_session_reflecting(self, chat_id: int, info: SessionInfo):
+        """Broadcast that the client is reflecting: meter frozen, nothing
+        charged, budget countdown — the grace broadcast's shape."""
+        await manager.send_to_chat(
+            {
+                "event": "session_reflecting",
+                "data": {
+                    "chat_id": info.chat_id,
+                    "chat_status": "ACTIVE",
+                    "session_status": "REFLECTING",
+                    "reflect_remaining_seconds": info.reflect_remaining_seconds,
+                    "reflect_seconds_used": info.reflect_seconds_used,
+                    "reflecting_since": info.reflecting_since,
+                    "elapsed_seconds": info.elapsed_seconds,
+                    "minutes_charged": info.minutes_charged,
+                    "estimated_cost": info.estimated_cost,
+                    "client_balance": info.client_balance,
+                    "credit_balance": info.credit_balance,
+                    "paid_balance": info.paid_balance,
+                    "rate_per_minute": info.rate_per_minute,
+                },
+            },
+            str(chat_id),
+        )
+
+    async def _broadcast_session_reflect_ended(
+        self, chat_id: int, info: SessionInfo, reason: str
+    ):
+        """Broadcast that the reflection ended (reason: return | budget |
+        session_ended) and the meter runs again — the grace broadcast's shape."""
+        await manager.send_to_chat(
+            {
+                "event": "session_reflect_ended",
+                "data": {
+                    "chat_id": info.chat_id,
+                    "chat_status": info.chat_status,
+                    "session_status": info.session_status,
+                    "reason": reason,
+                    "reflect_remaining_seconds": info.reflect_remaining_seconds,
+                    "reflect_seconds_used": info.reflect_seconds_used,
+                    "reflecting_since": info.reflecting_since,
+                    "elapsed_seconds": info.elapsed_seconds,
                     "minutes_charged": info.minutes_charged,
                     "estimated_cost": info.estimated_cost,
                     "client_balance": info.client_balance,
