@@ -7,26 +7,35 @@
 html[data-hall="room"] .room{opacity:1;pointer-events:auto;visibility:visible;}
 html[data-hall="room"] .thread{pointer-events:auto;}
 html[data-hall="room"][data-state="pausing"] .room,
+html[data-hall="room"][data-state="reflecting"] .room,
 html[data-hall="room"][data-state="ended"] .room{pointer-events:none;}
 /* FIX B — while the hold or the receipt is up, the room behind them is scenery
    on this host (it stays visible as the backdrop, so visibility cannot help).
    Its interactive children re-enable hit testing past the room's own
    pointer-events:none, so each one is switched off explicitly in those states. */
 html[data-hall="room"][data-state="pausing"] .room .top,
+html[data-hall="room"][data-state="reflecting"] .room .top,
 html[data-hall="room"][data-state="ended"] .room .top,
 html[data-hall="room"][data-state="pausing"] .room .thread,
+html[data-hall="room"][data-state="reflecting"] .room .thread,
 html[data-hall="room"][data-state="ended"] .room .thread,
 html[data-hall="room"][data-state="pausing"] .room .bub,
+html[data-hall="room"][data-state="reflecting"] .room .bub,
 html[data-hall="room"][data-state="ended"] .room .bub,
 html[data-hall="room"][data-state="pausing"] .room .composer,
+html[data-hall="room"][data-state="reflecting"] .room .composer,
 html[data-hall="room"][data-state="ended"] .room .composer,
 html[data-hall="room"][data-state="pausing"] .room .lowbal,
+html[data-hall="room"][data-state="reflecting"] .room .lowbal,
 html[data-hall="room"][data-state="ended"] .room .lowbal,
 html[data-hall="room"][data-state="pausing"] .room .older,
+html[data-hall="room"][data-state="reflecting"] .room .older,
 html[data-hall="room"][data-state="ended"] .room .older,
 html[data-hall="room"][data-state="pausing"] .room .rbanner,
+html[data-hall="room"][data-state="reflecting"] .room .rbanner,
 html[data-hall="room"][data-state="ended"] .room .rbanner,
 html[data-hall="room"][data-state="pausing"] .room .rnotice,
+html[data-hall="room"][data-state="reflecting"] .room .rnotice,
 html[data-hall="room"][data-state="ended"] .room .rnotice{pointer-events:none;}
 
 /* header buttons — 48x48 of real hit area, from the composer's own send size */
@@ -43,6 +52,16 @@ html[data-hall="room"] .rbtn{width:44px;height:44px;flex:none;border:0;cursor:po
 html[data-hall="room"] .rbtn:hover{background:rgba(255,214,150,.16);color:#fff;}
 html[data-hall="room"] .rend{width:auto;height:44px;border-radius:999px;padding:0 15px;
   font-size:13px;letter-spacing:.03em;margin-left:4px;}
+/* the reflection — a pill beside End carrying its word and the banked time.
+   Same face as End; the time is the display face in tabular figures so it
+   cannot jitter as it counts. At 0:00 it is present but quiet. */
+html[data-hall="room"] .rreflect{width:auto;height:44px;border-radius:999px;padding:0 14px;
+  display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.03em;}
+html[data-hall="room"] .rreflect b{font-family:var(--display);font-weight:300;font-size:14.5px;
+  color:var(--gilt);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;line-height:1;}
+html[data-hall="room"] .rreflect[aria-disabled="true"]{opacity:.55;cursor:default;}
+html[data-hall="room"] .rreflect[aria-disabled="true"]:hover{background:rgba(255,240,214,.05);color:rgba(224,210,190,.9);}
+html[data-hall="room"] .rreflect[aria-disabled="true"] b{color:rgba(224,210,190,.7);}
 html[data-hall="room"] .whobtn{border-radius:50%;padding:0;cursor:pointer;
   border:1px solid rgba(255,214,150,.22);background:rgba(255,240,214,.05);}
 
@@ -110,8 +129,10 @@ html[data-hall="room"] .meter b{font-variant-numeric:tabular-nums;}
 
 @media (max-width:430px){
   html[data-hall="room"] .top{gap:9px;padding-left:14px;padding-right:14px;}
+  html[data-hall="room"] .top .ctl{gap:9px;}
   html[data-hall="room"] .whotext .nm{font-size:17px;}
   html[data-hall="room"] .rend{padding:0 12px;font-size:12.5px;}
+  html[data-hall="room"] .rreflect{padding:0 11px;gap:6px;font-size:12.5px;}
   html[data-hall="room"] .lowbal{padding:10px 14px;}
 }
 

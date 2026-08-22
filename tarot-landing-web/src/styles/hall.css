@@ -233,6 +233,8 @@ html[data-state="room"] .room{opacity:1;visibility:visible;transition:opacity 12
 .top .whotext{min-width:0;flex:1 1 auto;overflow:hidden;}
 .top .whotext .nm,.top .whotext .st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .top .rbtn,.top .meter,.top .who{flex:0 0 auto;}
+/* the trailing controls — Reflect, End, Readers — as one cell, the row's own gap */
+.top .ctl{display:flex;align-items:center;gap:13px;flex:0 0 auto;}
 /* DEFECT 1+2, narrow widths — the header cannot hold the name, two controls and
    three numbers on one line, so it becomes rows: reader on the first, controls
    on the next, numbers on their own shelf. Nothing truncates; names wrap. */
@@ -240,11 +242,9 @@ html[data-state="room"] .room{opacity:1;visibility:visible;transition:opacity 12
   .top{flex-wrap:wrap;row-gap:8px;}
   .top .whotext{flex:1 1 auto;overflow:visible;}
   .top .whotext .nm,.top .whotext .st{white-space:normal;overflow:visible;text-overflow:clip;}
-  /* the trailing controls hug the right edge of their row — Readers takes the
-     push itself when End is absent, so it can never land under the orb at left */
-  .top .rend{margin-left:auto;}
-  .top .rleave{margin-left:auto;}
-  .top .rend~.rleave{margin-left:0;}
+  /* the trailing controls hug the right edge of their row, as one cell — so
+     they can never land under the orb at left, and never split across rows */
+  .top .ctl{margin-left:auto;}
   /* .top .stats, not .stats — this media block sits EARLIER in the file than
      the .stats base rule, so at equal specificity the base re-overrides it.
      The ancestor bumps it to (0,2,0) and the shelf wins regardless of order. */
@@ -374,9 +374,14 @@ html[data-state="room"] .room{opacity:1;visibility:visible;transition:opacity 12
 
 /* The room recedes rather than closing, so she can see she has not lost it. */
 html[data-state="pausing"] .room{opacity:.22;filter:blur(7px) saturate(.8);visibility:visible;transition:opacity 1200ms var(--ease);}
+/* 7 · the reflection (state: reflecting) — the room recedes exactly as it does
+   for the hold: she is sitting with it, not leaving it. Every value below is
+   the hold's own, stated again for the third state and nothing more. */
+html[data-state="reflecting"] .room{opacity:.22;filter:blur(7px) saturate(.8);visibility:visible;transition:opacity 1200ms var(--ease);}
 
 /* The orb comes back up and straddles the top edge of whichever panel is out. */
 html[data-state="pausing"] .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
+html[data-state="reflecting"] .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
 html[data-state="ended"]   .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
 /* The hold and the receipt follow the same height reduction the form has
    always had (hall.css form rules: .52 → .44 under 900px → .38 under 740px).
@@ -384,10 +389,10 @@ html[data-state="ended"]   .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
    laptops. Placed AFTER the base rules above: at equal specificity the later
    declaration wins, so these would be dead inside the earlier media blocks. */
 @media (max-height:900px){
-  html[data-state="pausing"] .orbfix,html[data-state="ended"] .orbfix{--os:.44;}
+  html[data-state="pausing"] .orbfix,html[data-state="reflecting"] .orbfix,html[data-state="ended"] .orbfix{--os:.44;}
 }
 @media (max-height:740px){
-  html[data-state="pausing"] .orbfix,html[data-state="ended"] .orbfix{--os:.38;}
+  html[data-state="pausing"] .orbfix,html[data-state="reflecting"] .orbfix,html[data-state="ended"] .orbfix{--os:.38;}
 }
 
 /* Two more stages beside the request stage. They carry .stage so they inherit
@@ -398,8 +403,9 @@ html[data-state="ended"]   .orbfix{--ox:50%;--oy:var(--panelTop,17%);--os:.52;}
    receipt panels sit at the same z-6 and swallow every click meant for the
    request panel underneath. Off by default; switched on only in their own state. */
 .stage2 .panel{pointer-events:none;}
-html[data-state="pausing"] .stage,html[data-state="ended"] .stage{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 700ms var(--ease),visibility 0s 700ms;}
+html[data-state="pausing"] .stage,html[data-state="reflecting"] .stage,html[data-state="ended"] .stage{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 700ms var(--ease),visibility 0s 700ms;}
 html[data-state="pausing"] #pausestage{opacity:1;pointer-events:auto;visibility:visible;transition:opacity 700ms var(--ease);}
+html[data-state="reflecting"] #reflectstage{opacity:1;pointer-events:auto;visibility:visible;transition:opacity 700ms var(--ease);}
 html[data-state="ended"]   #endstage{opacity:1;pointer-events:auto;visibility:visible;transition:opacity 700ms var(--ease);}
 
 /* A faded-out stage must not keep catching taps. .panel carries
@@ -412,8 +418,10 @@ html[data-state="lobby"] .stage .panel,
 html[data-state="accepting"] .stage .panel,
 html[data-state="room"] .stage .panel,
 html[data-state="pausing"] .stage .panel,
+html[data-state="reflecting"] .stage .panel,
 html[data-state="ended"] .stage .panel{pointer-events:none;}
 html[data-state="pausing"] #pausestage .panel,
+html[data-state="reflecting"] #reflectstage .panel,
 html[data-state="ended"] #endstage .panel{pointer-events:auto;}
 
 /* the countdown */
@@ -463,6 +471,11 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .rcell .slab{text-align:center;line-height:1.3;}
 
+/* decision 3 — reflection used, one quiet line under the receipt's figures.
+   The legal face, centred, a touch closer to the numbers it annotates. */
+#endpanel .rfline{margin-top:9px;text-align:center;font-size:11px;letter-spacing:.05em;
+  color:rgba(224,210,190,.62);}
+
 /* what she keeps */
 .softbox{margin-top:16px;padding:17px 18px;border-radius:18px;
   background:rgba(8,4,18,.55);border:1px solid rgba(255,214,150,.20);
@@ -500,6 +513,12 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
   #endpanel .softbox{margin-top:12px;padding:13px 15px;}
   #endpanel .stars{margin-top:8px;}
   #pausepanel .quiet,#endpanel .quiet{margin-top:10px;padding:7px 12px;}
+  /* decision 3 adds one line to the closing card; the card takes the same
+     kind of reduction the hold already has here, so it still fits unscrolled */
+  #endpanel{padding-top:44px;}
+  #endpanel .rfline{margin-top:7px;}
+  #endpanel .begin{margin-top:14px;padding:13px;}
+  #endpanel .legal{margin-top:6px;}
 }
 @media (max-height:620px){
   #pausepanel .cd{margin-top:10px;}
@@ -508,6 +527,72 @@ html[data-state="ended"] #endstage .panel{pointer-events:auto;}
   #endpanel .receipt{margin-top:11px;}
   #endpanel .rcell{padding:10px 4px;}
   #endpanel .softbox{margin-top:10px;padding:11px 13px;font-size:13.5px;}
+  /* the closing card at the smallest window. Measured 70px past the viewport
+     at 320x568 BEFORE the reflection line existed; with the line it must fit.
+     Spacing and type size only — the stars keep their 44x44 tap area. */
+  #endpanel{padding-top:34px;padding-bottom:12px;}
+  #endpanel .ptitle{font-size:21px;}
+  #endpanel .receipt{margin-top:8px;}
+  #endpanel .rcell{padding:8px 4px;}
+  #endpanel .rfline{margin-top:6px;}
+  #endpanel .softbox{margin-top:8px;padding:9px 12px;font-size:12.5px;line-height:1.5;}
+  #endpanel .sound{margin-top:8px;}
+  #endpanel .stars{margin-top:4px;}
+  #endpanel .begin{margin-top:10px;padding:11px;}
+  #endpanel .quiet{margin-top:4px;padding:4px 12px;}
+  #endpanel .legal{margin-top:4px;}
+}
+
+/* 7 · the reflection, short windows. The reflect panel carries the hold's
+   countdown and amounts AND the entry form's four sound pills, so it is the
+   tallest of the three and takes a reduction of its own at every tier the
+   other two already have. Spacing only; every face and colour is unchanged.
+   The sound-pill rules are scoped to #rfpills because .amt rides on .pill.
+   Measured to fit, unscrolled, at 1440x800, 1366x700, 400x642 and 320x568. */
+@media (max-height:900px){
+  #reflectpanel .cd{margin-top:14px;}
+  #reflectpanel .cdbar{margin-top:9px;}
+  #reflectpanel .sound{margin-top:12px;}
+  #reflectpanel .pills{margin-top:9px;}
+  #reflectpanel .amts{margin-top:12px;}
+  #reflectpanel .quiet{margin-top:6px;padding:6px 12px;}
+  #reflectpanel .begin{margin-top:14px;padding:14px;}
+  #reflectpanel .legal{margin-top:8px;}
+}
+@media (max-height:740px){
+  #reflectpanel{padding-top:44px;}
+  #reflectpanel .ptitle{font-size:clamp(22px,5vw,28px);}
+  #reflectpanel .cd{margin-top:10px;}
+  #reflectpanel .cdbar{margin-top:7px;}
+  #reflectpanel .sound{margin-top:9px;}
+  #reflectpanel .pills{margin-top:7px;}
+  #rfpills .pill{padding:7px 12px;}
+  #reflectpanel .amts{margin-top:9px;}
+  #reflectpanel .amt{padding:8px 4px;}
+  #reflectpanel .quiet{margin-top:4px;padding:5px 12px;}
+  #reflectpanel .begin{margin-top:10px;padding:12px;}
+  #reflectpanel .legal{margin-top:6px;}
+}
+@media (max-height:620px){
+  #reflectpanel{padding-top:34px;padding-bottom:12px;}
+  #reflectpanel .ptitle{font-size:21px;}
+  #reflectpanel .cd{margin-top:4px;}
+  #reflectpanel .cdnum{font-size:24px;}
+  #reflectpanel .cd .slab{display:none;}
+  /* the 0:00 beat must be readable even here: the label returns for its
+     2.5 seconds and the legal line yields the room, so nothing leaves the viewport */
+  #reflectpanel .cd .slab.rfup{display:block;}
+  #reflectpanel[data-timeup] .legal{display:none;}
+  #reflectpanel .cdbar{margin-top:4px;}
+  #reflectpanel .sound{margin-top:7px;}
+  #reflectpanel .pills{margin-top:4px;gap:6px;}
+  #rfpills .pill{padding:6px 10px;font-size:12px;}
+  #reflectpanel .amts{margin-top:5px;gap:6px;}
+  #reflectpanel .amt{padding:6px 4px;gap:2px;}
+  #reflectpanel .amt i{line-height:1.35;}
+  #reflectpanel .quiet{margin-top:2px;padding:3px 10px;}
+  #reflectpanel .begin{margin-top:7px;padding:10px;}
+  #reflectpanel .legal{margin-top:4px;font-size:10px;}
 }
 
 /* The old "handoff must never go black" override that thinned the Incoming

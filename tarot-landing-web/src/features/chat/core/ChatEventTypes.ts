@@ -22,6 +22,8 @@ export enum ChatEventType {
   SESSION_TIMER_TICK = 'session:timer_tick',
   SESSION_MINUTE_CHARGED = 'session:minute_charged', // per-minute prepaid debit
   SESSION_GRACE = 'session:grace', // out-of-balance top-up hold
+  SESSION_REFLECTING = 'session:reflecting', // the client is reflecting: meter frozen
+  SESSION_REFLECT_ENDED = 'session:reflect_ended', // …and the meter runs again
   SESSION_ENDING_SOON = 'session:ending_soon',
   SESSION_ENDED = 'session:ended',
   SESSION_PAUSED = 'session:paused',
@@ -86,6 +88,10 @@ export type ChatEventPayload = {
     session_status: string;
     started_at: string;
     rate_per_second: number;
+    // a refresh mid-reflection learns the server's figures from here
+    reflect_remaining_seconds?: number;
+    reflect_seconds_used?: number;
+    reflecting_since?: string | null;
   };
   [ChatEventType.SESSION_TIMER_TICK]: {
     elapsedSeconds: number;

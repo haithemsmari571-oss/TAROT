@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { NotificationType } from '@/features/notifications/types/notification.types';
-import { ChatSessionState, ChatSessionAction } from '../types/session.types';
+import { ChatSessionState, ChatSessionAction, SessionStatus } from '../types/session.types';
 import { getChatSessionTime } from '../api/chatApi';
 // Timer runs independently on client side
 // Initial data fetched from REST API on mount
@@ -25,6 +25,9 @@ const initialState: ChatSessionState = {
   graceSecondsLeft: 0,
   graceReaderName: null,
   isToppingUp: false,
+  reflectRemainingSeconds: null,
+  reflectSecondsUsed: null,
+  reflectingSince: null,
   remainingBalance: null,
   remainingSeconds: null,
   isInputEnabled: false,
@@ -61,13 +64,16 @@ export function chatSessionReducer(
         rate_per_minute,
         remaining_minutes,
         minutes_charged,
+        reflect_remaining_seconds,
+        reflect_seconds_used,
+        reflecting_since,
       } = action.payload;
 
       // Resolve the billing sub-state. The COCKPIT (psychic/admin) defaults to
       // AWAITING_JOIN so the meter stays frozen until a session-time sync
       // confirms the client joined. The CLIENT is, by virtue of viewing the
       // chat, already joined — never freeze their meter/input, so default ACTIVE.
-      const resolvedSessionStatus: 'ACTIVE' | 'AWAITING_JOIN' =
+      const resolvedSessionStatus: SessionStatus =
         session_status ?? (state.userRole === 'CLIENT' ? 'ACTIVE' : 'AWAITING_JOIN');
 
       const isBilling = resolvedSessionStatus === 'ACTIVE';
@@ -109,6 +115,10 @@ export function chatSessionReducer(
         isPaused: false,
         remainingBalance: client_balance,
         remainingSeconds,
+        // the server's reflection figures, when this payload carried them
+        reflectRemainingSeconds: reflect_remaining_seconds ?? state.reflectRemainingSeconds,
+        reflectSecondsUsed: reflect_seconds_used ?? state.reflectSecondsUsed,
+        reflectingSince: reflecting_since !== undefined ? reflecting_since : state.reflectingSince,
         endReason: null,
         // Balance warnings only make sense once the meter is actually running.
         showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
@@ -184,6 +194,9 @@ export function chatSessionReducer(
         grace_seconds_left,
         grace_reader_name,
         is_topping_up,
+        reflect_remaining_seconds,
+        reflect_seconds_used,
+        reflecting_since,
       } = action.payload;
 
       const nextSessionStatus = session_status
@@ -201,6 +214,10 @@ export function chatSessionReducer(
         estimatedCost: estimated_cost,
         minutesCharged: minutes_charged ?? state.minutesCharged,
         remainingMinutes: remaining_minutes ?? state.remainingMinutes,
+        // the server's reflection figures, when this sync carried them
+        reflectRemainingSeconds: reflect_remaining_seconds ?? state.reflectRemainingSeconds,
+        reflectSecondsUsed: reflect_seconds_used ?? state.reflectSecondsUsed,
+        reflectingSince: reflecting_since !== undefined ? reflecting_since : state.reflectingSince,
       };
 
       // ── Out-of-balance GRACE hold ─────────────────────────────────────────
@@ -469,6 +486,9 @@ export function useChatSessionState({
             remaining_minutes: data.remaining_minutes,
             minutes_charged: data.minutes_charged,
             remaining_seconds: data.remaining_seconds,
+            reflect_remaining_seconds: data.reflect_remaining_seconds,
+            reflect_seconds_used: data.reflect_seconds_used,
+            reflecting_since: data.reflecting_since,
             // Pass the backend billing status through (may be undefined). The
             // reducer applies the role-aware default (CLIENT → ACTIVE, cockpit →
             // AWAITING_JOIN) so the client is never frozen out of their own chat.
@@ -524,6 +544,9 @@ export function useChatSessionState({
             minutes_charged: data.minutes_charged,
             grace_seconds_left: data.grace_seconds_left,
             is_topping_up: data.is_topping_up,
+            reflect_remaining_seconds: data.reflect_remaining_seconds,
+            reflect_seconds_used: data.reflect_seconds_used,
+            reflecting_since: data.reflecting_since,
           },
         });
         // Keep the global header Stardust total live during a client's reading.

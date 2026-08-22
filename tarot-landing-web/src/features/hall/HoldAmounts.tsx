@@ -15,9 +15,12 @@ import {
   calculateStardustQuote,
 } from "@/features/payment/stardustTiers";
 
-export default function HoldAmounts() {
+/* `id` defaults to the hold panel's #amts. The reflect panel renders the SAME
+   component under #rfamts, so two panels can share one DOM without a
+   duplicate id — startHall binds both containers to the same handlers. */
+export default function HoldAmounts({ id = "amts" }: { id?: string } = {}) {
   return (
-    <div className="amts" id="amts">
+    <div className="amts" id={id}>
       {STARDUST_HOLD_PRESETS.map((a, i) => {
         const q = calculateStardustQuote(a);
         return (

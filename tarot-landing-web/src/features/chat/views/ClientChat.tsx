@@ -7,13 +7,15 @@ import "../../../styles/glass.css";
 import { useChats } from "../hooks/useChats";
 import { useRequestChat, useUpdateChatStatus } from "../hooks/useChatMutations";
 import { usePsychicDetails } from "../hooks/usePsychicDetails";
-import { getChatMessages, getChatSessionTime, resumeChat, pauseChatManual, pauseChat, Chat } from "../api/chatApi";
+import { getChatMessages, getChatSessionTime, resumeChat, pauseChatManual, pauseChat, reflectChat, reflectReturnChat, Chat, ChatSessionTime } from "../api/chatApi";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { usePayment } from "@/features/payment/hooks/usePayment";
 import { useChatEventToasts } from "../hooks/useChatEventToasts";
 import { useToast } from "../../../components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useChatSessionState } from "../hooks/useChatSessionState";
+import { useReflection } from "../hooks/useReflection";
+import { reflectEarnedSeconds, REFLECT_MARK_SECONDS } from "@/features/hall/reflectBudget";
 import { SessionSummaryModal, formatDuration } from "../components/SessionSummaryModal";
 import { endReasonEyebrow } from "../endReasonCopy";
 import HallRoom from "@/features/hall/HallRoom";
@@ -261,6 +263,10 @@ const ClientChat = () => {
   // Connection status for backward compatibility
   const connectionStatus = isConnected ? "connected" : "disconnected";
 
+  // the reflection hook is created below; the history load reaches its hold
+  // through this ref so the load callback can stay defined first
+  const holdFromHistoryRef = useRef<(list: ChatMessage[]) => ChatMessage[]>((l) => l);
+
   // Load previous messages
   const loadPreviousMessages = useCallback(async () => {
     if (!selectedChat) return;
@@ -283,7 +289,9 @@ const ClientChat = () => {
         status: msg.status,
       }));
 
-      setMessages(normalizedMessages);
+      // a refresh mid-reflection: lines the reader wrote after reflecting_since
+      // are held again, in order, not shown (useReflection.holdFromHistory)
+      setMessages(holdFromHistoryRef.current(normalizedMessages));
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
@@ -291,11 +299,9 @@ const ClientChat = () => {
     }
   }, [selectedChat]);
 
-  // Stable event handlers using useCallback
-  const handleMessageReceived = useCallback(({ message }: { message: ChatMessage }) => {
-    console.log('[ClientChat] Message received handler called:', message);
-    // A message arrived → stop showing the reader typing indicator.
-    setIsReaderTyping(false);
+  // The ONE path by which a live message enters the thread. handleMessageReceived
+  // below and the reflection's release both come through here.
+  const appendMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => {
       // Avoid duplicates
       if (prev.some(m => m.id === message.id)) {
@@ -307,13 +313,106 @@ const ClientChat = () => {
     });
   }, []);
 
+  // ── REFLECTION (client side for now; hooks/useReflection.ts) ──
+  //    While she reflects, the reader's messages are held in order and not
+  //    shown; on Return they are released one at a time with the normal arrival
+  //    treatment. Her own echoes and system lines pass straight through. The
+  //    budget (2:00 + 2:00 per 15 min of paid time, unused time banks) is read
+  //    from reflectBudget.ts — the server will mirror that module and later feed
+  //    its own remaining figure into the same prop. No request is made here.
+  // Fold a session-time shaped answer (the /reflect endpoints answer with it)
+  // into sessionState through the same SYNC the 8s poll uses.
+  const syncFigures = useCallback((d: ChatSessionTime) => {
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: d.elapsed_seconds,
+        estimated_cost: d.estimated_cost,
+        price_per_second: d.price_per_second,
+        client_balance: d.client_balance,
+        credit_balance: d.credit_balance,
+        paid_balance: d.paid_balance,
+        remaining_seconds: d.remaining_seconds,
+        session_status: d.session_status as any,
+        rate_per_minute: d.rate_per_minute,
+        remaining_minutes: d.remaining_minutes,
+        minutes_charged: d.minutes_charged,
+        grace_seconds_left: d.grace_seconds_left,
+        is_topping_up: d.is_topping_up,
+        reflect_remaining_seconds: d.reflect_remaining_seconds,
+        reflect_seconds_used: d.reflect_seconds_used,
+        reflecting_since: d.reflecting_since,
+      },
+    });
+  }, [dispatch]);
+
+  // the last session_reflect_ended the server sent (reason budget | return |
+  // session_ended); a fresh id each time so the hook sees every one
+  const [reflectEnded, setReflectEnded] = useState<{ id: number; reason: string } | null>(null);
+  const reflectEndedSeq = useRef(0);
+
+  const reflection = useReflection<ChatMessage>({
+    paidSeconds: sessionState.elapsedSeconds || 0,
+    canBegin: !!isChatActive,
+    isHeld: (m) =>
+      !(m.type === 'system' || m.is_system) &&
+      (m.sender_id ?? m.user_id) !== user?.id,
+    append: appendMessage,
+    setReaderTyping: setIsReaderTyping,
+    // no longer a live reading (ended, or paused by the server): release all
+    flush: !isChatActive,
+    resetKey: selectedChat,
+    // THE SERVER IS THE AUTHORITY: its figures from session-time, the
+    // on-connect session_info and the two broadcasts; the two endpoints. The
+    // hook falls back to reflectBudget.ts locally until a sync carries them.
+    server: {
+      reflecting: sessionState.sessionStatus == null ? null : sessionState.sessionStatus === 'REFLECTING',
+      remainingSeconds: sessionState.reflectRemainingSeconds,
+      secondsUsed: sessionState.reflectSecondsUsed,
+      reflectingSince: sessionState.reflectingSince,
+      ended: reflectEnded,
+      begin: () => selectedChat
+        ? reflectChat(selectedChat).then((d) => { syncFigures(d); return d; })
+        : Promise.reject(new Error('no chat')),
+      ret: () => selectedChat
+        ? reflectReturnChat(selectedChat).then((d) => { syncFigures(d); return d; })
+        : Promise.resolve(null),
+    },
+  });
+  holdFromHistoryRef.current = reflection.holdFromHistory;
+
+  // The history can load before session-time answers: once the server's
+  // reflecting_since is known while reflecting, re-hold what it covers.
+  useEffect(() => {
+    if (reflection.reflecting && sessionState.reflectingSince) {
+      setMessages((prev) => reflection.holdFromHistory(prev));
+    }
+  }, [reflection.reflecting, sessionState.reflectingSince, reflection.holdFromHistory]);
+
+  // Stable event handlers using useCallback
+  const handleMessageReceived = useCallback(({ message }: { message: ChatMessage }) => {
+    console.log('[ClientChat] Message received handler called:', message);
+    // Reflecting? A reader message is held here, in order, and shown on Return.
+    if (!reflection.admit(message)) {
+      console.log('[ClientChat] Held for reflection:', message.id);
+      return;
+    }
+    // A message arrived → stop showing the reader typing indicator.
+    setIsReaderTyping(false);
+    appendMessage(message);
+  }, [reflection.admit, appendMessage]);
+
   // Reader (Logan) typing indicator, from the backend typing_start/typing_stop
   // events broadcast during delivery. We don't send our own typing to the server.
   const handleTypingStart = useCallback(({ userId }: { userId: number }) => {
     if (user && userId === user.id) return; // ignore our own id (defensive)
+    if (!reflection.canShowTyping()) return; // held: the reader is not shown typing
     setIsReaderTyping(true);
-  }, [user]);
-  const handleTypingStop = useCallback(() => setIsReaderTyping(false), []);
+  }, [user, reflection.canShowTyping]);
+  const handleTypingStop = useCallback(() => {
+    if (!reflection.canShowTyping()) return; // the release drives the dots itself
+    setIsReaderTyping(false);
+  }, [reflection.canShowTyping]);
 
   // The other party opened the conversation → flip our sent messages to "seen".
   const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
@@ -421,8 +520,8 @@ const ClientChat = () => {
     }
   }, [sessionState.elapsedSeconds, sessionState.estimatedCost, selectedChat, refetch, dispatch]);
 
-  const handleSessionInfo = useCallback(({ chat_id, elapsed_seconds, estimated_cost, remaining_seconds, client_balance, chat_status, started_at, rate_per_second }: { chat_id: number; elapsed_seconds: number; estimated_cost: number; remaining_seconds: number; client_balance: number; chat_status: string; started_at: string; rate_per_second: number }) => {
-    console.log('[ClientChat] Session info received:', { chat_id, elapsed_seconds, remaining_seconds, client_balance, rate_per_second });
+  const handleSessionInfo = useCallback(({ chat_id, elapsed_seconds, estimated_cost, remaining_seconds, client_balance, chat_status, started_at, rate_per_second, session_status, reflect_remaining_seconds, reflect_seconds_used, reflecting_since }: { chat_id: number; elapsed_seconds: number; estimated_cost: number; remaining_seconds: number; client_balance: number; chat_status: string; started_at: string; rate_per_second: number; session_status?: string; reflect_remaining_seconds?: number; reflect_seconds_used?: number; reflecting_since?: string | null }) => {
+    console.log('[ClientChat] Session info received:', { chat_id, elapsed_seconds, remaining_seconds, client_balance, rate_per_second, session_status });
 
     // Initialize timer with data from backend
     const payload = {
@@ -434,6 +533,12 @@ const ClientChat = () => {
       psychic_id: selectedChatData?.psychic_id || 0,
       elapsed_seconds,
       estimated_cost,
+      // the billing sub-state and the reflection figures, so a reconnect
+      // mid-reflection lands back in the panel (REFLECTING) with the server's bank
+      session_status: session_status as any,
+      reflect_remaining_seconds,
+      reflect_seconds_used,
+      reflecting_since,
     };
 
     console.log('[ClientChat] Dispatching INITIALIZE with session info:', payload);
@@ -516,6 +621,51 @@ const ClientChat = () => {
     if (typeof p.clientBalance === 'number') {
       window.dispatchEvent(new CustomEvent('stardust:balance', { detail: p.clientBalance }));
     }
+  }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
+
+  // Reflection broadcasts — the grace shape plus the budget figures. Both
+  // fold into sessionState through SYNC; the end also tells the hook why.
+  const handleSessionReflecting = useCallback((p: any) => {
+    console.log('[ClientChat] Reflecting:', p);
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: p.elapsedSeconds ?? sessionState.elapsedSeconds,
+        estimated_cost: p.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: p.clientBalance,
+        credit_balance: p.creditBalance,
+        paid_balance: p.paidBalance,
+        session_status: 'REFLECTING',
+        rate_per_minute: p.ratePerMinute,
+        minutes_charged: p.minutesCharged,
+        reflect_remaining_seconds: p.reflectRemainingSeconds,
+        reflect_seconds_used: p.reflectSecondsUsed,
+        reflecting_since: p.reflectingSince ?? null,
+      },
+    });
+  }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
+  const handleSessionReflectEnded = useCallback((p: any) => {
+    console.log('[ClientChat] Reflection ended:', p);
+    dispatch({
+      type: 'SYNC',
+      payload: {
+        elapsed_seconds: p.elapsedSeconds ?? sessionState.elapsedSeconds,
+        estimated_cost: p.estimatedCost,
+        price_per_second: sessionState.psychicRatePerSecond,
+        client_balance: p.clientBalance,
+        credit_balance: p.creditBalance,
+        paid_balance: p.paidBalance,
+        session_status: (p.sessionStatus as any) ?? 'ACTIVE',
+        rate_per_minute: p.ratePerMinute,
+        minutes_charged: p.minutesCharged,
+        reflect_remaining_seconds: p.reflectRemainingSeconds,
+        reflect_seconds_used: p.reflectSecondsUsed,
+        reflecting_since: null,
+      },
+    });
+    reflectEndedSeq.current += 1;
+    setReflectEnded({ id: reflectEndedSeq.current, reason: String(p.reason ?? '') });
   }, [dispatch, sessionState.elapsedSeconds, sessionState.psychicRatePerSecond]);
 
   const handleConnected = useCallback(async () => {
@@ -606,6 +756,8 @@ const ClientChat = () => {
       [ChatEventType.SESSION_STARTED]: handleSessionStarted,
       [ChatEventType.SESSION_MINUTE_CHARGED]: handleSessionMinuteCharged,
       [ChatEventType.SESSION_GRACE]: handleSessionGrace,
+      [ChatEventType.SESSION_REFLECTING]: handleSessionReflecting,
+      [ChatEventType.SESSION_REFLECT_ENDED]: handleSessionReflectEnded,
       [ChatEventType.SESSION_ENDING_SOON]: handleSessionEndingSoon,
       [ChatEventType.SESSION_ENDED]: handleSessionEndedWebSocket,
       [ChatEventType.BALANCE_INSUFFICIENT]: handleBalanceInsufficient,
@@ -1192,7 +1344,17 @@ const ClientChat = () => {
              status alone and drew the closing card with no values in it. A
              conversation that ended in an earlier visit latched nothing, so it
              stays in 'room' and shows the banner instead. No new server call. */
-          phase={showsClosingCard ? 'ended' : isPaused ? 'pausing' : 'room'}
+          phase={showsClosingCard ? 'ended' : isPaused ? 'pausing' : reflection.reflecting ? 'reflecting' : 'room'}
+          /* the reflection: offered in an active reading; both numbers come
+             from reflectBudget.ts through the hook, nothing computed here */
+          reflect={isChatActive ? {
+            remainingSeconds: reflection.remainingSeconds,
+            earnedSeconds: reflection.earnedSeconds,
+            timeUp: reflection.timeUp,
+            onBegin: reflection.begin,
+            onReturn: reflection.ret,
+            onAddTime: (a: number) => handleAddStardustAt(a),
+          } : null}
           onMoreOffering={handleTopUpClick}
           readerName={psychicName}
           readerPhoto={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
@@ -1201,7 +1363,7 @@ const ClientChat = () => {
           elapsedLabel={`${Math.floor((sessionState.elapsedSeconds || 0) / 60)}:${String(Math.floor((sessionState.elapsedSeconds || 0) % 60)).padStart(2, "0")} elapsed`}
           spentLabel={formatGbp(sessionState.estimatedCost || 0)}
           isConnected={isConnected}
-          statusWord={isChatActive ? 'reading for you' : isPaused ? 'holding your place' : currentChatStatus === 'ENDED' ? 'ended' : currentChatStatus === 'REQUESTED' ? 'pending' : currentChatStatus === 'ARCHIVED' ? 'cancelled' : ''}
+          statusWord={isChatActive ? (reflection.reflecting ? 'holding the thread' : 'reading for you') : isPaused ? 'holding your place' : currentChatStatus === 'ENDED' ? 'ended' : currentChatStatus === 'REQUESTED' ? 'pending' : currentChatStatus === 'ARCHIVED' ? 'cancelled' : ''}
           messages={allMessages.map((msg: any, i: number) => ({
             id: msg.id ?? i,
             mine: (msg.sender_id || msg.user_id) === user?.id,
@@ -1286,6 +1448,10 @@ const ClientChat = () => {
                   sub: "We hope it brought you clarity. You're welcome back any time. ",
                   onAgain: () => { setRequestError(null); setShowRequestModal(true); },
                   onBack: () => navigate('/psychics-browse'),
+                  /* decision 3 — reflection used this reading, from the hook's
+                     own spent value. CLIENT-LOCAL until the server pass: a hard
+                     refresh before the card renders loses it (0 → no line). */
+                  reflectionSeconds: reflection.spentSeconds,
                 }
               : null
           }
@@ -1556,8 +1722,16 @@ export default ClientChat;
    ══════════════════════════════════════════════════════════════════════════ */
 const FORCED_STATES = [
   "active", "empty", "typing", "disconnected", "loading", "older",
-  "lowbalance", "paused", "grace", "ended", "requested", "archived",
+  "lowbalance", "paused", "grace", "reflecting", "ended", "requested", "archived",
 ] as const;
+
+/* The injector's reader lines, for "she replies" — the preview harness's own. */
+const FORCED_REPLIES = [
+  "there's a reason he went quiet and it isn't the one you've been telling yourself",
+  "the eight of cups keeps turning up for him. a man walking away from something he still wants",
+  "august, around the 14th. watch what happens near his birthday",
+  "you already know. you're waiting for me to say it so it's allowed to be true",
+];
 
 function ForcedRoomState({ mode }: { mode: string }) {
   const [input, setInput] = React.useState("");
@@ -1566,17 +1740,72 @@ function ForcedRoomState({ mode }: { mode: string }) {
   const navigate = useNavigate();
   const fire = (what: string) => setLog((l) => [...l, what]);
 
-  const msgs = [
+  /* The thread is real state here so the reflection's hold and release can be
+     driven through the SAME hook the live room uses. `mine` marks the
+     customer's side; `system` a state line. */
+  type ForcedMsg = { id: number; mine: boolean; text: string; system?: boolean; content?: string };
+  const [msgs, setMsgs] = React.useState<ForcedMsg[]>([
     { id: 1, mine: true, text: "He stopped answering six weeks ago. Daniel, born 14 August 1992." },
     { id: 2, mine: false, text: "daniel, six weeks of that silence after something that felt so right" },
     { id: 3, mine: false, text: "that shift is real and you felt it before you could even name it" },
-  ];
+  ]);
+  const [readerTyping, setReaderTyping] = React.useState(mode === "typing");
+  const nextId = React.useRef(100);
+  /* "End Chat" confirmed in the injector's own dialog ends the forced reading
+     locally, so the closing card can be reached AFTER reflecting in one
+     session — the hook's spent value, not a typed number, feeds the card */
+  const [endedHere, setEndedHere] = React.useState(false);
   const isPaused = mode === "paused" || mode === "grace";
-  const isEnded = mode === "ended";
-  const phase = isEnded ? "ended" : isPaused ? "pausing" : "room";
+  const isEnded = mode === "ended" || endedHere;
+  const isLive = !isPaused && !isEnded && mode !== "requested" && mode !== "archived" && mode !== "loading";
+  /* ?paid=<seconds> sets the paid session time the budget is computed from
+     (default 724 = the 12:04 elapsed the header shows); "+15 min paid" on the
+     bar adds a mark, so re-earning after 0:00 can be proven. ?spent=<seconds>
+     seeds reflection already used, so 0:00 is reachable in seconds. */
+  const params = new URLSearchParams(window.location.search);
+  const [paid, setPaid] = React.useState(Number(params.get("paid") ?? 724));
+  const spentSeed = Number(params.get("spent") ?? 0);
+  const appendForced = React.useCallback((m: ForcedMsg) =>
+    setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m])), []);
+  const reflection = useReflection<ForcedMsg>({
+    paidSeconds: paid,
+    canBegin: isLive,
+    isHeld: (m) => !m.system && !m.mine,
+    append: appendForced,
+    setReaderTyping,
+    flush: !isLive,
+    resetKey: mode,
+    initialSpentSeconds: spentSeed,
+  });
+  /* ?force=reflecting opens straight onto the panel */
+  const begin = reflection.begin;
+  React.useEffect(() => { if (mode === "reflecting") begin(); }, [mode, begin]);
+  /* the budget module, reachable from the page for the arithmetic proof —
+     the bundled module, not a copy */
+  React.useEffect(() => {
+    (window as any).__reflectEarned = reflectEarnedSeconds;
+    return () => { delete (window as any).__reflectEarned; };
+  }, []);
+  const inject = (system?: boolean) => {
+    const id = nextId.current++;
+    const text = system
+      ? "Valentina drew another card"
+      : FORCED_REPLIES[(id - 100) % FORCED_REPLIES.length];
+    const m: ForcedMsg = { id, mine: false, text, content: text, system };
+    fire((system ? "system " : "reply ") + id);
+    // the same gate a live message meets in handleMessageReceived
+    if (!reflection.admit(m)) { fire("held " + id); return; }
+    setReaderTyping(false);
+    appendForced(m);
+  };
+  const phase = isEnded ? "ended" : isPaused ? "pausing" : reflection.reflecting ? "reflecting" : "room";
 
   return (
-    <>
+    /* The real runtime. Without HallStage nothing sets data-hall/data-state, so
+       the hold, the receipt and this panel would all sit at visibility:hidden
+       and no control would carry a listener — the injector had drifted from
+       the room it is meant to prove. */
+    <HallStage>
       <HallRoom
         phase={phase as any}
         readerName="Valentina"
@@ -1586,10 +1815,18 @@ function ForcedRoomState({ mode }: { mode: string }) {
         elapsedLabel="12:04 elapsed"
         spentLabel="£4.20"
         isConnected={mode !== "disconnected"}
-        statusWord={isEnded ? "ended" : isPaused ? "holding your place" : mode === "requested" ? "pending" : "reading for you"}
+        statusWord={isEnded ? "ended" : isPaused ? "holding your place" : mode === "requested" ? "pending" : reflection.reflecting ? "holding the thread" : "reading for you"}
         messages={mode === "empty" || mode === "loading" || mode === "requested" ? [] : msgs}
         loadingMessages={mode === "loading"}
-        readerTyping={mode === "typing"}
+        readerTyping={readerTyping}
+        reflect={isLive ? {
+          remainingSeconds: reflection.remainingSeconds,
+          earnedSeconds: reflection.earnedSeconds,
+          timeUp: reflection.timeUp,
+          onBegin: () => { fire("reflect"); reflection.begin(); },
+          onReturn: () => { fire("return"); reflection.ret(); },
+          onAddTime: (a: number) => fire("top up £" + a),
+        } : null}
         hasMore={mode === "older"}
         loadingMore={false}
         onLoadMore={() => fire("load older")}
@@ -1631,6 +1868,8 @@ function ForcedRoomState({ mode }: { mode: string }) {
           sub: "We hope it brought you clarity. You're welcome back any time. ",
           onAgain: () => fire("book another"), onBack: () => fire("browse psychics"),
           onRate: (n: number) => fire("rated " + n),
+          // the hook's own spent value, as the live room passes it
+          reflectionSeconds: reflection.spentSeconds,
         } : null}
         notice={mode === "requested" ? {
           eyebrow: "Waiting for Psychic", title: "Your chat request is pending",
@@ -1639,6 +1878,9 @@ function ForcedRoomState({ mode }: { mode: string }) {
         } : null}
         onMoreOffering={() => fire("larger offering")}
         onBack={() => fire("back")}
+        /* the live room always offers Readers (ClientChat passes onLeave), so
+           the injector's header carries the same three trailing controls */
+        onLeave={() => fire("leave")}
         onOpenProfile={() => { fire("open profile"); setDlg("reader"); }}
         onEnd={!isEnded ? () => { fire("end"); setDlg("end"); } : undefined}
       />
@@ -1675,7 +1917,7 @@ function ForcedRoomState({ mode }: { mode: string }) {
         <p className="eyebrow">This action cannot be undone</p>
         <h1 className="ptitle" id="dlg-end">End Chat Session?</h1>
         <p className="psub">Are you sure you want to end this chat session? You will be charged for the time spent, and the conversation will be closed.</p>
-        <button className="begin" id="dlg-end-confirm" onClick={() => { fire("end chat"); setDlg(null); }}>End Chat</button>
+        <button className="begin" id="dlg-end-confirm" onClick={() => { fire("end chat"); setDlg(null); setEndedHere(true); }}>End Chat</button>
         <button className="quiet" id="dlg-end-cancel" onClick={() => setDlg(null)}>Cancel</button>
       </HallDialog>
       {/* The harness bar sits at the TOP and the room is pushed down by exactly
@@ -1689,10 +1931,14 @@ function ForcedRoomState({ mode }: { mode: string }) {
         {FORCED_STATES.map((m) => (
           <button key={m} aria-pressed={m === mode} onClick={() => navigate(`/chats?force=${m}`)}>{m}</button>
         ))}
+        <button id="inject" onClick={() => inject()}>she replies</button>
+        <button id="injectsys" onClick={() => inject(true)}>system line</button>
+        <button id="forceheld" data-held={reflection.heldCount}>held: {reflection.heldCount}</button>
+        <button id="addpaid" data-paid={paid} onClick={() => setPaid((p) => p + REFLECT_MARK_SECONDS)}>+1 mark paid ({paid}s)</button>
         <button id="open-request" onClick={() => setDlg("request")}>request modal</button>
         <button id="open-summary" onClick={() => setDlg("summary")}>summary modal</button>
         <button id="forcelog" data-log={log.join("|")}>fired: {log.length}</button>
       </div>
-    </>
+    </HallStage>
   );
 }

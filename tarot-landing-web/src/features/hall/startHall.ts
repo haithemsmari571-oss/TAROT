@@ -5,6 +5,9 @@
    imported instead of read out of a <script> tag. */
 
 import FRAG from "./hall.frag.glsl?raw";
+/* the reflection budget — the preview harness's stand-in start value is read
+   from the one module too, never typed here */
+import { reflectEarnedSeconds } from "./reflectBudget";
 
 /* mode 'preview' = /design-preview: the developer harness and the room stage are
    present and the journey runs on its own timers.
@@ -27,6 +30,10 @@ export interface HallOptions {
   /** "Read with her again" / "Back to the readers" on the receipt. */
   onAgain?: () => void;
   onBackToReaders?: () => void;
+  /** The Reflect control in the room header was pressed. */
+  onReflect?: () => void;
+  /** "Return" on the reflect panel. */
+  onReturn?: () => void;
 }
 
 /** What the receipt shows. Every field comes from the real session. */
@@ -284,6 +291,12 @@ function selectSound(kind:string){
   if(ctx.state!=='running')ctx.resume();
   startBed(kind);
 }
+/* Every sound pill on the page — the entry form's #pills and the reflect
+   panel's #rfpills — reads the same bedKind, so the two can never disagree. */
+function paintSndPills(){
+  [...document.querySelectorAll('.pill[data-snd]')].forEach(x=>
+    x.setAttribute('aria-pressed',String((x as HTMLElement).dataset.snd===bedKind)));
+}
 const HARM=[130.81,196,261.63,392,523.25,659.25,784];
 let lastH=0;
 function harmonic(v:number){
@@ -508,6 +521,7 @@ function reset(){timers.forEach(clearTimeout);timers=[];clearInterval(cardT);
 function activePanel():HTMLElement|null{
   const st=HH.getAttribute('data-state');
   if(st==='pausing')return document.getElementById('pausepanel');
+  if(st==='reflecting')return document.getElementById('reflectpanel');
   if(st==='ended')return document.getElementById('endpanel');
   return document.getElementById('panel');
 }
@@ -601,6 +615,9 @@ cleanups.push(()=>beginBtn.removeEventListener('click',onBegin));}
 
 let cdNum=document.getElementById('cdnum'),cdFill=document.getElementById('cdfill');
 let amtsEl=document.getElementById('amts'),addBtn=document.getElementById('addtime');
+/* the reflect panel's own amounts and add button — the same HoldAmounts
+   component under a second id, bound to the same handlers */
+let rfAmtsEl=document.getElementById('rfamts'),rfAddBtn=document.getElementById('rfaddtime');
 /* amount starts unset and is adopted from the markup's chosen pill on wire —
    the presets live in stardustTiers.ts, never here. */
 let cdT:any=null,cdLeft=0,cdSpan=300,amount=0,perMin:number|null=null;
@@ -623,6 +640,7 @@ function paintAmounts(){
     }
   });
   if(addBtn)addBtn.textContent='Add £'+amount+' and carry on';
+  if(rfAddBtn)rfAddBtn.textContent='Add £'+amount+' and carry on';
 }
 paintAmounts();
 
@@ -685,6 +703,58 @@ let againBtn=document.getElementById('again'),backBtn=document.getElementById('b
 const onAgain=()=>{opts.onAgain?.();if(MODE==="preview")reset();};
 const onBack=()=>{opts.onBackToReaders?.();};
 
+/* ═══════════ 7 · the reflection ═══════════
+   A third stage beside the hold and the receipt, driven by the room's phase
+   "reflecting". The live room draws its own countdown from the budget module
+   (React owns #rfcdnum there); this only moves the state machine, pins the
+   orb and binds the controls. The /design-preview harness has no session, so
+   in preview mode alone a stand-in countdown runs here from the module's own
+   starting value. */
+let rfT:any=null,rfBeat:any=null;
+function stopRf(){if(rfT){clearInterval(rfT);rfT=null;}if(rfBeat){clearTimeout(rfBeat);rfBeat=null;}}
+cleanups.push(stopRf);
+function toReflecting(previewSeconds?:number){
+  stopRf();
+  HH.setAttribute('data-state','reflecting');
+  repin();
+  if(MODE==="preview"&&previewSeconds&&previewSeconds>0){
+    const span=previewSeconds;let left=span;
+    const num=document.getElementById('rfcdnum'),fill=document.getElementById('rfcdfill'),
+          slab=document.getElementById('rfslab'),panel=document.getElementById('reflectpanel');
+    const paint=()=>{if(num)num.textContent=mmss(left);
+      if(fill)fill.style.width=Math.max(0,Math.min(100,(left/span)*100))+'%';};
+    if(slab){slab.textContent='yours to sit with';slab.classList.remove('rfup');}
+    panel?.removeAttribute('data-timeup');
+    paint();
+    rfT=setInterval(()=>{left=Math.max(0,left-1);paint();
+      if(left<=0){stopRf();
+        /* the stand-in's 0:00 beat, then Return's own handler — the live room's
+           hook does the same through ret(); neither has a second way out */
+        if(slab){slab.textContent='Your time is up';slab.classList.add('rfup');}
+        panel?.setAttribute('data-timeup','true');
+        rfBeat=setTimeout(onReturn,2500);}
+    },1000);
+  }
+}
+/* back to the room, from the reflection or from the hold */
+function toRoomState(){stopRf();HH.setAttribute('data-state','room');repin();}
+let reflectBtn=document.getElementById('reflect'),rfReturnBtn=document.getElementById('rfreturn');
+let rfMoreBtn=document.getElementById('rfmoreamts'),rfPillsEl=document.getElementById('rfpills');
+const onReflect=()=>{
+  if(reflectBtn?.getAttribute('aria-disabled')==='true')return;   /* present but quiet at 0:00 */
+  opts.onReflect?.();
+  if(MODE==="preview"){boot();toReflecting(reflectEarnedSeconds(0));}
+};
+const onReturn=()=>{opts.onReturn?.();if(MODE==="preview")toRoomState();};
+/* the reflect panel's music: the same selectSound the entry form's pills use —
+   one engine, one entry point. Scoped to its own container, like onPills. */
+const onRfPills=(e:Event)=>{
+  const p=(e.target as HTMLElement).closest('.pill[data-snd]') as HTMLElement|null;
+  if(!p||!rfPillsEl?.contains(p))return;
+  selectSound(p.dataset.snd||'none');
+  paintSndPills();
+  harmonic(.06);};
+
 /* FIX A — the receipt and hold controls used to be wired ONCE, right here, by
    getElementById inside if-guards. On /chats the hall now starts while the
    conversation LIST is showing, so none of those elements existed yet: every
@@ -704,6 +774,9 @@ function wireRoomControls(){
   endInstead=document.getElementById('endinstead');
   starsEl=document.getElementById('stars');
   againBtn=document.getElementById('again');backBtn=document.getElementById('backtoreaders');
+  reflectBtn=document.getElementById('reflect');rfReturnBtn=document.getElementById('rfreturn');
+  rfAmtsEl=document.getElementById('rfamts');rfAddBtn=document.getElementById('rfaddtime');
+  rfMoreBtn=document.getElementById('rfmoreamts');rfPillsEl=document.getElementById('rfpills');
   /* The amounts are the markup's own (rendered from the billing source). If the
      current selection is not among them — first wire, or the presets changed —
      adopt the pill the markup marks as its default (data-default: stable,
@@ -716,14 +789,17 @@ function wireRoomControls(){
   const bind=(el:Element|null,fn:EventListener)=>{if(el){el.addEventListener('click',fn);roomWired.push([el,fn]);}};
   bind(amtsEl,onAmts);bind(addBtn,onAdd);bind(moreBtn,onMore);bind(endInstead,onEndNow);
   bind(starsEl,onStars);bind(againBtn,onAgain);bind(backBtn,onBack);
-  paintAmounts();paintStars();tickCd();
+  /* the reflection: header control, panel's Return, its amounts, its music */
+  bind(reflectBtn,onReflect);bind(rfReturnBtn,onReturn);
+  bind(rfAmtsEl,onAmts);bind(rfAddBtn,onAdd);bind(rfMoreBtn,onMore);bind(rfPillsEl,onRfPills);
+  paintAmounts();paintStars();tickCd();paintSndPills();
 }
 wireRoomControls();
 
 const pillsEl=document.getElementById('pills');
-const paintPills=()=>{if(!pillsEl)return;
-  [...pillsEl.querySelectorAll('.pill')].forEach(x=>
-    x.setAttribute('aria-pressed',String((x as HTMLElement).dataset.snd===bedKind)));};
+/* paints every sound pill on the page, so a choice on the entry form also
+   shows on the reflect panel's pills when both exist (the preview) */
+const paintPills=()=>paintSndPills();
 const onPills=(e:Event)=>{
   const p=(e.target as HTMLElement).closest('.pill') as HTMLElement|null;
   /* scoped to THIS container — the hold panel's amount pills also carry .pill */
@@ -812,6 +888,12 @@ const mkPause=document.getElementById('mkpause')!;
 const onMkPause=()=>{boot();toPausing();};
 mkPause.addEventListener('click',onMkPause);
 cleanups.push(()=>mkPause.removeEventListener('click',onMkPause));
+/* the reflection, from the mock bar: the stand-in budget is the module's own
+   starting value for a reading with no paid time yet */
+const mkReflect=document.getElementById('mkreflect');
+const onMkReflect=()=>{boot();toReflecting(reflectEarnedSeconds(0));};
+if(mkReflect){mkReflect.addEventListener('click',onMkReflect);
+  cleanups.push(()=>mkReflect.removeEventListener('click',onMkReflect));}
 const mkEnd=document.getElementById('mkend')!;
 const onMkEnd=()=>{boot();toEnded({minutes:24,total:'£124.80',perMinute:'£5.20'});};
 mkEnd.addEventListener('click',onMkEnd);
@@ -857,8 +939,11 @@ cleanups.push(()=>pvBtn.removeEventListener('click',onPreview));
     setRate: (gbpPerMinute: number | null) => { perMin = gbpPerMinute; paintAmounts(); },
     /** The billing states the room drives. */
     pausing: (graceSeconds?: number) => toPausing(graceSeconds),
+    /** The reflection. The room draws the countdown itself from the budget
+        module; this only moves the state and pins the orb. */
+    reflecting: () => toReflecting(),
     ended: (r?: HallReceipt) => toEnded(r),
-    room: () => { HH.setAttribute('data-state','room'); repin(); },
+    room: () => toRoomState(),
     /** Whatever the current grace countdown has left, in seconds. */
     graceLeft: () => cdLeft,
   };

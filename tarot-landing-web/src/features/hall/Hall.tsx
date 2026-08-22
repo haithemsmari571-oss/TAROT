@@ -325,6 +325,39 @@ export default function Hall({ mode = "preview", psychicId }:
         </section>
       </main>
 
+      {/* 7 · the reflection — the harness's copy of HallRoom's third stage.
+          Stand-in numbers: the countdown here is run by startHall's preview
+          block from the budget module's own starting value. */}
+      <main className="stage stage2" id="reflectstage">
+        <section className="panel" id="reflectpanel">
+          <p className="eyebrow">Sit with this</p>
+          <h1 className="ptitle">Valentina <em>is holding the thread</em></h1>
+          <p className="psub">Nothing is charged while you think. Whatever she says meanwhile waits for you, and the reading carries on exactly where you left it.</p>
+          <div className="cd">
+            <div className="cdnum" id="rfcdnum">2:00</div>
+            <span className="slab">yours to sit with</span>
+            <div className="cdbar"><i className="cdfill" id="rfcdfill"></i></div>
+          </div>
+          <div className="sound">
+            <span className="slab">What you'll hear</span>
+            <div className="pills" id="rfpills">
+              <button className="pill" data-snd="none" aria-pressed="true">Silence</button>
+              <button className="pill" data-snd="rain" aria-pressed="false">Rain</button>
+              <button className="pill" data-snd="bowls" aria-pressed="false">Singing bowls</button>
+              <button className="pill" data-snd="hum" aria-pressed="false">Deep hum</button>
+            </div>
+          </div>
+          <div className="sound">
+            <span className="slab">Add time</span>
+            <HoldAmounts id="rfamts" />
+          </div>
+          <button className="quiet" id="rfaddtime">Add £50 and carry on</button>
+          <button className="quiet" id="rfmoreamts">A larger offering</button>
+          <button className="begin" id="rfreturn">Return to the reading</button>
+          <p className="legal">Your minutes do not run while you reflect.</p>
+        </section>
+      </main>
+
       {/* 6 · the reading ends */}
       <main className="stage stage2" id="endstage">
         <section className="panel" id="endpanel">
@@ -367,6 +400,7 @@ export default function Hall({ mode = "preview", psychicId }:
           <button id="preview" aria-pressed="false">watch the whole turn</button>
           <button id="send2">she replies</button>
           <button id="mkpause">credit runs out</button>
+          <button id="mkreflect">reflect</button>
           <button id="mkend">reading ends</button>
           <button id="replay">replay from the start</button>
         </div>

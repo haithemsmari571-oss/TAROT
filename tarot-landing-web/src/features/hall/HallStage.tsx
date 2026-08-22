@@ -26,6 +26,9 @@ export interface HallHandlers {
   onRate?: (stars: number) => void;
   onAgain?: () => void;
   onBackToReaders?: () => void;
+  /** the reflection — the header's Reflect and the panel's Return */
+  onReflect?: () => void;
+  onReturn?: () => void;
 }
 
 export interface HallRuntime {
@@ -51,6 +54,8 @@ export default function HallStage({ children }: { children: ReactNode }) {
       onRate: (s) => handlers.current.onRate?.(s),
       onAgain: () => handlers.current.onAgain?.(),
       onBackToReaders: () => handlers.current.onBackToReaders?.(),
+      onReflect: () => handlers.current.onReflect?.(),
+      onReturn: () => handlers.current.onReturn?.(),
     });
     setHall(h);
 

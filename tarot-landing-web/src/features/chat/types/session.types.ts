@@ -12,7 +12,9 @@ export type ChatStatus =
 // client has joined and the join-anchored meter is running.
 // GRACE = accepted + joined, but out of balance for the next minute → the
 // meter is frozen and the client is in the 60s top-up hold (not billing).
-export type SessionStatus = 'ACTIVE' | 'AWAITING_JOIN' | 'GRACE';
+// REFLECTING = she pressed Reflect: the meter and the charge are frozen on the
+// server, the chat stays ACTIVE, the reader keeps writing (held on screen).
+export type SessionStatus = 'ACTIVE' | 'AWAITING_JOIN' | 'GRACE' | 'REFLECTING';
 
 export interface ChatSessionData {
   chat_id: number;
@@ -33,6 +35,10 @@ export interface ChatSessionData {
   remaining_minutes?: number;
   minutes_charged?: number;
   remaining_seconds?: number;
+  // Reflection budget, the server's figure.
+  reflect_remaining_seconds?: number;
+  reflect_seconds_used?: number;
+  reflecting_since?: string | null;
 }
 
 // Periodic re-sync from getChatSessionTime — the join-anchored source of truth
@@ -54,6 +60,10 @@ export interface ChatSessionSyncData {
   grace_seconds_left?: number;
   grace_reader_name?: string;
   is_topping_up?: boolean;
+  // Reflection budget, the server's figure.
+  reflect_remaining_seconds?: number;
+  reflect_seconds_used?: number;
+  reflecting_since?: string | null;
 }
 
 export interface ChatSessionState {
@@ -88,6 +98,13 @@ export interface ChatSessionState {
   graceSecondsLeft: number; // countdown before the session auto-ends
   graceReaderName: string | null;
   isToppingUp: boolean;
+
+  // Reflection — the server's budget figures. Null until the first sync that
+  // carried them (an older backend never does); useReflection then computes
+  // locally from reflectBudget.ts, exactly as the dev injector does.
+  reflectRemainingSeconds: number | null;
+  reflectSecondsUsed: number | null;
+  reflectingSince: string | null;
   
   // Calculated values
   remainingBalance: number | null;

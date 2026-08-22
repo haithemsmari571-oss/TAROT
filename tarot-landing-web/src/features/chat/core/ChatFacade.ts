@@ -232,6 +232,35 @@ export class ChatFacade {
         });
         break;
 
+      case 'session_reflecting':
+      case 'session_reflect_ended': {
+        // Reflection: the server froze (or released) the meter. Both carry the
+        // grace broadcast's shape plus the budget figures; `reason` only on end.
+        const ev = eventType === 'session_reflecting'
+          ? ChatEventType.SESSION_REFLECTING
+          : ChatEventType.SESSION_REFLECT_ENDED;
+        // the server nests the figures under `data` ({event, data:{…}}); read
+        // the inner object (falling back to a flat shape if one ever arrives)
+        const d = data.data ?? data;
+        console.log('[ChatFacade] Emitting ' + ev + ':', d);
+        this.eventBus.emit(ev, {
+          sessionStatus: d.session_status,
+          chatStatus: d.chat_status,
+          reason: d.reason,
+          reflectRemainingSeconds: d.reflect_remaining_seconds,
+          reflectSecondsUsed: d.reflect_seconds_used,
+          reflectingSince: d.reflecting_since ?? null,
+          elapsedSeconds: d.elapsed_seconds,
+          minutesCharged: d.minutes_charged,
+          estimatedCost: d.estimated_cost,
+          clientBalance: d.client_balance,
+          creditBalance: d.credit_balance,
+          paidBalance: d.paid_balance,
+          ratePerMinute: d.rate_per_minute,
+        } as any);
+        break;
+      }
+
       case 'messages_read':
         // Recipient opened the conversation — flip our sent messages to "seen".
         this.eventBus.emit(ChatEventType.MESSAGES_READ, {

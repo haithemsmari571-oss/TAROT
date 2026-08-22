@@ -17,8 +17,9 @@ import { HallRuntimeContext } from "./HallStage";
 import HoldAmounts from "./HoldAmounts";
 import { setHallSheetEnabled } from "./hallSheet";
 import { formatMinutesLeft } from "@/lib/currency";
+import { formatReflectClock, formatReflectUsed } from "./reflectBudget";
 
-export type RoomPhase = "room" | "pausing" | "ended";
+export type RoomPhase = "room" | "pausing" | "reflecting" | "ended";
 
 export interface HallRoomMessage {
   id: string | number;
@@ -76,10 +77,30 @@ export interface HallRoomProps {
     perMinute: number | null;
   } | null;
 
+  /* the reflection — the third stage. Present whenever the caller offers it
+     (an active reading); the control shows the banked time before she presses
+     it and goes quiet, not hidden, at 0:00. Both numbers come from
+     reflectBudget.ts through the caller; nothing is computed here. */
+  reflect?: {
+    remainingSeconds: number;
+    earnedSeconds: number;
+    /** 0:00 reached mid-reflection: the soft "Your time is up" beat is on.
+        The caller ends it through its own Return code; nothing here dismisses. */
+    timeUp?: boolean;
+    onBegin: () => void;
+    onReturn: () => void;
+    /** the panel's amounts — the same top-up path the hold panel uses */
+    onAddTime: (amountGbp: number) => void;
+  } | null;
+
   /* #34 and every terminal state — the ended screen */
   receipt?: (HallReceipt & {
     title: string; sub: string;
     onAgain: () => void; onBack: () => void; onRate?: (stars: number) => void;
+    /** Reflection time used in this reading, in seconds (the hook's own spent
+        value). Draws one quiet line under the figures when > 0; at 0 there
+        is no element at all. Client-local until the server pass. */
+    reflectionSeconds?: number;
   }) | null;
 
   /* #33 anything with no hall home — drawn in the panel in its own words */
@@ -122,12 +143,16 @@ export default function HallRoom(p: HallRoomProps) {
   useEffect(() => {
     if (!runtime) return;
     runtime.handlers.current = {
-      onAddTime: (a) => p.hold?.onAddTime(a),
+      /* the hold's amounts while held, the reflect panel's while reflecting —
+         one "Add £N" handler in startHall, two panels, the same top-up path */
+      onAddTime: (a) => (p.hold ? p.hold.onAddTime(a) : p.reflect?.onAddTime(a)),
       onMoreAmounts: () => p.onMoreOffering?.(),
       onEndNow: () => p.hold?.onEndNow(),
       onRate: (s) => p.receipt?.onRate?.(s),
       onAgain: () => p.receipt?.onAgain(),
       onBackToReaders: () => p.receipt?.onBack(),
+      onReflect: () => p.reflect?.onBegin(),
+      onReturn: () => p.reflect?.onReturn(),
     };
   });
 
@@ -136,12 +161,18 @@ export default function HallRoom(p: HallRoomProps) {
      guarded getElementById skipped, and the closing card rendered with zero
      click listeners (CDP-measured). Re-wire against the real DOM now that the
      room is mounted. Idempotent — unbinds before it binds. */
-  useEffect(() => { hallInstance?.wireRoom?.(); }, [hallInstance]);
+  /* The Reflect control is rendered only once the reading is active, which on
+     the live room is AFTER this first wiring (the first session-time sync
+     flips it) — so it mounted with no listener (CDP measured 0 on the local
+     stack against 1 under the injector, where it exists from the first
+     render). Re-wire whenever a header control appears or goes; idempotent. */
+  useEffect(() => { hallInstance?.wireRoom?.(); }, [hallInstance, !!p.reflect, !!p.onEnd, !!p.onLeave]);
 
   /* the caller's phase drives the hall's own state machine */
   useEffect(() => {
     const h = hallInstance; if (!h) return;
     if (p.phase === "pausing") h.pausing(p.hold?.graceSeconds ?? undefined);
+    else if (p.phase === "reflecting") h.reflecting();
     else if (p.phase === "ended") h.ended(p.receipt ?? undefined);
     else h.room();
   }, [hallInstance, p.phase, p.hold?.graceSeconds, p.receipt?.minutes, p.receipt?.total, p.receipt?.perMinute]);
@@ -162,6 +193,13 @@ export default function HallRoom(p: HallRoomProps) {
   }, [p.readerPhoto]);
 
   const meter = p.isPaused ? "Paused" : formatMinutesLeft(p.minutesLeft);
+  const banked = p.reflect ? formatReflectClock(p.reflect.remainingSeconds) : null;
+  const bankedOut = !!p.reflect && p.reflect.remainingSeconds <= 0;
+  const timeUp = !!p.reflect?.timeUp;
+  const reflectUsed = formatReflectUsed(p.receipt?.reflectionSeconds ?? 0);
+  const countdownPct = p.reflect && p.reflect.earnedSeconds > 0
+    ? Math.max(0, Math.min(100, (p.reflect.remainingSeconds / p.reflect.earnedSeconds) * 100))
+    : 0;
 
   return (
     <>
@@ -189,12 +227,29 @@ export default function HallRoom(p: HallRoomProps) {
             <div className="stat"><b id="elapsed">{(p.elapsedLabel || "").replace(/\s*elapsed\s*$/, "") || "0:00"}</b><i>elapsed</i></div>
             <div className="stat"><b id="mins">{meter}</b><i>{p.isPaused ? "paused" : "left"}</i></div>
           </div>
-          {p.onEnd && (
-            <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading">End</button>
-          )}
-          {p.onLeave && (
-            <button className="rbtn rleave" onClick={p.onLeave} aria-label="Leave for the readers">Readers</button>
-          )}
+          {/* The trailing controls travel as one cell, so on a narrow header
+              they wrap to the next row TOGETHER and hug its right edge — a
+              Reflect that stayed up beside the name while End and Readers fell
+              to the left of the next row is what auto margins alone produced. */}
+          <div className="ctl">
+            {/* the reflection — beside End, showing the banked time. Bound by
+                startHall's wireRoomControls (id="reflect"), like the hold's
+                controls, so it carries a real listener the DOM can count. At
+                0:00 it stays, quiet: aria-disabled, and the handler declines. */}
+            {p.reflect && (
+              <button className="rbtn rreflect" id="reflect" type="button"
+                      aria-disabled={bankedOut ? "true" : undefined}
+                      aria-label={bankedOut ? "Reflect — no time banked yet" : `Reflect — ${banked} banked`}>
+                <span>Reflect</span><b id="reflectbank">{banked}</b>
+              </button>
+            )}
+            {p.onEnd && (
+              <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading">End</button>
+            )}
+            {p.onLeave && (
+              <button className="rbtn rleave" onClick={p.onLeave} aria-label="Leave for the readers">Readers</button>
+            )}
+          </div>
         </header>
 
         <div className="threadwrap">
@@ -295,6 +350,44 @@ export default function HallRoom(p: HallRoomProps) {
         </section>
       </main>
 
+      {/* ══ 7 · the reflection ══
+          The third stage. The countdown is drawn from the caller's numbers on
+          every render (React owns #rfcdnum here; startHall's own countdown
+          touches only #cdnum). At 0:00 the clock holds at 0:00 and the panel
+          stays until Return — what should happen then is an open decision. */}
+      <main className="stage stage2" id="reflectstage">
+        <section className="panel" id="reflectpanel" data-timeup={timeUp ? "true" : undefined}>
+          <p className="eyebrow">Sit with this</p>
+          <h1 className="ptitle">{p.readerName} <em>is holding the thread</em></h1>
+          <p className="psub">Nothing is charged while you think. Whatever she says meanwhile waits for you, and the reading carries on exactly where you left it.</p>
+          <div className="cd">
+            <div className="cdnum" id="rfcdnum">{banked ?? "0:00"}</div>
+            {/* the beat at 0:00 — the countdown's own label, in its own voice */}
+            <span className={"slab" + (timeUp ? " rfup" : "")} id="rfslab">{timeUp ? "Your time is up" : "yours to sit with"}</span>
+            <div className="cdbar"><i className="cdfill" id="rfcdfill" style={{ width: countdownPct + "%" }}></i></div>
+          </div>
+          <div className="sound">
+            <span className="slab">What you'll hear</span>
+            {/* the entry form's own four choices, through the same selectSound */}
+            <div className="pills" id="rfpills">
+              <button type="button" className="pill" data-snd="none" aria-pressed="true">Silence</button>
+              <button type="button" className="pill" data-snd="rain" aria-pressed="false">Rain</button>
+              <button type="button" className="pill" data-snd="bowls" aria-pressed="false">Singing bowls</button>
+              <button type="button" className="pill" data-snd="hum" aria-pressed="false">Deep hum</button>
+            </div>
+          </div>
+          <div className="sound">
+            <span className="slab">Add time</span>
+            {/* the hold panel's amounts, the same component under its own id */}
+            <HoldAmounts id="rfamts" />
+          </div>
+          <button className="quiet" id="rfaddtime" type="button">Add £50 and carry on</button>
+          <button className="quiet" id="rfmoreamts" type="button">A larger offering</button>
+          <button className="begin" id="rfreturn" type="button">Return to the reading</button>
+          <p className="legal">Your minutes do not run while you reflect.</p>
+        </section>
+      </main>
+
       {/* ══ 6 · the receipt ══ */}
       <main className="stage stage2" id="endstage">
         <section className="panel" id="endpanel">
@@ -308,6 +401,9 @@ export default function HallRoom(p: HallRoomProps) {
             <div className="rcell"><b className="rnum" id="rtotal">—</b><span className="slab">total</span></div>
             <div className="rcell"><b className="rnum" id="rrate">—</b><span className="slab">per minute</span></div>
           </div>
+          {/* decision 3 — reflection used, one quiet line under the figures;
+              omitted entirely when nothing was used (formatReflectUsed → "") */}
+          {reflectUsed && <p className="legal rfline" id="rreflect">{reflectUsed}</p>}
           <div className="softbox">{p.receipt?.sub ?? "She keeps what you told her tonight. Next time you sit down with her, "}<strong>you start where you finished.</strong></div>
           <div className="sound">
             <span className="slab">How was she?</span>

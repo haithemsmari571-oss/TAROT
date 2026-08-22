@@ -181,9 +181,13 @@ export interface ChatSessionTime {
   remaining_seconds?: number;
   remaining_minutes?: number; // whole minutes still affordable (incl. current)
   minutes_charged?: number; // minutes debited upfront so far
-  session_status?: string; // "ACTIVE" | "AWAITING_JOIN" | "GRACE"
+  session_status?: string; // "ACTIVE" | "AWAITING_JOIN" | "GRACE" | "REFLECTING"
   grace_seconds_left?: number; // out-of-balance top-up countdown
   is_topping_up?: boolean;
+  // Reflection — the server's budget figures (reported in every state).
+  reflect_remaining_seconds?: number;
+  reflect_seconds_used?: number;
+  reflecting_since?: string | null; // ISO while REFLECTING, else null
 }
 
 /**
@@ -233,6 +237,26 @@ export const pauseChat = async (chatId: number) => {
  */
 export const pauseChatManual = async (chatId: number) => {
   const response = await axiosClient.post(`/chat/${chatId}/pause`);
+  return response.data;
+};
+
+/**
+ * Reflection: she pauses to sit with what she said. The server freezes the
+ * meter and the charge at this second (the chat stays ACTIVE, the reader keeps
+ * writing). Answers the session-time shape; 409 with `reason` when refused
+ * (not_active | awaiting_join | grace | already_reflecting | no_budget).
+ */
+export const reflectChat = async (chatId: number): Promise<ChatSessionTime> => {
+  const response = await axiosClient.post(`/chat/${chatId}/reflect`);
+  return response.data;
+};
+
+/**
+ * Return from the reflection. Idempotent on the server: when she is not
+ * reflecting the current figures come back with 200, never an error.
+ */
+export const reflectReturnChat = async (chatId: number): Promise<ChatSessionTime> => {
+  const response = await axiosClient.post(`/chat/${chatId}/reflect/return`);
   return response.data;
 };
 
