@@ -47,6 +47,10 @@ from app.routers.hall_sounds import (
     admin_router as hall_sounds_admin_router,
     public_router as hall_sounds_public_router,
 )
+from app.routers.library_items import (
+    admin_router as library_items_admin_router,
+    public_router as library_items_public_router,
+)
 
 # Configure logging
 configure_logging()
@@ -221,6 +225,12 @@ app.include_router(admin_articles_router, prefix="/api/admin/articles", tags=["A
 app.include_router(public_seo_router, tags=["Public SEO"])
 app.include_router(hall_sounds_public_router, prefix="/api/hall-sounds", tags=["Hall Sounds"])
 app.include_router(hall_sounds_admin_router, prefix="/api/admin/hall-sounds", tags=["Admin - Hall Sounds"])
+app.include_router(library_items_public_router, prefix="/api/library-items", tags=["Library Items"])
+app.include_router(
+    library_items_admin_router,
+    prefix="/api/admin/library-items",
+    tags=["Admin - Library Items"],
+)
 
 app.include_router(
     admin_zodiac_router,
