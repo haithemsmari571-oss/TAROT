@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_app_settings
 from app.models.hall_sound import HallSound
+from app.schemas.hall_sound import MAX_HALL_SOUND_NAME_LENGTH
 
 # A 30-60 s ambient loop exported as 320 kbps MP3 is 1.2-2.4 MB; a Vorbis q8
 # export is smaller. 12 MB is five times that ceiling: room for a long loop or
@@ -211,8 +212,11 @@ def store_hall_sound(
             "Export a shorter loop or a lower bitrate.",
         )
     name = name.strip()
-    if not name or len(name) > 80:
-        raise HallSoundError(400, "Give the sound a name of up to 80 characters.")
+    if not name or len(name) > MAX_HALL_SOUND_NAME_LENGTH:
+        raise HallSoundError(
+            400,
+            f"Give the sound a name of up to {MAX_HALL_SOUND_NAME_LENGTH} characters.",
+        )
     if not (0.0 <= level <= 1.0):
         raise HallSoundError(400, "Level must be between 0 and 1.")
     sniffed = sniff_hall_sound(data)
