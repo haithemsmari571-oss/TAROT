@@ -43,6 +43,10 @@ from app.routers import (
     admin_onboarding_router,
 )
 import app.models
+from app.routers.hall_sounds import (
+    admin_router as hall_sounds_admin_router,
+    public_router as hall_sounds_public_router,
+)
 
 # Configure logging
 configure_logging()
@@ -215,6 +219,8 @@ app.include_router(
 app.include_router(articles_router, prefix="/api/articles", tags=["Articles"])
 app.include_router(admin_articles_router, prefix="/api/admin/articles", tags=["Admin Articles"])
 app.include_router(public_seo_router, tags=["Public SEO"])
+app.include_router(hall_sounds_public_router, prefix="/api/hall-sounds", tags=["Hall Sounds"])
+app.include_router(hall_sounds_admin_router, prefix="/api/admin/hall-sounds", tags=["Admin - Hall Sounds"])
 
 app.include_router(
     admin_zodiac_router,
