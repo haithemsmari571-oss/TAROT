@@ -12,7 +12,12 @@ from app.database.client import get_db
 from app.dependencies.authorization import require_permission
 from app.enums.permissions import Permission
 from app.models.hall_sound import HallSound
-from app.schemas.hall_sound import HallSoundAdmin, HallSoundPublic, HallSoundUpdate
+from app.schemas.hall_sound import (
+    MAX_HALL_SOUND_NAME_LENGTH,
+    HallSoundAdmin,
+    HallSoundPublic,
+    HallSoundUpdate,
+)
 from app.services.hall_sounds import (
     MAX_HALL_SOUND_BYTES,
     HallSoundError,
@@ -75,7 +80,7 @@ def admin_list_hall_sounds(db: Session = Depends(get_db)):
 @admin_router.post("", response_model=HallSoundAdmin, status_code=201)
 async def admin_upload_hall_sound(
     file: UploadFile = File(..., description="An MP3 or OGG ambient loop"),
-    name: str = Form(..., min_length=1, max_length=80),
+    name: str = Form(..., min_length=1, max_length=MAX_HALL_SOUND_NAME_LENGTH),
     sort_order: int = Form(0),
     enabled: bool = Form(True),
     level: float = Form(1.0, ge=0.0, le=1.0),

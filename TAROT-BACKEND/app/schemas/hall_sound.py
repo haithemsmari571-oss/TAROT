@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+MAX_HALL_SOUND_NAME_LENGTH = 18
+
 
 class HallSoundPublic(BaseModel):
     """Exactly what the site needs to offer and play a loop. Nothing else."""
@@ -39,7 +41,7 @@ class HallSoundUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(default=None, min_length=1, max_length=80)
+    name: str | None = Field(default=None, min_length=1, max_length=MAX_HALL_SOUND_NAME_LENGTH)
     sort_order: int | None = None
     enabled: bool | None = None
     level: float | None = Field(default=None, ge=0.0, le=1.0)
