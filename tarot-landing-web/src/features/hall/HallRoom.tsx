@@ -15,6 +15,7 @@ import "../../styles/hall-list.css";
 import { type HallReceipt } from "./startHall";
 import { HallRuntimeContext } from "./HallStage";
 import HoldAmounts from "./HoldAmounts";
+import SoundPills, { REFLECT_LIBRARY_SOUND_LIMIT } from "./SoundPills";
 import { setHallSheetEnabled } from "./hallSheet";
 import { formatMinutesLeft } from "@/lib/currency";
 import { formatReflectClock, formatReflectUsed } from "./reflectBudget";
@@ -368,13 +369,8 @@ export default function HallRoom(p: HallRoomProps) {
           </div>
           <div className="sound">
             <span className="slab">What you'll hear</span>
-            {/* the entry form's own four choices, through the same selectSound */}
-            <div className="pills" id="rfpills">
-              <button type="button" className="pill" data-snd="none" aria-pressed="true">Silence</button>
-              <button type="button" className="pill" data-snd="rain" aria-pressed="false">Rain</button>
-              <button type="button" className="pill" data-snd="bowls" aria-pressed="false">Singing bowls</button>
-              <button type="button" className="pill" data-snd="hum" aria-pressed="false">Deep hum</button>
-            </div>
+            {/* the entry form's own choices, through the same selectSound */}
+            <SoundPills id="rfpills" maxLibraryEntries={REFLECT_LIBRARY_SOUND_LIMIT} />
           </div>
           <div className="sound">
             <span className="slab">Add time</span>

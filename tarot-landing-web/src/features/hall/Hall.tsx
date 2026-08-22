@@ -26,6 +26,7 @@ import { setHallSheetEnabled } from "./hallSheet";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { getMyChatsWithDetails } from "@/features/chat/api/chatApi";
 import HoldAmounts from "./HoldAmounts";
+import SoundPills, { REFLECT_LIBRARY_SOUND_LIMIT } from "./SoundPills";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import { NotificationType } from "@/features/notifications/types/notification.types";
 // the same helper the reader's own page uses (browse/views/PsychicDetails.tsx:63),
@@ -232,12 +233,8 @@ export default function Hall({ mode = "preview", psychicId }:
           <textarea id="q" rows={3} placeholder="Whatever's sitting heaviest… names, birthdays, how long it's been going on."></textarea>
           <div className="sound">
             <span className="slab">What you'll hear</span>
-            <div className="pills" id="pills">
-              <button className="pill" data-snd="none" aria-pressed="true">Silence</button>
-              <button className="pill" data-snd="rain" aria-pressed="false">Rain</button>
-              <button className="pill" data-snd="bowls" aria-pressed="false">Singing bowls</button>
-              <button className="pill" data-snd="hum" aria-pressed="false">Deep hum</button>
-            </div>
+            {/* Silence + the owner's library, or the four generated beds — one source */}
+            <SoundPills />
           </div>
           <button className="begin" id="begin">Begin the reading</button>
           {/* Her rate, in the design's own label treatment. */}
@@ -340,12 +337,7 @@ export default function Hall({ mode = "preview", psychicId }:
           </div>
           <div className="sound">
             <span className="slab">What you'll hear</span>
-            <div className="pills" id="rfpills">
-              <button className="pill" data-snd="none" aria-pressed="true">Silence</button>
-              <button className="pill" data-snd="rain" aria-pressed="false">Rain</button>
-              <button className="pill" data-snd="bowls" aria-pressed="false">Singing bowls</button>
-              <button className="pill" data-snd="hum" aria-pressed="false">Deep hum</button>
-            </div>
+            <SoundPills id="rfpills" maxLibraryEntries={REFLECT_LIBRARY_SOUND_LIMIT} />
           </div>
           <div className="sound">
             <span className="slab">Add time</span>

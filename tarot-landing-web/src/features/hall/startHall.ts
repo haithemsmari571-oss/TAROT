@@ -8,6 +8,12 @@ import FRAG from "./hall.frag.glsl?raw";
 /* the reflection budget — the preview harness's stand-in start value is read
    from the one module too, never typed here */
 import { reflectEarnedSeconds } from "./reflectBudget";
+/* the owner's sound library — the list is fetched once here and read by the
+   pills and this engine alike; the four generated beds stay the fallback */
+import {
+  SOUND_KEY, isGeneratedKind, findHallSound, loadHallSounds, whenHallSoundsSettled,
+  subscribeHallSounds, nearestMood, type HallSoundEntry,
+} from "./hallSounds";
 
 /* mode 'preview' = /design-preview: the developer harness and the room stage are
    present and the journey runs on its own timers.
@@ -209,12 +215,18 @@ if(!ok){
    and the choice is kept in sessionStorage so it survives into the room's own
    hall instance. The pill click is itself the user gesture the autoplay
    policy needs, so boot()'s resume() runs gesture-qualified. */
-const SOUND_KEY='hall-sound';
+/* SOUND_KEY now lives in hallSounds.ts (the pills read it for their first paint). */
 let ctx:any=null,bedGain:any=null,uiGain:any=null,breathGain:any=null,soundOn=false,bedNodes:any[]=[];
+/* the current bed's own output gain, and whether it is a decoded library file
+   (a file fades out over XFADE; a generated bed still stops as it always did) */
+let bedOut:any=null,bedIsLibrary=false;
+/* set by the teardown: a stopped instance must never start audio again, even
+   from a fetch or a list that answers after the hall has unmounted */
+let halted=false;
 let flowSrc:any=null,flowGain:any=null,flowFilt:any=null;
 let bedKind:string=(()=>{try{return sessionStorage.getItem(SOUND_KEY)||'none';}catch(e){return 'none';}})();
 function boot(){
-  if(ctx)return;
+  if(ctx||halted)return;
   ctx=new (window.AudioContext||(window as any).webkitAudioContext)({latencyHint:'playback'});
   bedGain=ctx.createGain();bedGain.gain.value=0;
   breathGain=ctx.createGain();breathGain.gain.value=1;
@@ -241,8 +253,16 @@ function boot(){
    (the flow-noise idiom); 'hum' is a low sine drone. Spectrally distinct on
    purpose: rain sits high and broadband, bowls in the mids, hum at the bottom. */
 function startBed(kind:string='bowls'){
-  boot();bedNodes.forEach(n=>{try{n.stop()}catch(e){}});bedNodes=[];
-  const out=ctx.createGain();out.gain.value=1;out.connect(bedGain);
+  boot();
+  if(!ctx)return;                                  /* halted: a stopped instance stays silent */
+  /* a generated bed replacing a generated bed: exactly as before the library
+     (the old nodes stop now). Only a library file on the way out earns a
+     crossfade, and then the new bed fades in over the same second. */
+  const crossfade=bedIsLibrary;
+  retireBed(crossfade);
+  const out=ctx.createGain();out.gain.value=crossfade?0:1;out.connect(bedGain);
+  if(crossfade)out.gain.linearRampToValueAtTime(1,ctx.currentTime+XFADE);
+  bedOut=out;bedIsLibrary=false;
   if(kind==='rain'){
     const n=ctx.sampleRate*4,nb=ctx.createBuffer(1,n,ctx.sampleRate),nd=nb.getChannelData(0);
     for(let i=0;i<n;i++)nd[i]=Math.random()*2-1;
@@ -276,12 +296,66 @@ function startBed(kind:string='bowls'){
   bedGain.gain.setTargetAtTime(.2,ctx.currentTime,4);
 }
 function stopBed(){if(!ctx)return;bedGain.gain.setTargetAtTime(0,ctx.currentTime,1.2);
-  bedNodes.forEach(n=>{try{n.stop()}catch(e){}});bedNodes=[];
+  bedNodes.forEach(n=>{try{n.stop()}catch(e){}});bedNodes=[];bedOut=null;bedIsLibrary=false;
   if(flowGain)flowGain.gain.setTargetAtTime(0,ctx.currentTime,.3);}
 
-/* The single entry point for the four choices. Silence is an explicit stop of
-   whatever is playing, never just an unstarted engine; anything else builds
-   its bed right now, inside the click that authorises audio. */
+/* ═══════════ the owner's library ═══════════
+   A library choice plays a decoded file on a looping AudioBufferSourceNode
+   inside the SAME context and under the SAME bedGain as the generated beds:
+   source → trim (the file's own level) → out → bedGain. While the file
+   downloads and decodes, the generated bed for its nearest mood stands in,
+   and the file takes over through a one-second crossfade. A file that cannot
+   be fetched or decoded leaves the stand-in playing and says nothing.
+   Switching away from a file crossfades too; Silence still collapses all. */
+const XFADE=1.0;                                   /* seconds, "roughly a second" */
+const decodedFiles=new Map<string,AudioBuffer>();  /* key → decoded loop, once per page */
+let libSeq=0;                                      /* the latest library choice wins */
+/* Take the current bed out: over XFADE when asked, otherwise now — the
+   generated beds' own behaviour, untouched. */
+function retireBed(fade:boolean){
+  const nodes=bedNodes,out=bedOut;bedNodes=[];bedOut=null;
+  if(!nodes.length)return;
+  if(fade&&out&&ctx){
+    const t=ctx.currentTime;
+    out.gain.cancelScheduledValues(t);out.gain.setValueAtTime(out.gain.value,t);
+    out.gain.linearRampToValueAtTime(0,t+XFADE);
+    setTimeout(()=>{nodes.forEach(n=>{try{n.stop()}catch(e){}});try{out.disconnect();}catch(e){}},(XFADE+.25)*1000);
+  }else nodes.forEach(n=>{try{n.stop()}catch(e){}});
+}
+function startLibraryBed(entry:HallSoundEntry){
+  if(halted)return;
+  boot();
+  const seq=++libSeq;
+  /* the stand-in, at once: the nearest generated mood, as a generated choice */
+  startBed(nearestMood(entry));
+  const standNodes=bedNodes,standOut=bedOut;
+  const takeOver=(buf:AudioBuffer)=>{
+    if(halted||seq!==libSeq||bedKind!==entry.key||!ctx)return;   /* she has moved on */
+    const src=ctx.createBufferSource();src.buffer=buf;src.loop=true;
+    const trim=ctx.createGain();trim.gain.value=entry.level;
+    const out=ctx.createGain();out.gain.value=0;
+    src.connect(trim);trim.connect(out);out.connect(bedGain);src.start();
+    const t=ctx.currentTime;
+    out.gain.linearRampToValueAtTime(1,t+XFADE);
+    if(standOut){standOut.gain.cancelScheduledValues(t);standOut.gain.setValueAtTime(standOut.gain.value,t);
+      standOut.gain.linearRampToValueAtTime(0,t+XFADE);}
+    setTimeout(()=>{standNodes.forEach(n=>{try{n.stop()}catch(e){}});},(XFADE+.25)*1000);
+    bedNodes=[src];bedOut=out;bedIsLibrary=true;
+    bedGain.gain.setTargetAtTime(.2,ctx.currentTime,4);
+  };
+  const cached=decodedFiles.get(entry.key);
+  if(cached){takeOver(cached);return;}
+  fetch(entry.url).then(r=>{if(!r.ok)throw new Error('hall sound '+r.status);return r.arrayBuffer();})
+    .then(ab=>ctx.decodeAudioData(ab))
+    .then((buf:AudioBuffer)=>{decodedFiles.set(entry.key,buf);takeOver(buf);})
+    .catch(()=>{ /* could not fetch or decode: the stand-in simply stays */ });
+}
+
+/* The single entry point for every choice — the four generated beds and the
+   owner's library alike. Silence is an explicit stop of whatever is playing,
+   never just an unstarted engine; anything else builds its bed right now,
+   inside the click that authorises audio. A stored key the library no longer
+   carries falls back to silence without a word. */
 function selectSound(kind:string){
   bedKind=kind;
   try{sessionStorage.setItem(SOUND_KEY,kind);}catch(e){}
@@ -289,7 +363,12 @@ function selectSound(kind:string){
   if(!soundOn){stopBed();return;}
   boot();
   if(ctx.state!=='running')ctx.resume();
-  startBed(kind);
+  if(isGeneratedKind(kind)){startBed(kind);return;}
+  const entry=findHallSound(kind);
+  if(entry){startLibraryBed(entry);return;}
+  bedKind='none';soundOn=false;
+  try{sessionStorage.setItem(SOUND_KEY,'none');}catch(e){}
+  stopBed();paintSndPills();
 }
 /* Every sound pill on the page — the entry form's #pills and the reflect
    panel's #rfpills — reads the same bedKind, so the two can never disagree. */
@@ -816,7 +895,26 @@ cleanups.push(()=>pillsEl.removeEventListener('click',onPills));}
    if the browser still holds it suspended (a fresh page load), the first
    pointer-down below resumes it. */
 paintPills();
-if(bedKind!=='none'){soundOn=true;try{startBed(bedKind);}catch(e){}}
+/* the list, fetched once per page; the pills re-render from it, this engine
+   reads it, and a choice stored from the entry form is restored through it */
+loadHallSounds();
+cleanups.push(subscribeHallSounds(paintSndPills));
+if(bedKind!=='none'){
+  if(isGeneratedKind(bedKind)){soundOn=true;try{startBed(bedKind);}catch(e){}}
+  else{
+    /* a library key: the file is known only once the list is in. Until then
+       nothing plays (a stand-in would be a guess); then the usual path, or
+       silence if the key is gone. */
+    const want=bedKind;
+    whenHallSoundsSettled().then(()=>{
+      if(halted||bedKind!==want)return;
+      const entry=findHallSound(want);
+      if(entry){soundOn=true;try{startLibraryBed(entry);}catch(e){}}
+      else{bedKind='none';soundOn=false;try{sessionStorage.setItem(SOUND_KEY,'none');}catch(e){}}
+      paintSndPills();
+    });
+  }
+}
 
 /* ── the developer harness. /design-preview only — it must never reach a
    customer, and in entry mode none of these elements are rendered at all. ── */
@@ -922,7 +1020,7 @@ cleanups.push(()=>pvBtn.removeEventListener('click',onPreview));
 /* ── end of the developer harness ── */
 
   /* Teardown — the source page never unmounts, so it has no equivalent. */
-  cleanups.push(()=>{ timers.forEach(clearTimeout); clearInterval(cardT); clearTimeout(nudgeT);
+  cleanups.push(()=>{ halted=true; stopRf(); timers.forEach(clearTimeout); clearInterval(cardT); clearTimeout(nudgeT);
     HH.removeAttribute('data-state'); HH.style.removeProperty('--panelTop'); HH.style.removeProperty('--gold');
     try{ stopBed(); if(ctx) ctx.close(); }catch(e){} });
   return {
