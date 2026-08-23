@@ -60,20 +60,22 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navItems = isAuthenticated
-    ? [
+  const navItems = [
+    { name: "Sanctuary", path: "/sanctuary" },
+    ...(isAuthenticated
+      ? [
         { name: "Psychics", path: "/psychics-browse" },
         { name: "Chats", path: "/chats" },
         { name: "Life Path & Zodiac", path: "/oracle" },
         { name: "Articles", path: "/articles/" },
         { name: "Billing", path: "/billing" },
       ]
-    : [
-        { name: "Sanctuary", path: "/home" },
+      : [
         { name: "Psychics", path: "/psychics-browse" },
         { name: "Life Path & Zodiac", path: "/oracle" },
         { name: "Articles", path: "/articles/" },
-      ];
+      ]),
+  ];
 
   const avatarInitial = (user?.username || "✦").charAt(0).toUpperCase();
 

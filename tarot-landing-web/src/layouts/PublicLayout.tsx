@@ -1,5 +1,5 @@
 // src/layouts/PublicLayout.tsx
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import AnnouncementBar from "../components/AnnouncementBar";
@@ -9,6 +9,8 @@ import "../styles/glass.css";
 
 export default function PublicLayout() {
   const { isAuthenticated } = useAuth();
+  const { pathname } = useLocation();
+  const isSanctuary = pathname === "/sanctuary";
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "var(--gl-base)" }}>
@@ -18,9 +20,9 @@ export default function PublicLayout() {
       <main className="pt-[104px]">
         <Outlet />
       </main>
-      {!isAuthenticated && <Footer />}
+      {!isAuthenticated && !isSanctuary && <Footer />}
       {/* One-time welcome-credit modal — new, logged-out visitors only. */}
-      {!isAuthenticated && <WelcomePopup />}
+      {!isAuthenticated && !isSanctuary && <WelcomePopup />}
     </div>
   );
 }

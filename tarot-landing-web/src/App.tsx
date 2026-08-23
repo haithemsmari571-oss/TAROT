@@ -74,6 +74,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
     const isGuestAllowed =
       location.pathname === "/" ||
       location.pathname === "/home" ||
+      location.pathname === "/sanctuary" ||
       location.pathname === "/psychics-browse" ||
       location.pathname === "/oracle" ||
       location.pathname === "/about" ||
