@@ -1,0 +1,2059 @@
+<!doctype html>
+<!--
+  Flame — a real-time fractal flame.
+
+  A chaos game iterates points through affine transforms with nonlinear variations, scatters
+  them into a density histogram, and log-density tonemaps the result. The thin translucent
+  overlapping sheets are the histogram itself, which is why no surface or volume renderer
+  produces them. Structure after Scott Draves' flam3 / Apophysis / Chaotica.
+
+  The bloom downsample tap spacing (a quarter of a destination texel, so bilinear covers the
+  whole source footprint instead of aliasing) is taken from ThreeUI Community —
+  https://github.com/MengTo/threeui
+
+  MIT License. Copyright (c) 2026 Meng To.
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this
+  software and associated documentation files (the "Software"), to deal in the Software
+  without restriction, including without limitation the rights to use, copy, modify, merge,
+  publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+  to whom the Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or
+  substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+  INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+  PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+  FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Flame — Now Playing</title>
+<style>
+  :root {
+    --accent: #ff4fd8;
+    --accent2: #7b5cff;
+    --fg: rgba(255,251,246,0.93);
+    --fg-dim: rgba(255,248,240,0.52);
+    --fg-faint: rgba(255,248,240,0.24);
+    --line: rgba(255,246,235,0.13);
+    --panel: rgba(255,248,240,0.055);
+    --frost: rgba(255,248,240,0.05);
+    --frost-hi: rgba(255,248,240,0.10);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: #05040a; color: var(--fg); font-family: var(--sans); overflow: hidden; overscroll-behavior: none; }
+  body { -webkit-user-select: none; user-select: none; }
+
+  #orb, #orb2d { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; background: #000; }
+  #orb.dragging { cursor: grabbing; }
+
+  /* ---------- chrome ---------- */
+  .ui { position: fixed; z-index: 2; pointer-events: none; }
+  .ui > * { pointer-events: auto; }
+
+  #top { left: 0; right: 0; top: 0; padding: calc(18px + var(--safe-t)) calc(22px + env(safe-area-inset-right, 0px)) 26px calc(22px + env(safe-area-inset-left, 0px)); background: linear-gradient(to bottom, rgba(0,0,0,0.34), rgba(0,0,0,0)); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .eyebrow { font-size: 10px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--fg-dim); margin: 0 0 6px; }
+  #title { font-size: clamp(20px, 4.6vw, 34px); font-weight: 600; letter-spacing: -0.015em; margin: 0; line-height: 1.12; transition: opacity .18s; overflow-wrap: anywhere; hyphens: auto; }
+  #title.swap { opacity: 0; }
+  #subtitle { margin: 6px 0 0; font-size: 12px; color: var(--fg-dim); letter-spacing: 0.04em; }
+
+  #stats { text-align: right; font-family: var(--mono); font-size: 11px; color: var(--fg-dim); line-height: 1.5; white-space: nowrap; }
+  #stats b { color: var(--fg); font-weight: 500; }
+  #stats .warn { color: #ffb36b; }
+  #stats .tag { display: inline-block; margin-top: 4px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; font-size: 10px; color: var(--fg-dim); }
+
+  #toast { left: 50%; top: calc(86px + var(--safe-t)); transform: translateX(-50%) translateY(-6px); background: rgba(20,16,28,0.85); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-family: var(--mono); font-size: 11px; color: var(--fg); opacity: 0; transition: opacity .3s, transform .3s; backdrop-filter: blur(10px); }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  #bottom { left: 0; right: 0; bottom: 0; padding: 30px calc(22px + env(safe-area-inset-right, 0px)) calc(18px + var(--safe-b)) calc(22px + env(safe-area-inset-left, 0px)); background: linear-gradient(to top, rgba(0,0,0,0.42) 30%, rgba(0,0,0,0)); display: flex; flex-direction: column; gap: 14px; }
+
+  #progress { display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
+  /* padding + content-box clip gives the 3px-looking bar a 23px tall touch target */
+  #bar { flex: 1; height: 3px; padding: 10px 0; background: rgba(255,248,240,0.16); background-clip: content-box; border-radius: 3px; cursor: pointer; position: relative; box-sizing: content-box; touch-action: none; }
+  #bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+  #fill { height: 3px; width: 0%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 3px; transition: background .8s; }
+
+  #transport { display: flex; justify-content: center; align-items: center; gap: 22px; }
+  .btn { appearance: none; background: transparent; border: 0; color: var(--fg); width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; transition: background .2s, transform .15s; }
+  .btn:hover { background: rgba(255,248,240,0.09); }
+  .btn:active { transform: scale(0.94); }
+  .btn svg { width: 22px; height: 22px; fill: currentColor; }
+  #play { width: 64px; height: 64px; background: rgba(255,250,244,0.94); color: #100c08; box-shadow: 0 6px 30px rgba(0,0,0,0.32); }
+  #play:hover { background: #fffdfa; }
+  #play svg { width: 26px; height: 26px; }
+  #play .pause { display: none; }
+  #play.playing .play { display: none; }
+  #play.playing .pause { display: block; }
+
+  /* the ends fade, so a row that continues past the edge reads as continuing rather than as
+     stopping in the middle of nothing */
+  #tracks { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+            -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 34px), transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 34px), transparent 100%); }
+  .chip { scroll-snap-align: center; }
+  #tracks::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; border: 1px solid var(--line); background: var(--frost); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--fg-dim); padding: 9px 15px; border-radius: 999px; font-size: 12px; letter-spacing: 0.01em; cursor: pointer; transition: color .3s, border-color .3s, background .3s; font-family: var(--sans); }
+  .chip:hover { color: var(--fg); background: var(--frost-hi); }
+  .chip.active { color: var(--fg); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+  /* ---------- tuning panel ---------- */
+  #tools { position: fixed; z-index: 3; left: calc(22px + env(safe-area-inset-left, 0px)); right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(186px + var(--safe-b)); display: flex; gap: 8px; flex-wrap: wrap; }
+  #tools button { appearance: none; border: 1px solid var(--line); background: var(--frost); color: var(--fg-dim); padding: 8px 13px; border-radius: 999px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); font-family: var(--sans); transition: color .3s, background .3s, border-color .3s; }
+  #tools button:hover, #tools button.on { color: var(--fg); background: var(--frost-hi); border-color: rgba(255,246,235,0.32); }
+  #reactBtn[aria-pressed="true"] { color: #fff; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .chip.user { border-color: var(--accent); }
+  .chip.demo { border-style: dashed; }
+  #drop { position: fixed; inset: 0; z-index: 5; display: none; place-items: center; background: rgba(4,2,10,0.82); backdrop-filter: blur(6px); pointer-events: none; }
+  #drop.on { display: grid; }
+  #drop div { border: 2px dashed var(--accent); border-radius: 20px; padding: 34px 46px; font-size: 15px; letter-spacing: 0.04em; color: var(--fg); }
+  #tuneBtnLegacy { position: fixed; z-index: 3; left: 22px; bottom: calc(170px + var(--safe-b)); appearance: none; border: 1px solid var(--line); background: rgba(12,10,18,0.55); color: var(--fg-dim); padding: 7px 12px; border-radius: 999px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(10px); font-family: var(--sans); }
+  #tuneBtnLegacy:hover { color: var(--fg); }
+
+  #panel { position: fixed; z-index: 3; right: 16px; top: calc(80px + var(--safe-t)); width: 268px; max-height: calc(100vh - 300px); overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 10px; backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2); box-shadow: 0 8px 40px rgba(0,0,0,0.35); transform: translateX(12px); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .25s, transform .25s, visibility 0s .25s; }
+  #panel.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition-delay: 0s; }
+  #panel h3 { margin: 0 0 10px; font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--fg-dim); font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+  #panel h3 button { appearance: none; border: 0; background: transparent; color: var(--fg-dim); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; padding: 2px 4px; font-family: var(--sans); }
+  #panel h3 button:hover { color: var(--fg); }
+  .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; margin: 0 0 8px; }
+  .row label { font-size: 12px; color: var(--fg); }
+  .row output { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
+  .row input[type=range] { grid-column: 1 / -1; width: 100%; margin: 0; height: 22px; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+  .row input[type=range]::-webkit-slider-runnable-track { height: 2px; background: rgba(255,255,255,0.18); border-radius: 2px; }
+  .row input[type=range]::-moz-range-track { height: 2px; background: rgba(255,255,255,0.18); border-radius: 2px; }
+  .row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; margin-top: -7px; box-shadow: 0 0 0 3px rgba(0,0,0,0.4); }
+  .row input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.4); }
+  .meta { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; color: var(--fg-dim); line-height: 1.6; word-break: break-all; }
+
+  /* landscape phone: the panel would not fit beside the orb, so dock it top-right and shrink it */
+  /* A short window spends a quarter of its height on the transport if left alone; tighten it so
+     the orb keeps being the hero. */
+  @media (max-height: 720px) and (min-width: 641px) {
+    #play { width: 54px; height: 54px; }
+    .btn { width: 38px; height: 38px; }
+    #bottom { gap: 10px; padding-top: 20px; }
+    #top { padding-bottom: 14px; }
+  }
+  @media (max-height: 620px) and (max-width: 640px) {
+    #play { width: 50px; height: 50px; }
+    #bottom { gap: 8px; padding-top: 16px; }
+    #tracks { padding-bottom: 2px; }
+    .chip { padding: 7px 12px; font-size: 11px; }
+  }
+
+  /* Landscape phone: stacking the chrome above and below would leave the orb a sliver, so the
+     layout splits instead — controls in a left column, orb in the right half. */
+  @media (max-height: 520px) and (orientation: landscape) {
+    #top { right: 54%; }
+    #top #stats { display: none; }
+    #bottom { right: 54%; gap: 8px; }
+    #tools { top: calc(96px + var(--safe-t)); bottom: auto; left: calc(22px + env(safe-area-inset-left, 0px)); max-width: 42%; }
+    #panel { top: calc(8px + var(--safe-t)); max-height: calc(100vh - 70px); width: 230px; }
+    #transport { justify-content: flex-start; gap: 18px; padding-left: 4px; }
+    #play { width: 50px; height: 50px; }
+    .btn { width: 38px; height: 38px; }
+    #title { font-size: 24px; }
+    .chip { padding: 6px 11px; font-size: 11px; }
+  }
+  @media (max-height: 520px) and (orientation: portrait) {
+    #play { width: 52px; height: 52px; }
+  }
+  /* Portrait phone. The readout moves above the title so the title gets the full width instead of
+     being squeezed into a column beside it — that was what pushed a long name onto five lines. */
+  @media (max-width: 640px) {
+    #panel { right: 12px; left: 12px; width: auto; top: auto; bottom: calc(214px + var(--safe-b)); max-height: 38vh; }
+    #tools { bottom: calc(178px + var(--safe-b)); left: 14px; right: 14px; }
+    #top { padding: calc(10px + var(--safe-t)) 18px 10px; flex-direction: column-reverse; align-items: stretch; gap: 5px; }
+    #stats { text-align: left; font-size: 10px; line-height: 1.45; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    #stats > div, #stats > span { white-space: nowrap; }
+    #stats #build { flex-basis: 100%; }
+    #stats #build { margin-top: 0; }
+    #title { font-size: clamp(17px, 5.9vw, 27px); }
+    .eyebrow { display: none; }
+    #subtitle { margin-top: 3px; font-size: 11px; }
+    #progress { gap: 9px; }
+    #transport { gap: 18px; }
+    #play { width: 58px; height: 58px; }
+    .btn { width: 40px; height: 40px; }
+    #bottom { gap: 9px; padding-top: 18px; padding-bottom: calc(12px + var(--safe-b)); }
+    #bottom { padding: 0 18px calc(14px + var(--safe-b)); }
+    #stats .tag { display: none; }
+  }
+
+  /* ---------- no-webgl fallback ---------- */
+  #stats #fallbackNote { display: none; }
+  body.fallback #stats #fallbackNote { display: inline-block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #title, #fill, .chip, #panel, #toast { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="orb" aria-label="Audio-reactive fractal flame"></canvas>
+<canvas id="orb2d" aria-hidden="true" hidden></canvas>
+
+<div class="ui" id="top">
+  <div>
+    <p class="eyebrow">Now playing</p>
+    <h1 id="title">—</h1>
+    <p id="subtitle">—</p>
+  </div>
+  <div id="stats">
+    <div><b id="fps">–</b> fps</div>
+    <div><b id="scale">590k</b> samples/f · <span id="steps">768²</span></div>
+    <span class="tag" id="motionTag" hidden>reduced motion</span>
+    <span class="tag" id="fallbackNote">CPU fallback (no WebGL2)</span>
+    <div id="build" style="margin-top:4px;font-size:10px;color:var(--fg-faint)"></div>
+  </div>
+</div>
+
+<div class="ui" id="toast" role="status"></div>
+
+<div id="tools">
+  <button id="tuneBtn" type="button" aria-controls="panel" aria-expanded="false">Tune</button>
+  <button id="loadBtn" type="button" title="Play your own audio file">Load audio</button>
+  <button id="reactBtn" type="button" aria-pressed="false" title="Exaggerate the audio reaction">React ×1</button>
+</div>
+<input id="fileInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" hidden>
+<div id="drop"><div>Drop an audio file to play it through the orb</div></div>
+
+<div id="panel" role="group" aria-label="Look tuning">
+  <h3>Tuning <button id="reset" type="button">Reset</button></h3>
+  <div id="sliders"></div>
+  <div class="meta" id="meta"></div>
+</div>
+
+<div class="ui" id="bottom">
+  <div id="progress">
+    <span id="tCur">0:00</span>
+    <div id="bar" role="slider" tabindex="0" aria-label="Progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill"></div></div>
+    <span id="tTot">0:00</span>
+  </div>
+  <div id="transport">
+    <button class="btn" id="prev" type="button" aria-label="Previous track"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5 9 12l11 7z"/></svg></button>
+    <button class="btn" id="play" type="button" aria-label="Play">
+      <svg class="play" viewBox="0 0 24 24"><path d="M8 5v14l12-7z"/></svg>
+      <svg class="pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+    </button>
+    <button class="btn" id="next" type="button" aria-label="Next track"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
+  </div>
+  <div id="tracks" role="group" aria-label="Tracks"></div>
+</div>
+
+<!-- ================= SHADERS =================
+  A fractal flame: a chaos game iterating points through affine transforms with nonlinear
+  variations, scattered into a density histogram, then log-density tonemapped and coloured
+  from a palette indexed by transform. The translucent overlapping sheets come from the
+  histogram, which is why no surface or volume renderer can produce them.
+-->
+<script id="vs-quad" type="x-shader/x-vertex">#version 300 es
+const vec2 q[3] = vec2[3](vec2(-1.0,-1.0), vec2(3.0,-1.0), vec2(-1.0,3.0));
+void main(){ gl_Position = vec4(q[gl_VertexID], 0.0, 1.0); }
+</script>
+
+<script id="lib" type="x-shader/x-lib">
+uint pcg(inout uint s){ s = s*747796405u + 2891336453u; uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u; return (w >> 22u) ^ w; }
+float rnd(inout uint s){ return float(pcg(s)) * (1.0/4294967296.0); }
+
+// ---- flam3 variations. Each maps the plane to the plane; the mix of them is what gives a
+// flame its character, and animating the weights is what makes the structure morph. ----
+vec2 vLinear(vec2 p){ return p; }
+vec2 vSpherical(vec2 p){ return p/(dot(p,p)+1e-6); }
+vec2 vSwirl(vec2 p){ float r=dot(p,p); float s=sin(r), c=cos(r); return vec2(p.x*s-p.y*c, p.x*c+p.y*s); }
+vec2 vPolar(vec2 p){ return vec2(atan(p.x,p.y)*0.31830989, length(p)-1.0); }
+vec2 vDisc(vec2 p){ float a=atan(p.x,p.y)*0.31830989; float r=length(p)*3.14159265; return a*vec2(sin(r),cos(r)); }
+vec2 vSpiral(vec2 p){ float r=length(p)+1e-6; float a=atan(p.y,p.x); return vec2(cos(a)+sin(r), sin(a)-cos(r))/r; }
+vec2 vHyperbolic(vec2 p){ float r=length(p)+1e-6; float a=atan(p.x,p.y); return vec2(sin(a)/r, r*cos(a)); }
+vec2 vHandkerchief(vec2 p){ float r=length(p); float a=atan(p.x,p.y); return r*vec2(sin(a+r), cos(a-r)); }
+vec2 vEyefish(vec2 p){ return p*(2.0/(length(p)+1.0)); }
+vec2 vBubble(vec2 p){ return p*(4.0/(dot(p,p)+4.0)); }
+vec2 vCurl(vec2 p, float c1, float c2){
+  float t1 = 1.0 + c1*p.x + c2*(p.x*p.x - p.y*p.y);
+  float t2 = c1*p.y + 2.0*c2*p.x*p.y;
+  float d = 1.0/(t1*t1 + t2*t2 + 1e-6);
+  return d*vec2(p.x*t1 + p.y*t2, p.y*t1 - p.x*t2);
+}
+vec2 vJulia(vec2 p, inout uint s){
+  float r = sqrt(length(p) + 1e-9);
+  float a = atan(p.y,p.x)*0.5 + (rnd(s) < 0.5 ? 0.0 : 3.14159265);
+  return r*vec2(cos(a), sin(a));
+}
+// the faint square lattice that drifts through the reference frames
+vec2 vRectangles(vec2 p, vec2 k){
+  return vec2((2.0*floor(p.x/k.x) + 1.0)*k.x - p.x, (2.0*floor(p.y/k.y) + 1.0)*k.y - p.y);
+}
+</script>
+
+<!-- one chaos-game step for every point, in parallel -->
+<script id="fs-update" type="x-shader/x-fragment">#version 300 es
+precision highp float; precision highp int;
+__LIB__
+uniform sampler2D uState;
+uniform int   uSize;
+uniform mat3  uAff[NT];
+uniform vec4  uV1[NT];      // linear, spherical, swirl, polar
+uniform vec4  uV2[NT];      // disc, spiral, hyperbolic, curl
+uniform vec4  uV3[NT];      // julia, rectangles, eyefish, handkerchief
+uniform vec4  uMeta[NT];    // colour index, cdf, curl c1, curl c2
+uniform vec2  uGridK;
+uniform float uSym;
+uniform float uSymP;
+uniform uint  uSeed;
+out vec4 outState;
+void main(){
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  vec4 st = texelFetch(uState, ip, 0);
+  vec2 p = st.xy; float ci = st.z; uint rs = floatBitsToUint(st.w);
+  if (rs == 0u) rs = (uint(ip.x) + uint(ip.y)*uint(uSize))*2654435761u + uSeed + 1u;
+
+  // Restart a point if its orbit died or drifted off, and refresh a trickle of them every
+  // frame so the sample set keeps exploring instead of settling into fixed cycles.
+  bool bad = !(dot(p,p) < 1e8);
+  if (bad || rnd(rs) < 0.0035) { p = vec2(rnd(rs), rnd(rs))*2.0 - 1.0; ci = rnd(rs); }
+
+  float pick = rnd(rs);
+  if (pick < uSymP) {
+    // Symmetry is its own transform and leaves the colour index alone, which is how flam3 does
+    // it. Rotating on every iteration instead would smear every colour through every arm and
+    // the whole image would average to one cream tone.
+    float k2 = floor(rnd(rs)*uSym);
+    float ang = 6.28318530718*k2/uSym;
+    float cs = cos(ang), sn = sin(ang);
+    p = vec2(p.x*cs - p.y*sn, p.x*sn + p.y*cs);
+  } else {
+    float pk = (pick - uSymP)/max(1.0 - uSymP, 1e-4);
+    int j = 0;
+    for (int k = 0; k < NT; k++){ if (pk <= uMeta[k].y) { j = k; break; } }
+    vec2 q = (uAff[j]*vec3(p, 1.0)).xy;
+    vec4 a = uV1[j], b = uV2[j], c = uV3[j];
+    vec2 v = a.x*vLinear(q) + a.y*vSpherical(q) + a.z*vSwirl(q) + a.w*vPolar(q)
+           + b.x*vDisc(q)   + b.y*vSpiral(q)    + b.z*vHyperbolic(q) + b.w*vCurl(q, uMeta[j].z, uMeta[j].w)
+           + c.x*vJulia(q, rs) + c.y*vRectangles(q, uGridK) + c.z*vEyefish(q) + c.w*vHandkerchief(q);
+    p = v;
+    // colour speed: snapping harder toward the transform's own index keeps regions distinct
+    ci = mix(ci, uMeta[j].x, 0.62);
+  }
+  outState = vec4(p, ci, uintBitsToFloat(rs));
+}
+</script>
+
+<!-- scatter every point into the density histogram -->
+<script id="vs-scatter" type="x-shader/x-vertex">#version 300 es
+precision highp float; precision highp int;
+__LIB__
+uniform sampler2D uState;
+uniform sampler2D uPal;
+uniform float uCiShift;
+uniform vec4  uFlare[4];      // xy = radius, amplitude; z = width
+uniform vec4  uTrail[10];     // xy = position in disc space, z = strength, w = radius
+uniform vec3  uTrailK;        // push, curl, glow
+uniform int   uTrailN, uFlareN;
+uniform int   uSize;
+uniform mat3  uFin;
+uniform vec2  uFinW;        // linear vs bubble weight on the final transform
+uniform vec2  uAsp;
+uniform float uZoom;
+out vec3 vCol;
+void main(){
+  int i = gl_VertexID;
+  ivec2 uv = ivec2(i % uSize, i / uSize);
+  vec4 st = texelFetch(uState, uv, 0);
+  vec2 h = (uFin*vec3(st.xy, 1.0)).xy;
+  // the final transform is what bounds the flame into a disc
+  vec2 p = uFinW.x*vLinear(h) + uFinW.y*vBubble(h);
+  // Smoke: the pointer drags a wake through the flame. Samples near the trail are pushed aside
+  // and swirled, so the filaments part around a finger and curl back rather than a shape being
+  // stamped on top. Displacing where a sample lands is what makes it behave like a fluid.
+  float trailLum = 0.0;
+  for (int i = 0; i < 10; i++) {
+    if (i >= uTrailN) break;
+    if (uTrail[i].z <= 0.001) continue;
+    vec2 dv = p - uTrail[i].xy;
+    float r2 = dot(dv, dv);
+    float rad = uTrail[i].w;
+    float g = exp(-r2/(rad*rad));
+    vec2 dir = dv*inversesqrt(r2 + 1e-5);
+    p += (dir*uTrailK.x + vec2(-dir.y, dir.x)*uTrailK.y)*g*uTrail[i].z;
+    trailLum += g*uTrail[i].z;
+  }
+
+  // Flares: a surge of emission travelling outward from the core. This scales the light a sample
+  // deposits, never its position, so the flame keeps its exact shape and size — light moves through
+  // the arms instead of the orb pumping.
+  float rr = length(p);
+  float boost = 0.0, hot = 0.0;
+  for (int i = 0; i < 4; i++) {
+    if (i >= uFlareN) break;
+    if (uFlare[i].y <= 0.0) continue;
+    float d = (rr - uFlare[i].x)/uFlare[i].z;
+    float g = exp(-d*d);
+    boost += uFlare[i].y*g;
+    hot += uFlare[i].y*g;
+  }
+  vCol = texture(uPal, vec2(clamp(st.z + uCiShift + hot*0.05, 0.0, 0.92), 0.5)).rgb;
+  vCol *= 1.0 + min(boost, 1.25) + trailLum*uTrailK.z;
+  gl_Position = vec4(p*uZoom*uAsp, 0.0, 1.0);
+  gl_PointSize = 1.0;
+}
+</script>
+<script id="fs-scatter" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+in vec3 vCol; out vec4 o;
+void main(){ o = vec4(vCol, 1.0); }   // rgb = colour, a = density
+</script>
+
+<!-- the histogram fades so the image is a moving average, not a total -->
+<script id="fs-decay" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uT; uniform float uD; out vec4 o;
+void main(){ o = texelFetch(uT, ivec2(gl_FragCoord.xy), 0)*uD; }
+</script>
+
+<!-- log-density tonemap: the step that turns a histogram into a flame -->
+<script id="fs-tone" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uT;
+uniform float uExp, uGamma, uSat, uVig;
+out vec4 o;
+void main(){
+  vec4 a = texelFetch(uT, ivec2(gl_FragCoord.xy), 0);
+  float d = a.a;
+  if (d <= 1e-9) { o = vec4(0.0,0.0,0.0,1.0); return; }
+  // alpha = log(1+d)/d is the flame tonemap: sparse filaments stay visible while dense
+  // cores roll off slowly, which is what makes overlapping sheets read as translucent
+  float l = log(1.0 + d*uExp)/d;
+  vec3 c = max(a.rgb*l, 0.0);
+  // Roll the highlights off on luminance and keep the ratio between channels, so a bright
+  // filament goes pale without going white and the palette survives into the core.
+  float lum = dot(c, vec3(0.2126,0.7152,0.0722));
+  float rolled = lum/(1.0 + lum);
+  c *= lum > 1e-5 ? rolled/lum : 1.0;
+  lum = dot(c, vec3(0.2126,0.7152,0.0722));
+  c = mix(vec3(lum), c, uSat);
+  c = pow(clamp(c, 0.0, 1.0), vec3(1.0/uGamma));
+  o = vec4(c, 1.0);
+}
+</script>
+
+<script id="fs-bright" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uRes; uniform float uThreshold;
+out vec4 o;
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec2 px = 0.25/uRes;
+  vec3 c = texture(uTex, uv + vec2(-px.x,-px.y)).rgb + texture(uTex, uv + vec2(px.x,-px.y)).rgb
+         + texture(uTex, uv + vec2(-px.x, px.y)).rgb + texture(uTex, uv + vec2(px.x, px.y)).rgb;
+  c *= 0.25;
+  float l = dot(c, vec3(0.2126,0.7152,0.0722));
+  o = vec4(c*smoothstep(uThreshold, uThreshold + 0.5, l), 1.0);
+}
+</script>
+<script id="fs-blur" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uRes; uniform vec2 uDir;
+out vec4 o;
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes; vec2 d = uDir/uRes;
+  vec3 c = texture(uTex, uv).rgb*0.2270;
+  c += (texture(uTex, uv + d*1.3846).rgb + texture(uTex, uv - d*1.3846).rgb)*0.3162;
+  c += (texture(uTex, uv + d*3.2308).rgb + texture(uTex, uv - d*3.2308).rgb)*0.0703;
+  o = vec4(c, 1.0);
+}
+</script>
+<!-- the orb's light, placed into screen space so it can be blurred out across the whole room -->
+<script id="fs-spill" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTex, uBloom;
+uniform vec2 uRes, uOff, uScale;
+out vec4 o;
+void main(){
+  vec2 uv = (gl_FragCoord.xy*uScale.y - uOff)/uScale.x;
+  float rd = length(uv - 0.5);
+  float m = 1.0 - smoothstep(0.38, 0.498, rd);        // circular, so the spill carries no corners
+  if (m <= 0.0) { o = vec4(0.0,0.0,0.0,1.0); return; }
+  o = vec4((texture(uTex, uv).rgb*0.16 + texture(uBloom, uv).rgb*0.85)*m, 1.0);
+}
+</script>
+
+<script id="fs-comp" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+uniform sampler2D uTex, uBloom, uWide, uWave, uPalC;
+uniform vec4 uWaveK;      // half-height px, orb radius px, amount, spare
+uniform vec2 uRes, uSrcRes, uOff, uScale, uCentre;
+uniform float uGlow, uSpill, uAmbient;
+uniform vec3 uBgCol;
+out vec4 o;
+float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y)*p3.z); }
+void main(){
+  vec2 sv = gl_FragCoord.xy/uRes;
+
+  // The room. A deep wash carrying the flame's own colour, brightest near the orb and falling away
+  // to the corners, plus the orb's light blurred wide so it genuinely lights the space around it.
+  // Everything here is kept far below the flame's own brightness so nothing competes with it.
+  vec2 rel = (gl_FragCoord.xy - uCentre)/max(uScale.x, 1.0);
+  float fall = exp(-dot(rel, rel)*0.40);
+  // uBgCol arrives hue-normalised (max channel 1), so these two numbers ARE the screen levels:
+  // roughly 0.135 in the corners rising to 0.31 behind the orb. Measured, not eyeballed — the
+  // first version of this sat at 0.03 and read as pure black on anything but a gold palette.
+  vec3 c = uBgCol*(0.125 + 0.105*fall)*uAmbient;
+  c += texture(uWide, sv).rgb*uSpill;
+
+  // ---- the wave ----
+  // One horizontal band of light crossing the whole screen and passing behind the orb. Its
+  // half-height at each column is the audio envelope scrolling left to right, and it is built from
+  // four stacked gaussians at different scales rather than a stroke: a tight core that follows the
+  // fine detail, then progressively wider, fainter haloes. That is what makes it read as light
+  // with body rather than a drawn line.
+  {
+    float wx = gl_FragCoord.x/uRes.x;
+    // the fine envelope carries the detail; a smeared copy gives the wide layers their body, so
+    // the haze is soft light rather than a scaled-up copy of the same spikes
+    vec3 wv = texture(uWave, vec2(wx, 0.5)).rgb;   // fine, medium, very smooth
+    float e  = uWaveK.x*(0.07 + 0.93*wv.r);
+    float eM = uWaveK.x*(0.12 + 0.88*wv.g);
+    float eB = uWaveK.x*(0.16 + 0.84*wv.b);
+    // The band wraps the sphere instead of cutting across it: near the orb its centre line
+    // splits into two arcs that ride the silhouette, over the top and under the bottom, then
+    // rejoin and carry on. Away from the orb the two arcs collapse back into one band.
+    float Rk = max(uWaveK.y, 1.0);
+    float dxp = gl_FragCoord.x - uCentre.x;
+    // A circle's profile has a vertical tangent at the silhouette, which makes the two arcs
+    // separate infinitely fast there and leaves a hairline seam. A smooth bump curves the
+    // band over and under the sphere with no such edge anywhere.
+    float bulge = Rk*0.40*exp(-pow(dxp/(Rk*0.80), 2.0));
+    float dy = gl_FragCoord.y - uCentre.y;
+    float d = min(abs(dy - bulge), abs(dy + bulge));
+    float dxo = dxp/Rk;
+    float prox = 0.30 + 0.70*exp(-dxo*dxo*0.24);              // fuller where it meets the orb
+    float edge = smoothstep(0.0, 0.20, wx)*smoothstep(1.0, 0.80, wx);   // never reaches the edges
+    // five layers: a fine filament on the centre line, then progressively wider and fainter haze
+    float q0 = d/max(e*0.17,  1.6);
+    float q1 = d/max(eM*0.55, 5.0);
+    float q2 = d/max(eM*1.15, 12.0);
+    float q3 = d/max(eB*1.90, 26.0);
+    float q4 = d/max(eB*3.10 + uWaveK.x*0.10, 52.0);
+    float band = exp(-q0*q0)*0.42 + exp(-q1*q1)*0.46 + exp(-q2*q2)*0.40
+               + exp(-q3*q3)*0.28 + exp(-q4*q4)*0.17;
+    band *= prox*edge;
+    // The sphere sits in front: anything still inside the silhouette is dimmed hard. And right
+    // at the rim the band is lifted rather than cut, so its light runs into the orb's glow and
+    // there is no seam where the two meet.
+    float rr = length(gl_FragCoord.xy - uCentre)/Rk;
+    band *= mix(0.22, 1.0, smoothstep(0.86, 1.05, rr));
+    band *= 1.0 + 0.30*exp(-pow((rr - 1.0)/0.30, 2.0));   // a blend into the orb's glow, not a rim
+    // the orb's own colours: the saturated middle of the ramp, not its near-white top
+    float wci = clamp(0.74 - 0.40*clamp(d/max(eM, 1.0), 0.0, 1.8), 0.0, 0.86);
+    c += texture(uPalC, vec2(wci, 0.5)).rgb*band*uWaveK.z;
+  }
+
+  // The flame and its bloom, faded out on a circle well outside the flame itself. The old version
+  // tested a rectangle here, and since the bloom is still bright at that boundary the glow was
+  // chopped off along a straight square edge. Nothing on screen may have a straight edge.
+  vec2 uv = (gl_FragCoord.xy - uOff)/uScale;
+  float rd = length(uv - 0.5);
+  float m = 1.0 - smoothstep(0.40, 0.499, rd);
+  if (m > 0.0) c += (texture(uTex, uv).rgb + texture(uBloom, uv).rgb*uGlow)*m;
+
+  c += (hash12(gl_FragCoord.xy) - 0.5)/255.0;     // dither away 8-bit banding in the dark falloff
+  o = vec4(c, 1.0);
+}
+</script>
+
+<!-- ================= APP ================= -->
+<script>
+(() => {
+'use strict';
+
+/* ---------------- utilities ---------------- */
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a)*t;
+const TAU = Math.PI*2;
+const $ = id => document.getElementById(id);
+
+function cyrb53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  const q = l < 0.5 ? l*(1 + s) : l + s - l*s, p = 2*l - q;
+  const f = t => { t = (t + 1) % 1; if (t < 1/6) return p + (q - p)*6*t; if (t < 1/2) return q; if (t < 2/3) return p + (q - p)*(2/3 - t)*6; return p; };
+  return [f(h + 1/3), f(h), f(h - 1/3)];
+}
+const srgbToLin = c => c.map(v => Math.pow(v, 2.2));
+const rgbCss = c => `rgb(${c.map(v => Math.round(clamp(v, 0, 1)*255)).join(',')})`;
+function randUnit(r) { const z = r()*2 - 1, a = r()*TAU, s = Math.sqrt(1 - z*z); return [s*Math.cos(a), s*Math.sin(a), z]; }
+const fmtTime = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s/60)}:${String(s%60).padStart(2, '0')}`; };
+
+/* ---------------- tracks: a name seeds a colour world ----------------
+   Every track travels the whole motion and shape range; what a track owns is its colour.
+   The palettes come from a curated bank so no seed can land on a combination that reads
+   muddy, and each track draws its own ordered journey through that bank. */
+const SALT = 158253;
+const TRACK_NAMES = ["Sleep Under Venus", "The Fear Beneath", "Morning Light", "Mercury Retrograde", "Letting Him Go", "Full Moon Release", "Four Seven Eight", "Cord Cutting"];
+const ROOTS = [55.0, 61.74, 65.41, 73.42, 82.41, 87.31, 98.0];
+const KINDS = ["Sleep meditation", "Guided meditation", "Breathwork", "Podcast · Episode", "Sound bath", "Body scan"];
+
+// Each palette is a set of stops in sRGB. They are deliberately hand-picked: the reference
+// travels cyan/violet/magenta, then gold/lime/rose, then teal/green/yellow/red, then deep
+// blue/purple, and every one of those is satisfying on black.
+const PALETTES = [
+  ['#06103a', '#123a8a', '#2ea8e6', '#7ef0f0', '#e6f7ff'],            // 0 deep blue / ice
+  ['#12002e', '#4a0e8f', '#a02ee6', '#ff5ad0', '#ffd9f2'],            // 1 violet / magenta
+  ['#001a26', '#004d5c', '#00b39b', '#7fe66b', '#f2ffd9'],            // 2 teal / lime
+  ['#2b0a00', '#7a2d05', '#e08b12', '#ffd447', '#fff7cc'],            // 3 gold / amber
+  ['#26000f', '#7a0033', '#e0246b', '#ff8fb0', '#ffe0e8'],            // 4 rose / crimson
+  ['#001d1a', '#00544a', '#12a37a', '#9ada3c', '#ffe873'],            // 5 green / yellow
+  ['#040018', '#1b1060', '#4d3ce0', '#00d8ff', '#d9fbff'],            // 6 indigo / cyan
+  ['#1a0026', '#5c0a5c', '#c2189e', '#ff6a3d', '#ffc46b'],            // 7 purple / orange
+  ['#00121f', '#0a3d62', '#1e9bd1', '#a6e3a1', '#fdf6c3'],            // 8 blue / green / cream
+  ['#200018', '#6b0f4a', '#d62828', '#f77f00', '#fcbf49'],            // 9 red / fire
+  ['#031a1a', '#0d5c54', '#3fbf9e', '#8fd9e6', '#ede7ff'],            // 10 aqua / lilac
+  ['#0b0033', '#3a0ca3', '#7209b7', '#f72585', '#ffd6e8'],            // 11 royal / pink
+];
+const PAL_RGB = PALETTES.map(p => p.map(h => [parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255]));
+
+function deriveTrack(name) {
+  const r = mulberry32(cyrb53(name, SALT) >>> 0);
+  const sym = 5 + Math.floor(r()*2);                 // five or six arms, as in the reference
+  // an ordered journey of five palettes, no repeats, starting somewhere of its own
+  const bag = PAL_RGB.map((_, i) => i);
+  for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(r()*(i + 1)); const t = bag[i]; bag[i] = bag[j]; bag[j] = t; }
+  const worlds = bag.slice(0, 5);
+  const phase = r();                                  // where on the shared journey it starts
+  const flowSeed = r()*1000;
+  const root = ROOTS[Math.floor(r()*ROOTS.length)];
+  const pulsePeriod = 3.2 + r()*3.6;
+  const noiseCenter = 500 + r()*900;
+  const kind = KINDS[Math.floor(r()*KINDS.length)];
+  const duration = Math.round(6 + r()*22)*60 + Math.floor(r()*60);
+  const accent = PALETTES[worlds[0]][3], accent2 = PALETTES[worlds[1]][2];
+  return { name, sym, worlds, phase, flowSeed, root, pulsePeriod, noiseCenter, kind, duration,
+           accentCss: accent, accent2Css: accent2 };
+}
+const TRACKS = TRACK_NAMES.map(deriveTrack);
+const DEMO = deriveTrack('Reactivity Demo');
+DEMO.audio = 'demo'; DEMO.kind = 'Demo · beat and dynamics'; DEMO.duration = 144;
+TRACKS.push(DEMO);
+let userIdx = -1;
+
+const fmtK = n => n >= 1e6 ? (n/1e6).toFixed(2) + 'M' : Math.round(n/1000) + 'k';
+
+/* ---------------- state ---------------- */
+const reduceMotionMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+const state = {
+  trackIndex: 0,
+  playing: false,
+  elapsed: 0,
+  flowTime: 0,
+  clock: 0,
+  swayT: 0, charT: 0, playStart: 0,
+  audio: { bass: 0, mid: 0, high: 0, level: 0, loud: 1 },
+  tune: { exposure: 1.0, gamma: 2.35, swirl: 0.85, speed: 1.0, glow: 0.55, sat: 1.4, trail: 0.955, grid: 0.35, react: 1.5, ambient: 1.0, wave: 1.0 },
+  motion: reduceMotionMQ.matches ? 0.45 : 1,
+  palA: TRACKS[0].worlds[0], palB: TRACKS[0].worlds[1], palMix: 0, palStep: 0,
+  flares: [], nextIdle: 5,
+};
+const TUNE_DEFAULTS = { ...state.tune };
+{ const q = new URLSearchParams(location.search); for (const k in state.tune) { const v = parseFloat(q.get(k)); if (!Number.isNaN(v)) state.tune[k] = v; } }
+
+const SLIDERS = [
+  ['exposure', 'Exposure', 0.2, 4, 0.01],
+  ['gamma', 'Gamma', 1.2, 4, 0.01],
+  ['swirl', 'Variation mix', 0, 1.6, 0.01],
+  ['speed', 'Animation speed', 0, 2, 0.01],
+  ['glow', 'Bloom', 0, 2, 0.01],
+  ['sat', 'Colour saturation', 0, 2, 0.01],
+  ['trail', 'Persistence', 0.5, 0.995, 0.001],
+  ['grid', 'Grid artifacts', 0, 1, 0.01],
+  ['ambient', 'Room light', 0, 2, 0.01],
+  ['wave', 'Waveform', 0, 2, 0.01],
+  ['react', 'Audio reaction', 0, 4, 0.05],
+];
+
+/* ---------------- audio bed ---------------- */
+class AudioBed {
+  constructor() { this.ctx = null; this.ready = false; this.freq = null; this.wave = null; this.nextPulse = 0; this.pulsePeriod = 5; this.gain = { bass: 1, mid: 1, high: 1, level: 1 }; this.slow = {}; this.opk = {}; this.source = 'bed'; this.loudPeak = 0.05;
+    this.prevSpec = null; this.fluxHist = new Float32Array(48); this.fluxAt = 0; this.sinceBeat = 9; this.fileBuf = null; this.fileNode = null; this.fileOffset = 0; this.demoNext = 0; this.demoStep = 0; }
+  init() {
+    if (this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const C = this.ctx = new AC();
+    const master = this.master = C.createGain(); master.gain.value = 0;
+    // Three sources share the analyser: the generated ambient bed, the demo track, and a file the
+    // user drops in. Each has its own bus so switching does not have to rebuild the graph.
+    const bed = this.bedBus = C.createGain(); bed.gain.value = 1; bed.connect(master);
+    const demo = this.demoBus = C.createGain(); demo.gain.value = 0; demo.connect(master);
+    const fileG = this.fileBus = C.createGain(); fileG.gain.value = 0; fileG.connect(master);
+    const comp = C.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4; comp.attack.value = 0.01; comp.release.value = 0.25;
+    const an = this.analyser = C.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.35;
+    master.connect(comp); comp.connect(an); an.connect(C.destination);
+    this.freq = new Uint8Array(an.frequencyBinCount);
+    this.wave = new Uint8Array(an.fftSize);
+
+    // --- drone: sub + detuned pair + fifth, through a dark low-pass ---
+    const droneGain = this.droneGain = C.createGain(); droneGain.gain.value = 0.2;
+    const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 0.7;
+    droneGain.connect(lp); lp.connect(bed);
+    this.oscs = [];
+    const mk = (type, mult, det, g) => { const o = C.createOscillator(); o.type = type; o.detune.value = det; const gg = C.createGain(); gg.gain.value = g; o.connect(gg); gg.connect(droneGain); o.start(); this.oscs.push({ o, mult }); };
+    mk('sine', 0.5, 0, 0.9);
+    mk('triangle', 1, -5, 0.35);
+    mk('triangle', 1, 6, 0.35);
+    mk('sine', 1.5, 0, 0.3);
+    mk('sine', 2.0, 3, 0.18);
+    // slow "breath" on drone level (period ~6.5 s)
+    const breath = C.createOscillator(); breath.type = 'sine'; breath.frequency.value = 1/6.5;
+    const breathG = C.createGain(); breathG.gain.value = 0.09;
+    breath.connect(breathG); breathG.connect(droneGain.gain); breath.start();
+    // slow detune drift
+    const drift = C.createOscillator(); drift.type = 'sine'; drift.frequency.value = 1/11;
+    const driftG = C.createGain(); driftG.gain.value = 9;
+    drift.connect(driftG); this.oscs.forEach(({ o }) => driftG.connect(o.detune)); drift.start();
+
+    // --- filtered noise wash with a slowly sweeping band-pass + feedback delay ---
+    const len = C.sampleRate*4, buf = C.createBuffer(1, len, C.sampleRate), d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random()*2 - 1; b0 = 0.99765*b0 + w*0.099046; b1 = 0.963*b1 + w*0.2965164; b2 = 0.57*b2 + w*1.0526913; d[i] = (b0 + b1 + b2 + w*0.1848)*0.11; } // pink-ish
+    this.noiseBuf = buf;
+    const noise = C.createBufferSource(); noise.buffer = buf; noise.loop = true;
+    const bp = this.bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.1;
+    const sweep = C.createOscillator(); sweep.type = 'sine'; sweep.frequency.value = 1/13;
+    const sweepG = this.sweepG = C.createGain(); sweepG.gain.value = 420;
+    sweep.connect(sweepG); sweepG.connect(bp.frequency); sweep.start();
+    const nGain = C.createGain(); nGain.gain.value = 0.16;
+    noise.connect(bp); bp.connect(nGain); nGain.connect(bed); noise.start();
+    // air: high shelf of the same noise, quiet, so the top end has life
+    const hp = C.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3200;
+    const airG = C.createGain(); airG.gain.value = 0.045;
+    noise.connect(hp); hp.connect(airG); airG.connect(bed);
+    const delay = C.createDelay(2.0); delay.delayTime.value = 0.41;
+    const fb = C.createGain(); fb.gain.value = 0.48;
+    const dlp = C.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 2400;
+    nGain.connect(delay); delay.connect(dlp); dlp.connect(fb); fb.connect(delay); dlp.connect(bed);
+
+    this.pulseBus = C.createGain(); this.pulseBus.gain.value = 0.9; this.pulseBus.connect(bed);
+    this.ready = true;
+    this.applyTrack(TRACKS[state.trackIndex], true);
+  }
+  applyTrack(t, immediate) {
+    if (!this.ready) return;
+    const now = this.ctx.currentTime, k = immediate ? 0.001 : 0.8;
+    this.oscs.forEach(({ o, mult }) => o.frequency.setTargetAtTime(t.root*mult, now, k));
+    this.bp.frequency.setTargetAtTime(t.noiseCenter, now, k);
+    this.pulsePeriod = t.pulsePeriod;
+  }
+  schedulePulses() {
+    if (!this.ready || !state.playing || this.source !== 'bed') return;
+    const C = this.ctx, now = C.currentTime;
+    if (this.nextPulse < now) this.nextPulse = now + 0.1;
+    while (this.nextPulse < now + 1.6) {   // long look-ahead so pulses survive a backgrounded tab's throttled timers
+      const t0 = this.nextPulse;
+      // soft sub "boom"
+      const o = C.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(82, t0); o.frequency.exponentialRampToValueAtTime(36, t0 + 0.38);
+      const g = C.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.55, t0 + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
+      o.connect(g); g.connect(this.pulseBus); o.start(t0); o.stop(t0 + 0.8);
+      // glassy high tick ~1/3 of the way after the boom (drives the highlight flicker)
+      const t1 = t0 + this.pulsePeriod*0.34;
+      const s = C.createOscillator(); s.type = 'sine'; s.frequency.setValueAtTime(5200 + Math.random()*1800, t1);
+      const sg = C.createGain(); sg.gain.setValueAtTime(0.0001, t1); sg.gain.exponentialRampToValueAtTime(0.07, t1 + 0.01); sg.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.5);
+      s.connect(sg); sg.connect(this.pulseBus); s.start(t1); s.stop(t1 + 0.55);
+      this.nextPulse += this.pulsePeriod;
+    }
+  }
+  // ---- demo track: a plain 80bpm loop whose whole point is being easy to see in the orb.
+  // Four bars full, two bars stripped back to a pad, two bars building — so the low end clearly
+  // pumps, the high end clearly ticks, and there are obvious loud and quiet stretches.
+  hit(t0, freq, endFreq, dur, gain, type) {
+    const C = this.ctx, o = C.createOscillator(); o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t0);
+    if (endFreq) o.frequency.exponentialRampToValueAtTime(endFreq, t0 + dur);
+    const g = C.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(gain, 0.0002), t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(this.demoBus); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  tick(t0, gain, hz) {
+    const C = this.ctx, src = C.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const f = C.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hz;
+    const g = C.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(gain, 0.0002), t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+    src.connect(f); f.connect(g); g.connect(this.demoBus); src.start(t0); src.stop(t0 + 0.12);
+  }
+  scheduleDemo() {
+    if (!this.ready || this.source !== 'demo' || !state.playing || this.ctx.state !== 'running') return;
+    const C = this.ctx, now = C.currentTime, root = TRACKS[state.trackIndex].root;
+    const step = (60/80)/4;                                     // 80 bpm, sixteenths
+    if (!(this.demoNext > now - 1)) { this.demoNext = now + 0.08; this.demoStep = 0; }
+    const NOTES = [0, 3, 5, 7, 10, 12];
+    while (this.demoNext < now + 1.2) {
+      const t0 = this.demoNext, st = this.demoStep, bar = Math.floor(st/16) % 8, i = st % 16;
+      const quiet = bar === 4 || bar === 5;
+      const build = bar === 6 || bar === 7;
+      const lvl = quiet ? 0.3 : build ? 0.7 + 0.3*(((st % 32)/32)) : 1.0;
+      if (i === 0 || i === 6 || i === 10 || (build && i === 14)) {
+        this.hit(t0, 132, 44, quiet ? 0.22 : 0.34, 0.95*lvl);   // kick
+        if (i === 0) this.hit(t0, root, root*0.5, 0.7, 0.5*lvl);
+      }
+      if (!quiet && (i === 0 || i === 3 || i === 6 || i === 10 || i === 13)) {
+        const n = NOTES[(st*7 + bar*3) % NOTES.length];
+        this.hit(t0, root*2*Math.pow(2, n/12), null, 0.26, 0.28*lvl, 'triangle');   // bass line
+      }
+      if (i % 2 === 0 || build) this.tick(t0, (i % 4 === 0 ? 0.05 : 0.028)*lvl, build ? 5000 : 7000);
+      if (i === 0 && (bar === 0 || bar === 4)) {                // pad swell marks each section
+        const C2 = this.ctx, g = C2.createGain();
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.1*lvl + 0.02, t0 + 1.6);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 5.6);
+        g.connect(this.demoBus);
+        [0, 3, 7].forEach((n, k) => {
+          const o = C2.createOscillator(); o.type = 'triangle';
+          o.frequency.value = root*2*Math.pow(2, n/12); o.detune.value = (k - 1)*7;
+          o.connect(g); o.start(t0); o.stop(t0 + 5.7);
+        });
+      }
+      this.demoNext += step; this.demoStep++;
+    }
+  }
+
+  // ---- a file the user dropped in, played through the same analyser ----
+  async loadFile(file) {
+    this.init();
+    if (!this.ready) throw new Error('Web Audio unavailable');
+    const bytes = await file.arrayBuffer();
+    const buf = await new Promise((res, rej) => {
+      const r = this.ctx.decodeAudioData(bytes, res, rej);       // callback form: older Safari
+      if (r && r.then) r.then(res, rej);
+    });
+    this.fileBuf = buf;
+    return buf;
+  }
+  startFile(offset) {
+    if (!this.fileBuf) return;
+    this.stopFile();
+    const C = this.ctx, n = C.createBufferSource();
+    n.buffer = this.fileBuf; n.connect(this.fileBus);
+    this.fileOffset = clamp(offset || 0, 0, this.fileBuf.duration - 0.01);
+    this.fileStart = C.currentTime;
+    n.start(0, this.fileOffset);
+    this.fileNode = n;
+  }
+  stopFile() {
+    if (!this.fileNode) return;
+    this.fileOffset = this.fileTime();
+    try { this.fileNode.stop(); } catch (e) {}
+    this.fileNode.disconnect(); this.fileNode = null;
+  }
+  fileTime() {
+    if (!this.fileBuf) return 0;
+    if (!this.fileNode) return this.fileOffset || 0;
+    return clamp((this.fileOffset || 0) + (this.ctx.currentTime - this.fileStart), 0, this.fileBuf.duration);
+  }
+  // Spectral-flux onset detection: how much energy has APPEARED since the last frame, summed over
+  // the drum bands. Loudness alone cannot tell a drum hit from a sustained loud chord — a rise in
+  // the spectrum can, which is why this follows the kit rather than the level.
+  detectBeat(dt) {
+    this.sinceBeat += dt;
+    if (!this.ready || this.ctx.state !== 'running' || this.source === 'bed') return 0;
+    const f = this.freq, n = f.length;
+    if (!this.prevSpec || this.prevSpec.length !== n) { this.prevSpec = new Float32Array(n); this.prevSpec.set(f); return 0; }
+    const binHz = this.ctx.sampleRate/this.analyser.fftSize;
+    const lo1 = Math.max(1, Math.floor(30/binHz)), hi1 = Math.min(n - 1, Math.ceil(220/binHz));   // kick
+    const lo2 = Math.min(n - 1, Math.floor(1500/binHz)), hi2 = Math.min(n - 1, Math.ceil(7000/binHz)); // snare / hats
+    let flux = 0;
+    for (let i = lo1; i <= hi1; i++) { const d = f[i] - this.prevSpec[i]; if (d > 0) flux += d*1.6; }
+    for (let i = lo2; i <= hi2; i++) { const d = f[i] - this.prevSpec[i]; if (d > 0) flux += d*0.5; }
+    this.prevSpec.set(f);
+    flux /= 255*(hi1 - lo1 + 1 + (hi2 - lo2 + 1)*0.4);
+
+    const h = this.fluxHist;
+    let mean = 0; for (let i = 0; i < h.length; i++) mean += h[i];
+    mean /= h.length;
+    let varr = 0; for (let i = 0; i < h.length; i++) { const d = h[i] - mean; varr += d*d; }
+    const sd = Math.sqrt(varr/h.length);
+    h[this.fluxAt] = flux; this.fluxAt = (this.fluxAt + 1) % h.length;
+
+    // Adaptive threshold: a hit has to stand out from the recent past, not just be loud. The margin
+    // is a fraction of the running mean rather than a fixed number — a fixed floor is tuned to one
+    // recording level and goes deaf on anything quieter.
+    const thresh = mean + Math.max(sd*1.5, mean*0.30) + 1e-5;
+    if (flux < 2e-4) return 0;                 // genuine silence, not a quiet drummer
+    if (flux > thresh && this.sinceBeat > 0.14) {
+      this.sinceBeat = 0;
+      return clamp((flux - thresh)/Math.max(thresh, 1e-4), 0.15, 3.0);   // how much bigger than usual
+    }
+    return 0;
+  }
+
+  // How far ahead of the listener the analyser is: what the graph has processed but not yet
+  // played. outputLatency is the real figure where a browser reports it; baseLatency is the
+  // floor when it does not.
+  outputLag() {
+    if (!this.ready) return 0;
+    const o = this.ctx.outputLatency, b = this.ctx.baseLatency;
+    return clamp((typeof o === 'number' && o > 0 ? o : 0) + (typeof b === 'number' ? b : 0), 0, 0.35);
+  }
+
+  // k peak values taken from consecutive slices of the current time-domain buffer, so a frame
+  // contributes real detail to the scrolling history rather than one repeated number.
+  envelopeSlices(k) {
+    const out = new Float32Array(k);
+    if (!this.ready || !this.wave || this.ctx.state !== 'running') {
+      const t = state.clock;
+      for (let i = 0; i < k; i++)
+        out[i] = 0.11 + 0.06*Math.abs(Math.sin(t*1.7 + i*0.9)) + 0.04*Math.abs(Math.sin(t*0.6 + i*2.3));
+      return out;
+    }
+    this.analyser.getByteTimeDomainData(this.wave);
+    const len = this.wave.length, per = Math.max(1, Math.floor(len/k));
+    for (let i = 0; i < k; i++) {
+      let peak = 0;
+      const a = Math.min(len - 1, i*per), b = Math.min(len, a + per);
+      for (let j = a; j < b; j++) { const v = Math.abs(this.wave[j] - 128)/128; if (v > peak) peak = v; }
+      out[i] = peak;
+    }
+    return out;
+  }
+
+  // A snapshot of the actual sound, downsampled to the ribbon's resolution. When nothing is
+  // playing this returns a near-flat line, which is the honest answer: a calm ribbon.
+  snapshotWave(n) {
+    const out = new Float32Array(n);
+    if (!this.ready || !this.wave || this.ctx.state !== 'running') {
+      // silence still gets a fine, quiet trace rather than a flat bar
+      for (let i = 0; i < n; i++)
+        out[i] = 0.20 + 0.16*Math.abs(Math.sin(i*0.37)) + 0.11*Math.abs(Math.sin(i*1.31 + 1.0))
+                      + 0.07*Math.abs(Math.sin(i*0.09 + 2.0));
+      return out;
+    }
+    this.analyser.getByteTimeDomainData(this.wave);
+    const len = this.wave.length, per = len/n;
+    for (let i = 0; i < n; i++) {
+      let peak = 0;
+      const a = (i*per)|0, b = Math.max((i*per|0) + 1, Math.min(len, ((i + 1)*per)|0));
+      for (let j = a; j < b; j++) { const v = Math.abs(this.wave[j] - 128)/128; if (v > peak) peak = v; }
+      out[i] = peak;
+    }
+    // deliberately NOT smoothed: the bucket-to-bucket spikiness is what makes it read as a waveform
+    return out;
+  }
+
+  // pick which source feeds the analyser, and cross-fade so switching never clicks
+  setSource(src) {
+    if (!this.ready) { this.source = src; return; }
+    this.source = src;
+    const now = this.ctx.currentTime, k = 0.12;
+    this.bedBus.gain.setTargetAtTime(src === 'bed' ? 1 : 0, now, k);
+    this.demoBus.gain.setTargetAtTime(src === 'demo' ? 1 : 0, now, k);
+    this.fileBus.gain.setTargetAtTime(src === 'file' ? 1 : 0, now, k);
+    if (src !== 'file') this.stopFile();
+    if (src === 'demo') { this.demoNext = 0; this.demoStep = 0; }
+  }
+
+  // soft swell that accompanies a visual event (only while playing)
+  swell(kind) {
+    if (!this.ready || !state.playing || this.ctx.state !== 'running') return;
+    if (this.source !== 'bed') return;      // never inject tones over the demo loop or the user's own track
+    const C = this.ctx, t0 = C.currentTime + 0.05;
+    if (kind === 0 || kind === 2) {
+      const o = C.createOscillator(); o.type = 'sine'; o.frequency.value = TRACKS[state.trackIndex].root*(kind === 0 ? 1.0 : 1.5);
+      const g = C.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.22, t0 + 2.2); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 6.5);
+      o.connect(g); g.connect(this.pulseBus); o.start(t0); o.stop(t0 + 6.6);
+    } else {
+      const src = C.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+      const f = C.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.5; f.frequency.setValueAtTime(kind === 1 ? 2600 : 1400, t0); f.frequency.exponentialRampToValueAtTime(kind === 1 ? 5200 : 700, t0 + 4.0);
+      const g = C.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.09, t0 + 1.6); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 5.5);
+      src.connect(f); f.connect(g); g.connect(this.pulseBus); src.start(t0); src.stop(t0 + 5.6);
+    }
+  }
+  async play() {
+    this.init();
+    if (!this.ready) return false;
+    if (this.ctx.state !== 'running') { try { await this.ctx.resume(); } catch (e) {} }
+    if (!state.playing) return true;                 // paused again while resume() was in flight
+    if (this.source === 'file' && this.fileBuf && !this.fileNode) this.startFile(this.fileOffset);
+    this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.master.gain.setTargetAtTime(0.9, this.ctx.currentTime, 0.35);
+    this.nextPulse = this.ctx.currentTime + 0.3;
+    return true;
+  }
+  pause() {
+    if (!this.ready) return;
+    if (this.source === 'file') this.stopFile();
+    this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2);
+    clearTimeout(this._suspendT);
+    this._suspendT = setTimeout(() => { if (!state.playing && this.ctx.state === 'running') this.ctx.suspend(); }, 1200);
+  }
+  // frequency-band energies, auto-normalised, with fast attack / slower release
+  analyse(dt) {
+    const a = state.audio;
+    const rel = Math.exp(-dt/0.16), att = Math.exp(-dt/0.03);
+    if (!this.ready || this.ctx.state !== 'running') {
+      for (const k in a) if (k !== 'loud') a[k] *= rel;
+      a.loud += (1 - a.loud)*(1 - rel);        // silence: drift back to neutral, do not dim the orb
+      return;
+    }
+    this.analyser.getByteFrequencyData(this.freq);
+    this.analyser.getByteTimeDomainData(this.wave);
+    const binHz = this.ctx.sampleRate/this.analyser.fftSize;
+    const last = this.freq.length - 1;
+    const band = (lo, hi, pw) => {
+      let s = 0, n = 0;
+      const i1 = Math.min(Math.ceil(hi/binHz), last);
+      for (let i = Math.min(Math.floor(lo/binHz), last); i <= i1; i++) { const v = this.freq[i]/255; s += v*v; n++; }
+      return Math.pow(s/Math.max(1, n), 0.5*pw);
+    };
+    let rms = 0; for (let i = 0; i < this.wave.length; i += 4) { const v = (this.wave[i] - 128)/128; rms += v*v; }
+    rms = Math.sqrt(rms/(this.wave.length/4));
+    const raw = { bass: band(28, 150, 1.0), mid: band(200, 1600, 1.1), high: band(2600, 9000, 1.3), level: rms*2.2 };
+    // Absolute loudness, held against a slow 25 s peak rather than the fast per-band normaliser.
+    // The per-band values deliberately auto-level so the orb stays responsive at any volume, but
+    // that also erases the difference between a loud chorus and a quiet break — this keeps it.
+    const lpk = this.loudPeak = Math.max(rms, (this.loudPeak || 0.05)*Math.exp(-dt/25) + 0.0002, 0.02);
+    const lv = clamp(rms/lpk, 0, 1);
+    a.loud += (lv - a.loud)*(1 - Math.exp(-dt/0.4));
+    if (!Number.isFinite(a.loud)) a.loud = 1;
+    for (const k in raw) {
+      let r = raw[k];
+      if (!Number.isFinite(r)) r = 0;
+      // The bed is continuous, so raw loudness alone would sit pinned near its own maximum and never
+      // "pulse". Split it: a slowly-normalised sustained level, plus an onset term (how far the band
+      // has jumped above its own 1.2 s average, scaled by the recent biggest jump). Each sub boom and
+      // treble tick then reads as a real spike from a calm baseline.
+      const ceil = this.gain[k] = Math.max(r, (this.gain[k] || 0.2)*Math.exp(-dt/6) + 0.0005, 0.03);
+      const prevSlow = this.slow[k] === undefined ? r : this.slow[k];
+      const slow = this.slow[k] = prevSlow + (r - prevSlow)*(1 - Math.exp(-dt/1.2));
+      const onset = Math.max(0, r - slow);
+      const opk = this.opk[k] = Math.max(onset, (this.opk[k] || 0.02)*Math.exp(-dt/5) + 0.0002, 0.015);
+      let v = clamp(0.32*(r/ceil) + 0.95*(onset/opk), 0, 1);
+      if (!Number.isFinite(v)) v = 0;
+      const c = v > a[k] ? att : rel;
+      a[k] = v + (a[k] - v)*c;
+      if (!Number.isFinite(a[k])) a[k] = 0;
+    }
+  }
+}
+document.addEventListener('visibilitychange', () => { perf.skip = true; if (!document.hidden && state.playing) state.playStart = performance.now() - state.elapsed*1000; });
+const audio = new AudioBed();
+// rAF stops in a hidden tab but the audio does not: keep scheduling from a timer too
+setInterval(() => { if (state.playing) { audio.schedulePulses(); audio.scheduleDemo(); } }, 400);
+
+/* ---------------- renderer: the chaos game ----------------
+   Four passes a frame:
+     update  - one chaos-game iteration for every point, in parallel
+     decay   - the histogram fades, so what is on screen is a moving average
+     scatter - every point deposits colour and density into the histogram
+     tone    - log-density tonemap, then bloom and composite
+   Measured on this machine: scatter runs at a flat 75M points/sec and is bound by point
+   count, not by resolution, so the quality ladder scales samples and leaves the image sharp. */
+const canvas = $('orb');
+let gl = null, R = null, ctx2d = null, canvas2d = null;
+const fpsEl = $('fps'), scaleEl = $('scale'), stepsEl = $('steps');
+const SCALE_STEPS = [1024, 896, 768, 640, 512];          // side of the point grid
+const STEPS_FOR = SCALE_STEPS.map(s => s*s);             // samples deposited per frame
+const NT = 5;                                            // transforms in the flame
+const FLAME_FILL = 0.80;      // how much of the accumulator the flame occupies; the rest is
+const RECT_K = 0.94/FLAME_FILL;  // headroom for the bloom to fade out in, so nothing is ever clipped square
+
+function createGL() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('webgl') === '0') return null;
+  return canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false,
+    premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+}
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { const log = gl.getShaderInfoLog(s); gl.deleteShader(s); throw new Error(log); }
+  return s;
+}
+function srcOf(id) { return $(id).textContent.replace('__LIB__', $('lib').textContent).replace(/\bNT\b/g, String(NT)); }
+function program(vsId, fsId) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, srcOf(vsId)));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, srcOf(fsId)));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, a.name); }
+  return { p, u };
+}
+function makeTex(fmt, w, h, filter) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, fmt, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter || gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter || gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { t, f, w, h, ok };
+}
+function killTex(o) { if (!o) return; gl.deleteFramebuffer(o.f); gl.deleteTexture(o.t); }
+
+function initGL() {
+  gl = createGL();
+  if (!gl) return false;
+  try {
+    const cbf = gl.getExtension('EXT_color_buffer_float');
+    if (!cbf) throw new Error('no float render targets');
+    const fbl = gl.getExtension('EXT_float_blend');
+    const dense = window.matchMedia('(hover: none) and (pointer: coarse)').matches && (window.devicePixelRatio || 1) >= 2;
+    R = {
+      // 32F where blending into it is allowed. Measured: 32F and 16F scatter at identical speed,
+      // and a 16F accumulator hard-stalls after 2048 deposits into a bin, so 32F is strictly better.
+      accFmt: fbl ? gl.RGBA32F : gl.RGBA16F, float32: !!fbl,
+      update: program('vs-quad', 'fs-update'),
+      scatter: program('vs-scatter', 'fs-scatter'),
+      decay: program('vs-quad', 'fs-decay'),
+      tone: program('vs-quad', 'fs-tone'),
+      bright: program('vs-quad', 'fs-bright'),
+      blur: program('vs-quad', 'fs-blur'),
+      spill: program('vs-quad', 'fs-spill'),
+      comp: program('vs-quad', 'fs-comp'),
+      scaleIdx: clamp(+(new URLSearchParams(location.search).get('rung') ?? (dense ? 2 : 1)) || 0, 0, SCALE_STEPS.length - 1),
+      W: 0, H: 0, S: 0, dpr: 1, seeded: false,
+    };
+    R.plainVAO = gl.createVertexArray();
+    gl.bindVertexArray(R.plainVAO);
+    gl.disable(gl.DEPTH_TEST);
+  } catch (e) { console.error('flame init:', e); gl = null; R = null; return false; }
+  return true;
+}
+
+function resizeGL() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(canvas.clientWidth*dpr)), h = Math.max(1, Math.round(canvas.clientHeight*dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  R.dpr = dpr; R.W = w; R.H = h;
+  // The flame is a disc, so the histogram is square and only as big as the short side needs.
+  const side = clamp(Math.round(Math.min(w, h)*0.98*RECT_K), 384, 1600);
+  if (side !== R.S) {
+    R.S = side;
+    [R.acc, R.acc2, R.toneT, R.bl1, R.bl2].forEach(killTex);
+    R.acc = makeTex(R.accFmt, side, side); R.acc2 = makeTex(R.accFmt, side, side);
+    R.toneT = makeTex(gl.RGBA8, side, side, gl.LINEAR);
+    const bs = Math.max(64, side >> 2);
+    R.bl1 = makeTex(gl.RGBA8, bs, bs, gl.LINEAR); R.bl2 = makeTex(gl.RGBA8, bs, bs, gl.LINEAR);
+    clearAcc();
+  }
+  // screen-shaped, tiny: the orb's light spread across the room
+  const ww = Math.max(32, w >> 3), wh = Math.max(32, h >> 3);
+  if (!R.wide1 || R.wide1.w !== ww || R.wide1.h !== wh) {
+    [R.wide1, R.wide2].forEach(killTex);
+    R.wide1 = makeTex(gl.RGBA8, ww, wh, gl.LINEAR); R.wide2 = makeTex(gl.RGBA8, ww, wh, gl.LINEAR);
+  }
+
+  rebuildTargets();
+  perf.skip = true;
+}
+function clearAcc() {
+  if (!R || !R.acc) return;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.acc.f); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.acc2.f); gl.clear(gl.COLOR_BUFFER_BIT);
+}
+// the point grid is the quality lever
+function rebuildTargets() {
+  if (!R) return;
+  const side = SCALE_STEPS[R.scaleIdx];
+  if (R.state && R.state.w === side) { scaleEl.textContent = fmtK(STEPS_FOR[R.scaleIdx]); return; }
+  killTex(R.state); killTex(R.state2);
+  R.state = makeTex(gl.RGBA32F, side, side); R.state2 = makeTex(gl.RGBA32F, side, side);
+  seedState(side);
+  scaleEl.textContent = fmtK(STEPS_FOR[R.scaleIdx]);
+  stepsEl.textContent = side + '²';
+}
+function seedState(side) {
+  const d = new Float32Array(side*side*4);
+  const ub = new Uint32Array(1), fb = new Float32Array(ub.buffer);
+  for (let i = 0; i < side*side; i++) {
+    d[i*4] = Math.random()*2 - 1; d[i*4 + 1] = Math.random()*2 - 1; d[i*4 + 2] = Math.random();
+    ub[0] = ((i*2654435761) >>> 0) || 1; d[i*4 + 3] = fb[0];
+  }
+  gl.bindTexture(gl.TEXTURE_2D, R.state.t);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, side, side, gl.RGBA, gl.FLOAT, d);
+}
+
+/* ---------------- the palette journey ----------------
+   Always in transition, never parked: the mix runs 0 to 1 across a phase whose length drifts,
+   then the destination becomes the source and the next palette is drawn. Because the crossfade
+   spans the whole phase there is no moment where the colour is standing still to be noticed. */
+let PAL_TEX = null;
+const palBuf = new Uint8Array(256*4);
+const BG = [0.45, 0.5, 0.7];
+let palPhaseLen = 20, palPhaseT = 0;
+function startPaletteJourney(t, hard) {
+  const w = t.worlds;
+  state.palStep = 0;
+  if (hard) { state.palA = state.palB; state.palB = w[0]; palPhaseT = 0; palPhaseLen = 16; }
+  else { state.palA = w[0]; state.palB = w[1]; state.palMix = 0; palPhaseT = 0; }
+}
+function palAt(pal, x) {
+  const n = pal.length - 1;
+  const v = clamp(x, 0, 1)*n;
+  const i = Math.min(n - 1, Math.floor(v)), f = v - i, sm = f*f*(3 - 2*f);
+  const a = pal[i], b = pal[i + 1];
+  return [a[0] + (b[0] - a[0])*sm, a[1] + (b[1] - a[1])*sm, a[2] + (b[2] - a[2])*sm];
+}
+function updatePalette(dt, tr) {
+  palPhaseT += dt;
+  if (palPhaseT >= palPhaseLen) {
+    palPhaseT = 0;
+    // the phase length drifts so the rhythm of the colour changes never becomes predictable
+    palPhaseLen = 12 + 8*(0.5 + 0.5*Math.sin(state.clock*0.037 + tr.flowSeed));
+    state.palStep = (state.palStep + 1) % tr.worlds.length;
+    state.palA = state.palB;
+    state.palB = tr.worlds[(state.palStep + 1) % tr.worlds.length];
+  }
+  const m = clamp(palPhaseT/palPhaseLen, 0, 1);
+  state.palMix = m*m*(3 - 2*m);
+  const A = PAL_RGB[state.palA], B = PAL_RGB[state.palB], mix = state.palMix;
+  // The change sweeps across the colour index rather than cross-dissolving. Averaging two
+  // palettes in RGB passes through a muddy desaturated middle; a wipe keeps every colour fully
+  // saturated the whole way, and while it crosses, both palettes are on screen at once in
+  // different parts of the flame — which is far prettier than either alone.
+  const WIDTH = 0.30;
+  const edge = (1 + 2*WIDTH)*(1 - mix) - WIDTH;
+  for (let i = 0; i < 256; i++) {
+    const x = i/255;
+    let t = clamp((edge - x)/(2*WIDTH) + 0.5, 0, 1);
+    t = t*t*(3 - 2*t);
+    const ca = palAt(A, x), cb = palAt(B, x);
+    palBuf[i*4]     = 255*clamp(ca[0] + (cb[0] - ca[0])*t, 0, 1);
+    palBuf[i*4 + 1] = 255*clamp(ca[1] + (cb[1] - ca[1])*t, 0, 1);
+    palBuf[i*4 + 2] = 255*clamp(ca[2] + (cb[2] - ca[2])*t, 0, 1);
+    palBuf[i*4 + 3] = 255;
+  }
+  // the room takes its colour from the middle of whatever palette is on screen, kept deep
+  let br = 0, bg2 = 0, bb = 0;
+  for (let i = 90; i < 200; i += 8) { br += palBuf[i*4]; bg2 += palBuf[i*4 + 1]; bb += palBuf[i*4 + 2]; }
+  const n = Math.ceil((200 - 90)/8), inv = 1/(n*255);
+  const tgt = [br*inv, bg2*inv, bb*inv];
+  const mx = Math.max(tgt[0], tgt[1], tgt[2], 0.001);
+  for (let k = 0; k < 3; k++) {
+    // Hue-normalised to a max channel of 1 so a dark palette lights the room as much as a bright
+    // one, then pulled 26% toward neutral so it reads as a lit space rather than a colour filter.
+    const v = (tgt[k]/mx)*0.74 + 0.26;
+    BG[k] += (v - BG[k])*(1 - Math.exp(-dt/1.6));
+  }
+  if (!PAL_TEX) PAL_TEX = makeTex(gl.RGBA8, 256, 1, gl.LINEAR);
+  gl.bindTexture(gl.TEXTURE_2D, PAL_TEX.t);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, palBuf);
+}
+
+/* ---------------- the wave ----------------
+   The wave does not travel. Its shape across the screen is the live waveform, held steady by a
+   short temporal average so it stays detailed without buzzing, and the whole thing swells outward
+   from the centre line on each beat and settles back between them.
+
+   Timing is the point. The analyser sees audio BEFORE it reaches the speakers, so a pulse fired
+   the instant a beat is detected lands early. Each detected beat is therefore queued and fired at
+   the moment the sound actually reaches the listener: the graph's own output latency, plus a
+   measured constant for the detector's own lag. See WAVE_LAG. */
+const WAVE_N = 1024;
+const waveHist = new Uint8Array(WAVE_N*4);
+const waveShape = new Float32Array(WAVE_N);
+const waveMed = new Float32Array(WAVE_N), waveWide = new Float32Array(WAVE_N);
+let WAVE_TEX = null;
+let wavePulse = 0, waveVel = 0;
+const beatQueue = [];
+// Measured against a file with a kick exactly every 0.5 s: see the timing test in the notes.
+// Positive delays the swell, negative brings it forward.
+const WAVE_LAG = -0.020;
+
+function queueBeat(strength, nowSec) {
+  const lat = audio.outputLag();
+  beatQueue.push({ at: nowSec + Math.max(0, lat + WAVE_LAG), s: clamp(strength, 0.2, 3) });
+  if (beatQueue.length > 8) beatQueue.shift();
+}
+
+function boxSmooth(src, dst, r) {
+  const n = src.length, w = r*2 + 1;
+  let acc = 0;
+  for (let i = -r; i <= r; i++) acc += src[Math.min(n - 1, Math.max(0, i))];
+  for (let i = 0; i < n; i++) {
+    dst[i] = acc/w;
+    acc -= src[Math.min(n - 1, Math.max(0, i - r))];
+    acc += src[Math.min(n - 1, Math.max(0, i + r + 1))];
+  }
+}
+
+function updateWave(dt) {
+  if (!R) return;
+  const nowSec = state.clock;
+  // fire any beat whose sound has now reached the listener
+  while (beatQueue.length && beatQueue[0].at <= nowSec) {
+    const b = beatQueue.shift();
+    const hit = 0.55 + 0.45*Math.min(b.s, 2)/2;
+    wavePulse = Math.max(wavePulse, hit);
+    waveVel = Math.max(waveVel, hit*3.2);
+  }
+  // swell fast, settle slowly, rest low
+  waveVel -= waveVel*Math.min(1, dt*11);
+  wavePulse += waveVel*dt;
+  wavePulse -= wavePulse*Math.min(1, dt*3.1);
+  wavePulse = clamp(wavePulse, 0, 1.35);
+
+  // the shape: the live waveform, temporally averaged so it is detailed but not jittery
+  const live = audio.envelopeSlices(WAVE_N);
+  const k = 1 - Math.exp(-dt/0.22);
+  for (let i = 0; i < WAVE_N; i++) waveShape[i] += (live[i] - waveShape[i])*k;
+  boxSmooth(waveShape, waveMed, 14);
+  boxSmooth(waveMed, waveWide, 46);
+
+  const rest = 0.10, swell = 0.90*state.motion;
+  const amp = rest + wavePulse*swell;
+  for (let i = 0; i < WAVE_N; i++) {
+    waveHist[i*4]     = Math.round(clamp(waveShape[i]*amp, 0, 1)*255);
+    waveHist[i*4 + 1] = Math.round(clamp(waveMed[i]*amp, 0, 1)*255);
+    waveHist[i*4 + 2] = Math.round(clamp(waveWide[i]*amp, 0, 1)*255);
+    waveHist[i*4 + 3] = 255;
+  }
+  if (!WAVE_TEX) WAVE_TEX = makeTex(gl.RGBA8, WAVE_N, 1, gl.LINEAR);
+  gl.bindTexture(gl.TEXTURE_2D, WAVE_TEX.t);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, WAVE_N, 1, gl.RGBA, gl.UNSIGNED_BYTE, waveHist);
+}
+
+/* ---------------- pointer: moving a hand through smoke ----------------
+   The pointer leaves a wake of samples behind it. Each one pushes the flame outward and swirls it
+   a little, and fades over about a second and a half, so the filaments part where the finger goes
+   and drift back once it has passed. Pointer Events cover mouse, pen and touch from one path. */
+const TRAIL_BUF = new Float32Array(40);
+let TRAIL_N = 0;
+const trail = [];
+function discCoords(clientX, clientY) {
+  const lc = liveCanvas(), rect = lc.getBoundingClientRect();
+  const dpr = R ? R.dpr : Math.min(window.devicePixelRatio || 1, 2);
+  const c = layout();
+  const px = (clientX - rect.left)*dpr, py = (clientY - rect.top)*dpr;
+  const half = c.d*0.5;
+  return [(px - c.x)/half/0.94, (c.y - py)/half/0.94];
+}
+function addTrail(clientX, clientY, strength) {
+  const q = discCoords(clientX, clientY);
+  if (!Number.isFinite(q[0]) || !Number.isFinite(q[1])) return;
+  if (q[0]*q[0] + q[1]*q[1] > 2.6) return;               // well outside the disc
+  const last = trail[trail.length - 1];
+  // seed extra points along a fast drag so a quick swipe still leaves a continuous wake
+  if (last) {
+    const dx = q[0] - last.x, dy = q[1] - last.y, d = Math.hypot(dx, dy);
+    const steps = Math.min(4, Math.floor(d/0.09));
+    for (let i = 1; i <= steps; i++) trail.push({ x: last.x + dx*i/(steps + 1), y: last.y + dy*i/(steps + 1), s: strength*0.75, r: 0.2 });
+  }
+  trail.push({ x: q[0], y: q[1], s: strength, r: 0.22 });
+  while (trail.length > 10) trail.shift();
+}
+function updateTrail(dt) {
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const t = trail[i];
+    t.s *= Math.exp(-dt/1.15);                            // dissipates over roughly a second and a half
+    t.r += dt*0.10;                                       // and spreads as it goes, like smoke
+    if (t.s < 0.02) trail.splice(i, 1);
+  }
+  TRAIL_N = Math.min(trail.length, 10);
+  for (let i = 0; i < 10; i++) {
+    const t = trail[i];
+    TRAIL_BUF[i*4] = t ? t.x : 0; TRAIL_BUF[i*4 + 1] = t ? t.y : 0;
+    TRAIL_BUF[i*4 + 2] = t ? t.s*state.motion : 0; TRAIL_BUF[i*4 + 3] = t ? t.r : 1;
+  }
+}
+const activePointers = new Map();
+function onDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  addTrail(e.clientX, e.clientY, 0.85);
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  e.preventDefault();
+}
+function onMove(e) {
+  const prev = activePointers.get(e.pointerId);
+  // a hover with no button still stirs it, just more gently
+  const held = prev !== undefined;
+  if (!held && e.pointerType !== 'mouse') return;
+  const speed = prev ? Math.min(1, Math.hypot(e.clientX - prev.x, e.clientY - prev.y)/26) : 0.35;
+  addTrail(e.clientX, e.clientY, (held ? 0.7 : 0.3)*(0.45 + 0.75*speed));
+  if (held) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (held) e.preventDefault();
+}
+function onUp(e) { activePointers.delete(e.pointerId); }
+for (const el of [canvas, $('orb2d')]) {
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
+  el.addEventListener('lostpointercapture', onUp);
+}
+
+/* ---------------- flares ----------------
+   A flare is born at the core and travels out through the arms over about two seconds, fading as
+   it goes. A bigger hit throws a brighter one that travels further. */
+const FLARE_BUF = new Float32Array(16);
+let FLARE_N = 0;
+let lastFlareAt = -9;
+function addFlare(strength) {
+  const s = state;
+  // a busy hi-hat pattern should not stack four flares on top of each other
+  if (s.clock - lastFlareAt < 0.34) return;
+  lastFlareAt = s.clock;
+  const amp = clamp(strength, 0.15, 3.0);
+  s.flares.push({ t: 0, amp: 0.22 + amp*0.32, dur: 1.9 + Math.min(amp, 2)*0.6, reach: 0.85 + Math.min(amp, 2)*0.22 });
+  if (s.flares.length > 4) s.flares.shift();
+}
+function updateFlares(dt) {
+  const s = state, k = s.motion;
+  s.flares = s.flares.filter(f => (f.t += dt) < f.dur);
+  FLARE_N = Math.min(s.flares.length, 4);
+  for (let i = 0; i < 4; i++) {
+    const f = s.flares[i];
+    if (!f) { FLARE_BUF[i*4] = 0; FLARE_BUF[i*4 + 1] = 0; FLARE_BUF[i*4 + 2] = 1; FLARE_BUF[i*4 + 3] = 0; continue; }
+    const u = f.t/f.dur;
+    // fast at the core, easing as it reaches the rim, so it reads as a curtain rather than a ring
+    FLARE_BUF[i*4] = Math.pow(u, 0.62)*f.reach;
+    FLARE_BUF[i*4 + 1] = f.amp*Math.pow(1 - u, 1.6)*k;
+    FLARE_BUF[i*4 + 2] = 0.13 + 0.22*u;      // the curtain broadens as it travels
+    FLARE_BUF[i*4 + 3] = 0;
+  }
+}
+
+/* ---------------- the flame itself ----------------
+   Affines are built as rotation x scale x translation with the scale held below 1, which
+   keeps every transform contractive so the attractor stays bounded no matter where the
+   animation wanders. Variation weights are normalised for the same reason. */
+const AFF = new Float32Array(NT*9), V1 = new Float32Array(NT*4), V2 = new Float32Array(NT*4),
+      V3 = new Float32Array(NT*4), META = new Float32Array(NT*4), FIN = new Float32Array(9);
+function flameParams(t, tr) {
+  const S = tr.flowSeed, mix = state.tune.swirl, grid = state.tune.grid;
+  const a = state.audio, rx = state.tune.react;
+  // Audio leans on the variation mix, but it has to be applied AFTER normalisation below —
+  // adding it to the weights before they are normalised divides the nudge straight back out,
+  // which is why this looked completely dead.
+  const mBass = 1 + (a.bass - 0.45)*0.50*rx;
+  const mMid  = 1 + (a.mid  - 0.42)*0.60*rx;
+  const mHigh = 1 + (a.high - 0.40)*0.65*rx;
+  let cum = 0; const wts = [];
+  for (let i = 0; i < NT; i++) wts.push((i === 0 ? 2.6 : 0.55) + 0.85*(0.5 + 0.5*Math.sin(t*0.0298 + i*1.7 + S)));
+  const tot = wts.reduce((x, y) => x + y, 0);
+  for (let i = 0; i < NT; i++) {
+    const core = (i === 0);
+    const ph = i*2.3999632 + S;
+    const rot = ph + t*0.0345*(i % 2 ? 1 : -1) + 0.85*Math.sin(t*0.0178 + ph);
+    const sc = core ? 0.19 + 0.07*Math.sin(t*0.0178 + ph) : 0.52 + 0.30*Math.sin(t*0.0252 + ph*1.3);
+    const ca = Math.cos(rot)*sc, sa = Math.sin(rot)*sc;
+    const off = core ? 0.055 : 0.62;
+    const tx = off*Math.sin(t*0.0312 + ph*2.1), ty = off*Math.cos(t*0.0377 + ph*1.3);
+    AFF[i*9] = ca;  AFF[i*9 + 1] = sa; AFF[i*9 + 2] = 0;
+    AFF[i*9 + 3] = -sa; AFF[i*9 + 4] = ca; AFF[i*9 + 5] = 0;
+    AFF[i*9 + 6] = tx;  AFF[i*9 + 7] = ty; AFF[i*9 + 8] = 1;
+    const q = t*0.0475 + i*1.9 + S;
+    const w = [
+      (core ? 2.4 : 0.55) + 0.30*Math.sin(q*0.83),  // linear
+      (core ? 0.10 : 0.34) + 0.26*Math.sin(q*1.13 + 1.0),   // spherical
+      0.30 + 0.26*Math.sin(q*0.71 + 2.0),           // swirl
+      0.16 + 0.16*Math.sin(q*1.31 + 3.0),           // polar
+      0.20 + 0.18*Math.sin(q*0.97 + 4.0),           // disc
+      0.20 + 0.18*Math.sin(q*1.19 + 5.0),           // spiral
+      0.14 + 0.14*Math.sin(q*0.61 + 6.0),           // hyperbolic
+      0.22 + 0.20*Math.sin(q*0.89 + 7.0),           // curl
+      0.18 + 0.16*Math.sin(q*1.07 + 8.0),           // julia
+      grid*(0.16 + 0.16*Math.sin(t*0.0113 + i)),    // rectangles: the faint square lattice
+      0.14 + 0.14*Math.sin(q*0.77 + 9.0),           // eyefish
+      0.12 + 0.12*Math.sin(q*1.23 + 10.0),          // handkerchief
+    ];
+    for (let k = 0; k < 12; k++) w[k] = Math.max(0, w[k])*(k === 0 ? 1 : mix*(core ? 0.16 : 1));
+    let sum = 0; for (let k = 0; k < 12; k++) sum += w[k];
+    const inv = 1.12/Math.max(sum, 1e-3);
+    V1[i*4] = w[0]*inv; V1[i*4+1] = w[1]*inv*mBass; V1[i*4+2] = w[2]*inv*mMid; V1[i*4+3] = w[3]*inv;
+    V2[i*4] = w[4]*inv; V2[i*4+1] = w[5]*inv*mHigh;  V2[i*4+2] = w[6]*inv;      V2[i*4+3] = w[7]*inv*mMid;
+    V3[i*4] = w[8]*inv*mHigh; V3[i*4+1] = w[9]*inv;  V3[i*4+2] = w[10]*inv;     V3[i*4+3] = w[11]*inv;
+    cum += wts[i]/tot;
+    META[i*4] = i/(NT - 1); META[i*4+1] = cum;
+    META[i*4+2] = 0.7*Math.sin(t*0.0107 + i + S); META[i*4+3] = 0.5*Math.cos(t*0.0087 + i + S);
+  }
+  // the whole disc turns slowly, and the core sits a little off centre
+  const fr = t*0.0168 + S*0.1, fc = Math.cos(fr), fs = Math.sin(fr);
+  const ox = 0.10*Math.sin(t*0.0071 + S), oy = 0.10*Math.cos(t*0.0059 + S);
+  FIN[0] = fc; FIN[1] = fs; FIN[2] = 0; FIN[3] = -fs; FIN[4] = fc; FIN[5] = 0; FIN[6] = ox; FIN[7] = oy; FIN[8] = 1;
+}
+
+function drawFlame(dt) {
+  const s = state, tr = TRACKS[s.trackIndex];
+  const T = s.flowTime;
+  flameParams(T, tr);
+  updatePalette(dt, tr);
+
+  const side = SCALE_STEPS[R.scaleIdx];
+  // ---- update: one iteration for every point ----
+  gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.state2.f); gl.viewport(0, 0, side, side);
+  gl.useProgram(R.update.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.state.t);
+  gl.uniform1i(R.update.u.uState, 0);
+  gl.uniform1i(R.update.u.uSize, side);
+  gl.uniformMatrix3fv(R.update.u.uAff, false, AFF);
+  gl.uniform4fv(R.update.u.uV1, V1); gl.uniform4fv(R.update.u.uV2, V2);
+  gl.uniform4fv(R.update.u.uV3, V3); gl.uniform4fv(R.update.u.uMeta, META);
+  gl.uniform1f(R.update.u.uSym, tr.sym);
+  gl.uniform1f(R.update.u.uSymP, 0.34);
+  gl.uniform2f(R.update.u.uGridK, 0.55 + 0.25*Math.sin(T*0.009), 0.55 + 0.25*Math.cos(T*0.011));
+  gl.uniform1ui(R.update.u.uSeed, (s.frameNo|0) >>> 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  let sw = R.state; R.state = R.state2; R.state2 = sw;
+
+  // ---- decay ----
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.acc2.f); gl.viewport(0, 0, R.S, R.S);
+  gl.useProgram(R.decay.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.acc.t);
+  gl.uniform1i(R.decay.u.uT, 0);
+  // On a 16F accumulator a bin stops accepting deposits after 2048 of them, so the fade has to
+  // be quick enough to hold the steady state below that. On 32F the persistence can be long.
+  const maxTrail = R.float32 ? 0.995 : 0.955;
+  gl.uniform1f(R.decay.u.uD, Math.min(state.tune.trail, maxTrail));
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  sw = R.acc; R.acc = R.acc2; R.acc2 = sw;
+
+  // ---- scatter ----
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.acc.f); gl.viewport(0, 0, R.S, R.S);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.useProgram(R.scatter.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.state.t);
+  gl.uniform1i(R.scatter.u.uState, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, PAL_TEX.t);
+  gl.uniform1i(R.scatter.u.uPal, 1);
+  gl.uniform1i(R.scatter.u.uSize, side);
+  gl.uniformMatrix3fv(R.scatter.u.uFin, false, FIN);
+  gl.uniform2f(R.scatter.u.uFinW, 0.04, 0.96);
+  gl.uniform2f(R.scatter.u.uAsp, 1, 1);
+  gl.uniform1f(R.scatter.u.uZoom, FLAME_FILL);
+  gl.uniform1f(R.scatter.u.uCiShift, clamp((s.audio.bass - 0.5)*0.07*s.tune.react, -0.10, 0.10));
+  gl.uniform4fv(R.scatter.u.uFlare, FLARE_BUF);
+  gl.uniform4fv(R.scatter.u.uTrail, TRAIL_BUF);
+  gl.uniform3f(R.scatter.u.uTrailK, 0.115, 0.085, 1.5);
+  gl.uniform1i(R.scatter.u.uTrailN, TRAIL_N);
+  gl.uniform1i(R.scatter.u.uFlareN, FLARE_N);
+  gl.drawArrays(gl.POINTS, 0, STEPS_FOR[R.scaleIdx]);
+  gl.disable(gl.BLEND);
+
+  // ---- tonemap ----
+  const loud = clamp(1 + (s.audio.loud - 0.55)*0.55*s.tune.react, 0.55, 1.7);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.toneT.f); gl.viewport(0, 0, R.S, R.S);
+  gl.useProgram(R.tone.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.acc.t);
+  gl.uniform1i(R.tone.u.uT, 0);
+  // Self-normalising exposure. The mean density over the disc is known exactly — samples per
+  // frame, divided by (1 - persistence) for the temporal average, over the disc area in texels —
+  // so the tonemap can be scaled to put that mean at mid brightness whatever the quality rung,
+  // resolution or persistence happens to be. Without this, changing any of them changes exposure.
+  const decayUsed = Math.min(state.tune.trail, maxTrail);
+  const discArea = Math.PI*Math.pow(R.S*FLAME_FILL*0.5, 2);
+  const meanD = STEPS_FOR[R.scaleIdx]/Math.max(1 - decayUsed, 0.005)/discArea;
+  gl.uniform1f(R.tone.u.uExp, s.tune.exposure*loud*0.85/Math.max(meanD, 1e-6));
+  gl.uniform1f(R.tone.u.uGamma, s.tune.gamma);
+  gl.uniform1f(R.tone.u.uSat, s.tune.sat);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // ---- bloom ----
+  const bs = R.bl1.w;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.bl1.f); gl.viewport(0, 0, bs, bs);
+  gl.useProgram(R.bright.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.toneT.t);
+  gl.uniform1i(R.bright.u.uTex, 0); gl.uniform2f(R.bright.u.uRes, bs, bs);
+  gl.uniform1f(R.bright.u.uThreshold, 0.42);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  for (const [src, dst, dx, dy] of [[R.bl1, R.bl2, 1.4, 0], [R.bl2, R.bl1, 0, 1.4]]) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f); gl.viewport(0, 0, bs, bs);
+    gl.useProgram(R.blur.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.t);
+    gl.uniform1i(R.blur.u.uTex, 0); gl.uniform2f(R.blur.u.uRes, bs, bs);
+    gl.uniform2f(R.blur.u.uDir, dx, dy);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  const c = layout();
+  const rectD = c.d*RECT_K;
+  const offX = c.x - rectD*0.5, offY = R.H - (c.y + rectD*0.5);
+
+  // ---- the orb's light, placed into screen space and blurred wide ----
+  const ww = R.wide1.w, wh = R.wide1.h, step = R.W/ww;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.wide1.f); gl.viewport(0, 0, ww, wh);
+  gl.useProgram(R.spill.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.toneT.t); gl.uniform1i(R.spill.u.uTex, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, R.bl1.t); gl.uniform1i(R.spill.u.uBloom, 1);
+  gl.uniform2f(R.spill.u.uRes, ww, wh);
+  gl.uniform2f(R.spill.u.uOff, offX, offY);
+  gl.uniform2f(R.spill.u.uScale, rectD, step);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // Two rounds, wide. One narrow round leaves the spill tracing the outline of the disc, which
+  // reads as a grey plate sitting behind the flame instead of light thrown into the room.
+  for (const [src, dst, dx, dy] of [[R.wide1, R.wide2, 5.5, 0], [R.wide2, R.wide1, 0, 5.5],
+                                    [R.wide1, R.wide2, 2.4, 0], [R.wide2, R.wide1, 0, 2.4]]) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f); gl.viewport(0, 0, ww, wh);
+    gl.useProgram(R.blur.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.t);
+    gl.uniform1i(R.blur.u.uTex, 0); gl.uniform2f(R.blur.u.uRes, ww, wh); gl.uniform2f(R.blur.u.uDir, dx, dy);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // ---- composite: room, spill, then the flame on top ----
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, R.W, R.H);
+  gl.useProgram(R.comp.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.toneT.t); gl.uniform1i(R.comp.u.uTex, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, R.bl1.t); gl.uniform1i(R.comp.u.uBloom, 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, R.wide1.t); gl.uniform1i(R.comp.u.uWide, 2);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, WAVE_TEX.t); gl.uniform1i(R.comp.u.uWave, 3);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, PAL_TEX.t); gl.uniform1i(R.comp.u.uPalC, 4);
+  gl.uniform4f(R.comp.u.uWaveK, c.d*0.76, c.d*0.5, 0.84*s.tune.wave, 0);
+  gl.uniform2f(R.comp.u.uRes, R.W, R.H);
+  gl.uniform2f(R.comp.u.uSrcRes, R.S, R.S);
+  gl.uniform2f(R.comp.u.uScale, rectD, rectD);
+  gl.uniform2f(R.comp.u.uOff, offX, offY);
+  gl.uniform2f(R.comp.u.uCentre, c.x, R.H - c.y);
+  gl.uniform1f(R.comp.u.uGlow, s.tune.glow*clamp(1 + (s.audio.high - 0.40)*0.65*s.tune.react, 0.45, 2.0));
+  gl.uniform1f(R.comp.u.uSpill, (0.30 + 0.34*s.tune.glow)*s.tune.ambient);
+  gl.uniform1f(R.comp.u.uAmbient, s.tune.ambient);
+  gl.uniform3f(R.comp.u.uBgCol, BG[0], BG[1], BG[2]);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+/* ---------------- layout: where the disc sits ---------------- */
+let layoutCache = null;
+window.__orbBox = () => { const c = layout(); const dpr = R ? R.dpr : 1;
+  return { d: c.d/dpr, cx: c.x/dpr, cy: c.y/dpr }; };   // for layout tests
+function liveCanvas() { return ctx2d ? canvas2d : canvas; }
+function layout() {
+  if (layoutCache) return layoutCache;
+  const lc = liveCanvas();
+  const dpr = R ? R.dpr : Math.min(window.devicePixelRatio || 1, 2);
+  const w = (lc.clientWidth || window.innerWidth)*dpr, h = (lc.clientHeight || window.innerHeight)*dpr;
+  const split = h <= 520*dpr && w > h;
+  const top = split ? 8*dpr : ($('top').offsetHeight + 10)*dpr;
+  const bottom = split ? 8*dpr : ($('bottom').offsetHeight + 12)*dpr;
+  const availH = Math.max(80*dpr, h - top - bottom);
+  // Breathing room on every axis. The width cap used to be 98%, which left four pixels beside the
+  // orb on a phone and read as cropped even though it technically fitted.
+  const d = split ? Math.min(0.96*h, w*0.44)
+                  : Math.min(Math.min(w, h)*0.94, availH*0.98, w*0.88);
+  return (layoutCache = { x: split ? w*0.73 : w*0.5, y: split ? h*0.5 : top + availH*0.5, d, w, h });
+}
+/* ---------------- adaptive resolution ---------------- */
+// Judge quality by the MEDIAN frame time over a rolling window, against an explicit 60fps target.
+//
+// The previous version compared each frame against the display's own refresh interval, which on a
+// 144Hz panel demanded 107fps rather than the 60fps that was actually asked for, and reset the
+// climb-back counter on every hitched frame — so it ratcheted to the bottom rung and stayed there
+// on a machine with enormous headroom. A median ignores GC hitches without ignoring real slowness,
+// and a fixed target means a fast display is not punished for being fast.
+const perf = {
+  win: [], winSum: 0,        // rolling ~1 s of raw frame times
+  fpsAcc: 0, fpsN: 0,        // for the on-screen counter
+  t: 0,                      // seconds of adaptation time
+  settle: 2.0,               // ignore this many seconds after any change
+  penalty: 10, retryAt: 0,   // exponential back-off before re-probing a level that failed
+  goodFor: 0,                // how long the current level has comfortably held
+  baseFps: 0, downFrom: 0, checkGain: false, noGain: 0,   // verifying a descent actually buys frame rate
+  cappedUntil: 0,            // frame rate is limited by something other than our resolution
+  skip: true,
+};
+const ADAPT = new URLSearchParams(location.search).get('adapt') !== '0';   // ?adapt=0 locks render scale at 100%
+const DEBUG = +(new URLSearchParams(location.search).get('debug') || 0);
+function adapt(dt, raw) {
+  if (!R) return;
+  // skip exactly one frame after a stall we did not cause (tab hidden, resize, first frame) — but never
+  // discard merely slow frames, or the counter would only ever average the fast ones and read 60
+  if (perf.skip || raw <= 0) { perf.skip = false; return; }
+
+  perf.fpsAcc += raw; perf.fpsN++;
+  if (perf.fpsAcc >= 0.5) { fpsEl.textContent = Math.round(perf.fpsN/perf.fpsAcc); perf.fpsAcc = 0; perf.fpsN = 0; }
+
+  perf.win.push(raw); perf.winSum += raw;
+  while (perf.win.length > 10 && perf.winSum > 1.0) perf.winSum -= perf.win.shift();
+
+  if (!ADAPT) return;
+  perf.t += raw;
+  perf.settle -= raw;
+  if (perf.settle > 0 || perf.win.length < 10) return;
+
+  // median, so one GC hitch cannot move the verdict but sustained slowness still does
+  const sorted = perf.win.slice().sort((a, b) => a - b);
+  const fps = 1/sorted[sorted.length >> 1];
+  const target = 58;                       // just under 60, to leave room for vsync jitter
+  const idx = R.scaleIdx;
+
+  // Did the last step down actually buy anything? If lowering the resolution changed nothing, the
+  // limit is not our render cost — a vsync-capped display, a throttled tab, a busy CPU — and
+  // degrading further would cost quality for no frame rate. Undo it and stop trying for a while.
+  // This also replaces guessing the refresh rate from frame times, which cannot tell a 30Hz display
+  // apart from a machine that happens to render at 30fps.
+  if (perf.checkGain) {
+    if (fps >= perf.baseFps*1.08) {
+      perf.checkGain = false; perf.noGain = 0;               // the descent is paying off
+    } else if (perf.noGain < 1 && idx < SCALE_STEPS.length - 1) {
+      // One rung bought nothing, but on a vsync-locked display a small reduction can land inside the
+      // same refresh interval and show zero gain even though a bigger one would cross it. Try once more.
+      perf.noGain++;
+      R.scaleIdx = idx + 1; rebuildTargets();
+      perf.settle = 2.5; perf.goodFor = 0;
+      toast(`${Math.round(fps)} fps → ${fmtK(STEPS_FOR[R.scaleIdx])} samples/frame`);
+      return;
+    } else {
+      // Two rungs of reduction bought nothing: the limit is not our render cost. Give the quality back.
+      R.scaleIdx = perf.downFrom; rebuildTargets();
+      perf.settle = 3.0; perf.goodFor = 0; perf.cappedUntil = perf.t + 90;
+      perf.checkGain = false; perf.noGain = 0;
+      if (R.scaleIdx === 0) scaleEl.classList.remove('warn');
+      toast(`Frame rate is capped elsewhere → back to ${fmtK(STEPS_FOR[R.scaleIdx])} samples/frame`);
+      return;
+    }
+  }
+
+  if (fps >= target) { perf.goodFor += raw; } else { perf.goodFor = 0; }
+  if (perf.goodFor > 30) { perf.penalty = 10; perf.retryAt = Math.min(perf.retryAt, perf.t); }  // conditions improved: forget past failures
+
+  if (fps < target*0.92 && idx < SCALE_STEPS.length - 1 && perf.t >= perf.cappedUntil) {
+    // cannot hold the target here — drop a rung, and wait longer each time before trying this one again
+    R.scaleIdx = idx + 1; rebuildTargets();
+    perf.settle = 2.5; perf.goodFor = 0;
+    perf.baseFps = fps; perf.downFrom = idx; perf.checkGain = true; perf.noGain = 0;
+    perf.retryAt = perf.t + perf.penalty;
+    perf.penalty = Math.min(perf.penalty*2, 240);
+    toast(`${Math.round(fps)} fps → ${fmtK(STEPS_FOR[R.scaleIdx])} samples/frame`);
+    scaleEl.classList.add('warn');
+  } else if (fps >= target && idx > 0 && perf.t >= perf.retryAt && (fps > target*1.4 || perf.goodFor > 8)) {
+    // Headroom to spare: climb back toward full quality. Obvious headroom climbs at once; a
+    // marginal margin has to hold for a while first, so the boundary does not flap. On a
+    // vsync-locked display every rung reads exactly 60fps, so the only way to find out whether
+    // there is room for more quality is to try it — hence the back-off rather than no probing.
+    R.scaleIdx = idx - 1; rebuildTargets();
+    perf.settle = 1.8; perf.goodFor = 0;
+    toast(`Headroom → ${fmtK(STEPS_FOR[R.scaleIdx])} samples/frame`);
+    if (R.scaleIdx === 0) scaleEl.classList.remove('warn');
+  }
+}
+let toastT = 0;
+function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2600); }
+
+/* ---------------- fallback: the same chaos game on the CPU ----------------
+   Far fewer samples, but it is still a real flame rather than a different picture. */
+function startFallback() {
+  if (ctx2d) return;
+  document.body.classList.add('fallback');
+  canvas2d = $('orb2d'); canvas2d.hidden = false; canvas.hidden = true;
+  ctx2d = canvas2d.getContext('2d');
+  scaleEl.textContent = 'CPU'; stepsEl.textContent = '40k';
+}
+const CPU = { hist: null, S: 0, img: null, px: null, x: 0.1, y: 0.2, c: 0.5 };
+function draw2D(dt) {
+  const cv = canvas2d, dpr = 1;
+  const w = Math.max(1, Math.round(cv.clientWidth)), h = Math.max(1, Math.round(cv.clientHeight));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; CPU.S = 0; }
+  const S = Math.min(w, h);
+  if (CPU.S !== S) { CPU.S = S; CPU.hist = new Float32Array(S*S*4); CPU.img = ctx2d.createImageData(S, S); CPU.px = CPU.img.data; }
+  const hist = CPU.hist, tr = TRACKS[state.trackIndex];
+  const T = state.flowTime;
+  flameParamsCPU(T, tr);
+  const decay = 0.93;
+  for (let i = 0; i < hist.length; i++) hist[i] *= decay;
+  let x = CPU.x, y = CPU.y, ci = CPU.c;
+  const A = PAL_RGB[state.palA], B = PAL_RGB[state.palB], mix = state.palMix;
+  for (let n = 0; n < 40000; n++) {
+    const j = (Math.random()*NT)|0, o = j*9;
+    const qx = CAF[o]*x + CAF[o + 3]*y + CAF[o + 6], qy = CAF[o + 1]*x + CAF[o + 4]*y + CAF[o + 7];
+    const r2 = qx*qx + qy*qy + 1e-6, r = Math.sqrt(r2), a = Math.atan2(qx, qy);
+    const sr = Math.sin(r2), cr = Math.cos(r2);
+    x = 0.42*qx + 0.30*(qx/r2) + 0.18*(qx*sr - qy*cr) + 0.10*(a*0.3183);
+    y = 0.42*qy + 0.30*(qy/r2) + 0.18*(qx*cr + qy*sr) + 0.10*(r - 1);
+    const k = (Math.random()*tr.sym)|0, ang = 6.28318530718*k/tr.sym, cs = Math.cos(ang), sn = Math.sin(ang);
+    const nx = x*cs - y*sn; y = x*sn + y*cs; x = nx;
+    ci = (ci + j/(NT - 1))*0.5;
+    if (!(x*x + y*y < 1e6)) { x = Math.random()*2 - 1; y = Math.random()*2 - 1; ci = Math.random(); continue; }
+    if (n < 24) continue;
+    const bd = 4/(x*x + y*y + 4);
+    const px = (x*bd*0.94*0.5 + 0.5)*S, py = (0.5 - y*bd*0.94*0.5)*S;
+    if (px < 0 || py < 0 || px >= S || py >= S) continue;
+    const idx = ((py|0)*S + (px|0))*4;
+    const ca = palAt(A, ci), cb = palAt(B, ci);
+    hist[idx]     += ca[0] + (cb[0] - ca[0])*mix;
+    hist[idx + 1] += ca[1] + (cb[1] - ca[1])*mix;
+    hist[idx + 2] += ca[2] + (cb[2] - ca[2])*mix;
+    hist[idx + 3] += 1;
+  }
+  CPU.x = x; CPU.y = y; CPU.c = ci;
+  const px2 = CPU.px, expo = 26*state.tune.exposure, ig = 1/state.tune.gamma;
+  for (let i = 0, n = S*S; i < n; i++) {
+    const d = hist[i*4 + 3];
+    if (d <= 0) { px2[i*4] = px2[i*4+1] = px2[i*4+2] = 0; px2[i*4+3] = 255; continue; }
+    const l = Math.log(1 + d*expo)/d;
+    px2[i*4]     = 255*Math.min(1, Math.pow(Math.max(hist[i*4]*l, 0), ig));
+    px2[i*4 + 1] = 255*Math.min(1, Math.pow(Math.max(hist[i*4+1]*l, 0), ig));
+    px2[i*4 + 2] = 255*Math.min(1, Math.pow(Math.max(hist[i*4+2]*l, 0), ig));
+    px2[i*4 + 3] = 255;
+  }
+  ctx2d.fillStyle = '#000'; ctx2d.fillRect(0, 0, w, h);
+  ctx2d.putImageData(CPU.img, (w - S)>>1, (h - S)>>1);
+}
+const CAF = new Float32Array(NT*9);
+function flameParamsCPU(t, tr) {
+  const S = tr.flowSeed;
+  for (let i = 0; i < NT; i++) {
+    const ph = i*2.3999632 + S;
+    const rot = ph + t*0.017*(i % 2 ? 1 : -1) + 0.55*Math.sin(t*0.0091 + ph);
+    const sc = 0.52 + 0.30*Math.sin(t*0.0131 + ph*1.3);
+    const ca = Math.cos(rot)*sc, sa = Math.sin(rot)*sc;
+    CAF[i*9] = ca; CAF[i*9+1] = sa; CAF[i*9+3] = -sa; CAF[i*9+4] = ca;
+    CAF[i*9+6] = 0.62*Math.sin(t*0.0163 + ph*2.1); CAF[i*9+7] = 0.62*Math.cos(t*0.0197 + ph*1.3);
+  }
+}
+/* ---------------- UI ---------------- */
+let titleT = 0;
+const titleEl = $('title'), subEl = $('subtitle'), tracksEl = $('tracks'), playBtn = $('play'), fillEl = $('fill'), tCur = $('tCur'), tTot = $('tTot'), barEl = $('bar');
+function buildChips() {
+  tracksEl.textContent = '';
+  TRACKS.forEach((t, i) => {
+    const b = document.createElement('button'); b.className = 'chip' + (t.user ? ' user' : t.audio === 'demo' ? ' demo' : '');
+    b.type = 'button'; b.textContent = t.name;
+    b.addEventListener('click', () => setTrack(i)); tracksEl.appendChild(b);
+  });
+}
+buildChips();
+function setTrack(i, keepProgress) {
+  i = (i + TRACKS.length) % TRACKS.length;
+  const t = TRACKS[i];
+  const changed = i !== state.trackIndex;
+  state.trackIndex = i;
+  if (!keepProgress) { state.elapsed = 0; state.playStart = performance.now(); }
+  if (changed) { clearTimeout(titleT); titleEl.classList.add('swap'); titleT = setTimeout(() => { titleEl.textContent = t.name; titleEl.classList.remove('swap'); }, 180); }
+  else titleEl.textContent = t.name;
+  subEl.textContent = `${t.kind} · ${fmtTime(t.duration)}`;
+  document.documentElement.style.setProperty('--accent', t.accentCss);
+  document.documentElement.style.setProperty('--accent2', t.accent2Css);
+  [...tracksEl.children].forEach((c, j) => { c.classList.toggle('active', j === i); c.setAttribute('aria-pressed', j === i); });
+  tracksEl.children[i].scrollIntoView({ block: 'nearest', inline: 'center', behavior: state.motion < 1 ? 'auto' : 'smooth' });
+  audio.applyTrack(t, false);
+  audio.setSource(t.audio || 'bed');
+  startPaletteJourney(t, changed);
+  $('meta').textContent = `seed ${cyrb53(t.name, SALT).toString(16)} · ${t.sym}-fold · palettes ${t.worlds.join('/')} · ${t.root.toFixed(1)} Hz`;
+}
+// The file never leaves the page: it is decoded in the browser and played through the same
+// analyser as everything else, so what drives the orb is genuinely the user's own audio.
+async function loadUserFile(file) {
+  if (!file) return;
+  toast(`Decoding ${file.name}…`);
+  try {
+    const buf = await audio.loadFile(file);
+    const name = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 40) || 'Your file';
+    const t = deriveTrack(name);
+    t.audio = 'file'; t.user = true; t.kind = 'Your file'; t.duration = Math.max(1, buf.duration);
+    if (userIdx < 0) { userIdx = TRACKS.length; TRACKS.push(t); } else TRACKS[userIdx] = t;
+    buildChips();
+    audio.fileOffset = 0;
+    setTrack(userIdx);
+    toast(`${name} · ${fmtTime(buf.duration)} — press play`);
+    if (state.playing) { audio.startFile(0); }
+  } catch (err) {
+    toast('Could not decode that file');
+    console.error(err);
+  }
+}
+const fileInput = $('fileInput');
+fileInput.addEventListener('change', () => { loadUserFile(fileInput.files[0]); fileInput.value = ''; });
+$('loadBtn').addEventListener('click', () => fileInput.click());
+
+let dragDepth = 0;
+const dropEl = $('drop');
+window.addEventListener('dragenter', e => { e.preventDefault(); if (++dragDepth === 1) dropEl.classList.add('on'); });
+window.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+window.addEventListener('dragleave', e => { e.preventDefault(); if (--dragDepth <= 0) { dragDepth = 0; dropEl.classList.remove('on'); } });
+window.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; dropEl.classList.remove('on');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadUserFile(f);
+});
+
+async function togglePlay() {
+  if (state.playing) { state.playing = false; audio.pause(); }
+  else { state.playing = true; state.playStart = performance.now() - state.elapsed*1000; const ok = await audio.play(); if (!ok) { state.playing = false; toast('Web Audio unavailable in this browser'); } }
+  playBtn.classList.toggle('playing', state.playing);
+  playBtn.setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
+}
+playBtn.addEventListener('click', togglePlay);
+$('prev').addEventListener('click', () => setTrack(state.trackIndex - 1));
+$('next').addEventListener('click', () => setTrack(state.trackIndex + 1));
+function seekTo(sec) {
+  state.elapsed = clamp(sec, 0, TRACKS[state.trackIndex].duration);
+  state.playStart = performance.now() - state.elapsed*1000;
+  if (audio.source === 'file' && audio.fileBuf) {
+    audio.stopFile();                       // stop first: it rewrites fileOffset from the old position
+    audio.fileOffset = state.elapsed;
+    if (state.playing) audio.startFile(state.elapsed);
+  }
+}
+barEl.addEventListener('pointerdown', e => { const r = barEl.getBoundingClientRect(); seekTo(clamp((e.clientX - r.left)/r.width, 0, 1)*TRACKS[state.trackIndex].duration); barEl.focus(); });
+barEl.addEventListener('keydown', e => {
+  const dur = TRACKS[state.trackIndex].duration;
+  const step = { ArrowRight: 5, ArrowLeft: -5, PageUp: 30, PageDown: -30 }[e.key];
+  if (step !== undefined) seekTo(state.elapsed + step);
+  else if (e.key === 'Home') seekTo(0);
+  else if (e.key === 'End') seekTo(dur);
+  else return;
+  e.preventDefault(); e.stopPropagation();
+});
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  // never steal keys from a focused control: Space must still activate a button, arrows must still move a slider
+  if (t !== document.body && t.closest && t.closest('input, select, textarea, [contenteditable], [role=slider], button:focus-visible')) return;
+  if (e.repeat) return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.code === 'ArrowRight') setTrack(state.trackIndex + 1);
+  else if (e.code === 'ArrowLeft') setTrack(state.trackIndex - 1);
+  else if (e.code === 'Escape' && $('panel').classList.contains('open')) { $('tuneBtn').click(); $('tuneBtn').focus(); }
+});
+
+// tuning panel
+const slidersEl = $('sliders');
+SLIDERS.forEach(([key, label, min, max, step]) => {
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `<label for="s-${key}">${label}</label><output id="o-${key}"></output><input id="s-${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state.tune[key]}">`;
+  slidersEl.appendChild(row);
+  const inp = row.querySelector('input'), out = row.querySelector('output');
+  const show = () => out.textContent = (+inp.value).toFixed(2);
+  inp.addEventListener('input', () => { state.tune[key] = +inp.value; show(); if (key === 'react') syncReactBtn(); });
+  show();
+});
+function syncSliders() { SLIDERS.forEach(([key]) => { const inp = $('s-' + key); inp.value = state.tune[key]; $('o-' + key).textContent = (+inp.value).toFixed(2); }); setReact(state.tune.react); }
+$('reset').addEventListener('click', () => { Object.assign(state.tune, TUNE_DEFAULTS); syncSliders(); });
+const reactBtn = $('reactBtn');
+// the button and the slider are two views of one value, so each has to update the other
+function syncReactBtn() {
+  const v = state.tune.react;
+  reactBtn.textContent = `React ×${v % 1 === 0 ? v : v.toFixed(1)}`;
+  reactBtn.setAttribute('aria-pressed', v > 1.5);
+}
+function setReact(v) {
+  state.tune.react = v;
+  const inp = $('s-react'); if (inp) { inp.value = v; $('o-react').textContent = v.toFixed(2); }
+  syncReactBtn();
+}
+// the toggle swings between the calm default and a deliberately overdone setting
+reactBtn.addEventListener('click', () => setReact(state.tune.react > 1.5 ? 1.5 : 3.5));
+function setPanel(on) {
+  const panel = $('panel'), btn = $('tuneBtn');
+  panel.classList.toggle('open', on);
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-expanded', on);
+  if ('inert' in panel) panel.inert = !on;
+}
+$('tuneBtn').addEventListener('click', () => setPanel(!$('panel').classList.contains('open')));
+// There is only room for the panel beside the flame on a large window. Shrinking one — dragging a
+// split divider, rotating a phone — used to leave it open across the whole screen with the flame
+// hidden behind it, so the panel gets put away whenever the room disappears.
+function panelHasRoom() { return window.innerWidth >= 900 && window.innerHeight >= 620; }
+window.addEventListener('resize', () => { if (!panelHasRoom()) setPanel(false); });
+// on a small screen, tapping the flame dismisses the panel
+$('orb').addEventListener('pointerdown', () => { if (!panelHasRoom()) setPanel(false); });
+
+const motionTag = $('motionTag');
+function applyMotionPref() { state.motion = reduceMotionMQ.matches ? 0.35 : 1; motionTag.hidden = !reduceMotionMQ.matches; }
+reduceMotionMQ.addEventListener ? reduceMotionMQ.addEventListener('change', applyMotionPref) : reduceMotionMQ.addListener(applyMotionPref);
+applyMotionPref();
+
+/* ---------------- main loop ---------------- */
+let last = 0, lastPct = '', lastCur = '';
+function frame(now) {
+  requestAnimationFrame(frame);
+  const raw = last ? (now - last)/1000 : 1/60; last = now;
+  const dt = Math.min(raw, 0.1);
+  layoutCache = null;
+  const s = state;
+  s.frameNo = (s.frameNo || 0) + 1;
+
+  audio.analyse(dt);
+  if (s.playing) { audio.schedulePulses(); audio.scheduleDemo(); }
+  // beats throw flares; when nothing is playing the orb still breathes them out on its own so it
+  // is never sitting completely still
+  const beat = s.playing ? audio.detectBeat(dt) : 0;
+  if (beat > 0) { addFlare(beat*s.tune.react*0.9); queueBeat(beat, s.clock); }
+  s.nextIdle -= dt;
+  if (s.nextIdle <= 0) {
+    s.nextIdle = (s.motion < 1 ? 9 : 5) + Math.random()*(s.motion < 1 ? 7 : 5);
+    if (beat === 0) { addFlare(0.25 + Math.random()*0.4); queueBeat(0.35, s.clock); }
+  }
+  updateFlares(dt);
+  updateTrail(dt);
+  if (gl && R) updateWave(dt);
+
+  const speed = s.tune.speed*s.motion;
+  s.clock += dt*s.motion;
+  const tick = dt*s.motion*(0.35 + 0.65*s.tune.speed);
+  s.swayT = (s.swayT + tick) % 6283.185307;
+  s.charT += tick;
+  // The flame's own clock. Audio nudges the rate a little; it never scales anything on a beat.
+  s.flowTime += dt*speed*clamp(1.0 + (s.audio.level - 0.45)*0.45*s.tune.react, 0.25, 2.5);
+
+  if (s.playing) {
+    s.elapsed = (audio.source === 'file' && audio.fileBuf) ? audio.fileTime() : (performance.now() - s.playStart)/1000;
+    const trk = TRACKS[s.trackIndex];
+    if (s.elapsed >= trk.duration) {
+      if (trk.user || trk.audio === 'demo') seekTo(0);
+      else setTrack(s.trackIndex + 1);
+    }
+  }
+  const tr = TRACKS[s.trackIndex];
+  const frac = clamp(s.elapsed/tr.duration, 0, 1);
+  const pct = (frac*100).toFixed(1) + '%';
+  if (pct !== lastPct) { fillEl.style.width = lastPct = pct; barEl.setAttribute('aria-valuenow', Math.round(frac*100)); }
+  const cur = fmtTime(s.elapsed);
+  if (cur !== lastCur) { tCur.textContent = lastCur = cur; tTot.textContent = fmtTime(tr.duration); barEl.setAttribute('aria-valuetext', `${cur} of ${fmtTime(tr.duration)}`); }
+
+  if (gl && R && !gl.isContextLost()) {
+    if (canvas.width !== Math.round(canvas.clientWidth*R.dpr) || canvas.height !== Math.round(canvas.clientHeight*R.dpr)) resizeGL();
+    drawFlame(dt);
+    adapt(dt, raw);
+  } else if (ctx2d) {
+    draw2D(dt);
+    perf.fpsAcc += raw; perf.fpsN++;
+    if (perf.fpsAcc >= 0.5) { fpsEl.textContent = Math.round(perf.fpsN/perf.fpsAcc); perf.fpsAcc = 0; perf.fpsN = 0; }
+  }
+}
+
+/* ---------------- boot ---------------- */
+const BUILD = 'flame-12 · 2026-08-23 18:05';
+window.ORB_BUILD = BUILD;
+$('build').textContent = BUILD;
+setReact(state.tune.react);
+setTrack(0);
+setPanel(panelHasRoom());
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); R = null; toast('Graphics context lost — restoring…'); }, false);
+canvas.addEventListener('webglcontextrestored', () => { R = null; if (initGL()) { resizeGL(); toast('Graphics restored'); } else startFallback(); }, false);
+if (initGL()) { resizeGL(); window.addEventListener('resize', () => { if (R) resizeGL(); }); }
+else startFallback();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
