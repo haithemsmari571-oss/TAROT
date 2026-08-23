@@ -82,6 +82,14 @@ class AppSettings(BaseSettings):
 
     MEDIA_DIR: Path = Path("media/uploads")
 
+    # Sanctuary media object storage. Values are intentionally empty in source;
+    # production supplies all five through the gitignored TAROT-BACKEND/.env.
+    R2_ENDPOINT: str = ""
+    R2_BUCKET: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_PUBLIC_BASE_URL: str = ""
+
     SOCKET_AUTH_TIMEOUT: int = 60
 
     STRIPE_ENDPOINT_SECRET: str = ""

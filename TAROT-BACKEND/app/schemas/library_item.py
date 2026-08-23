@@ -1,3 +1,5 @@
+import base64
+import binascii
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -5,6 +7,59 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 MAX_LIBRARY_ITEM_TYPE_LENGTH = 80
 MAX_LIBRARY_ITEM_TITLE_LENGTH = 100
+MAX_LIBRARY_AUDIO_SIZE_BYTES = 2_147_483_647
+
+
+class LibraryAudioUploadRequest(BaseModel):
+    """Metadata calculated locally before a direct-to-R2 audio upload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content_type: str
+    size_bytes: int = Field(gt=0)
+    sha256: str
+    content_md5: str
+    duration_seconds: float = Field(gt=0)
+    original_filename: str | None = Field(default=None, max_length=255)
+
+    @field_validator("content_type")
+    @classmethod
+    def normalize_content_type(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_sha256(cls, value: str) -> str:
+        value = value.strip().lower()
+        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+            raise ValueError("sha256 must be 64 hexadecimal characters")
+        return value
+
+    @field_validator("content_md5")
+    @classmethod
+    def validate_content_md5(cls, value: str) -> str:
+        value = value.strip()
+        try:
+            decoded = base64.b64decode(value, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError("content_md5 must be base64-encoded") from exc
+        if len(decoded) != 16:
+            raise ValueError("content_md5 must contain one MD5 digest")
+        return value
+
+
+class LibraryAudioUploadGrant(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    object_key: str
+    upload_url: str
+    method: str = "PUT"
+    expires_in_seconds: int
+    headers: dict[str, str]
+
+
+class LibraryAudioReference(LibraryAudioUploadRequest):
+    object_key: str
 
 
 class LibraryItemPublic(BaseModel):
