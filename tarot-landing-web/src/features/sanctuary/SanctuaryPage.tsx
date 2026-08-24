@@ -152,6 +152,15 @@ function formatDuration(seconds: number | null) {
   return `${hours}h${minutes ? ` ${minutes}m` : ""}`;
 }
 
+function formatPlayerTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const wholeSeconds = Math.floor(seconds);
+  const hours = Math.floor(wholeSeconds / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
+  const remaining = String(wholeSeconds % 60).padStart(2, "0");
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${remaining}` : `${minutes}:${remaining}`;
+}
+
 function actionSymbol(item: SanctuaryBrowseItem) {
   return item.interaction === "read" ? "↗" : "▶";
 }
@@ -192,11 +201,11 @@ function ZodiacWheel({ secondary = false }: { secondary?: boolean }) {
   );
 }
 
-function LibraryCard({ item, featured = false }: { item: SanctuaryBrowseItem; featured?: boolean }) {
+function LibraryCard({ item, featured = false, onActivate }: { item: SanctuaryBrowseItem; featured?: boolean; onActivate: (item: SanctuaryBrowseItem) => void }) {
   const duration = formatDuration(item.durationSeconds);
   return (
     <article className={`${styles.libraryCard}${featured ? ` ${styles.featuredCard}` : ""}`} data-sanctuary-kind={item.type}>
-      <button className={styles.cardCoverButton} type="button" aria-label={`${actionVerb(item)}: ${item.title}`} onClick={() => undefined}>
+      <button className={styles.cardCoverButton} type="button" aria-label={`${actionVerb(item)}: ${item.title}`} onClick={() => onActivate(item)}>
         <span className={styles.cover}><Cover item={item} /></span>
         <span className={styles.cardActionIcon} aria-hidden="true">{actionSymbol(item)}</span>
       </button>
@@ -242,14 +251,28 @@ function QuietState({ loading, error }: { loading: boolean; error: string | null
 
 export default function SanctuaryPage() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const { items, loading, error } = useLibraryItems();
   const [activeKind, setActiveKind] = useState("Everything");
   const [changing, setChanging] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [activeItem, setActiveItem] = useState<SanctuaryBrowseItem | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(0);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setRevealed(true));
     return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => {
+      audio?.pause();
+      audio?.removeAttribute("src");
+      audio?.load();
+    };
   }, []);
 
   useEffect(() => {
@@ -288,12 +311,56 @@ export default function SanctuaryPage() {
     }, 260);
   };
 
+  const playItem = (item: SanctuaryBrowseItem) => {
+    const audio = audioRef.current;
+    if (!audio || !item.audioUrl) return;
+
+    const replacingItem = activeItem?.source !== item.source || activeItem.key !== item.key;
+    if (replacingItem) {
+      audio.src = item.audioUrl;
+      setElapsedSeconds(0);
+      setTotalSeconds(item.durationSeconds ?? 0);
+      setActiveItem(item);
+    }
+
+    void audio.play().catch(() => setIsPlaying(false));
+  };
+
+  const togglePlayback = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) void audio.play().catch(() => setIsPlaying(false));
+    else audio.pause();
+  };
+
+  const seek = (seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = seconds;
+    setElapsedSeconds(seconds);
+  };
+
+  const syncDuration = () => {
+    const duration = audioRef.current?.duration;
+    if (duration != null && Number.isFinite(duration)) setTotalSeconds(duration);
+  };
+
   const titleWords = hero?.title.split(" ") ?? [];
   const titleTurn = Math.max(1, Math.ceil(titleWords.length / 2));
 
   return (
-    <div className={styles.page} ref={rootRef} data-sanctuary-mounted="true">
+    <div className={`${styles.page}${activeItem ? ` ${styles.hasPlayer}` : ""}`} ref={rootRef} data-sanctuary-mounted="true">
       <Seo meta={{ path: "/sanctuary", canonical: "https://askvalentina.co.uk/sanctuary", title: "The Sanctuary | Ask Valentina", description: "A quiet library of meditations, stories, music and small ways back to yourself." }} />
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        onTimeUpdate={(event) => setElapsedSeconds(event.currentTarget.currentTime)}
+        onLoadedMetadata={syncDuration}
+        onDurationChange={syncDuration}
+      />
       <div className={styles.sky} aria-hidden="true">
         <div className={styles.skyStars} />
         <ZodiacWheel />
@@ -318,7 +385,7 @@ export default function SanctuaryPage() {
                 {hero.durationSeconds != null ? <span>{formatDuration(hero.durationSeconds)}</span> : null}
               </div>
               <div className={styles.heroActions}>
-                <button className={styles.primaryAction} type="button" onClick={() => undefined}>
+                <button className={styles.primaryAction} type="button" onClick={() => playItem(hero)}>
                   <span className={styles.actionDisc} aria-hidden="true">{actionSymbol(hero)}</span>
                   <span className={styles.actionCopy}><b>{hero.interaction === "read" ? "Begin reading" : "Begin listening"}</b><small>the room is ready</small></span>
                 </button>
@@ -349,13 +416,13 @@ export default function SanctuaryPage() {
                     <p className={styles.eyebrow} id="sanctuary-featured-title">Featured tonight</p>
                     <p>Two gentle places to begin.</p>
                   </div>
-                  <div className={styles.featuredGrid}>{items.slice(0, 2).map((item) => <LibraryCard key={`${item.source}:${item.key}`} item={item} featured />)}</div>
+                  <div className={styles.featuredGrid}>{items.slice(0, 2).map((item) => <LibraryCard key={`${item.source}:${item.key}`} item={item} featured onActivate={playItem} />)}</div>
                 </section>
               ) : null}
 
               {showingEverything ? <div className={styles.libraryDivider}><span>The rest of the Sanctuary</span></div> : null}
               <div className={`${styles.libraryGrid}${changing ? ` ${styles.changing}` : ""}`}>
-                {visibleItems.length ? visibleItems.map((item) => <LibraryCard key={`${item.source}:${item.key}`} item={item} />) : <div className={styles.noResults}>Nothing is asking to be found here tonight.</div>}
+                {visibleItems.length ? visibleItems.map((item) => <LibraryCard key={`${item.source}:${item.key}`} item={item} onActivate={playItem} />) : <div className={styles.noResults}>Nothing is asking to be found here tonight.</div>}
               </div>
             </div>
           </section>
@@ -363,6 +430,34 @@ export default function SanctuaryPage() {
       )}
 
       {!loading && !error && items.length ? <footer className={styles.footer}>The door stays open. Come back whenever the night feels long.</footer> : null}
+      {activeItem ? (
+        <aside className={styles.playerBar} aria-label="Now playing">
+          <div className={styles.playerInner}>
+            <div className={styles.playerCover}><Cover item={activeItem} /></div>
+            <div className={styles.playerCopy} aria-live="polite">
+              <span>{activeItem.type}</span>
+              <strong>{activeItem.title}</strong>
+            </div>
+            <button className={styles.playerToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
+              <span aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
+            </button>
+            <div className={styles.playerTimeline}>
+              <span>{formatPlayerTime(elapsedSeconds)}</span>
+              <input
+                className={styles.playerSeek}
+                type="range"
+                min="0"
+                max={Math.max(totalSeconds, 0)}
+                step="0.1"
+                value={Math.min(elapsedSeconds, totalSeconds || 0)}
+                onChange={(event) => seek(Number(event.target.value))}
+                aria-label={`Seek ${activeItem.title}`}
+              />
+              <span>{formatPlayerTime(totalSeconds)}</span>
+            </div>
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }
