@@ -154,6 +154,18 @@ function formatDuration(seconds: number | null) {
   return `${hours}h${minutes ? ` ${minutes}m` : ""}`;
 }
 
+function SkipIcon({ direction }: { direction: "previous" | "next" }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {direction === "previous" ? (
+        <path d="M6 5v14M19 6.5 9 12l10 5.5z" />
+      ) : (
+        <path d="M18 5v14M5 6.5 15 12 5 17.5z" />
+      )}
+    </svg>
+  );
+}
+
 function formatPlayerTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const wholeSeconds = Math.floor(seconds);
@@ -320,6 +332,10 @@ export default function SanctuaryPage() {
   }, []);
 
   const kinds = useMemo(() => Array.from(new Set(items.map((item) => item.type))), [items]);
+  const playableItems = useMemo(
+    () => items.filter((item): item is SanctuaryBrowseItem & { audioUrl: string } => Boolean(item.audioUrl)),
+    [items],
+  );
   const hero = items[0];
   const showingEverything = activeKind === "Everything";
   const visibleItems = showingEverything ? items.slice(2) : items.filter((item) => item.type === activeKind);
@@ -355,6 +371,28 @@ export default function SanctuaryPage() {
     if (!audio) return;
     if (audio.paused) void audio.play().catch(() => setIsPlaying(false));
     else audio.pause();
+  };
+
+  const skipTrack = (direction: -1 | 1) => {
+    const audio = audioRef.current;
+    if (!audio || !activeItem || playableItems.length < 2) return;
+
+    const activeIndex = playableItems.findIndex(
+      (item) => item.source === activeItem.source && item.key === activeItem.key,
+    );
+    if (activeIndex < 0) return;
+
+    const nextIndex = (activeIndex + direction + playableItems.length) % playableItems.length;
+    const nextItem = playableItems[nextIndex];
+    const keepPlaying = !audio.paused;
+
+    audio.dataset.orbTrackName = nextItem.title;
+    audio.src = nextItem.audioUrl;
+    setElapsedSeconds(0);
+    setTotalSeconds(nextItem.durationSeconds ?? 0);
+    setActiveItem(nextItem);
+
+    if (keepPlaying) void audio.play().catch(() => setIsPlaying(false));
   };
 
   const seek = (seconds: number) => {
@@ -518,9 +556,17 @@ export default function SanctuaryPage() {
                 onChange={(event) => seek(Number(event.target.value))}
                 aria-label={`Seek ${activeItem.title} in now playing`}
               />
-              <button className={styles.nowPlayingToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
-                <span className={styles.nowPlayingToggleGlyph} aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
-              </button>
+              <div className={styles.nowPlayingTransport}>
+                <button className={styles.nowPlayingSkip} type="button" onClick={() => skipTrack(-1)} disabled={playableItems.length < 2} aria-label="Previous track">
+                  <SkipIcon direction="previous" />
+                </button>
+                <button className={styles.nowPlayingToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
+                  <span className={styles.nowPlayingToggleGlyph} aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
+                </button>
+                <button className={styles.nowPlayingSkip} type="button" onClick={() => skipTrack(1)} disabled={playableItems.length < 2} aria-label="Next track">
+                  <SkipIcon direction="next" />
+                </button>
+              </div>
             </div>
           </div>
         </section>,
