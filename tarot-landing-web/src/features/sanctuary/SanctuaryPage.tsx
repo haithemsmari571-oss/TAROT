@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Seo from "@/components/Seo";
 import type { SanctuaryBrowseItem } from "./api/libraryItemsApi";
 import { useLibraryItems } from "./hooks/useLibraryItems";
+import { startOrb } from "./orb/startOrb";
 import styles from "./SanctuaryPage.module.css";
 
 const GOLD_JOURNEY = [
@@ -252,6 +254,7 @@ function QuietState({ loading, error }: { loading: boolean; error: string | null
 export default function SanctuaryPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const orbContainerRef = useRef<HTMLDivElement>(null);
   const { items, loading, error } = useLibraryItems();
   const [activeKind, setActiveKind] = useState("Everything");
   const [changing, setChanging] = useState(false);
@@ -260,6 +263,7 @@ export default function SanctuaryPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setRevealed(true));
@@ -274,6 +278,24 @@ export default function SanctuaryPage() {
       audio?.load();
     };
   }, []);
+
+  useEffect(() => {
+    if (!nowPlayingOpen) return;
+    const container = orbContainerRef.current;
+    const audio = audioRef.current;
+    if (!container || !audio) return;
+    const orb = startOrb(container, audio);
+    return () => orb.stop();
+  }, [nowPlayingOpen]);
+
+  useEffect(() => {
+    if (!nowPlayingOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNowPlayingOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [nowPlayingOpen]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -317,6 +339,7 @@ export default function SanctuaryPage() {
 
     const replacingItem = activeItem?.source !== item.source || activeItem.key !== item.key;
     if (replacingItem) {
+      audio.dataset.orbTrackName = item.title;
       audio.src = item.audioUrl;
       setElapsedSeconds(0);
       setTotalSeconds(item.durationSeconds ?? 0);
@@ -431,13 +454,21 @@ export default function SanctuaryPage() {
 
       {!loading && !error && items.length ? <footer className={styles.footer}>The door stays open. Come back whenever the night feels long.</footer> : null}
       {activeItem ? (
-        <aside className={styles.playerBar} aria-label="Now playing">
+        <aside
+          className={styles.playerBar}
+          aria-label="Now playing"
+          onClick={(event) => {
+            if (!(event.target instanceof Element) || !event.target.closest("button, input")) setNowPlayingOpen(true);
+          }}
+        >
           <div className={styles.playerInner}>
-            <div className={styles.playerCover}><Cover item={activeItem} /></div>
-            <div className={styles.playerCopy} aria-live="polite">
-              <span>{activeItem.type}</span>
-              <strong>{activeItem.title}</strong>
-            </div>
+            <button className={styles.playerOpen} type="button" onClick={() => setNowPlayingOpen(true)} aria-label={`Open now playing for ${activeItem.title}`}>
+              <span className={styles.playerCover}><Cover item={activeItem} /></span>
+              <span className={styles.playerCopy} aria-live="polite">
+                <span>{activeItem.type}</span>
+                <strong>{activeItem.title}</strong>
+              </span>
+            </button>
             <button className={styles.playerToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
               <span aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
             </button>
@@ -457,6 +488,20 @@ export default function SanctuaryPage() {
             </div>
           </div>
         </aside>
+      ) : null}
+      {activeItem && nowPlayingOpen && typeof document !== "undefined" ? createPortal(
+        <section className={`${styles.page} ${styles.nowPlayingOverlay}`} role="dialog" aria-modal="true" aria-labelledby="sanctuary-now-playing-title" data-sanctuary-now-playing="true">
+          <div className={styles.nowPlayingOrb} ref={orbContainerRef} />
+          <button className={styles.nowPlayingClose} type="button" onClick={() => setNowPlayingOpen(false)} autoFocus aria-label="Close now playing">
+            <span className={styles.nowPlayingCloseGlyph} aria-hidden="true">×</span>
+            <span className={styles.nowPlayingCloseLabel}>Close</span>
+          </button>
+          <div className={styles.nowPlayingCopy}>
+            <span className={styles.nowPlayingType}>{activeItem.type}</span>
+            <strong className={styles.nowPlayingTitle} id="sanctuary-now-playing-title">{activeItem.title}</strong>
+          </div>
+        </section>,
+        document.body,
       ) : null}
     </div>
   );
