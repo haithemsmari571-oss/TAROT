@@ -129,8 +129,33 @@ export default function App() {
         })}
       </Route>
 
-      {/* The old admin components remain in source for one-commit rollback, but
-          every old /admin URL now leaves this app and opens the matching CRM room. */}
+      {/* Library media still belongs to this app. Keep its guard identical to
+          the legacy admin screens while all other /admin URLs continue to CRM. */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        {privateRoutes.filter((r) => r.path === "/admin/library").map((r: RouteConfig) => (
+          <Route
+            key={r.path}
+            path={r.path}
+            element={
+              <RoleProtectedRoute
+                allowedRoles={r.allowedRoles ?? []}
+                redirectTo="/admin/chats"
+              >
+                <r.component />
+              </RoleProtectedRoute>
+            }
+          />
+        ))}
+      </Route>
+
+      {/* The remaining old admin components stay available for one-commit
+          rollback, but their URLs leave this app for the matching CRM room. */}
       <Route path="/admin/*" element={<AdminCrmRedirect />} />
 
       {/* Non-admin private routes keep their existing customer layout. */}
