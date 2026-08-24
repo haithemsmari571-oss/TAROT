@@ -24,7 +24,13 @@ from app.utils.security import hash_password
 settings = get_app_settings()
 
 
-def get_psychics(db: Session, filters: list, skip: int = 0, limit: int = 0):
+def get_psychics(
+    db: Session,
+    filters: list,
+    skip: int = 0,
+    limit: int = 0,
+    viewer: User | None = None,
+):
     # 💡 Ordered explicitly by display priority sequence ascending, then by newest practitioner ID descending
     stmt = select(User).where(User.role == Role.PSYCHIC).order_by(User.order.asc(), User.id.desc())
 
@@ -44,7 +50,7 @@ def get_psychics(db: Session, filters: list, skip: int = 0, limit: int = 0):
 
     psychics = db.scalars(stmt).all()
     return {
-        "items": [_psychic_to_out(p) for p in psychics],
+        "items": [_psychic_to_out(p, viewer) for p in psychics],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -52,7 +58,10 @@ def get_psychics(db: Session, filters: list, skip: int = 0, limit: int = 0):
 
 
 def create_psychic(
-    db: Session, psychic_data: PsychicCreate, profile_picture: UploadFile
+    db: Session,
+    psychic_data: PsychicCreate,
+    profile_picture: UploadFile,
+    viewer: User | None = None,
 ):
     profile_picture_path = _upload_profile_picture(profile_picture)
 
@@ -77,10 +86,14 @@ def create_psychic(
 
     db.commit()
 
-    return _psychic_to_out(psychic)
+    return _psychic_to_out(psychic, viewer)
 
 
-def _psychic_to_out(psychic: User) -> PsychicRead:
+def _psychic_to_out(psychic: User, viewer: User | None = None) -> PsychicRead:
+    can_view_email = viewer is not None and (
+        viewer.role in (Role.ADMIN, Role.SUPERADMIN)
+        or (viewer.role == Role.PSYCHIC and viewer.id == psychic.id)
+    )
     categories_mapped = [
         PsychicCategoryRead(
             id=psychic_category.category_id,
@@ -102,7 +115,7 @@ def _psychic_to_out(psychic: User) -> PsychicRead:
     return PsychicRead(
         id=psychic.id,
         username=psychic.username,
-        email=psychic.email,
+        email=psychic.email if can_view_email else None,
         is_verified=psychic.is_verified,
         price_per_second=psychic.price_per_second,
         categories=categories_mapped,
@@ -156,6 +169,7 @@ def update_psychic(
     psychic_id: int,
     psychic_data: Optional[PsychicUpdate] = None,
     profile_picture: Optional[UploadFile] = None,
+    viewer: User | None = None,
 ):
     psychic = get_psychic(db, psychic_id)
 
@@ -200,7 +214,7 @@ def update_psychic(
     db.commit()
     db.refresh(psychic)
 
-    return _psychic_to_out(psychic)
+    return _psychic_to_out(psychic, viewer)
 
 
 def delete_psychic(db: Session, psychic_id: int):
@@ -212,11 +226,9 @@ def delete_psychic(db: Session, psychic_id: int):
     return None
 
 
-def read_psychic(db: Session, psychic_id: int):
-    # The route serving this is public, and PsychicRead carries `email`, so the
-    # role filter is what stops an anonymous caller walking the id range and
-    # harvesting every account's address — clients and admins included. Keep it
-    # in step with get_psychic above; a lookup by id alone is not safe here.
+def read_psychic(db: Session, psychic_id: int, viewer: User | None = None):
+    # Keep the role filter in step with get_psychic above so the public route
+    # cannot return a client or admin record when an id is guessed.
     psychic = (
         db.query(User)
         .options(
@@ -229,7 +241,7 @@ def read_psychic(db: Session, psychic_id: int):
     if not psychic:
         raise UserNotFoundError()
 
-    return _psychic_to_out(psychic)
+    return _psychic_to_out(psychic, viewer)
 
 
 

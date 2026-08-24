@@ -161,3 +161,16 @@ def get_current_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         )
+
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Return the bearer user when valid, otherwise continue anonymously."""
+    if credentials is None:
+        return None
+    try:
+        return get_current_user(credentials, db)
+    except Exception:
+        return None

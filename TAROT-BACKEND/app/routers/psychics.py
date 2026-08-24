@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 import app.services.psychics as psychic_service
 from app.database.client import get_db
 from app.dependencies.authorization import require_permission
-from app.dependencies.get_current_user import get_current_user
+from app.dependencies.get_current_user import get_current_user, get_optional_current_user
 from app.enums.permissions import Permission
 from app.enums.role import ROLE_PERMISSIONS, Role
 from app.filters.psychic import build_psychics_filters
@@ -42,10 +42,11 @@ def require_psychic_update_access(
 def get_psychic_endpoint(
     filters: PsychicFilter = Depends(),
     db: Session = Depends(get_db),
+    viewer: User | None = Depends(get_optional_current_user),
 ):
     sql_filters = build_psychics_filters(filters)
     result = psychic_service.get_psychics(
-        db, sql_filters, skip=filters.skip, limit=filters.limit
+        db, sql_filters, skip=filters.skip, limit=filters.limit, viewer=viewer
     )
     return result
 
@@ -57,7 +58,9 @@ def create_psychic_endpoint(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_permission(Permission.MANAGE_PSYCHICS)),
 ):
-    psychic = psychic_service.create_psychic(db, psychic_data, profile_picture)
+    psychic = psychic_service.create_psychic(
+        db, psychic_data, profile_picture, viewer=_admin
+    )
     return psychic
 
 
@@ -87,14 +90,18 @@ def update_psychic_endpoint(
             )
         )
     psychic = psychic_service.update_psychic(
-        db, psychic_id, psychic_data, profile_picture
+        db, psychic_id, psychic_data, profile_picture, viewer=actor
     )
     return psychic
 
 
 @router.get("/{psychic_id}")
-def read_psychic_endpoint(psychic_id: int, db: Session = Depends(get_db)):
-    psychic = psychic_service.read_psychic(db, psychic_id)
+def read_psychic_endpoint(
+    psychic_id: int,
+    db: Session = Depends(get_db),
+    viewer: User | None = Depends(get_optional_current_user),
+):
+    psychic = psychic_service.read_psychic(db, psychic_id, viewer=viewer)
     return psychic
 
 

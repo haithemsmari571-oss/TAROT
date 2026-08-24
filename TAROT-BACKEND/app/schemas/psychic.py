@@ -35,6 +35,7 @@ class PsychicAvailabilityRead(BaseModel):
 
 
 class PsychicRead(PsychicBase):
+    email: EmailStr | None = None
     id: int
     is_verified: bool
     categories: List[PsychicCategoryRead]
