@@ -108,7 +108,8 @@ class ObjectStorage:
                 Config=self._transfer_config,
             )
         finally:
-            fileobj.seek(0)
+            if not fileobj.closed:
+                fileobj.seek(0)
 
     def presign_put(
         self,
