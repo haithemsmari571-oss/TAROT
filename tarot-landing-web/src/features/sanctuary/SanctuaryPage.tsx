@@ -218,7 +218,7 @@ function LibraryCard({ item, featured = false, onActivate }: { item: SanctuaryBr
         </div>
         <h3>{item.title}</h3>
         <p className={styles.cardDescription}>{item.description}</p>
-        <span className={styles.cardVerb}>{actionVerb(item)}</span>
+        <button className={styles.cardVerb} type="button" onClick={() => onActivate(item)}>{actionVerb(item)}</button>
       </div>
     </article>
   );
@@ -346,6 +346,7 @@ export default function SanctuaryPage() {
       setActiveItem(item);
     }
 
+    setNowPlayingOpen(true);
     void audio.play().catch(() => setIsPlaying(false));
   };
 
@@ -469,7 +470,7 @@ export default function SanctuaryPage() {
                 <strong>{activeItem.title}</strong>
               </span>
             </button>
-            <button className={styles.playerToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
+            <button className={styles.playerToggle} type="button" onClick={() => { togglePlayback(); setNowPlayingOpen(true); }} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
               <span aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
             </button>
             <div className={styles.playerTimeline}>
@@ -482,6 +483,7 @@ export default function SanctuaryPage() {
                 step="0.1"
                 value={Math.min(elapsedSeconds, totalSeconds || 0)}
                 onChange={(event) => seek(Number(event.target.value))}
+                onClick={() => setNowPlayingOpen(true)}
                 aria-label={`Seek ${activeItem.title}`}
               />
               <span>{formatPlayerTime(totalSeconds)}</span>
@@ -496,9 +498,30 @@ export default function SanctuaryPage() {
             <span className={styles.nowPlayingCloseGlyph} aria-hidden="true">×</span>
             <span className={styles.nowPlayingCloseLabel}>Close</span>
           </button>
-          <div className={styles.nowPlayingCopy}>
-            <span className={styles.nowPlayingType}>{activeItem.type}</span>
-            <strong className={styles.nowPlayingTitle} id="sanctuary-now-playing-title">{activeItem.title}</strong>
+          <div className={styles.nowPlayingDock}>
+            <div className={styles.nowPlayingCopy}>
+              <span className={styles.nowPlayingType}>{activeItem.type}</span>
+              <strong className={styles.nowPlayingTitle} id="sanctuary-now-playing-title">{activeItem.title}</strong>
+            </div>
+            <div className={styles.nowPlayingControls} aria-label="Now-playing controls">
+              <div className={styles.nowPlayingTimes}>
+                <span className={styles.nowPlayingElapsed}>{formatPlayerTime(elapsedSeconds)}</span>
+                <span className={styles.nowPlayingTotal}>{formatPlayerTime(totalSeconds)}</span>
+              </div>
+              <input
+                className={styles.nowPlayingSeek}
+                type="range"
+                min="0"
+                max={Math.max(totalSeconds, 0)}
+                step="0.1"
+                value={Math.min(elapsedSeconds, totalSeconds || 0)}
+                onChange={(event) => seek(Number(event.target.value))}
+                aria-label={`Seek ${activeItem.title} in now playing`}
+              />
+              <button className={styles.nowPlayingToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
+                <span className={styles.nowPlayingToggleGlyph} aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
+              </button>
+            </div>
           </div>
         </section>,
         document.body,
