@@ -254,6 +254,51 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
     setElapsedSeconds(seconds);
   }, []);
 
+  useEffect(() => {
+    if (!activeItem || !("mediaSession" in navigator)) return;
+    const mediaSession = navigator.mediaSession;
+    if (typeof MediaMetadata !== "undefined") {
+      mediaSession.metadata = new MediaMetadata({
+        title: activeItem.title,
+        artist: "Ask Valentina",
+        album: activeItem.type,
+        artwork: activeItem.coverUrl ? [{ src: activeItem.coverUrl }] : [],
+      });
+    }
+
+    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
+      ["play", () => {
+        const audio = audioRef.current;
+        if (audio) void audio.play().catch(() => setIsPlaying(false));
+      }],
+      ["pause", () => audioRef.current?.pause()],
+      ["previoustrack", () => skipTrack(-1)],
+      ["nexttrack", () => skipTrack(1)],
+    ];
+    for (const [action, handler] of handlers) {
+      try {
+        mediaSession.setActionHandler(action, handler);
+      } catch {
+        // Browsers may expose Media Session while omitting individual actions.
+      }
+    }
+
+    return () => {
+      for (const [action] of handlers) {
+        try {
+          mediaSession.setActionHandler(action, null);
+        } catch {
+          // Match the guarded registration above.
+        }
+      }
+    };
+  }, [activeItem, skipTrack]);
+
+  useEffect(() => {
+    if (!activeItem || !("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [activeItem, isPlaying]);
+
   const contextValue = useMemo<SanctuaryPlayerContextValue>(() => ({
     activeItem,
     isPlaying,

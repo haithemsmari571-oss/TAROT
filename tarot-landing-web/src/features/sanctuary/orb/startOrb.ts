@@ -338,10 +338,20 @@ type AudioLevels = {
   loud: number;
 };
 
-type SharedMediaTap = {
+type SharedMediaElementTap = {
   context: AudioContext;
   source: MediaElementAudioSourceNode;
   activeAnalyser: AnalyserNode | null;
+};
+
+type AudioInput = {
+  context: AudioContext;
+  analyser: AnalyserNode;
+  detach: () => void;
+};
+
+type CapturableAudioElement = HTMLAudioElement & {
+  captureStream?: () => MediaStream;
 };
 
 type AudioAnalysis = {
@@ -352,30 +362,69 @@ type AudioAnalysis = {
   detach: () => void;
 };
 
-const mediaTaps = new WeakMap<HTMLAudioElement, SharedMediaTap>();
+const mediaElementTaps = new WeakMap<HTMLAudioElement, SharedMediaElementTap>();
 const AUDIO_LEVEL_KEYS = ["bass", "mid", "high", "level"] as const;
 
-function getMediaTap(audioElement: HTMLAudioElement) {
-  const existing = mediaTaps.get(audioElement);
+function makeAnalyser(context: AudioContext) {
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.35;
+  return analyser;
+}
+
+function getMediaElementTap(audioElement: HTMLAudioElement) {
+  const existing = mediaElementTaps.get(audioElement);
   if (existing) return existing;
   const context = new AudioContext();
   const source = context.createMediaElementSource(audioElement);
   source.connect(context.destination);
-  const tap = { context, source, activeAnalyser: null } satisfies SharedMediaTap;
-  mediaTaps.set(audioElement, tap);
+  const tap = { context, source, activeAnalyser: null } satisfies SharedMediaElementTap;
+  mediaElementTaps.set(audioElement, tap);
   return tap;
 }
 
-function attachAudioAnalysis(
-  audioElement: HTMLAudioElement,
-  levels: AudioLevels,
-  getClock: () => number,
-): AudioAnalysis {
-  const tap = getMediaTap(audioElement);
+function attachCapturedStream(audioElement: CapturableAudioElement): AudioInput {
+  const captureStream = audioElement.captureStream;
+  if (!captureStream) throw new Error("captureStream is unavailable");
+  const stream = captureStream.call(audioElement);
+  const context = new AudioContext();
+  const analyser = makeAnalyser(context);
+  let source: MediaStreamAudioSourceNode | null = null;
+  let detached = false;
+
+  const connectSource = () => {
+    if (detached || source || stream.getAudioTracks().length === 0) return;
+    source = context.createMediaStreamSource(stream);
+    source.connect(analyser);
+  };
+  stream.addEventListener("addtrack", connectSource);
+  audioElement.addEventListener("loadedmetadata", connectSource);
+  audioElement.addEventListener("playing", connectSource);
+  connectSource();
+  if (context.state !== "running") void context.resume().catch(() => undefined);
+
+  return {
+    context,
+    analyser,
+    detach() {
+      if (detached) return;
+      detached = true;
+      stream.removeEventListener("addtrack", connectSource);
+      audioElement.removeEventListener("loadedmetadata", connectSource);
+      audioElement.removeEventListener("playing", connectSource);
+      source?.disconnect();
+      analyser.disconnect();
+      for (const track of stream.getTracks()) track.stop();
+      void context.close().catch(() => undefined);
+    },
+  };
+}
+
+function attachMediaElementFallback(audioElement: HTMLAudioElement): AudioInput {
+  const tap = getMediaElementTap(audioElement);
   const { context, source } = tap;
-  const analyser = context.createAnalyser();
-  analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.35;
+  const analyser = makeAnalyser(context);
+  let detached = false;
 
   source.disconnect();
   tap.activeAnalyser?.disconnect();
@@ -383,6 +432,36 @@ function attachAudioAnalysis(
   analyser.connect(context.destination);
   tap.activeAnalyser = analyser;
   if (context.state !== "running") void context.resume().catch(() => undefined);
+
+  return {
+    context,
+    analyser,
+    detach() {
+      if (detached) return;
+      detached = true;
+      if (tap.activeAnalyser === analyser) {
+        source.disconnect();
+        analyser.disconnect();
+        // captureStream is unavailable here, so the once-bound media-element
+        // source must remain connected for playback after the orb closes.
+        source.connect(context.destination);
+        tap.activeAnalyser = null;
+      } else {
+        analyser.disconnect();
+      }
+    },
+  };
+}
+
+function attachAudioAnalysis(
+  audioElement: HTMLAudioElement,
+  levels: AudioLevels,
+  getClock: () => number,
+): AudioAnalysis {
+  const input = typeof (audioElement as CapturableAudioElement).captureStream === "function"
+    ? attachCapturedStream(audioElement as CapturableAudioElement)
+    : attachMediaElementFallback(audioElement);
+  const { context, analyser } = input;
 
   const frequency = new Uint8Array(analyser.frequencyBinCount);
   const waveform = new Uint8Array(analyser.fftSize);
@@ -528,14 +607,7 @@ function attachAudioAnalysis(
     detach() {
       if (detached) return;
       detached = true;
-      if (tap.activeAnalyser === analyser) {
-        source.disconnect();
-        analyser.disconnect();
-        source.connect(context.destination);
-        tap.activeAnalyser = null;
-      } else {
-        analyser.disconnect();
-      }
+      input.detach();
     },
   };
 }
