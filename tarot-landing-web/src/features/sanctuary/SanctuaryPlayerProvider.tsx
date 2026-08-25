@@ -24,6 +24,27 @@ type SanctuaryPlayerContextValue = {
 
 const SanctuaryPlayerContext = createContext<SanctuaryPlayerContextValue | null>(null);
 const HISTORY_KEY = "sanctuaryNowPlaying";
+const PLAYER_ATTRIBUTE = "data-sanctuary-player";
+let appAudioElement: HTMLAudioElement | null = null;
+
+function getAppAudioElement() {
+  if (appAudioElement) {
+    if (!appAudioElement.isConnected) document.body.append(appAudioElement);
+    return appAudioElement;
+  }
+
+  const existing = document.querySelector<HTMLAudioElement>(`audio[${PLAYER_ATTRIBUTE}="true"]`);
+  const audio = existing ?? document.createElement("audio");
+  audio.setAttribute(PLAYER_ATTRIBUTE, "true");
+  audio.setAttribute("aria-hidden", "true");
+  audio.setAttribute("playsinline", "");
+  audio.preload = "metadata";
+  audio.playsInline = true;
+  audio.hidden = true;
+  if (!audio.isConnected) document.body.append(audio);
+  appAudioElement = audio;
+  return audio;
+}
 
 function sameItem(left: SanctuaryBrowseItem | null, right: SanctuaryBrowseItem) {
   return left?.source === right.source && left.key === right.key;
@@ -75,6 +96,8 @@ function PlayerCover({ item }: { item: SanctuaryBrowseItem }) {
 
 export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const transportQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const audibleRef = useRef(false);
   const orbContainerRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<SanctuaryBrowseItem | null>(null);
   const trackListRef = useRef<PlayableItem[]>([]);
@@ -89,31 +112,84 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
 
   const ensureAudio = useCallback(() => {
-    if (audioRef.current) return audioRef.current;
-
-    const audio = document.createElement("audio");
-    audio.preload = "metadata";
-    const syncDuration = () => {
-      if (Number.isFinite(audio.duration)) setTotalSeconds(audio.duration);
-    };
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
-    const onTimeUpdate = () => setElapsedSeconds(audio.currentTime);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("loadedmetadata", syncDuration);
-    audio.addEventListener("durationchange", syncDuration);
+    const audio = getAppAudioElement();
     audioRef.current = audio;
     return audio;
   }, []);
 
-  const attachAudioToHost = useCallback((host: HTMLDivElement | null) => {
-    const audio = audioRef.current;
-    if (host && audio && !host.contains(audio)) host.append(audio);
+  useEffect(() => {
+    const audio = ensureAudio();
+    const setAudible = (audible: boolean) => {
+      audibleRef.current = audible;
+      setIsPlaying(audible);
+    };
+    const syncDuration = () => {
+      if (Number.isFinite(audio.duration)) setTotalSeconds(audio.duration);
+    };
+    const syncElapsed = () => setElapsedSeconds(audio.currentTime);
+    const onPlay = () => {
+      if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && !audio.muted && audio.volume > 0) setAudible(true);
+    };
+    const onPlaying = () => setAudible(!audio.muted && audio.volume > 0);
+    const onNotAudible = () => setAudible(false);
+    const onVolumeChange = () => {
+      if (audio.muted || audio.volume <= 0) setAudible(false);
+      else if (!audio.paused && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) setAudible(true);
+    };
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("playing", onPlaying);
+    audio.addEventListener("pause", onNotAudible);
+    audio.addEventListener("ended", onNotAudible);
+    audio.addEventListener("waiting", onNotAudible);
+    audio.addEventListener("emptied", onNotAudible);
+    audio.addEventListener("error", onNotAudible);
+    audio.addEventListener("volumechange", onVolumeChange);
+    audio.addEventListener("timeupdate", syncElapsed);
+    audio.addEventListener("seeked", syncElapsed);
+    audio.addEventListener("loadedmetadata", syncDuration);
+    audio.addEventListener("durationchange", syncDuration);
+    setAudible(!audio.paused && !audio.ended && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && !audio.muted && audio.volume > 0);
+    syncDuration();
+    syncElapsed();
+
+    return () => {
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("playing", onPlaying);
+      audio.removeEventListener("pause", onNotAudible);
+      audio.removeEventListener("ended", onNotAudible);
+      audio.removeEventListener("waiting", onNotAudible);
+      audio.removeEventListener("emptied", onNotAudible);
+      audio.removeEventListener("error", onNotAudible);
+      audio.removeEventListener("volumechange", onVolumeChange);
+      audio.removeEventListener("timeupdate", syncElapsed);
+      audio.removeEventListener("seeked", syncElapsed);
+      audio.removeEventListener("loadedmetadata", syncDuration);
+      audio.removeEventListener("durationchange", syncDuration);
+      audibleRef.current = false;
+      audioRef.current = null;
+    };
+  }, [ensureAudio]);
+
+  const enqueueTransport = useCallback((operation: (audio: HTMLAudioElement) => void | Promise<void>) => {
+    const run = () => operation(ensureAudio());
+    const next = transportQueueRef.current.then(run, run);
+    transportQueueRef.current = next.catch(() => undefined);
+    return transportQueueRef.current;
+  }, [ensureAudio]);
+
+  const playAudio = useCallback((audio: HTMLAudioElement) => {
+    return audio.play().then(() => undefined).catch(() => undefined);
   }, []);
+
+  const requestPlay = useCallback(() => {
+    void enqueueTransport(playAudio);
+  }, [enqueueTransport, playAudio]);
+
+  const requestPause = useCallback(() => {
+    void enqueueTransport((audio) => {
+      audio.pause();
+    });
+  }, [enqueueTransport]);
 
   const openNowPlaying = useCallback(() => {
     if (openRef.current || closePendingRef.current || !activeItemRef.current) return;
@@ -184,15 +260,6 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
     };
   }, [nowPlayingOpen]);
 
-  useEffect(() => () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
-    audioRef.current = null;
-  }, []);
-
   const setTrackList = useCallback((items: SanctuaryBrowseItem[]) => {
     const playableItems = items.filter((item): item is PlayableItem => Boolean(item.audioUrl));
     trackListRef.current = playableItems;
@@ -208,51 +275,56 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
 
   const playItem = useCallback((item: SanctuaryBrowseItem) => {
     if (!item.audioUrl) return;
-    const audio = ensureAudio();
     if (!sameItem(activeItemRef.current, item)) {
-      audio.dataset.orbTrackName = item.title;
-      audio.src = item.audioUrl;
       activeItemRef.current = item;
       setActiveItem(item);
       setElapsedSeconds(0);
       setTotalSeconds(item.durationSeconds ?? 0);
     }
     openNowPlaying();
-    void audio.play().catch(() => setIsPlaying(false));
-  }, [ensureAudio, openNowPlaying]);
+    void enqueueTransport(async (audio) => {
+      if (!sameItem(activeItemRef.current, item)) return;
+      const itemAudioUrl = new URL(item.audioUrl, document.baseURI).href;
+      if (audio.src !== itemAudioUrl) {
+        audio.dataset.orbTrackName = item.title;
+        audio.src = itemAudioUrl;
+      }
+      await playAudio(audio);
+    });
+  }, [enqueueTransport, openNowPlaying, playAudio]);
 
   const togglePlayback = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) void audio.play().catch(() => setIsPlaying(false));
-    else audio.pause();
-  }, []);
+    void enqueueTransport(async (audio) => {
+      if (audio.paused || audio.ended || !audibleRef.current) await playAudio(audio);
+      else audio.pause();
+    });
+  }, [enqueueTransport, playAudio]);
 
   const skipTrack = useCallback((direction: -1 | 1) => {
-    const audio = audioRef.current;
-    const current = activeItemRef.current;
-    const tracks = trackListRef.current;
-    if (!audio || !current || tracks.length < 2) return;
-    const activeIndex = tracks.findIndex((item) => sameItem(current, item));
-    if (activeIndex < 0) return;
+    void enqueueTransport(async (audio) => {
+      const current = activeItemRef.current;
+      const tracks = trackListRef.current;
+      if (!current || tracks.length < 2) return;
+      const activeIndex = tracks.findIndex((item) => sameItem(current, item));
+      if (activeIndex < 0) return;
 
-    const nextItem = tracks[(activeIndex + direction + tracks.length) % tracks.length];
-    const keepPlaying = !audio.paused;
-    audio.dataset.orbTrackName = nextItem.title;
-    audio.src = nextItem.audioUrl;
-    activeItemRef.current = nextItem;
-    setActiveItem(nextItem);
-    setElapsedSeconds(0);
-    setTotalSeconds(nextItem.durationSeconds ?? 0);
-    if (keepPlaying) void audio.play().catch(() => setIsPlaying(false));
-  }, []);
+      const nextItem = tracks[(activeIndex + direction + tracks.length) % tracks.length];
+      const keepPlaying = !audio.paused && !audio.ended;
+      audio.dataset.orbTrackName = nextItem.title;
+      audio.src = nextItem.audioUrl;
+      activeItemRef.current = nextItem;
+      setActiveItem(nextItem);
+      setElapsedSeconds(0);
+      setTotalSeconds(nextItem.durationSeconds ?? 0);
+      if (keepPlaying) await playAudio(audio);
+    });
+  }, [enqueueTransport, playAudio]);
 
   const seek = useCallback((seconds: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = seconds;
-    setElapsedSeconds(seconds);
-  }, []);
+    void enqueueTransport((audio) => {
+      audio.currentTime = seconds;
+    });
+  }, [enqueueTransport]);
 
   useEffect(() => {
     if (!activeItem || !("mediaSession" in navigator)) return;
@@ -267,11 +339,8 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-      ["play", () => {
-        const audio = audioRef.current;
-        if (audio) void audio.play().catch(() => setIsPlaying(false));
-      }],
-      ["pause", () => audioRef.current?.pause()],
+      ["play", requestPlay],
+      ["pause", requestPause],
       ["previoustrack", () => skipTrack(-1)],
       ["nexttrack", () => skipTrack(1)],
     ];
@@ -292,7 +361,7 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
         }
       }
     };
-  }, [activeItem, skipTrack]);
+  }, [activeItem, requestPause, requestPlay, skipTrack]);
 
   useEffect(() => {
     if (!activeItem || !("mediaSession" in navigator)) return;
@@ -311,7 +380,6 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
       {children}
       {activeItem ? (
         <>
-          <div className={styles.playerAudioHost} ref={attachAudioToHost} aria-hidden="true" />
           <aside
             className={`${styles.playerLayer} ${styles.playerBar}`}
             aria-label="Now playing"
