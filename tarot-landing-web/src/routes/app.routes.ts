@@ -4,7 +4,6 @@ import HomeRedirect from "../features/home/views/HomeRedirect";
 import home from "../features/home/views/home";
 import userRoutes from "./user.routes";
 import psychicsRoutes from "./psychics.routes";
-import libraryAdminRoutes from "./library-admin.routes";
 import chatRoutes from "./chat.routes";
 import dashboardRoutes from "./dashboard.routes";
 import browseRoutes from "./browse.routes";
@@ -62,7 +61,6 @@ const routes: RouteConfig[] = [
   ...authRoutes,
 ...userRoutes,
 ...psychicsRoutes,
-...libraryAdminRoutes,
 ...chatRoutes,
 ...dashboardRoutes,
 ...browseRoutes,
