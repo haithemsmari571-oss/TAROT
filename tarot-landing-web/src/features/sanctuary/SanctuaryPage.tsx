@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import Seo from "@/components/Seo";
 import type { SanctuaryBrowseItem } from "./api/libraryItemsApi";
 import { useLibraryItems } from "./hooks/useLibraryItems";
-import { startOrb } from "./orb/startOrb";
+import { useSanctuaryPlayer } from "./SanctuaryPlayerProvider";
 import styles from "./SanctuaryPage.module.css";
 
 const GOLD_JOURNEY = [
@@ -154,27 +153,6 @@ function formatDuration(seconds: number | null) {
   return `${hours}h${minutes ? ` ${minutes}m` : ""}`;
 }
 
-function SkipIcon({ direction }: { direction: "previous" | "next" }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {direction === "previous" ? (
-        <path d="M6 5v14M19 6.5 9 12l10 5.5z" />
-      ) : (
-        <path d="M18 5v14M5 6.5 15 12 5 17.5z" />
-      )}
-    </svg>
-  );
-}
-
-function formatPlayerTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const wholeSeconds = Math.floor(seconds);
-  const hours = Math.floor(wholeSeconds / 3600);
-  const minutes = Math.floor((wholeSeconds % 3600) / 60);
-  const remaining = String(wholeSeconds % 60).padStart(2, "0");
-  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${remaining}` : `${minutes}:${remaining}`;
-}
-
 function actionSymbol(item: SanctuaryBrowseItem) {
   return item.interaction === "read" ? "↗" : "▶";
 }
@@ -265,49 +243,16 @@ function QuietState({ loading, error }: { loading: boolean; error: string | null
 
 export default function SanctuaryPage() {
   const rootRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const orbContainerRef = useRef<HTMLDivElement>(null);
   const { items, loading, error } = useLibraryItems();
+  const { activeItem, playItem, setTrackList } = useSanctuaryPlayer();
   const [activeKind, setActiveKind] = useState("Everything");
   const [changing, setChanging] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [activeItem, setActiveItem] = useState<SanctuaryBrowseItem | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [totalSeconds, setTotalSeconds] = useState(0);
-  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setRevealed(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    return () => {
-      audio?.pause();
-      audio?.removeAttribute("src");
-      audio?.load();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!nowPlayingOpen) return;
-    const container = orbContainerRef.current;
-    const audio = audioRef.current;
-    if (!container || !audio) return;
-    const orb = startOrb(container, audio);
-    return () => orb.stop();
-  }, [nowPlayingOpen]);
-
-  useEffect(() => {
-    if (!nowPlayingOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setNowPlayingOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [nowPlayingOpen]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -336,6 +281,11 @@ export default function SanctuaryPage() {
     () => items.filter((item): item is SanctuaryBrowseItem & { audioUrl: string } => Boolean(item.audioUrl)),
     [items],
   );
+
+  useEffect(() => {
+    setTrackList(playableItems);
+  }, [playableItems, setTrackList]);
+
   const hero = items[0];
   const showingEverything = activeKind === "Everything";
   const visibleItems = showingEverything ? items.slice(2) : items.filter((item) => item.type === activeKind);
@@ -349,80 +299,12 @@ export default function SanctuaryPage() {
     }, 260);
   };
 
-  const playItem = (item: SanctuaryBrowseItem) => {
-    const audio = audioRef.current;
-    if (!audio || !item.audioUrl) return;
-
-    const replacingItem = activeItem?.source !== item.source || activeItem.key !== item.key;
-    if (replacingItem) {
-      audio.dataset.orbTrackName = item.title;
-      audio.src = item.audioUrl;
-      setElapsedSeconds(0);
-      setTotalSeconds(item.durationSeconds ?? 0);
-      setActiveItem(item);
-    }
-
-    setNowPlayingOpen(true);
-    void audio.play().catch(() => setIsPlaying(false));
-  };
-
-  const togglePlayback = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) void audio.play().catch(() => setIsPlaying(false));
-    else audio.pause();
-  };
-
-  const skipTrack = (direction: -1 | 1) => {
-    const audio = audioRef.current;
-    if (!audio || !activeItem || playableItems.length < 2) return;
-
-    const activeIndex = playableItems.findIndex(
-      (item) => item.source === activeItem.source && item.key === activeItem.key,
-    );
-    if (activeIndex < 0) return;
-
-    const nextIndex = (activeIndex + direction + playableItems.length) % playableItems.length;
-    const nextItem = playableItems[nextIndex];
-    const keepPlaying = !audio.paused;
-
-    audio.dataset.orbTrackName = nextItem.title;
-    audio.src = nextItem.audioUrl;
-    setElapsedSeconds(0);
-    setTotalSeconds(nextItem.durationSeconds ?? 0);
-    setActiveItem(nextItem);
-
-    if (keepPlaying) void audio.play().catch(() => setIsPlaying(false));
-  };
-
-  const seek = (seconds: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = seconds;
-    setElapsedSeconds(seconds);
-  };
-
-  const syncDuration = () => {
-    const duration = audioRef.current?.duration;
-    if (duration != null && Number.isFinite(duration)) setTotalSeconds(duration);
-  };
-
   const titleWords = hero?.title.split(" ") ?? [];
   const titleTurn = Math.max(1, Math.ceil(titleWords.length / 2));
 
   return (
     <div className={`${styles.page}${activeItem ? ` ${styles.hasPlayer}` : ""}`} ref={rootRef} data-sanctuary-mounted="true">
       <Seo meta={{ path: "/sanctuary", canonical: "https://askvalentina.co.uk/sanctuary", title: "The Sanctuary | Ask Valentina", description: "A quiet library of meditations, stories, music and small ways back to yourself." }} />
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => setIsPlaying(false)}
-        onTimeUpdate={(event) => setElapsedSeconds(event.currentTarget.currentTime)}
-        onLoadedMetadata={syncDuration}
-        onDurationChange={syncDuration}
-      />
       <div className={styles.sky} aria-hidden="true">
         <div className={styles.skyStars} />
         <ZodiacWheel />
@@ -492,86 +374,6 @@ export default function SanctuaryPage() {
       )}
 
       {!loading && !error && items.length ? <footer className={styles.footer}>The door stays open. Come back whenever the night feels long.</footer> : null}
-      {activeItem ? (
-        <aside
-          className={styles.playerBar}
-          aria-label="Now playing"
-          onClick={(event) => {
-            if (!(event.target instanceof Element) || !event.target.closest("button, input")) setNowPlayingOpen(true);
-          }}
-        >
-          <div className={styles.playerInner}>
-            <button className={styles.playerOpen} type="button" onClick={() => setNowPlayingOpen(true)} aria-label={`Open now playing for ${activeItem.title}`}>
-              <span className={styles.playerCover}><Cover item={activeItem} /></span>
-              <span className={styles.playerCopy} aria-live="polite">
-                <span>{activeItem.type}</span>
-                <strong>{activeItem.title}</strong>
-              </span>
-            </button>
-            <button className={styles.playerToggle} type="button" onClick={() => { togglePlayback(); setNowPlayingOpen(true); }} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
-              <span aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
-            </button>
-            <div className={styles.playerTimeline}>
-              <span>{formatPlayerTime(elapsedSeconds)}</span>
-              <input
-                className={styles.playerSeek}
-                type="range"
-                min="0"
-                max={Math.max(totalSeconds, 0)}
-                step="0.1"
-                value={Math.min(elapsedSeconds, totalSeconds || 0)}
-                onChange={(event) => seek(Number(event.target.value))}
-                onClick={() => setNowPlayingOpen(true)}
-                aria-label={`Seek ${activeItem.title}`}
-              />
-              <span>{formatPlayerTime(totalSeconds)}</span>
-            </div>
-          </div>
-        </aside>
-      ) : null}
-      {activeItem && nowPlayingOpen && typeof document !== "undefined" ? createPortal(
-        <section className={`${styles.page} ${styles.nowPlayingOverlay}`} role="dialog" aria-modal="true" aria-labelledby="sanctuary-now-playing-title" data-sanctuary-now-playing="true">
-          <div className={styles.nowPlayingOrb} ref={orbContainerRef} />
-          <button className={styles.nowPlayingClose} type="button" onClick={() => setNowPlayingOpen(false)} autoFocus aria-label="Close now playing">
-            <span className={styles.nowPlayingCloseGlyph} aria-hidden="true">×</span>
-            <span className={styles.nowPlayingCloseLabel}>Close</span>
-          </button>
-          <div className={styles.nowPlayingDock}>
-            <div className={styles.nowPlayingCopy}>
-              <span className={styles.nowPlayingType}>{activeItem.type}</span>
-              <strong className={styles.nowPlayingTitle} id="sanctuary-now-playing-title">{activeItem.title}</strong>
-            </div>
-            <div className={styles.nowPlayingControls} aria-label="Now-playing controls">
-              <div className={styles.nowPlayingTimes}>
-                <span className={styles.nowPlayingElapsed}>{formatPlayerTime(elapsedSeconds)}</span>
-                <span className={styles.nowPlayingTotal}>{formatPlayerTime(totalSeconds)}</span>
-              </div>
-              <input
-                className={styles.nowPlayingSeek}
-                type="range"
-                min="0"
-                max={Math.max(totalSeconds, 0)}
-                step="0.1"
-                value={Math.min(elapsedSeconds, totalSeconds || 0)}
-                onChange={(event) => seek(Number(event.target.value))}
-                aria-label={`Seek ${activeItem.title} in now playing`}
-              />
-              <div className={styles.nowPlayingTransport}>
-                <button className={styles.nowPlayingSkip} type="button" onClick={() => skipTrack(-1)} disabled={playableItems.length < 2} aria-label="Previous track">
-                  <SkipIcon direction="previous" />
-                </button>
-                <button className={styles.nowPlayingToggle} type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${activeItem.title}`}>
-                  <span className={styles.nowPlayingToggleGlyph} aria-hidden="true">{isPlaying ? "Ⅱ" : "▶"}</span>
-                </button>
-                <button className={styles.nowPlayingSkip} type="button" onClick={() => skipTrack(1)} disabled={playableItems.length < 2} aria-label="Next track">
-                  <SkipIcon direction="next" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>,
-        document.body,
-      ) : null}
     </div>
   );
 }

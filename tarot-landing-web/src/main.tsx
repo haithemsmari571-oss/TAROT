@@ -11,6 +11,7 @@ import { NotificationProvider } from './features/notifications/context/Notificat
 import IncomingReadingModal from './features/chat/components/IncomingReadingModal'
 import { TopUpProvider } from './features/payment/context/TopUpContext'
 import { CelebrationProvider } from './features/celebrations/CelebrationProvider'
+import { SanctuaryPlayerProvider } from './features/sanctuary/SanctuaryPlayerProvider'
 
 const queryClient = new QueryClient(
   {defaultOptions: {
@@ -32,9 +33,11 @@ createRoot(document.getElementById('root')!).render(
               <ToastProvider>
                 <TopUpProvider>
                   <CelebrationProvider>
-                    <App />
-                    {/* Global "Incoming Reading" gate — the ONLY way to join/start billing */}
-                    <IncomingReadingModal />
+                    <SanctuaryPlayerProvider>
+                      <App />
+                      {/* Global "Incoming Reading" gate — the ONLY way to join/start billing */}
+                      <IncomingReadingModal />
+                    </SanctuaryPlayerProvider>
                   </CelebrationProvider>
                 </TopUpProvider>
               </ToastProvider>

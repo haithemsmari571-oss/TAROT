@@ -556,7 +556,9 @@ export type OrbController = {
   stop: () => void;
 };
 
-export function startOrb(container: HTMLElement, audioElement: HTMLAudioElement): OrbController {
+export type OrbScale = (viewportWidth: number, viewportHeight: number) => number;
+
+export function startOrb(container: HTMLElement, audioElement: HTMLAudioElement, orbScale?: OrbScale): OrbController {
   const cleanups: Array<() => void> = [];
   let stopped = false;
   let rafId = 0;
@@ -689,7 +691,9 @@ export function startOrb(container: HTMLElement, audioElement: HTMLAudioElement)
     const currentDpr = gl ? dpr : 1;
     const layoutWidth = Math.max(1, container.clientWidth * currentDpr);
     const layoutHeight = Math.max(1, container.clientHeight * currentDpr);
-    const diameter = Math.min(Math.min(layoutWidth, layoutHeight) * 0.94, layoutWidth * 0.88);
+    const diameter = orbScale
+      ? Math.max(1, orbScale(layoutWidth / currentDpr, layoutHeight / currentDpr) * currentDpr)
+      : Math.min(Math.min(layoutWidth, layoutHeight) * 0.94, layoutWidth * 0.88);
     return { x: layoutWidth * 0.5, y: layoutHeight * 0.5, d: diameter };
   }
 
