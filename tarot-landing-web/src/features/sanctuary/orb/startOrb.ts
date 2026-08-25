@@ -7,6 +7,9 @@ const FLAME_FILL = 0.8;
 const RECT_K = 0.94 / FLAME_FILL;
 const WAVE_N = 1024;
 const WAVE_LAG = -0.02;
+const PRECOMPUTE_MAX_BYTES = 40 * 1024 * 1024;
+const PRECOMPUTE_STEP_SECONDS = 0.05;
+const PRECOMPUTE_FFT_SIZE = 2048;
 
 const PALETTES = [
   ["#06103a", "#123a8a", "#2ea8e6", "#7ef0f0", "#e6f7ff"],
@@ -338,12 +341,6 @@ type AudioLevels = {
   loud: number;
 };
 
-type SharedMediaElementTap = {
-  context: AudioContext;
-  source: MediaElementAudioSourceNode;
-  activeAnalyser: AnalyserNode | null;
-};
-
 type AudioInput = {
   context: AudioContext;
   analyser: AnalyserNode;
@@ -354,6 +351,16 @@ type CapturableAudioElement = HTMLAudioElement & {
   captureStream?: () => MediaStream;
 };
 
+type PrecomputedAnalysisTrack = {
+  stepSeconds: number;
+  amplitude: Float32Array;
+  bass: Float32Array;
+  mid: Float32Array;
+  high: Float32Array;
+  beats: Float32Array;
+  outputLag: number;
+};
+
 type AudioAnalysis = {
   analyse: (dt: number) => void;
   detectBeat: (dt: number) => number;
@@ -362,7 +369,7 @@ type AudioAnalysis = {
   detach: () => void;
 };
 
-const mediaElementTaps = new WeakMap<HTMLAudioElement, SharedMediaElementTap>();
+const precomputedAnalysisCache = new Map<string, PrecomputedAnalysisTrack | null>();
 const AUDIO_LEVEL_KEYS = ["bass", "mid", "high", "level"] as const;
 
 function makeAnalyser(context: AudioContext) {
@@ -370,17 +377,6 @@ function makeAnalyser(context: AudioContext) {
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.35;
   return analyser;
-}
-
-function getMediaElementTap(audioElement: HTMLAudioElement) {
-  const existing = mediaElementTaps.get(audioElement);
-  if (existing) return existing;
-  const context = new AudioContext();
-  const source = context.createMediaElementSource(audioElement);
-  source.connect(context.destination);
-  const tap = { context, source, activeAnalyser: null } satisfies SharedMediaElementTap;
-  mediaElementTaps.set(audioElement, tap);
-  return tap;
 }
 
 function attachCapturedStream(audioElement: CapturableAudioElement): AudioInput {
@@ -420,47 +416,12 @@ function attachCapturedStream(audioElement: CapturableAudioElement): AudioInput 
   };
 }
 
-function attachMediaElementFallback(audioElement: HTMLAudioElement): AudioInput {
-  const tap = getMediaElementTap(audioElement);
-  const { context, source } = tap;
-  const analyser = makeAnalyser(context);
-  let detached = false;
-
-  source.disconnect();
-  tap.activeAnalyser?.disconnect();
-  source.connect(analyser);
-  analyser.connect(context.destination);
-  tap.activeAnalyser = analyser;
-  if (context.state !== "running") void context.resume().catch(() => undefined);
-
-  return {
-    context,
-    analyser,
-    detach() {
-      if (detached) return;
-      detached = true;
-      if (tap.activeAnalyser === analyser) {
-        source.disconnect();
-        analyser.disconnect();
-        // captureStream is unavailable here, so the once-bound media-element
-        // source must remain connected for playback after the orb closes.
-        source.connect(context.destination);
-        tap.activeAnalyser = null;
-      } else {
-        analyser.disconnect();
-      }
-    },
-  };
-}
-
-function attachAudioAnalysis(
+function attachCapturedAudioAnalysis(
   audioElement: HTMLAudioElement,
   levels: AudioLevels,
   getClock: () => number,
 ): AudioAnalysis {
-  const input = typeof (audioElement as CapturableAudioElement).captureStream === "function"
-    ? attachCapturedStream(audioElement as CapturableAudioElement)
-    : attachMediaElementFallback(audioElement);
+  const input = attachCapturedStream(audioElement as CapturableAudioElement);
   const { context, analyser } = input;
 
   const frequency = new Uint8Array(analyser.frequencyBinCount);
@@ -610,6 +571,454 @@ function attachAudioAnalysis(
       input.detach();
     },
   };
+}
+
+function abortError() {
+  return new DOMException("The audio analysis was cancelled", "AbortError");
+}
+
+function throwIfAborted(signal: AbortSignal) {
+  if (signal.aborted) throw abortError();
+}
+
+async function cancelResponseBody(response: Response) {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // The size probe has already served its purpose.
+  }
+}
+
+function contentLength(headers: Headers) {
+  const raw = headers.get("content-length");
+  if (raw === null) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function probeAudioByteSize(url: string, signal: AbortSignal) {
+  try {
+    const head = await fetch(url, {
+      method: "HEAD",
+      credentials: "same-origin",
+      cache: "force-cache",
+      signal,
+    });
+    if (head.ok) {
+      const size = contentLength(head.headers);
+      if (size !== null) return size;
+    }
+  } catch {
+    throwIfAborted(signal);
+  }
+
+  try {
+    const probe = await fetch(url, {
+      headers: { Range: "bytes=0-0" },
+      credentials: "same-origin",
+      cache: "force-cache",
+      signal,
+    });
+    if (!probe.ok) {
+      await cancelResponseBody(probe);
+      return null;
+    }
+    const range = probe.headers.get("content-range")?.match(/\/(\d+)$/);
+    const size = range ? Number(range[1]) : probe.status === 200 ? contentLength(probe.headers) : null;
+    await cancelResponseBody(probe);
+    return typeof size === "number" && Number.isFinite(size) ? size : null;
+  } catch {
+    throwIfAborted(signal);
+    return null;
+  }
+}
+
+function fftInPlace(real: Float32Array, imaginary: Float32Array) {
+  const count = real.length;
+  let reverse = 0;
+  for (let index = 1; index < count; index += 1) {
+    let bit = count >> 1;
+    while (reverse & bit) {
+      reverse ^= bit;
+      bit >>= 1;
+    }
+    reverse ^= bit;
+    if (index < reverse) {
+      const realValue = real[index] ?? 0;
+      real[index] = real[reverse] ?? 0;
+      real[reverse] = realValue;
+      const imaginaryValue = imaginary[index] ?? 0;
+      imaginary[index] = imaginary[reverse] ?? 0;
+      imaginary[reverse] = imaginaryValue;
+    }
+  }
+
+  for (let size = 2; size <= count; size <<= 1) {
+    const angle = -TAU / size;
+    const phaseReal = Math.cos(angle);
+    const phaseImaginary = Math.sin(angle);
+    const half = size >> 1;
+    for (let start = 0; start < count; start += size) {
+      let twiddleReal = 1;
+      let twiddleImaginary = 0;
+      for (let offset = 0; offset < half; offset += 1) {
+        const even = start + offset;
+        const odd = even + half;
+        const oddReal = real[odd] ?? 0;
+        const oddImaginary = imaginary[odd] ?? 0;
+        const productReal = twiddleReal * oddReal - twiddleImaginary * oddImaginary;
+        const productImaginary = twiddleReal * oddImaginary + twiddleImaginary * oddReal;
+        const evenReal = real[even] ?? 0;
+        const evenImaginary = imaginary[even] ?? 0;
+        real[even] = evenReal + productReal;
+        imaginary[even] = evenImaginary + productImaginary;
+        real[odd] = evenReal - productReal;
+        imaginary[odd] = evenImaginary - productImaginary;
+        const nextTwiddleReal = twiddleReal * phaseReal - twiddleImaginary * phaseImaginary;
+        twiddleImaginary = twiddleReal * phaseImaginary + twiddleImaginary * phaseReal;
+        twiddleReal = nextTwiddleReal;
+      }
+    }
+  }
+}
+
+function yieldAnalysisWork(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, 0);
+    const onAbort = () => {
+      window.clearTimeout(timeoutId);
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function analyseDecodedAudio(
+  buffer: AudioBuffer,
+  outputLag: number,
+  signal: AbortSignal,
+): Promise<PrecomputedAnalysisTrack> {
+  const hopSamples = Math.max(1, Math.round(buffer.sampleRate * PRECOMPUTE_STEP_SECONDS));
+  const frameCount = Math.max(1, Math.ceil(buffer.length / hopSamples));
+  const amplitude = new Float32Array(frameCount);
+  const bass = new Float32Array(frameCount);
+  const mid = new Float32Array(frameCount);
+  const high = new Float32Array(frameCount);
+  const beats = new Float32Array(frameCount);
+  const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) => buffer.getChannelData(index));
+  const real = new Float32Array(PRECOMPUTE_FFT_SIZE);
+  const imaginary = new Float32Array(PRECOMPUTE_FFT_SIZE);
+  const spectrum = new Float32Array(PRECOMPUTE_FFT_SIZE / 2);
+  const previousSpectrum = new Float32Array(spectrum.length);
+  const smoothedSpectrum = new Float32Array(spectrum.length);
+  const windowValues = new Float32Array(PRECOMPUTE_FFT_SIZE);
+  const fluxHistory = new Float32Array(48);
+  const binHz = buffer.sampleRate / PRECOMPUTE_FFT_SIZE;
+  let fluxAt = 0;
+  let sinceBeat = 9;
+
+  for (let index = 0; index < windowValues.length; index += 1) {
+    windowValues[index] = 0.5 - 0.5 * Math.cos(TAU * index / (windowValues.length - 1));
+  }
+
+  const band = (low: number, upper: number, power: number) => {
+    const start = Math.min(spectrum.length - 1, Math.max(1, Math.floor(low / binHz)));
+    const end = Math.min(spectrum.length - 1, Math.ceil(upper / binHz));
+    let sum = 0;
+    let count = 0;
+    for (let index = start; index <= end; index += 1) {
+      const value = spectrum[index] ?? 0;
+      sum += value * value;
+      count += 1;
+    }
+    return Math.pow(sum / Math.max(1, count), 0.5 * power);
+  };
+
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    throwIfAborted(signal);
+    const frameStart = frame * hopSamples;
+    const frameEnd = Math.min(buffer.length, frameStart + hopSamples);
+    let squareSum = 0;
+    let sampleCount = 0;
+    for (let sample = frameStart; sample < frameEnd; sample += 2) {
+      let value = 0;
+      for (const channel of channels) value += channel[sample] ?? 0;
+      value /= Math.max(1, channels.length);
+      squareSum += value * value;
+      sampleCount += 1;
+    }
+    amplitude[frame] = Math.sqrt(squareSum / Math.max(1, sampleCount));
+
+    real.fill(0);
+    imaginary.fill(0);
+    for (let offset = 0; offset < PRECOMPUTE_FFT_SIZE; offset += 1) {
+      const sample = frameStart + offset;
+      if (sample >= buffer.length) break;
+      let value = 0;
+      for (const channel of channels) value += channel[sample] ?? 0;
+      real[offset] = value / Math.max(1, channels.length) * (windowValues[offset] ?? 0);
+    }
+    fftInPlace(real, imaginary);
+    for (let bin = 0; bin < spectrum.length; bin += 1) {
+      const magnitude = Math.hypot(real[bin] ?? 0, imaginary[bin] ?? 0) * 2 / PRECOMPUTE_FFT_SIZE;
+      const scaled = Math.log1p(magnitude * 32) / Math.log(33);
+      smoothedSpectrum[bin] = (smoothedSpectrum[bin] ?? 0) * 0.35 + scaled * 0.65;
+      spectrum[bin] = smoothedSpectrum[bin] ?? 0;
+    }
+    bass[frame] = band(28, 150, 1);
+    mid[frame] = band(200, 1600, 1.1);
+    high[frame] = band(2600, 9000, 1.3);
+
+    if (frame > 0) {
+      const kickLow = Math.max(1, Math.floor(30 / binHz));
+      const kickHigh = Math.min(spectrum.length - 1, Math.ceil(220 / binHz));
+      const highLow = Math.min(spectrum.length - 1, Math.floor(1500 / binHz));
+      const highHigh = Math.min(spectrum.length - 1, Math.ceil(7000 / binHz));
+      let flux = 0;
+      for (let bin = kickLow; bin <= kickHigh; bin += 1) {
+        const change = (spectrum[bin] ?? 0) - (previousSpectrum[bin] ?? 0);
+        if (change > 0) flux += change * 1.6;
+      }
+      for (let bin = highLow; bin <= highHigh; bin += 1) {
+        const change = (spectrum[bin] ?? 0) - (previousSpectrum[bin] ?? 0);
+        if (change > 0) flux += change * 0.5;
+      }
+      flux /= kickHigh - kickLow + 1 + (highHigh - highLow + 1) * 0.4;
+      let mean = 0;
+      for (const value of fluxHistory) mean += value;
+      mean /= fluxHistory.length;
+      let variance = 0;
+      for (const value of fluxHistory) {
+        const difference = value - mean;
+        variance += difference * difference;
+      }
+      const deviation = Math.sqrt(variance / fluxHistory.length);
+      fluxHistory[fluxAt] = flux;
+      fluxAt = (fluxAt + 1) % fluxHistory.length;
+      const threshold = mean + Math.max(deviation * 1.5, mean * 0.3) + 0.00001;
+      sinceBeat += PRECOMPUTE_STEP_SECONDS;
+      if (flux >= 0.0002 && flux > threshold && sinceBeat > 0.14) {
+        beats[frame] = clamp((flux - threshold) / Math.max(threshold, 0.0001), 0.15, 3);
+        sinceBeat = 0;
+      }
+    }
+    previousSpectrum.set(spectrum);
+
+    if (frame % 12 === 11) await yieldAnalysisWork(signal);
+  }
+
+  return {
+    stepSeconds: PRECOMPUTE_STEP_SECONDS,
+    amplitude,
+    bass,
+    mid,
+    high,
+    beats,
+    outputLag,
+  };
+}
+
+async function precomputeAudioTrack(
+  url: string,
+  signal: AbortSignal,
+  setContext: (context: AudioContext | null) => void,
+) {
+  const size = await probeAudioByteSize(url, signal);
+  if (size === null || size > PRECOMPUTE_MAX_BYTES) return null;
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    cache: "force-cache",
+    signal,
+  });
+  if (!response.ok) throw new Error(`Audio analysis fetch failed with ${response.status}`);
+  let encoded: ArrayBuffer | null = await response.arrayBuffer();
+  if (encoded.byteLength > PRECOMPUTE_MAX_BYTES) {
+    encoded = null;
+    return null;
+  }
+  throwIfAborted(signal);
+
+  const context = new AudioContext();
+  setContext(context);
+  const output = context.outputLatency;
+  const base = context.baseLatency;
+  const outputLag = clamp(
+    (typeof output === "number" && output > 0 ? output : 0) + (typeof base === "number" ? base : 0),
+    0,
+    0.35,
+  );
+  try {
+    let decoded: AudioBuffer | null = await context.decodeAudioData(encoded);
+    encoded = null;
+    throwIfAborted(signal);
+    const analysis = await analyseDecodedAudio(decoded, outputLag, signal);
+    decoded = null;
+    return analysis;
+  } finally {
+    setContext(null);
+    void context.close().catch(() => undefined);
+  }
+}
+
+function attachPrecomputedAudioAnalysis(
+  audioElement: HTMLAudioElement,
+  levels: AudioLevels,
+  getClock: () => number,
+): AudioAnalysis {
+  let track: PrecomputedAnalysisTrack | null = null;
+  let trackUrl = "";
+  let controller: AbortController | null = null;
+  let decodeContext: AudioContext | null = null;
+  let lastBeatFrame = -1;
+  let detached = false;
+  let loudPeak = 0.05;
+  const gain: Partial<Record<(typeof AUDIO_LEVEL_KEYS)[number], number>> = {};
+  const slow: Partial<Record<(typeof AUDIO_LEVEL_KEYS)[number], number>> = {};
+  const onsetPeak: Partial<Record<(typeof AUDIO_LEVEL_KEYS)[number], number>> = {};
+
+  const useTrack = (nextTrack: PrecomputedAnalysisTrack | null) => {
+    track = nextTrack;
+    lastBeatFrame = -1;
+  };
+
+  const loadCurrentTrack = () => {
+    if (detached) return;
+    const nextUrl = audioElement.src || audioElement.currentSrc;
+    if (!nextUrl || nextUrl === trackUrl) return;
+    trackUrl = nextUrl;
+    controller?.abort();
+    controller = null;
+    if (decodeContext) {
+      void decodeContext.close().catch(() => undefined);
+      decodeContext = null;
+    }
+    useTrack(null);
+
+    if (precomputedAnalysisCache.has(nextUrl)) {
+      useTrack(precomputedAnalysisCache.get(nextUrl) ?? null);
+      return;
+    }
+
+    const loadController = new AbortController();
+    controller = loadController;
+    void precomputeAudioTrack(nextUrl, loadController.signal, (context) => {
+      if (controller === loadController) decodeContext = context;
+      else if (context) void context.close().catch(() => undefined);
+    }).then((analysis) => {
+      if (loadController.signal.aborted) return;
+      precomputedAnalysisCache.set(nextUrl, analysis);
+      if (!detached && controller === loadController && trackUrl === nextUrl) useTrack(analysis);
+    }).catch(() => {
+      // Fetch, decode, or cancellation failures leave the renderer on its idle loop.
+    }).finally(() => {
+      if (controller === loadController) controller = null;
+    });
+  };
+
+  audioElement.addEventListener("loadstart", loadCurrentTrack);
+  audioElement.addEventListener("loadedmetadata", loadCurrentTrack);
+  loadCurrentTrack();
+
+  return {
+    analyse(dt) {
+      const release = Math.exp(-dt / 0.16);
+      const activeTrack = track;
+      if (!activeTrack || audioElement.paused || audioElement.ended) {
+        for (const key of AUDIO_LEVEL_KEYS) levels[key] *= release;
+        levels.loud += (1 - levels.loud) * (1 - release);
+        return;
+      }
+      const attack = Math.exp(-dt / 0.03);
+      const frame = clamp(Math.floor(audioElement.currentTime / activeTrack.stepSeconds), 0, activeTrack.amplitude.length - 1);
+      const rms = activeTrack.amplitude[frame] ?? 0;
+      const raw = {
+        bass: activeTrack.bass[frame] ?? 0,
+        mid: activeTrack.mid[frame] ?? 0,
+        high: activeTrack.high[frame] ?? 0,
+        level: rms * 2.2,
+      };
+      loudPeak = Math.max(rms, loudPeak * Math.exp(-dt / 25) + 0.0002, 0.02);
+      const loudness = clamp(rms / loudPeak, 0, 1);
+      levels.loud += (loudness - levels.loud) * (1 - Math.exp(-dt / 0.4));
+      if (!Number.isFinite(levels.loud)) levels.loud = 1;
+      for (const key of AUDIO_LEVEL_KEYS) {
+        let value = raw[key];
+        if (!Number.isFinite(value)) value = 0;
+        const ceiling = gain[key] = Math.max(value, (gain[key] ?? 0.2) * Math.exp(-dt / 6) + 0.0005, 0.03);
+        const previousSlow = slow[key] ?? value;
+        const slowValue = slow[key] = previousSlow + (value - previousSlow) * (1 - Math.exp(-dt / 1.2));
+        const onset = Math.max(0, value - slowValue);
+        const peak = onsetPeak[key] = Math.max(onset, (onsetPeak[key] ?? 0.02) * Math.exp(-dt / 5) + 0.0002, 0.015);
+        let normalised = clamp(0.32 * (value / ceiling) + 0.95 * (onset / peak), 0, 1);
+        if (!Number.isFinite(normalised)) normalised = 0;
+        const coefficient = normalised > levels[key] ? attack : release;
+        levels[key] = normalised + (levels[key] - normalised) * coefficient;
+        if (!Number.isFinite(levels[key])) levels[key] = 0;
+      }
+    },
+    detectBeat() {
+      const activeTrack = track;
+      if (!activeTrack || audioElement.paused || audioElement.ended) return 0;
+      const frame = clamp(Math.floor(audioElement.currentTime / activeTrack.stepSeconds), 0, activeTrack.beats.length - 1);
+      if (lastBeatFrame < 0 || frame < lastBeatFrame || frame - lastBeatFrame > 10) lastBeatFrame = frame - 1;
+      let strength = 0;
+      for (let index = lastBeatFrame + 1; index <= frame; index += 1) {
+        strength = Math.max(strength, activeTrack.beats[index] ?? 0);
+      }
+      lastBeatFrame = frame;
+      return strength;
+    },
+    outputLag() {
+      return track?.outputLag ?? 0;
+    },
+    envelopeSlices(count) {
+      const output = new Float32Array(count);
+      const activeTrack = track;
+      if (!activeTrack) {
+        const time = getClock();
+        for (let index = 0; index < count; index += 1) {
+          output[index] =
+            0.11 +
+            0.06 * Math.abs(Math.sin(time * 1.7 + index * 0.9)) +
+            0.04 * Math.abs(Math.sin(time * 0.6 + index * 2.3));
+        }
+        return output;
+      }
+      const currentFrame = audioElement.currentTime / activeTrack.stepSeconds;
+      const span = Math.min(64, activeTrack.amplitude.length - 1);
+      for (let index = 0; index < count; index += 1) {
+        const sourceFrame = clamp(Math.round(currentFrame - span + span * index / Math.max(1, count - 1)), 0, activeTrack.amplitude.length - 1);
+        output[index] = activeTrack.amplitude[sourceFrame] ?? 0;
+      }
+      return output;
+    },
+    detach() {
+      if (detached) return;
+      detached = true;
+      audioElement.removeEventListener("loadstart", loadCurrentTrack);
+      audioElement.removeEventListener("loadedmetadata", loadCurrentTrack);
+      controller?.abort();
+      controller = null;
+      if (decodeContext) {
+        void decodeContext.close().catch(() => undefined);
+        decodeContext = null;
+      }
+      track = null;
+    },
+  };
+}
+
+function attachAudioAnalysis(
+  audioElement: HTMLAudioElement,
+  levels: AudioLevels,
+  getClock: () => number,
+) {
+  return typeof (audioElement as CapturableAudioElement).captureStream === "function"
+    ? attachCapturedAudioAnalysis(audioElement, levels, getClock)
+    : attachPrecomputedAudioAnalysis(audioElement, levels, getClock);
 }
 
 type Flare = { t: number; amp: number; dur: number; reach: number };
