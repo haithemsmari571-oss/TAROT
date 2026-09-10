@@ -18,6 +18,7 @@ class PsychicBase(BaseModel):
     username: str
     email: EmailStr
     price_per_second: float | None = None
+    price_per_message: float | None = None
     bio: str | None = None
     order: int | None = None
 
@@ -65,6 +66,7 @@ class PsychicUpdate(BaseModel):
     email: EmailStr | None = None
     is_online: bool | None = None
     price_per_second: float | None = None
+    price_per_message: float | None = None
     categories_ids: List[int] | None = None
     availabilities_create: List[PsychicAvailiabilityCreate] | None = None
     availabilities_ids_to_remove: List[int] | None = None

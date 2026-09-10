@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 17 files."""
+"""Verification of the eleven Production Lock Version 18 files."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
+    # Production Lock Version 18: per-message billing, step 1, adds ONE setting to
+    # config.py: BILLING_MODE (default "per_minute"). No reading setting or prompt changed.
+    #
     # Production Lock Version 17: Sanctuary media adds five environment-only
     # R2 settings to config.py. No reading setting or prompt changed.
     #
@@ -94,7 +97,7 @@ LOCKED_SHA256 = {
     #                     That is how "sitting with you For weeks" reached clients.
     #
     # Versions 1-11 stay preserved in Second Brain.
-    "app/config.py": "09C5DAE6088C179033749A4C12FE0C26F07A4F0F33C86E60FD0F86F2D03C8B61",
+    "app/config.py": "9483DC4F8AC47C100D58634E2AA1381D9DAC675FE4A092B830ED7F73600D66DE",
     "app/services/ai/client.py": "35E42B59265880441751DE0F53A7637A032B51D60A1D9B64A12AAD20865658CB",
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
     "app/services/ai/reading_duo.py": "33CCA0B8405E0E9872E71C7218C0A31202135554682F329E3E0AD06B6ED6AE2A",

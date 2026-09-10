@@ -42,6 +42,9 @@ class User(Base):
     is_verified: Mapped[bool] = mapped_column(default=False)
     is_online: Mapped[bool] = mapped_column(default=True)
     price_per_second: Mapped[float] = mapped_column(nullable=True)
+    # Per-message billing (BILLING_MODE=per_message): the reader's price for one client
+    # message. Same Float as price_per_second; NULL until the reader sets it.
+    price_per_message: Mapped[float] = mapped_column(nullable=True)
     profile_picture_path: Mapped[str] = mapped_column(nullable=True)
     bio: Mapped[str] = mapped_column(nullable=True)
     # Captured (required) at signup for astrology features; nullable so the

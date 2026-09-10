@@ -144,6 +144,14 @@ class AppSettings(BaseSettings):
     # Rollback after deploy: set READING_ENGINE=single_agent in the prod .env and restart (instant),
     # or revert this line and redeploy.
     READING_ENGINE: str = "two_role"
+    # ── Billing mode ─────────────────────────────────────────────────────────
+    # "per_minute"  = the timed session: session_manager charges one minute at a time
+    #                 (the live behaviour).
+    # "per_message" = every client message is charged at the reader's per-message rate
+    #                 and answered by one model call. Being built in steps; until the
+    #                 default flips, the per-minute code stays in place and dark.
+    # Overridable from TAROT-BACKEND/.env exactly like READING_ENGINE (BILLING_MODE=...).
+    BILLING_MODE: str = "per_minute"
     # The single-agent Reader (only used when READING_ENGINE=single_agent). Opus for
     # the A/B — we want to see the quality ceiling before considering a cheaper tier.
     # Verified callable on this key before switching (2026-07-13).

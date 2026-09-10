@@ -363,11 +363,15 @@ def get_chat_details_endpoint(
         "psychic_id": chat.psychic_id,
         "created_at": chat.created_at.isoformat() if chat.created_at else None,
         "updated_at": chat.updated_at.isoformat() if chat.updated_at else None,
+        # Per-message billing plumbing (step 1): mode in force, reader's per-message
+        # price, client's spendable balance. Additive; nothing reads them yet.
+        **_billing_fields(db, chat),
         "psychic": {
             "id": psychic.id,
             "username": psychic.username,
             "email": psychic.email,
             "price_per_second": psychic.price_per_second,
+            "price_per_message": psychic.price_per_message,
         }
         if psychic
         else None,
@@ -469,7 +473,31 @@ def get_chat_messages_endpoint(
     )
 
 
-def _session_info_json(session_info) -> dict:
+def _billing_fields(db, chat) -> dict:
+    """The three per-message figures every session payload carries from step 1 of
+    per-message billing on: the billing mode in force, the reader's per-message price
+    (None until the reader sets one), and the client's spendable balance as the
+    affordability gate computes it (earned + credit + paid). Purely additive; nothing
+    reads them yet."""
+    price = None
+    balance = None
+    if chat is not None:
+        psychic = getattr(chat, "psychic", None)
+        client = getattr(chat, "user", None)
+        if psychic is not None:
+            price = psychic.price_per_message
+        if db is not None and client is not None:
+            from app.services.stardust_rewards import get_spendable_stardust
+
+            balance = round(float(get_spendable_stardust(db, client)), 2)
+    return {
+        "billing_mode": settings.BILLING_MODE,
+        "price_per_message": price,
+        "balance": balance,
+    }
+
+
+def _session_info_json(session_info, chat=None, db=None) -> dict:
     """The session-time shape. /reflect and /reflect/return answer with it too,
     so the room has one reader for every figure the server reports."""
     return {
@@ -495,10 +523,11 @@ def _session_info_json(session_info) -> dict:
         "reflect_remaining_seconds": session_info.reflect_remaining_seconds,
         "reflect_seconds_used": session_info.reflect_seconds_used,
         "reflecting_since": session_info.reflecting_since,
+        **_billing_fields(db, chat),
     }
 
 
-def _no_session_json(chat) -> dict:
+def _no_session_json(chat, db=None) -> dict:
     """The session-time shape when the chat has no live session."""
     credit_balance = float(chat.user.credit_balance) if chat.user else 0.0
     paid_balance = float(chat.user.balance) if chat.user else 0.0
@@ -519,6 +548,7 @@ def _no_session_json(chat) -> dict:
         "reflect_remaining_seconds": 0,
         "reflect_seconds_used": 0,
         "reflecting_since": None,
+        **_billing_fields(db, chat),
     }
 
 
@@ -548,10 +578,10 @@ def get_chat_session_time_endpoint(
 
     if not session_info:
         # No active session
-        return JSONResponse(content=_no_session_json(chat), status_code=200)
+        return JSONResponse(content=_no_session_json(chat, db=db), status_code=200)
 
     # Return session info from SessionManager
-    return JSONResponse(content=_session_info_json(session_info), status_code=200)
+    return JSONResponse(content=_session_info_json(session_info, chat=chat, db=db), status_code=200)
 
 
 # TODO: allow only psychic
@@ -1544,7 +1574,7 @@ async def reflect_chat(
         return JSONResponse(content={"detail": "Failed to start reflection"}, status_code=500)
 
     await session_mgr._broadcast_session_reflecting(chat_id, info)
-    return JSONResponse(content=_session_info_json(info), status_code=200)
+    return JSONResponse(content=_session_info_json(info, chat=chat, db=db), status_code=200)
 
 
 @router.post("/{chat_id}/reflect/return")
@@ -1580,10 +1610,10 @@ async def reflect_return_chat(
     if info is None:
         # No live session at all (the reading has ended): the current figures,
         # which are the no-session ones. Still 200 — Return is never an error.
-        return JSONResponse(content=_no_session_json(chat), status_code=200)
+        return JSONResponse(content=_no_session_json(chat, db=db), status_code=200)
     if was_reflecting:
         await session_mgr._broadcast_session_reflect_ended(chat_id, info, "return")
-    return JSONResponse(content=_session_info_json(info), status_code=200)
+    return JSONResponse(content=_session_info_json(info, chat=chat, db=db), status_code=200)
 
 
 @router.post("/{chat_id}/pause")
@@ -1854,6 +1884,7 @@ async def websocket_endpoint(
                             "reflect_remaining_seconds": session_info.reflect_remaining_seconds,
                             "reflect_seconds_used": session_info.reflect_seconds_used,
                             "reflecting_since": session_info.reflecting_since,
+                            **_billing_fields(db, chat),
                         },
                     }
                 )
