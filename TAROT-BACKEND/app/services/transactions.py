@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 from sqlalchemy import desc
@@ -175,6 +176,9 @@ def create_debit_transaction(
     related_chat_id: Optional[int] = None,
     related_session_interval_id: Optional[int] = None,
     metadata: Optional[dict] = None,
+    related_message_id: Optional[int] = None,
+    idempotency_key: Optional[str] = None,
+    commit: bool = True,
 ) -> Transaction:
     """
     Create a DEBIT transaction (remove points from user balance).
@@ -188,6 +192,13 @@ def create_debit_transaction(
         related_chat_id: Chat ID this transaction is related to
         related_session_interval_id: Session interval ID being billed
         metadata: Additional JSON metadata
+        related_message_id: Client message this debit paid for (per-message billing)
+        idempotency_key: Unique key that makes the charge exactly-once. Per-message
+            billing passes "msg_fee:{message_id}", so a retry is refused by the
+            UNIQUE column rather than charging twice.
+        commit: When False the caller owns the transaction — the row is flushed
+            (so its id exists) but not committed, and a failure is left for the
+            caller to roll back. Every pre-existing caller keeps the default.
 
     Returns:
         Created Transaction object
@@ -280,6 +291,8 @@ def create_debit_transaction(
             description=description,
             related_chat_id=related_chat_id,
             related_session_interval_id=related_session_interval_id,
+            related_message_id=related_message_id,
+            idempotency_key=idempotency_key,
             transaction_metadata=json.dumps(
                 {
                     **(metadata or {}),
@@ -298,8 +311,12 @@ def create_debit_transaction(
         user.credit_balance = round(credit_before - from_credit, 2)
         user.balance = round(paid_before - from_paid, 2)
 
-        db.commit()
-        db.refresh(transaction)
+        if commit:
+            db.commit()
+            db.refresh(transaction)
+        else:
+            # Caller owns the unit of work: assign the id, leave the commit.
+            db.flush()
 
         logger.info(
             "debit_transaction_created",
@@ -318,7 +335,10 @@ def create_debit_transaction(
         return transaction
 
     except IntegrityError as e:
-        db.rollback()
+        # When the caller owns the transaction they also own the rollback, so a
+        # failed flush leaves their unit of work intact for them to unwind.
+        if commit:
+            db.rollback()
         logger.error(
             "debit_transaction_integrity_error",
             user_id=user_id,
@@ -327,6 +347,146 @@ def create_debit_transaction(
             exc_info=True,
         )
         raise
+
+
+def _lot_is_live(expires_at, now: datetime) -> bool:
+    """True when a lot can still be spent. ``expires_at`` is timezone-aware in
+    PostgreSQL but can come back naive from SQLite, so a naive value is read as
+    UTC rather than crashing the comparison."""
+    if expires_at is None:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > now
+
+
+def refund_message(db: Session, message_id: int) -> Optional[Transaction]:
+    """Reverse the per-message debit for ``message_id``, putting every portion
+    back in the bucket it came from.
+
+    A debit records exactly what it consumed (``earned_lots``, ``credit_spent``,
+    ``paid_spent`` — see :func:`create_debit_transaction`), so this is a
+    mirror-image reversal rather than a flat credit: earned Stardust returns to
+    the very lot it left, keeping its original expiry clock and its place in the
+    soonest-to-expire spend order.
+
+    The one case the receipt cannot replay is a lot that died while the debit
+    stood (swept, or simply past its clock). Restoring there would either
+    resurrect value that should have been forfeited or park it where it can never
+    be spent, so that portion lands on free ``credit_balance`` instead. It never
+    becomes purchased balance, which would be a silent upgrade to money that had
+    an expiry.
+
+    Exactly-once by construction: the reversal row carries
+    ``idempotency_key="msg_refund:{message_id}"`` and the original debit is
+    flipped to REVERSED, so a second call finds no un-reversed debit.
+
+    Returns the reversal row, or None when there is nothing to refund.
+    """
+    from app.models import StardustLot
+    from app.services.stardust_rewards import get_spendable_stardust
+
+    debit = (
+        db.query(Transaction)
+        .filter(
+            Transaction.related_message_id == message_id,
+            Transaction.transaction_type == TransactionType.DEBIT,
+            Transaction.status != TransactionStatus.REVERSED,
+        )
+        .first()
+    )
+    if debit is None:
+        logger.info("refund_message_nothing_to_refund", message_id=message_id)
+        return None
+
+    try:
+        receipt = json.loads(debit.transaction_metadata or "{}")
+    except (TypeError, ValueError):
+        receipt = {}
+    credit_spent = round(float(receipt.get("credit_spent") or 0), 2)
+    paid_spent = round(float(receipt.get("paid_spent") or 0), 2)
+    earned_lots = receipt.get("earned_lots") or []
+
+    amount = round(float(debit.amount), 2)
+    user, _ = get_user_balance_with_lock(db, debit.user_id)
+    # Read the running balance BEFORE anything moves, so the ledger row reports
+    # the same total-spendable figure the debit did.
+    balance_before = round(float(get_spendable_stardust(db, user)), 2)
+    now = datetime.now(timezone.utc)
+
+    restored_to_lots = []
+    dead_lot_to_credit = 0.0
+    for entry in earned_lots:
+        lot_id = entry.get("lot_id")
+        portion = round(float(entry.get("amount") or 0), 2)
+        if portion <= 0:
+            continue
+        lot = (
+            db.query(StardustLot)
+            .filter(StardustLot.id == lot_id)
+            .with_for_update()
+            .first()
+            if lot_id is not None
+            else None
+        )
+        if lot is not None and not lot.is_expired and _lot_is_live(lot.expires_at, now):
+            lot.remaining = round(float(lot.remaining) + portion, 2)
+            restored_to_lots.append({"lot_id": lot_id, "amount": portion})
+        else:
+            dead_lot_to_credit = round(dead_lot_to_credit + portion, 2)
+
+    user.credit_balance = round(
+        float(user.credit_balance or 0) + credit_spent + dead_lot_to_credit, 2
+    )
+    user.balance = round(float(user.balance or 0) + paid_spent, 2)
+    balance_after = round(balance_before + amount, 2)
+
+    reversal = Transaction(
+        user_id=debit.user_id,
+        transaction_type=TransactionType.REVERSAL,
+        amount=amount,
+        balance_before=balance_before,
+        balance_after=balance_after,
+        status=TransactionStatus.COMPLETED,
+        description=f"Refund for message #{message_id}",
+        related_chat_id=debit.related_chat_id,
+        related_message_id=message_id,
+        idempotency_key=f"msg_refund:{message_id}",
+        transaction_metadata=json.dumps(
+            {
+                "original_transaction_id": debit.id,
+                "restored_to_lots": restored_to_lots,
+                "restored_to_credit": round(credit_spent + dead_lot_to_credit, 2),
+                "restored_to_paid": paid_spent,
+                "dead_lot_amount_to_credit": dead_lot_to_credit,
+            }
+        ),
+    )
+    db.add(reversal)
+    debit.status = TransactionStatus.REVERSED
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # The UNIQUE idempotency key already exists: this message was refunded by
+        # someone else between our read and our write. Nothing to do.
+        db.rollback()
+        logger.warning("refund_message_already_refunded", message_id=message_id)
+        return None
+
+    db.refresh(reversal)
+    logger.info(
+        "refund_message_completed",
+        message_id=message_id,
+        reversal_transaction_id=reversal.id,
+        original_transaction_id=debit.id,
+        user_id=debit.user_id,
+        amount=amount,
+        restored_to_lots=len(restored_to_lots),
+        dead_lot_amount_to_credit=dead_lot_to_credit,
+        currency="points",
+    )
+    return reversal
 
 
 def create_refund_transaction(
@@ -597,6 +757,10 @@ def get_transactions_summary(
             total_credits += amt
         elif ttype == TransactionType.DEBIT:
             total_debits += amt
+        elif ttype == TransactionType.REVERSAL:
+            # A reversed per-message charge is spend that did not happen, so it
+            # comes off the debit side rather than reading as money arriving.
+            total_debits -= amt
 
     return {
         "total_credits": round(total_credits, 2),

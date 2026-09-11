@@ -2,6 +2,7 @@
 
 from typing import Any, Dict
 from datetime import datetime
+from app.config import get_app_settings
 from app.services.chat.handlers.base import BaseEventHandler
 from app.events.types import ChatEventType
 from app.models import User, Chat
@@ -107,8 +108,81 @@ class MessageHandler(BaseEventHandler):
             user.id == chat.user_id
             and user.role not in (Role.ADMIN, Role.SUPERADMIN)
         )
+
+        # -- Per-message billing (BILLING_MODE=per_message) -------------------
+        # Replaces the out-of-session fee below ENTIRELY: every client message on
+        # an ACTIVE reading is charged at the reader's per-message rate, and a
+        # message outside an ACTIVE reading is refused rather than charged. Each
+        # refusal persists nothing and charges nothing. In per_minute mode this
+        # branch is skipped and the file behaves exactly as it always has.
+        per_message_mode = get_app_settings().BILLING_MODE == "per_message"
+        per_message_price = None
+        if per_message_mode and sender_is_paying_client:
+            from app.enums.chat_status import ChatStatus
+            from app.services.stardust_rewards import get_spendable_stardust
+
+            if chat.status != ChatStatus.ACTIVE:
+                logger.info(
+                    "per_message_rejected_session_not_active",
+                    chat_id=self.chat_id,
+                    user_id=user.id,
+                    chat_status=chat.status.value,
+                )
+                await self.send_event(
+                    "message_rejected",
+                    {
+                        "data": {
+                            "reason": "SESSION_NOT_ACTIVE",
+                            "message": "The reader has not joined yet.",
+                        }
+                    },
+                )
+                return
+
+            raw_price = chat.psychic.price_per_message if chat.psychic else None
+            if raw_price is None:
+                logger.warning(
+                    "per_message_price_missing",
+                    chat_id=self.chat_id,
+                    psychic_id=chat.psychic_id,
+                    user_id=user.id,
+                )
+                await self.send_event(
+                    "message_rejected",
+                    {
+                        "data": {
+                            "reason": "READER_UNAVAILABLE",
+                            "message": "This reader is not available right now.",
+                        }
+                    },
+                )
+                return
+
+            per_message_price = round(float(raw_price), 2)
+            balance = round(get_spendable_stardust(self.db, user), 2)
+            if balance < per_message_price:
+                logger.info(
+                    "per_message_rejected_insufficient_balance",
+                    chat_id=self.chat_id,
+                    user_id=user.id,
+                    price_per_message=per_message_price,
+                    balance=balance,
+                )
+                await self.send_event(
+                    "message_rejected",
+                    {
+                        "data": {
+                            "reason": "INSUFFICIENT_BALANCE",
+                            "price_per_message": per_message_price,
+                            "balance": balance,
+                        }
+                    },
+                )
+                return
+
         if (
-            sender_is_paying_client
+            not per_message_mode
+            and sender_is_paying_client
             and not _client_in_live_session(chat)
             and _chat_ever_accepted(self.db, chat)
         ):
@@ -170,8 +244,75 @@ class MessageHandler(BaseEventHandler):
             "chat_id": self.chat_id,  # Add chat context
         }
 
-        # Save message to database
-        db_message = await save_message(self.db, message_data, user, chat)
+        # Save message to database. Under per-message billing the message and its
+        # charge are ONE transaction, so neither can exist without the other: the
+        # message is flushed for its id, the debit is written against that id, and
+        # only then does the pair commit.
+        if per_message_price is not None:
+            from app.exceptions.transactions import InsufficientBalanceError
+            from app.services.stardust_rewards import get_spendable_stardust
+            from app.services.transactions import create_debit_transaction
+
+            try:
+                db_message = await save_message(
+                    self.db, message_data, user, chat, commit=False
+                )
+                self.db.flush()
+                create_debit_transaction(
+                    db=self.db,
+                    user_id=user.id,
+                    amount=per_message_price,
+                    description=f"Message #{db_message.id}",
+                    related_chat_id=chat.id,
+                    related_message_id=db_message.id,
+                    idempotency_key=f"msg_fee:{db_message.id}",
+                    metadata={
+                        "price_per_message": per_message_price,
+                        "psychic_id": chat.psychic_id,
+                    },
+                    commit=False,
+                )
+                self.db.commit()
+            except InsufficientBalanceError:
+                # Lost a race between the gate and the charge. Rolling back removes
+                # the message row too, so she is never left with a sent message she
+                # did not pay for.
+                self.db.rollback()
+                balance = round(get_spendable_stardust(self.db, user), 2)
+                logger.info(
+                    "per_message_insufficient_balance_at_charge",
+                    chat_id=self.chat_id,
+                    user_id=user.id,
+                    price_per_message=per_message_price,
+                    balance=balance,
+                )
+                await self.send_event(
+                    "message_rejected",
+                    {
+                        "data": {
+                            "reason": "INSUFFICIENT_BALANCE",
+                            "price_per_message": per_message_price,
+                            "balance": balance,
+                        }
+                    },
+                )
+                return
+            except Exception:
+                self.db.rollback()
+                raise
+
+            fee_charged = per_message_price
+            client_balance_after = round(get_spendable_stardust(self.db, user), 2)
+            logger.info(
+                "per_message_fee_charged",
+                chat_id=self.chat_id,
+                user_id=user.id,
+                message_id=db_message.id,
+                fee=fee_charged,
+                balance_after=client_balance_after,
+            )
+        else:
+            db_message = await save_message(self.db, message_data, user, chat)
 
         # Update message data with DB fields
         message_data["id"] = db_message.id

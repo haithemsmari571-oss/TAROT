@@ -358,7 +358,9 @@ def end_chat_session(
     db.commit()
 
 
-async def save_message(db: Session, data: dict, user: User, chat: Chat) -> Message:
+async def save_message(
+    db: Session, data: dict, user: User, chat: Chat, commit: bool = True
+) -> Message:
     # Serialize a human/client insert against Hybrid approval, which locks the
     # same Chat -> current-session order before its final freshness check.
     db.query(Chat.id).filter(Chat.id == chat.id).with_for_update().first()
@@ -370,7 +372,13 @@ async def save_message(db: Session, data: dict, user: User, chat: Chat) -> Messa
         content=data["content"],
     )
     db.add(message)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        # The caller owns the transaction (per-message billing saves the message
+        # and its debit together). Flush so message.id exists for the rest of
+        # their unit of work, but leave the commit to them.
+        db.flush()
     return message
 
 

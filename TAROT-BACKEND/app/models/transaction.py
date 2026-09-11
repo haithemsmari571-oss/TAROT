@@ -26,6 +26,13 @@ class Transaction(Base):
     related_session_interval_id: Mapped[int] = mapped_column(
         ForeignKey("session_intervals.id"), nullable=True
     )
+    # Per-message billing (BILLING_MODE=per_message): the client message this
+    # debit paid for. A plain indexed FK, for lookup only — one-debit-per-message
+    # is enforced by the UNIQUE idempotency_key ("msg_fee:{id}"), not by a
+    # unique index here.
+    related_message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id"), nullable=True, index=True
+    )
     stripe_payment_intent_id: Mapped[str] = mapped_column(String(255), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=True
