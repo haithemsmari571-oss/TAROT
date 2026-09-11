@@ -21,7 +21,9 @@ from app.services.psychics import get_psychic
 from app.services.users import get_user
 
 
-def _validate_start_chat(db: Session, user_id: int, psychic_id: int):
+def _validate_start_chat(
+    db: Session, user_id: int, psychic_id: int, per_message: bool = False
+):
     user = get_user(db, user_id)
     if not user:
         raise UserNotFoundError()
@@ -29,6 +31,11 @@ def _validate_start_chat(db: Session, user_id: int, psychic_id: int):
     psychic = get_psychic(db, psychic_id)
     if not psychic:
         raise UserNotFoundError("Psychic with that id doesn't exist")
+
+    # A per-message reading has no first minute to fund: the router gates the
+    # request on the per-message price instead, and charges the question itself.
+    if per_message:
+        return
 
     # Check if user has enough balance (at least 2 minutes)
     from app.services.billing import check_user_can_start_session
@@ -73,9 +80,17 @@ def _latest_message_session_id(
     return int(session.id) if session is not None else None
 
 
-def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
-    """Request a chat and return the chat_id"""
-    _validate_start_chat(db, user_id, chat_data.psychic_id)
+def req_start_chat(
+    db: Session, user_id: int, chat_data: ChatStart, per_message: bool = False
+) -> int:
+    """Request a chat and return the chat_id.
+
+    ``per_message``: skip the per-minute minimum-balance check, and FLUSH rather
+    than commit, so the caller can charge the hall question in the same
+    transaction and roll the whole request back if that charge is refused.
+    Every pre-existing caller keeps the default and is unchanged.
+    """
+    _validate_start_chat(db, user_id, chat_data.psychic_id, per_message=per_message)
 
     # Check if a chat already exists between this user and psychic
     existing_chat = (
@@ -96,7 +111,10 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
             content=chat_data.message,
         )
         db.add(msg_req)
-        db.commit()
+        if per_message:
+            db.flush()
+        else:
+            db.commit()
         return existing_chat.id
 
     # If no existing chat, create a new one
@@ -118,7 +136,10 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
         )
         db.add(msg_req)
 
-        db.commit()
+        if per_message:
+            db.flush()
+        else:
+            db.commit()
         return chat.id
     except IntegrityError:
         # Rollback and retry with existing chat (race condition handling)
@@ -138,7 +159,10 @@ def req_start_chat(db: Session, user_id: int, chat_data: ChatStart) -> int:
                 content=chat_data.message,
             )
             db.add(msg_req)
-            db.commit()
+            if per_message:
+                db.flush()
+            else:
+                db.commit()
             return existing_chat.id
 
         # If still no chat found, raise error

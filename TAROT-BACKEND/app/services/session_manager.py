@@ -328,6 +328,28 @@ class SessionManager:
                 if not session:
                     continue
 
+                # A per-message reading carries no clock, on restart exactly as
+                # on a fresh start: no interval, no budget, no rate maths. Just
+                # enough state for end_session and the message gate to find it.
+                if _per_message_mode():
+                    self.active_sessions[chat.id] = SessionState(
+                        chat_id=chat.id,
+                        session_id=session.id,
+                        interval_id=None,
+                        started_at=chat.client_joined_at or datetime.now(),
+                        client_id=chat.user_id,
+                        psychic_id=chat.psychic_id,
+                        rate_per_second=chat.psychic.price_per_second,
+                        max_session_duration_seconds=0,
+                        initial_balance=0.0,
+                        last_check_at=datetime.now(),
+                        awaiting_join=(chat.client_joined_at is None),
+                        client_joined_at=chat.client_joined_at,
+                        minutes_charged=0,
+                    )
+                    logger.info("loaded_active_session_clockless", chat_id=chat.id)
+                    continue
+
                 # Get the current interval (one without ended_at)
                 interval = (
                     db.query(SessionInterval)
@@ -1505,6 +1527,11 @@ class SessionManager:
 
         now = datetime.now()
         session_state.client_disconnected_at = now
+        if _per_message_mode():
+            # No meter to freeze and no timeout will follow (the monitor skips
+            # per-message sessions). The room simply knows she stepped out.
+            logger.info("client_disconnected_clockless", chat_id=chat_id)
+            return
         # Reflecting: the meter is already frozen at the second she pressed
         # Reflect and started_at has not been rebased yet, so measuring from it
         # now would fold the reflected seconds into the meter. Keep the freeze.
@@ -2155,8 +2182,9 @@ class SessionManager:
                     finally:
                         self._last_atlas_memory_sweep = datetime.now()
 
-                # Check paused sessions for 30-minute timeout
-                for chat_id in list(self.paused_sessions.keys()):
+                # Check paused sessions for 30-minute timeout. Per-message
+                # readings are never paused, so there is nothing to time out.
+                for chat_id in ([] if _per_message_mode() else list(self.paused_sessions.keys())):
                     try:
                         chat = db.query(Chat).filter(Chat.id == chat_id).first()
                         if chat and chat.paused_at:

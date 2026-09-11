@@ -55,6 +55,34 @@ class ConnectionManager:
             for socket in disconnected_sockets:
                 self.disconnect(socket, chat_id)
 
+    async def send_to_user_in_chat(
+        self, message: dict, chat_id: str, user_id: int
+    ) -> bool:
+        """Send to ONE participant's open sockets in a room, not the whole room.
+        Returns True if at least one socket received it. Lets a client learn her
+        balance moved without the reader's socket seeing the figure."""
+        delivered = False
+        dead = []
+        for connection, uid in list(self.active_chats.get(chat_id, [])):
+            if uid != user_id:
+                continue
+            try:
+                await connection.send_json(message)
+                delivered = True
+            except Exception as e:  # noqa: BLE001 - one dead socket must not stop the rest
+                from app.logging_config import get_logger
+
+                get_logger(__name__).warning(
+                    "failed_to_send_to_user_in_chat",
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    error=str(e),
+                )
+                dead.append(connection)
+        for socket in dead:
+            self.disconnect(socket, chat_id)
+        return delivered
+
     async def send_to_user(self, message: dict, user_id: str):
         raise NotImplementedError
 

@@ -17,6 +17,7 @@ from app.logging_config import bind_user_to_context, get_logger
 from app.manager import manager
 from app.database.client import get_db
 from sqlalchemy.orm import Session
+from app.dependencies.billing_mode import require_per_minute_billing
 from app.dependencies.get_current_user import get_current_user
 
 from app.models.chat import Chat
@@ -85,13 +86,49 @@ async def requset_chat_endpoint(
     # The first minute is charged upfront on join, so block a request the client
     # can't afford for even one minute — otherwise the reading starts and
     # insta-dies. Admins/superadmins (testing / connected-as-psychic) bypass.
+    per_message = settings.BILLING_MODE == "per_message"
     if user.role not in (Role.ADMIN, Role.SUPERADMIN):
         from app.services.billing import minimum_balance_to_start
 
         psychic_row = (
             db.query(User).filter(User.id == chat_data.psychic_id).first()
         )
-        if psychic_row and psychic_row.price_per_second:
+        if per_message:
+            # Per-message: no first minute to fund. She must be able to afford
+            # the question itself, which is charged as message one below. Same
+            # 402 and shape as the per-minute gate, so the hall reads one thing.
+            from app.services.per_message_billing import price_of_reader
+            from app.services.stardust_rewards import get_spendable_stardust
+
+            price = price_of_reader(psychic_row)
+            spendable = round(get_spendable_stardust(db, user), 2)
+            psychic_name = psychic_row.username if psychic_row else None
+            if price is None:
+                logger.warning(
+                    "request_refused_reader_unavailable",
+                    psychic_id=chat_data.psychic_id,
+                    user_id=user.id,
+                )
+                return JSONResponse(
+                    content={
+                        "detail": "READER_UNAVAILABLE",
+                        "required": None,
+                        "balance": spendable,
+                        "psychic_name": psychic_name,
+                    },
+                    status_code=402,
+                )
+            if spendable < price:
+                return JSONResponse(
+                    content={
+                        "detail": "INSUFFICIENT_BALANCE",
+                        "required": price,
+                        "balance": spendable,
+                        "psychic_name": psychic_name,
+                    },
+                    status_code=402,
+                )
+        elif psychic_row and psychic_row.price_per_second:
             from app.services.stardust_rewards import get_spendable_stardust
 
             required = minimum_balance_to_start(psychic_row.price_per_second)
@@ -112,7 +149,49 @@ async def requset_chat_endpoint(
                 )
 
     # Create/update chat and get chat_id
-    chat_id = req_start_chat(db, user.id, chat_data)
+    if per_message:
+        # The hall question is message one and pays like every message after it.
+        # req_start_chat has already stored it (flushed, not committed), so it is
+        # charged as that row, and a refused charge rolls the chat back with it.
+        from app.services.per_message_billing import (
+            PerMessageRefusal,
+            charge_client_message,
+        )
+
+        chat_id = req_start_chat(db, user.id, chat_data, per_message=True)
+        chat_row = db.query(Chat).filter(Chat.id == chat_id).first()
+        request_message = (
+            db.query(Message)
+            .filter(
+                Message.chat_id == chat_id,
+                Message.sender_id == user.id,
+                Message.is_system.is_(False),
+            )
+            .order_by(Message.id.desc())
+            .first()
+        )
+        try:
+            await charge_client_message(
+                db, chat_row, chat_data.message, user,
+                commit=False, message=request_message,
+            )
+            db.commit()
+        except PerMessageRefusal as refusal:
+            # charge_client_message has already rolled the session back, which
+            # takes the flushed chat and message rows with it.
+            db.rollback()
+            psychic_row = db.query(User).filter(User.id == chat_data.psychic_id).first()
+            return JSONResponse(
+                content={
+                    "detail": refusal.reason,
+                    "required": refusal.payload.get("price_per_message"),
+                    "balance": refusal.payload.get("balance"),
+                    "psychic_name": psychic_row.username if psychic_row else None,
+                },
+                status_code=402,
+            )
+    else:
+        chat_id = req_start_chat(db, user.id, chat_data)
 
     # Register this request with the session manager (for tracking pending requests)
     from app.services.session_manager import get_session_manager
@@ -980,6 +1059,7 @@ async def topup_chat_balance(
     chat_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    _clock_only: None = Depends(require_per_minute_billing),
 ):
     """
     Pause chat (via SessionManager) and create Stripe checkout session for top-up.
@@ -1221,6 +1301,7 @@ async def resume_paused_chat(
     chat_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    _clock_only: None = Depends(require_per_minute_billing),
 ):
     """
     Resume a paused chat session if the user has sufficient balance.
@@ -1531,6 +1612,7 @@ async def reflect_chat(
     chat_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    _clock_only: None = Depends(require_per_minute_billing),
 ):
     """
     The client pauses to sit with what she said. The meter and the charge stop
@@ -1593,6 +1675,7 @@ async def reflect_return_chat(
     chat_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    _clock_only: None = Depends(require_per_minute_billing),
 ):
     """
     She returns from the reflection: the meter runs again from the frozen
@@ -1632,6 +1715,7 @@ async def pause_chat_manual(
     chat_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    _clock_only: None = Depends(require_per_minute_billing),
 ):
     """
     Manually pause an active chat (psychic or admin). Reuses the existing

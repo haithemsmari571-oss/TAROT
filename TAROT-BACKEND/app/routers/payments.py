@@ -496,6 +496,48 @@ async def _handle_lifetime_purchase(
         )
 
 
+async def _tell_room_balance_updated(db: Session, user_id: int) -> bool:
+    """After a top-up under per-message billing: if the client has a reading
+    open, send HER sockets in that room a balance_updated frame with the new
+    spendable balance and the reader's per-message price, so the room can
+    re-enable the send button. Only her sockets, never the reader's, because
+    the figure is her balance. Returns True when something was delivered."""
+    from app.enums.chat_status import ChatStatus
+    from app.manager import manager
+    from app.models.chat import Chat
+    from app.models.user import User
+    from app.services.per_message_billing import price_per_message
+    from app.services.stardust_rewards import get_spendable_stardust
+
+    chat = (
+        db.query(Chat)
+        .filter(Chat.user_id == user_id, Chat.status == ChatStatus.ACTIVE)
+        .order_by(Chat.id.desc())
+        .first()
+    )
+    if chat is None:
+        return False
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        return False
+    payload = {
+        "event": "balance_updated",
+        "data": {
+            "balance": round(float(get_spendable_stardust(db, user)), 2),
+            "price_per_message": price_per_message(chat),
+        },
+    }
+    delivered = await manager.send_to_user_in_chat(payload, str(chat.id), user_id)
+    logger.info(
+        "balance_updated_sent_to_room",
+        chat_id=chat.id,
+        user_id=user_id,
+        delivered=delivered,
+        balance=payload["data"]["balance"],
+    )
+    return delivered
+
+
 @router.post("/webhook")
 async def stripe_webhook(
     request: Request,
@@ -658,13 +700,22 @@ async def stripe_webhook(
                         SessionNotFoundError,
                     )
 
+                    # Per-message readings are never paused, so there is nothing
+                    # to resume and no top-up hold to clear. The credit above is
+                    # the whole effect; the room just needs to know the balance
+                    # moved so it can re-enable the send button.
+                    per_message = settings.BILLING_MODE == "per_message"
                     paused_chat = (
-                        db.query(Chat)
+                        None
+                        if per_message
+                        else db.query(Chat)
                         .filter(
                             Chat.user_id == user_id, Chat.status == ChatStatus.PAUSED
                         )
                         .first()
                     )
+                    if per_message:
+                        await _tell_room_balance_updated(db, user_id)
 
                     if paused_chat:
                         logger.info(
