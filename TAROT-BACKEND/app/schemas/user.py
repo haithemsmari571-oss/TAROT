@@ -125,7 +125,7 @@ class AdminUserDetail(BaseModel):
     is_verified: bool
     is_online: bool
     price_per_second: Optional[float] = None
-    price_per_message: Optional[float] = None
+    price_per_message: Optional[float] = Field(default=None, gt=0)
     profile_picture_path: Optional[str] = None
     bio: Optional[str] = None
     created_at: datetime
@@ -146,7 +146,7 @@ class AdminUserCreate(BaseModel):
     is_verified: bool = False
     balance: float = 0
     price_per_second: Optional[float] = None
-    price_per_message: Optional[float] = None
+    price_per_message: Optional[float] = Field(default=None, gt=0)
     bio: Optional[str] = None
 
     @field_validator("password")
@@ -167,7 +167,7 @@ class AdminUserUpdate(BaseModel):
     is_verified: Optional[bool] = None
     is_online: Optional[bool] = None
     price_per_second: Optional[float] = None
-    price_per_message: Optional[float] = None
+    price_per_message: Optional[float] = Field(default=None, gt=0)
     bio: Optional[str] = None
     password: Optional[str] = None
     balance: Optional[float] = None

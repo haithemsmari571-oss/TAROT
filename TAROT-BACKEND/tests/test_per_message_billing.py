@@ -6,18 +6,33 @@ the per-minute default so the live path is provably unchanged.
 
 import asyncio
 import json
+from datetime import timedelta
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
+from app.enums.chat_session_status import ChatSessionStatus
 from app.enums.chat_status import ChatStatus
 from app.enums.role import Role
 from app.enums.transaction_status import TransactionStatus
 from app.enums.transaction_type import TransactionType
-from app.models import Chat, Message, StardustLot, Transaction
+from app.models import (
+    Chat,
+    ChatSession,
+    Message,
+    SessionInterval,
+    StardustLot,
+    Transaction,
+)
+from app.schemas.psychic import PsychicCreate, PsychicUpdate
+from app.schemas.user import AdminUserCreate, AdminUserUpdate
 from app.services import stardust_rewards as sr
 from app.services.chat.handlers import message_handler as mh
-from app.services.chat.handlers.message_handler import MessageHandler
+from app.services.chat.handlers.message_handler import (
+    OUT_OF_SESSION_MESSAGE_FEE,
+    MessageHandler,
+)
 from app.services.transactions import create_debit_transaction, refund_message
 
 
@@ -62,7 +77,11 @@ def _mode(monkeypatch, mode):
 
 
 def _stub_delivery(monkeypatch):
-    """Silence broadcast/presence/burst so a successful send can run end to end."""
+    """Silence broadcast/presence/burst so a successful send can run end to end.
+
+    Returns the list that records every note_client_message call, so a test can
+    prove the handler reached the reading pipeline rather than merely not
+    crashing."""
     import app.notification_manager as nm
     import app.routers.chats as chats_router
     import app.services.session_manager as sm
@@ -72,10 +91,14 @@ def _stub_delivery(monkeypatch):
     monkeypatch.setattr(nm, "notification_manager", _FakeNotifications())
     monkeypatch.setattr(sm, "get_session_manager", lambda: _NoLiveSessions())
 
-    async def _noop(*args, **kwargs):
+    noted = []
+
+    async def _record(*args, **kwargs):
+        noted.append((args, kwargs))
         return None
 
-    monkeypatch.setattr(reading_burst, "note_client_message", _noop)
+    monkeypatch.setattr(reading_burst, "note_client_message", _record)
+    return noted
 
 
 def _people(db, make_user, *, balance=0.0, credit=0.0, price=2.0):
@@ -304,7 +327,11 @@ def test_refund_replays_the_receipt_onto_lot_credit_and_paid(db, make_user):
 
 
 # -- 8. A dead lot cannot take it back, so it lands on free credit -----------
-def test_a_dead_lot_sends_its_portion_to_credit_instead(db, make_user):
+@pytest.mark.parametrize("how_it_died", ["is_expired", "expires_at_past"])
+def test_a_dead_lot_sends_its_portion_to_credit_instead(db, make_user, how_it_died):
+    """Both ways a lot can be dead: swept (is_expired), and simply past its clock
+    while the sweep has not run yet. The second is the branch _lot_is_live exists
+    for, and only it exercises the expires_at comparison."""
     client = make_user(balance=0.0, credit_balance=0.0)
     sr.credit_earned_stardust(
         db,
@@ -312,23 +339,28 @@ def test_a_dead_lot_sends_its_portion_to_credit_instead(db, make_user):
         1.5,
         "Reward",
         source="task:test",
-        idempotency_key="task:test:2",
+        idempotency_key=f"task:test:{how_it_died}",
         now=sr._utcnow(),
     )
     lot = db.query(StardustLot).one()
+    message_id = 88 if how_it_died == "is_expired" else 89
     create_debit_transaction(
         db=db,
         user_id=client.id,
         amount=1.5,
-        description="Message #88",
-        related_message_id=88,
-        idempotency_key="msg_fee:88",
+        description=f"Message #{message_id}",
+        related_message_id=message_id,
+        idempotency_key=f"msg_fee:{message_id}",
     )
     # The lot dies while the debit stands.
-    lot.is_expired = True
+    if how_it_died == "is_expired":
+        lot.is_expired = True
+    else:
+        lot.is_expired = False
+        lot.expires_at = sr._utcnow() - timedelta(days=1)
     db.commit()
 
-    refund_message(db, 88)
+    refund_message(db, message_id)
 
     db.refresh(lot)
     db.refresh(client)
@@ -339,19 +371,99 @@ def test_a_dead_lot_sends_its_portion_to_credit_instead(db, make_user):
 
 # -- 9. Nothing to refund ----------------------------------------------------
 def test_refunding_a_message_with_no_debit_returns_none(db, make_user):
+    """None is the answer, and nothing may move on the way to returning it."""
+    client = make_user(balance=4.0, credit_balance=2.0)
+    sr.credit_earned_stardust(
+        db,
+        client.id,
+        3.0,
+        "Reward",
+        source="task:test",
+        idempotency_key="task:test:9",
+        now=sr._utcnow(),
+    )
+    before = (
+        float(client.balance),
+        float(client.credit_balance),
+        [float(lot.remaining) for lot in db.query(StardustLot).order_by(StardustLot.id)],
+    )
+
     assert refund_message(db, 424242) is None
+
+    db.refresh(client)
+    after = (
+        float(client.balance),
+        float(client.credit_balance),
+        [float(lot.remaining) for lot in db.query(StardustLot).order_by(StardustLot.id)],
+    )
+    assert after == before
+    assert (
+        db.query(Transaction)
+        .filter(Transaction.transaction_type == TransactionType.REVERSAL)
+        .count()
+        == 0
+    )
+
+
+def _accept(db, chat):
+    """Give the chat a session and a billable interval, which is how the
+    out-of-session fee decides a chat has ever been accepted."""
+    session = ChatSession(chat_id=chat.id, status=ChatSessionStatus.COMPLETED)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    db.add(
+        SessionInterval(
+            session_id=session.id,
+            started_at=sr._utcnow().replace(tzinfo=None),
+            is_billed=True,
+        )
+    )
+    db.commit()
+    return session
 
 
 # -- 10. The per-minute default is untouched ---------------------------------
-def test_per_minute_mode_creates_no_per_message_debit(db, make_user, monkeypatch):
-    """Default BILLING_MODE. The message saves, and the out-of-session fee logic
-    behaves exactly as before: this chat was never accepted, so it is free."""
-    _stub_delivery(monkeypatch)
+def test_per_minute_mode_still_charges_the_out_of_session_fee(
+    db, make_user, monkeypatch
+):
+    """Default BILLING_MODE, chat not ACTIVE, previously accepted. The pre-existing
+    OUT_OF_SESSION_MESSAGE_FEE must still be charged, with its own description and
+    no per-message idempotency key. This is the case the `not per_message_mode`
+    guard has to let through."""
+    noted = _stub_delivery(monkeypatch)
     from app.config import get_app_settings
 
     assert get_app_settings().BILLING_MODE == "per_minute"
     client, psychic = _people(db, make_user, balance=10.0, price=2.0)
-    chat = _chat(db, client, psychic)
+    chat = _chat(db, client, psychic, status=ChatStatus.ENDED)
+    _accept(db, chat)
+
+    ws = _send(db, chat, client)
+
+    debit = db.query(Transaction).one()
+    assert debit.transaction_type == TransactionType.DEBIT
+    assert float(debit.amount) == OUT_OF_SESSION_MESSAGE_FEE
+    assert debit.description == f"Message to {psychic.username} (between sessions)"
+    assert debit.idempotency_key is None  # never the per-message key
+    assert debit.related_message_id is None
+    db.refresh(client)
+    assert float(client.balance) == 10.0 - OUT_OF_SESSION_MESSAGE_FEE
+    assert db.query(Message).count() == 1
+    assert not [f for f in ws.sent if f.get("event") == "message_rejected"]
+    # The chat is not ACTIVE, so the reading pipeline is not notified.
+    assert noted == []
+
+
+def test_per_minute_mode_on_an_active_reading_charges_nothing_and_reaches_the_pipeline(
+    db, make_user, monkeypatch
+):
+    """Default BILLING_MODE, ACTIVE chat. The message is free (the per-minute timer
+    covers it), no transaction of any kind is written, and the handler goes on to
+    note_client_message exactly as it always has."""
+    noted = _stub_delivery(monkeypatch)
+    client, psychic = _people(db, make_user, balance=10.0, price=2.0)
+    chat = _chat(db, client, psychic, status=ChatStatus.ACTIVE)
 
     ws = _send(db, chat, client)
 
@@ -360,3 +472,99 @@ def test_per_minute_mode_creates_no_per_message_debit(db, make_user, monkeypatch
     db.refresh(client)
     assert float(client.balance) == 10.0
     assert not [f for f in ws.sent if f.get("event") == "message_rejected"]
+    assert len(noted) == 1  # the reading pipeline was reached
+
+
+# -- 11. A non-positive price is refused, and does not poison the chat --------
+@pytest.mark.parametrize("bad_price", [0, 0.0, -1, -1.0, 0.004])
+def test_a_non_positive_price_is_refused_without_breaking_the_chat(
+    db, make_user, monkeypatch, bad_price
+):
+    """0, a negative, and anything that rounds to 0 are all unusable configuration,
+    not a free reader. Each is refused before anything is persisted, and correcting
+    the price makes the very next message work."""
+    _mode(monkeypatch, "per_message")
+    noted = _stub_delivery(monkeypatch)
+    client, psychic = _people(db, make_user, balance=50.0, price=bad_price)
+    chat = _chat(db, client, psychic)
+
+    ws = _send(db, chat, client)
+
+    assert ws.sent == [
+        {
+            "event": "message_rejected",
+            "data": {
+                "reason": "READER_UNAVAILABLE",
+                "message": "This reader is not available right now.",
+            },
+        }
+    ]
+    assert db.query(Message).count() == 0
+    assert db.query(Transaction).count() == 0
+    db.refresh(client)
+    assert float(client.balance) == 50.0
+    assert noted == []
+
+    # The chat is still usable: fix the price and the next message goes through.
+    psychic.price_per_message = 2.0
+    db.commit()
+
+    _send(db, chat, client, content="try again")
+
+    message = db.query(Message).one()
+    debit = db.query(Transaction).one()
+    assert debit.related_message_id == message.id
+    assert float(debit.amount) == 2.0
+    db.refresh(client)
+    assert float(client.balance) == 48.0
+
+
+# -- 12. The API refuses to store a non-positive price -----------------------
+def test_the_schemas_accept_none_and_a_real_price_and_reject_zero_or_negative():
+    psychic_common = dict(
+        password="password1",
+        is_online=True,
+        categories_ids=[],
+        availability=[],
+        price_per_second=0.05,
+    )
+    user_common = dict(username="reader", email="reader@test.co", password="password1")
+
+    # None and a real price are both fine.
+    assert (
+        PsychicCreate(
+            username="reader", email="reader@test.co", **psychic_common
+        ).price_per_message
+        is None
+    )
+    assert (
+        PsychicCreate(
+            username="reader",
+            email="reader@test.co",
+            price_per_message=2.5,
+            **psychic_common,
+        ).price_per_message
+        == 2.5
+    )
+    assert PsychicUpdate().price_per_message is None
+    assert PsychicUpdate(price_per_message=2.5).price_per_message == 2.5
+    assert AdminUserCreate(**user_common).price_per_message is None
+    assert AdminUserCreate(price_per_message=2.5, **user_common).price_per_message == 2.5
+    assert AdminUserUpdate().price_per_message is None
+    assert AdminUserUpdate(price_per_message=2.5).price_per_message == 2.5
+
+    # Zero and negatives are refused at the boundary.
+    for bad in (0, -1):
+        with pytest.raises(ValidationError):
+            PsychicCreate(
+                username="reader",
+                email="reader@test.co",
+                price_per_message=bad,
+                **psychic_common,
+            )
+        with pytest.raises(ValidationError):
+            PsychicUpdate(price_per_message=bad)
+        with pytest.raises(ValidationError):
+            AdminUserCreate(price_per_message=bad, **user_common)
+        with pytest.raises(ValidationError):
+            AdminUserUpdate(price_per_message=bad)

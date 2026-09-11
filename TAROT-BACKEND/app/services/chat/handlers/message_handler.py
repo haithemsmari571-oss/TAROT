@@ -139,13 +139,23 @@ class MessageHandler(BaseEventHandler):
                 )
                 return
 
+            # Round FIRST, so a sub-penny price (0.004 -> 0.0) is caught by the
+            # same check, then refuse anything that is not a positive amount. A
+            # price of zero or below is unusable configuration rather than a free
+            # reader: the ledger refuses a non-positive debit outright, and letting
+            # one through would flush the message row and then die with an internal
+            # error instead of one of the three message_rejected shapes.
             raw_price = chat.psychic.price_per_message if chat.psychic else None
-            if raw_price is None:
+            per_message_price = (
+                round(float(raw_price), 2) if raw_price is not None else None
+            )
+            if per_message_price is None or per_message_price <= 0:
                 logger.warning(
                     "per_message_price_missing",
                     chat_id=self.chat_id,
                     psychic_id=chat.psychic_id,
                     user_id=user.id,
+                    raw_price=raw_price,
                 )
                 await self.send_event(
                     "message_rejected",
@@ -158,7 +168,6 @@ class MessageHandler(BaseEventHandler):
                 )
                 return
 
-            per_message_price = round(float(raw_price), 2)
             balance = round(get_spendable_stardust(self.db, user), 2)
             if balance < per_message_price:
                 logger.info(

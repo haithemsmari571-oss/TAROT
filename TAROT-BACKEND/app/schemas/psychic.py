@@ -5,6 +5,7 @@ from typing import List, Optional, Generic, TypeVar
 from pydantic import (
     BaseModel,
     EmailStr,
+    Field,
     field_validator,
     model_validator,
 )
@@ -18,7 +19,7 @@ class PsychicBase(BaseModel):
     username: str
     email: EmailStr
     price_per_second: float | None = None
-    price_per_message: float | None = None
+    price_per_message: Optional[float] = Field(default=None, gt=0)
     bio: str | None = None
     order: int | None = None
 
@@ -66,7 +67,7 @@ class PsychicUpdate(BaseModel):
     email: EmailStr | None = None
     is_online: bool | None = None
     price_per_second: float | None = None
-    price_per_message: float | None = None
+    price_per_message: Optional[float] = Field(default=None, gt=0)
     categories_ids: List[int] | None = None
     availabilities_create: List[PsychicAvailiabilityCreate] | None = None
     availabilities_ids_to_remove: List[int] | None = None
