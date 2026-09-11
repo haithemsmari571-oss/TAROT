@@ -72,6 +72,16 @@ def _reflecting_since_iso(session_state) -> Optional[str]:
     return since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _per_message_mode() -> bool:
+    """True when readings are billed per message, so the session carries no clock.
+
+    Read through the module-level settings on every call rather than captured at
+    import, so the mode can be flipped in the environment (and in tests) without
+    reimporting. In per_minute mode every caller below behaves exactly as before.
+    """
+    return settings.BILLING_MODE == "per_message"
+
+
 def _per_minute_rate(rate_per_second: float) -> float:
     """Exact per-minute charge in points (£), to 2 dp (pennies)."""
     return round((rate_per_second or 0) * 60, 2)
@@ -459,22 +469,29 @@ class SessionManager:
             user = db.query(User).filter(User.id == chat.user_id).first()
             psychic = chat.psychic
 
-            # Validate minimum balance. Spendable = earned + credit + paid, since
-            # earned Stardust funds readings at full value (spent first).
-            min_required = (
-                psychic.price_per_second * settings.SESSION_MINIMUM_BALANCE_SECONDS
-            )
+            # A per-message reading carries no clock, so there is no time budget to
+            # fund and no minimum balance to start. The per-message charge at send
+            # owns balance from here on, so a client with nothing may still be
+            # accepted — she simply cannot send until she tops up.
+            per_message = _per_message_mode()
             spendable = get_spendable_stardust(db, user)
-            if spendable < min_required:
-                logger.warning(
-                    "insufficient_balance_for_session_start",
-                    chat_id=chat_id,
-                    user_balance=spendable,
-                    min_required=min_required,
+
+            if not per_message:
+                # Validate minimum balance. Spendable = earned + credit + paid, since
+                # earned Stardust funds readings at full value (spent first).
+                min_required = (
+                    psychic.price_per_second * settings.SESSION_MINIMUM_BALANCE_SECONDS
                 )
-                raise InsufficientBalanceError(
-                    f"Minimum {min_required} points required ({settings.SESSION_MINIMUM_BALANCE_SECONDS} seconds)"
-                )
+                if spendable < min_required:
+                    logger.warning(
+                        "insufficient_balance_for_session_start",
+                        chat_id=chat_id,
+                        user_balance=spendable,
+                        min_required=min_required,
+                    )
+                    raise InsufficientBalanceError(
+                        f"Minimum {min_required} points required ({settings.SESSION_MINIMUM_BALANCE_SECONDS} seconds)"
+                    )
 
             # Promote the durable request session so its initial request message
             # and every live message share one exact reading-session identity.
@@ -504,13 +521,17 @@ class SessionManager:
             # engine debits money directly (one DEBIT per minute), so intervals
             # exist only for timing/history — the legacy interval biller and the
             # periodic billing task must never touch them (would double-charge).
-            interval = SessionInterval(
-                session_id=chat_session.id,
-                started_at=datetime.now(),
-                trigger_event=ChatSessionTrigger.INITIAL_START,
-                is_billed=True,
-            )
-            db.add(interval)
+            # Intervals are timer segments. A per-message reading has no timer, so
+            # it has no intervals at all.
+            interval = None
+            if not per_message:
+                interval = SessionInterval(
+                    session_id=chat_session.id,
+                    started_at=datetime.now(),
+                    trigger_event=ChatSessionTrigger.INITIAL_START,
+                    is_billed=True,
+                )
+                db.add(interval)
 
             # Update chat status
             chat.status = ChatStatus.ACTIVE
@@ -524,15 +545,19 @@ class SessionManager:
 
             db.commit()
             db.refresh(chat_session)
-            db.refresh(interval)
+            if interval is not None:
+                db.refresh(interval)
 
             # Calculate max session duration based on initial (spendable) balance.
             # This is independent of billing - session ends when elapsed time reaches this
-            max_duration = (
-                int(spendable / psychic.price_per_second)
-                if psychic.price_per_second > 0
-                else 0
-            )
+            # Per-message readings have no duration budget at all.
+            max_duration = 0
+            if not per_message:
+                max_duration = (
+                    int(spendable / psychic.price_per_second)
+                    if psychic.price_per_second > 0
+                    else 0
+                )
 
             # Remove from requested (if it was a REQUESTED chat)
             self.unregister_request(chat_id)
@@ -541,8 +566,8 @@ class SessionManager:
             session_state = SessionState(
                 chat_id=chat_id,
                 session_id=chat_session.id,
-                interval_id=interval.id,
-                started_at=interval.started_at,
+                interval_id=interval.id if interval is not None else None,
+                started_at=interval.started_at if interval is not None else datetime.now(),
                 client_id=chat.user_id,
                 psychic_id=chat.psychic_id,
                 rate_per_second=psychic.price_per_second,
@@ -570,7 +595,7 @@ class SessionManager:
                 "session_started",
                 chat_id=chat_id,
                 session_id=chat_session.id,
-                interval_id=interval.id,
+                interval_id=interval.id if interval is not None else None,
                 remaining_seconds=info.remaining_seconds,
             )
 
@@ -631,8 +656,12 @@ class SessionManager:
             # the instant they join.
             user = db.query(User).filter(User.id == chat.user_id).first()
             current_balance = get_spendable_stardust(db, user) if user else 0.0
+            per_message = _per_message_mode()
             rate = session_state.rate_per_second
-            additional_seconds = int(current_balance / rate) if rate > 0 else 0
+            # No clock in per-message mode, so no seconds to budget.
+            additional_seconds = (
+                0 if per_message else (int(current_balance / rate) if rate > 0 else 0)
+            )
 
             # Anchor the timer at the join moment and (re)arm warnings.
             session_state.started_at = joined_at
@@ -645,13 +674,15 @@ class SessionManager:
             session_state.warning_10s_sent = False
 
             # Move the current interval's start to the join time so billing matches.
-            interval = (
-                db.query(SessionInterval)
-                .filter(SessionInterval.id == session_state.interval_id)
-                .first()
-            )
-            if interval:
-                interval.started_at = joined_at
+            # A per-message reading has no interval to move.
+            if not per_message:
+                interval = (
+                    db.query(SessionInterval)
+                    .filter(SessionInterval.id == session_state.interval_id)
+                    .first()
+                )
+                if interval:
+                    interval.started_at = joined_at
 
             chat.client_joined_at = joined_at
             session_state.minutes_charged = 0
@@ -662,7 +693,9 @@ class SessionManager:
             # functional — this is the only moment we start billing. If the
             # client can't even cover the first minute, drop straight into the
             # grace/top-up flow rather than billing or hard-ending.
-            per_min = _per_minute_rate(session_state.rate_per_second)
+            # Per-message readings charge nothing on join: the client pays per
+            # message, at send, and joining costs her nothing.
+            per_min = 0 if per_message else _per_minute_rate(session_state.rate_per_second)
             if per_min > 0:
                 if current_balance + 1e-9 >= per_min:
                     try:
@@ -861,12 +894,19 @@ class SessionManager:
         try:
             # Calculate final session info before ending
             final_info = self._calculate_session_info(session_state, db)
+            if _per_message_mode():
+                # What she actually paid is the sum of her message charges, not
+                # anything derived from a timer that never ran.
+                final_info.estimated_cost = self._per_message_spend(db, chat_id)
 
-            # Update interval (skip if already ended, e.g. for paused sessions)
+            # Update interval (skip if already ended, e.g. for paused sessions).
+            # A per-message session never had one.
             interval = (
                 db.query(SessionInterval)
                 .filter(SessionInterval.id == session_state.interval_id)
                 .first()
+                if session_state.interval_id is not None
+                else None
             )
 
             if interval:
@@ -885,7 +925,7 @@ class SessionManager:
                         interval_id=interval.id,
                         existing_ended_at=interval.ended_at.isoformat(),
                     )
-            else:
+            elif session_state.interval_id is not None:
                 logger.error(
                     "interval_not_found", interval_id=session_state.interval_id
                 )
@@ -1876,6 +1916,27 @@ class SessionManager:
 
     # ── Per-minute prepaid billing helpers ──────────────────────────────────
 
+    def _per_message_spend(self, db: Session, chat_id: int) -> float:
+        """Total the client actually paid for this chat under per-message billing:
+        every message debit that was not reversed. No interval arithmetic."""
+        from sqlalchemy import func
+
+        from app.enums.transaction_status import TransactionStatus
+        from app.enums.transaction_type import TransactionType
+        from app.models import Message, Transaction
+
+        total = (
+            db.query(func.coalesce(func.sum(Transaction.amount), 0))
+            .join(Message, Message.id == Transaction.related_message_id)
+            .filter(
+                Message.chat_id == chat_id,
+                Transaction.transaction_type == TransactionType.DEBIT,
+                Transaction.status != TransactionStatus.REVERSED,
+            )
+            .scalar()
+        )
+        return round(float(total or 0), 2)
+
     def _charge_minute(self, db: Session, session_state: SessionState, minute_number: int):
         """
         Debit exactly one minute's rate upfront and write ONE ledger DEBIT
@@ -2134,6 +2195,14 @@ class SessionManager:
                     try:
                         session_state = self.active_sessions.get(chat_id)
                         if not session_state:
+                            continue
+
+                        # A per-message reading has no clock for the monitor to
+                        # run: nothing to charge, no interval to keep, no
+                        # minimum-balance pause, no disconnect timeout and no
+                        # grace to expire. It ends only through end_session.
+                        # The loop keeps turning as a heartbeat.
+                        if _per_message_mode():
                             continue
 
                         # Skip sessions where the client hasn't joined yet — the

@@ -499,19 +499,26 @@ def _billing_fields(db, chat) -> dict:
 
 def _session_info_json(session_info, chat=None, db=None) -> dict:
     """The session-time shape. /reflect and /reflect/return answer with it too,
-    so the room has one reader for every figure the server reports."""
+    so the room has one reader for every figure the server reports.
+
+    A per-message reading has no clock, so every figure derived from one is sent
+    as null rather than a misleading zero. The keys stay in the shape so nothing
+    reading them breaks; the room stops showing them in a later step."""
+    clockless = settings.BILLING_MODE == "per_message"
     return {
-        "elapsed_seconds": session_info.elapsed_seconds,
-        "estimated_cost": session_info.estimated_cost,
+        "elapsed_seconds": None if clockless else session_info.elapsed_seconds,
+        "estimated_cost": None if clockless else session_info.estimated_cost,
         "price_per_second": session_info.rate_per_second,
         "rate_per_minute": session_info.rate_per_minute,
         "client_balance": session_info.client_balance,
         "credit_balance": session_info.credit_balance,
         "paid_balance": session_info.paid_balance,
-        "remaining_seconds": session_info.remaining_seconds,
-        "remaining_minutes": session_info.remaining_minutes,
-        "minutes_charged": session_info.minutes_charged,
-        "total_seconds": session_info.elapsed_seconds,  # For backwards compatibility
+        "remaining_seconds": None if clockless else session_info.remaining_seconds,
+        "remaining_minutes": None if clockless else session_info.remaining_minutes,
+        "minutes_charged": None if clockless else session_info.minutes_charged,
+        "total_seconds": (
+            None if clockless else session_info.elapsed_seconds
+        ),  # For backwards compatibility
         # AWAITING_JOIN before the client joins; ACTIVE while billing; GRACE
         # during the out-of-balance top-up hold; REFLECTING while she sits with
         # it (meter frozen, nothing charged, chat still ACTIVE). Drives the UI.
@@ -528,23 +535,27 @@ def _session_info_json(session_info, chat=None, db=None) -> dict:
 
 
 def _no_session_json(chat, db=None) -> dict:
-    """The session-time shape when the chat has no live session."""
+    """The session-time shape when the chat has no live session. Same clockless
+    rule as the live shape above: null, not zero, when there is no clock."""
     credit_balance = float(chat.user.credit_balance) if chat.user else 0.0
     paid_balance = float(chat.user.balance) if chat.user else 0.0
     rate = chat.psychic.price_per_second or 0.0
     per_min = round(rate * 60, 2)
     total = credit_balance + paid_balance
+    clockless = settings.BILLING_MODE == "per_message"
     return {
-        "elapsed_seconds": 0,
-        "estimated_cost": 0.0,
+        "elapsed_seconds": None if clockless else 0,
+        "estimated_cost": None if clockless else 0.0,
         "price_per_second": rate,
         "rate_per_minute": per_min,
         "client_balance": total,
         "credit_balance": credit_balance,
         "paid_balance": paid_balance,
-        "remaining_seconds": 0,
-        "remaining_minutes": int(total / per_min) if per_min > 0 else 0,
-        "minutes_charged": 0,
+        "remaining_seconds": None if clockless else 0,
+        "remaining_minutes": (
+            None if clockless else (int(total / per_min) if per_min > 0 else 0)
+        ),
+        "minutes_charged": None if clockless else 0,
         "reflect_remaining_seconds": 0,
         "reflect_seconds_used": 0,
         "reflecting_since": None,
