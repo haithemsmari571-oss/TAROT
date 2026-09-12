@@ -1612,7 +1612,10 @@ class SessionManager:
             chat = db.query(Chat).filter(Chat.id == session_state.chat_id).first()
             rate = session_state.rate_per_second
             per_min = _per_minute_rate(rate)
-            full_duration = int(current_balance / rate) if rate > 0 else 0
+            # A per-message reader may carry no per-second rate at all; a None
+            # here is no budget, not an error. Per-minute rates are floats, so
+            # this reads exactly as before for them.
+            full_duration = int(current_balance / rate) if (rate or 0) > 0 else 0
             affordable_minutes = int(current_balance / per_min) if per_min > 0 else 0
             return SessionInfo(
                 chat_id=session_state.chat_id,
@@ -2736,6 +2739,24 @@ class SessionManager:
             if requested_session is not None:
                 requested_session.status = ChatSessionStatus.CANCELLED
             db.commit()
+
+            # Per-message billing: the question she paid for was never answered,
+            # so its charge goes back. Its own try, so a refund failure can never
+            # keep a request from ending.
+            if _per_message_mode():
+                try:
+                    from app.services.per_message_billing import (
+                        refund_unanswered_request,
+                    )
+
+                    refund_unanswered_request(db, chat_id)
+                except Exception as refund_error:  # noqa: BLE001
+                    logger.error(
+                        "per_message_request_refund_failed",
+                        chat_id=chat_id,
+                        error_type=type(refund_error).__name__,
+                        error=str(refund_error),
+                    )
 
             logger.info(
                 "chat_request_declined",

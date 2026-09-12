@@ -51,6 +51,26 @@ logger = get_logger(__name__)
 # Per-message billing: how long the client's End waits for the reader's goodbye
 # before ending without it. Module-level so a test can shorten it.
 PER_MESSAGE_GOODBYE_TIMEOUT_S = 12.0
+# How long the client's End waits for a reply already being generated or
+# delivered before the goodbye goes out regardless.
+PER_MESSAGE_END_IDLE_TIMEOUT_S = 10.0
+
+
+def _refund_unanswered_request_safely(db: Session, chat_id: int) -> None:
+    """Per-message billing: a request that ends before any reader reply gives
+    the hall question's charge back. Never raises into an endpoint: the request
+    still ends if the refund cannot be made, and the failure is logged."""
+    from app.services.per_message_billing import refund_unanswered_request
+
+    try:
+        refund_unanswered_request(db, chat_id)
+    except Exception as error:  # noqa: BLE001 - the end must still land
+        logger.error(
+            "per_message_request_refund_failed",
+            chat_id=chat_id,
+            error_type=type(error).__name__,
+            error=str(error),
+        )
 
 
 @router.post("/request")
@@ -792,6 +812,35 @@ async def update_chat_status_endpoint(
             psychic_user = db.query(User).filter(User.id == chat_obj.psychic_id).first()
             psychic_name = psychic_user.username if psychic_user else "Psychic"
 
+            # The rate keys of both CHAT_ACCEPTED payloads. Per-minute: exactly as
+            # before, raw in the stored notification and float() in the socket
+            # frame. Per-message: the per-message price and the billing mode, and
+            # a per-second rate that is null when the reader has none, never a
+            # float() of None.
+            if settings.BILLING_MODE == "per_message":
+                from app.services.per_message_billing import price_of_reader
+
+                accepted_rate_raw = chat_obj.psychic.price_per_second
+                accepted_rate_stored = {
+                    "psychic_rate_per_second": accepted_rate_raw,
+                    "billing_mode": "per_message",
+                    "price_per_message": price_of_reader(chat_obj.psychic),
+                }
+                accepted_rate_wire = {
+                    "psychic_rate_per_second": (
+                        float(accepted_rate_raw) if accepted_rate_raw is not None else None
+                    ),
+                    "billing_mode": "per_message",
+                    "price_per_message": price_of_reader(chat_obj.psychic),
+                }
+            else:
+                accepted_rate_stored = {
+                    "psychic_rate_per_second": chat_obj.psychic.price_per_second,
+                }
+                accepted_rate_wire = {
+                    "psychic_rate_per_second": float(chat_obj.psychic.price_per_second),
+                }
+
             notification = Notification(
                 user_id=chat_obj.user_id,
                 type=NotificationType.CHAT_ACCEPTED,
@@ -801,7 +850,7 @@ async def update_chat_status_endpoint(
                     "chat_id": chat_id,
                     "psychic_id": chat_obj.psychic_id,
                     "chat_status": ChatStatus.ACTIVE.value,
-                    "psychic_rate_per_second": chat_obj.psychic.price_per_second,
+                    **accepted_rate_stored,
                     "client_balance": session_info.client_balance,
                     "session_started_at": session_info.started_at,
                 },
@@ -820,7 +869,7 @@ async def update_chat_status_endpoint(
                     "psychic_id": chat_obj.psychic_id,
                     "chat_status": ChatStatus.ACTIVE.value,
                     "session_started_at": session_info.started_at,
-                    "psychic_rate_per_second": float(chat_obj.psychic.price_per_second),
+                    **accepted_rate_wire,
                     "client_balance": float(session_info.client_balance),
                     "psychic_name": psychic_name,
                 },
@@ -862,9 +911,16 @@ async def update_chat_status_endpoint(
     elif chat.status == ChatStatus.ENDED and chat_obj:
         # If the chat was still REQUESTED, treat this as a decline/rejection
         if chat_obj.status == ChatStatus.REQUESTED:
+            # Per-message billing: the question she paid for was never answered.
+            # end_session refunds it itself for a request it still tracks; the
+            # call below is the belt for one it no longer does (a restart that
+            # lost the in-memory set), so the refund happens exactly once.
+            tracked_request = chat_id in session_manager.requested_sessions
             await session_manager.end_session(
                 chat_id, ChatTerminationReason.MANUAL_EXIT, ended_by_user_id=user.id
             )
+            if settings.BILLING_MODE == "per_message" and not tracked_request:
+                _refund_unanswered_request_safely(db, chat_id)
 
             is_psychic_rejection = user.id == chat_obj.psychic_id
 
@@ -929,13 +985,27 @@ async def update_chat_status_endpoint(
 
         if settings.BILLING_MODE == "per_message" and user.id == chat_obj.user_id:
             # Per-message billing, the client's own End: refund whatever she paid
-            # for that has not been started, let the reader say goodbye (unbilled,
-            # and bounded so a slow model cannot hold the End), then end as today.
-            # The clock reader's closing line inside end_session is dark in this
-            # mode. The reader's own End path below is unchanged.
+            # for that has not been started, wait (bounded) for a reply already
+            # in flight so the goodbye lands after it, let the reader say goodbye
+            # (unbilled, and bounded so a slow model cannot hold the End), then
+            # end as today. The clock reader's closing line inside end_session is
+            # dark in this mode. The reader's own End path below is unchanged.
             from app.services.ai import reading_single
 
             await reading_single.drain_on_end(chat_id)
+            try:
+                await asyncio.wait_for(
+                    reading_single.wait_for_idle(chat_id),
+                    timeout=PER_MESSAGE_END_IDLE_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                # The reply keeps going and lands when it lands; the goodbye
+                # does not wait any longer for it.
+                logger.warning(
+                    "per_message_end_idle_timeout",
+                    chat_id=chat_id,
+                    timeout_s=PER_MESSAGE_END_IDLE_TIMEOUT_S,
+                )
             try:
                 await asyncio.wait_for(
                     reading_single.say_goodbye(chat_id),
@@ -1055,6 +1125,11 @@ async def update_chat_status_endpoint(
         # Update chat status
         chat_obj.status = ChatStatus.ARCHIVED
         db.commit()
+
+        # Per-message billing: a cancelled request has no reply, so the hall
+        # question's charge goes back.
+        if settings.BILLING_MODE == "per_message":
+            _refund_unanswered_request_safely(db, chat_id)
 
         logger.info("chat_request_cancelled", chat_id=chat_id, user_id=user.id)
 

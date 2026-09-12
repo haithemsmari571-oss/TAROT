@@ -194,3 +194,59 @@ async def charge_client_message(
         fee=price,
     )
     return message, price
+
+
+def refund_unanswered_request(db: Session, chat_id: int):
+    """Give back the hall question's charge when a request ends before any reader
+    reply. The reply test is a non-system message from the reader NEWER than the
+    hall question, so a chat reused for a second reading (whose earlier replies
+    are still on it) refunds its new, unanswered question too. Returns the
+    reversal row, or None when there is a reply, no question, or nothing left to
+    refund (already reversed). Never raises for a missing chat."""
+    from app.models import Chat, Message
+    from app.services.transactions import refund_message
+
+    chat = db.get(Chat, chat_id)
+    if chat is None:
+        return None
+    hall_question = (
+        db.query(Message)
+        .filter(
+            Message.chat_id == chat_id,
+            Message.sender_id == chat.user_id,
+            Message.is_system.is_(False),
+        )
+        .order_by(Message.id.desc())
+        .first()
+    )
+    if hall_question is None:
+        return None
+    replied = (
+        db.query(Message.id)
+        .filter(
+            Message.chat_id == chat_id,
+            Message.sender_id == chat.psychic_id,
+            Message.is_system.is_(False),
+            Message.id > hall_question.id,
+        )
+        .first()
+    )
+    if replied is not None:
+        logger.info(
+            "per_message_request_not_refunded",
+            chat_id=chat_id,
+            message_id=hall_question.id,
+            reason="reader_replied",
+        )
+        return None
+    reversal = refund_message(db, hall_question.id)
+    if reversal is None:
+        return None
+    logger.info(
+        "per_message_request_refunded",
+        chat_id=chat_id,
+        message_id=hall_question.id,
+        reversal_id=reversal.id,
+        amount=round(float(reversal.amount), 2),
+    )
+    return reversal

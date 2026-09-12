@@ -20,6 +20,7 @@ import time
 from collections import defaultdict
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -32,12 +33,22 @@ from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.enums.chat_session_status import ChatSessionStatus
 from app.enums.chat_status import ChatStatus
+from app.enums.notification_type import NotificationType
 from app.enums.response_mode import ResponseMode
 from app.enums.role import Role
 from app.enums.transaction_type import TransactionType
-from app.models import Chat, ChatSession, Message, ReadingSteeringNote, Transaction, User
+from app.models import (
+    Chat,
+    ChatSession,
+    Message,
+    Notification,
+    ReadingSteeringNote,
+    Transaction,
+    User,
+)
 from app.models.base import Base
 from app.routers import chats as chats_router
+from app.services import per_message_billing
 from app.services import session_manager as sm
 from app.services.ai import (
     reading_assistant,
@@ -130,7 +141,9 @@ class _FakeWebSocket:
 
 
 class _Model:
-    """Stands in for ai_client.run_chat_stream: each script entry is one call."""
+    """Stands in for ai_client.run_chat_stream: each script entry is one call. A
+    string is streamed back, an Exception is raised, and a (seconds, text) tuple
+    blocks that long first, which is how a reply is still in flight."""
 
     def __init__(self, script):
         self.script = list(script)
@@ -139,9 +152,33 @@ class _Model:
     def __call__(self, **kwargs):
         self.calls.append(kwargs)
         step = self.script.pop(0)
+        if isinstance(step, tuple):
+            time.sleep(step[0])
+            step = step[1]
         if isinstance(step, Exception):
             raise step
         return iter([step])
+
+
+class _Notifications:
+    """Stands in for the notification socket manager and keeps every frame."""
+
+    def __init__(self):
+        self.sent = []
+        self.active_connections = {}
+
+    async def send_to_user(self, message, user_id):
+        self.sent.append((user_id, message))
+
+    def is_user_connected(self, user_id):
+        return False
+
+    def find(self, notification_type):
+        return [
+            (user_id, message)
+            for user_id, message in self.sent
+            if message.get("notification_type") == notification_type
+        ]
 
 
 @pytest.fixture
@@ -175,6 +212,8 @@ def journey(sqlite, monkeypatch):
         reading_assistant, "build_client_file", lambda db, client_id: "CLIENT FILE TEXT"
     )
     monkeypatch.setattr("app.services.push.notify_user_push", lambda *a, **k: None)
+    notifications = _Notifications()
+    monkeypatch.setattr("app.notification_manager.notification_manager", notifications)
 
     calls = defaultdict(list)
 
@@ -215,7 +254,7 @@ def journey(sqlite, monkeypatch):
     monkeypatch.setattr(sm, "get_session_manager", lambda: manager)
     return SimpleNamespace(
         db=db, Local=Local, store=store, calls=calls, manager=manager,
-        monkeypatch=monkeypatch, real_enqueue=real_enqueue,
+        monkeypatch=monkeypatch, real_enqueue=real_enqueue, notifications=notifications,
     )
 
 
@@ -225,14 +264,14 @@ def _model(journey, script):
     return model
 
 
-def _people(db, *, balance=20.0):
+def _people(db, *, balance=20.0, per_second=RATE):
     client = User(
         email="client@test.co", username="client", password_hash="hash",
         balance=balance, role=Role.USER,
     )
     psychic = User(
         email="sophie@test.co", username="sophie", password_hash="hash",
-        role=Role.PSYCHIC, price_per_second=RATE, price_per_message=PRICE,
+        role=Role.PSYCHIC, price_per_second=per_second, price_per_message=PRICE,
     )
     db.add_all([client, psychic])
     db.commit()
@@ -250,14 +289,26 @@ def _chat(db, client, psychic, *, status, mode=ResponseMode.SABRI, session=None)
     return chat
 
 
-def _http(journey, current):
+def _app(journey, current):
     """A test app with the chats router at its real prefix. ``current`` is a
     one-key dict so a test can switch who is calling between requests."""
     test_app = FastAPI()
     test_app.include_router(chats_router.router, prefix="/api/chat")
     test_app.dependency_overrides[get_db] = lambda: journey.db
     test_app.dependency_overrides[get_current_user] = lambda: current["user"]
-    return TestClient(test_app, raise_server_exceptions=False)
+    return test_app
+
+
+def _http(journey, current):
+    return TestClient(_app(journey, current), raise_server_exceptions=False)
+
+
+def _async_http(journey, current):
+    """The same app driven from inside a running loop, so a request can share the
+    loop with an engine worker that is mid-reply."""
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_app(journey, current)), base_url="http://test"
+    )
 
 
 def _room(journey, chat, client):
@@ -319,11 +370,13 @@ def _assert_old_pipeline_dark(journey):
         assert journey.calls[name] == [], f"old pipeline entered through {name}"
 
 
-def _open_reading(journey, *, hall_question="will he come back? we broke up in march"):
+def _open_reading(
+    journey, *, hall_question="will he come back? we broke up in march", per_second=RATE
+):
     """/request as the client, accept as the psychic, /join as the client. Returns
     everything the tests need to carry on from a live per-message reading."""
     db = journey.db
-    client, psychic = _people(db)
+    client, psychic = _people(db, per_second=per_second)
     current = {"user": client}
     http = _http(journey, current)
 
@@ -558,3 +611,181 @@ def test_per_minute_join_still_greets_and_messages_still_note_the_burst(journey)
     assert journey.calls["enqueue_reply"] == []
     assert _rows(db, TransactionType.DEBIT) != []  # minute 1, charged on join as always
     assert db.query(Transaction).filter(Transaction.idempotency_key.like("msg_fee:%")).count() == 0
+
+
+def _request_only(journey, *, hall_question="will he come back"):
+    """/request as the client and stop there: a pending, paid, unanswered request."""
+    db = journey.db
+    client, psychic = _people(db)
+    current = {"user": client}
+    http = _http(journey, current)
+    resp = http.post("/api/chat/request", json={"psychic_id": psychic.id, "message": hall_question})
+    assert resp.status_code == 201, resp.text
+    chat = db.query(Chat).one()
+    hall = _client_messages(db, chat, client)[-1]
+    db.refresh(client)
+    assert client.balance == 20.0 - PRICE
+    return SimpleNamespace(client=client, psychic=psychic, chat=chat, hall=hall, http=http, current=current)
+
+
+# ── 7. a reader priced per message only accepts cleanly ──────────────────────
+def test_reader_with_no_per_second_rate_accepts_and_joins(journey):
+    db = journey.db
+    _model(journey, [])
+
+    r = _open_reading(journey, per_second=None)
+
+    stored = db.query(Notification).filter(Notification.type == NotificationType.CHAT_ACCEPTED).one()
+    assert stored.user_id == r.client.id
+    assert stored.data["price_per_message"] == PRICE
+    assert stored.data["billing_mode"] == "per_message"
+    assert stored.data["psychic_rate_per_second"] is None
+    wire = journey.notifications.find(NotificationType.CHAT_ACCEPTED)
+    assert len(wire) == 1 and wire[0][0] == r.client.id
+    assert wire[0][1]["data"]["price_per_message"] == PRICE
+    assert wire[0][1]["data"]["billing_mode"] == "per_message"
+    assert wire[0][1]["data"]["psychic_rate_per_second"] is None
+    assert wire[0][1]["data"]["psychic_name"] == "sophie"
+    assert _enqueued(journey) == [(r.chat.id, r.hall.id)]
+
+
+# ── 8. the client cancels before any reply ────────────────────────────────────
+def test_client_cancel_before_any_reply_refunds_the_question(journey):
+    db = journey.db
+    log = _Log()
+    journey.monkeypatch.setattr(per_message_billing, "logger", log)
+    r = _request_only(journey)
+
+    db.expire_all()
+    resp = r.http.post(f"/api/chat/{r.chat.id}/status", json={"status": ChatStatus.ENDED.value})
+    assert resp.status_code == 201, resp.text
+
+    reversals = _rows(db, TransactionType.REVERSAL, r.hall.id)
+    assert len(reversals) == 1
+    db.refresh(r.client)
+    assert r.client.balance == 20.0
+    assert log.find("per_message_request_refunded") == [{
+        "chat_id": r.chat.id, "message_id": r.hall.id, "reversal_id": reversals[0].id, "amount": PRICE,
+    }]
+    db.expire_all()
+    assert db.get(Chat, r.chat.id).status == ChatStatus.ENDED
+    assert journey.calls["old_goodbye"] == []
+
+
+# ── 9. the reader declines before any reply, both ways ───────────────────────
+@pytest.mark.parametrize("decline", [ChatStatus.ENDED, ChatStatus.ARCHIVED])
+def test_reader_decline_before_any_reply_refunds_the_question(journey, decline):
+    db = journey.db
+    log = _Log()
+    journey.monkeypatch.setattr(per_message_billing, "logger", log)
+    r = _request_only(journey)
+
+    r.current["user"] = r.psychic
+    db.expire_all()
+    resp = r.http.post(f"/api/chat/{r.chat.id}/status", json={"status": decline.value})
+    assert resp.status_code == 201, resp.text
+
+    reversals = _rows(db, TransactionType.REVERSAL, r.hall.id)
+    assert len(reversals) == 1
+    db.refresh(r.client)
+    assert r.client.balance == 20.0
+    refunded = log.find("per_message_request_refunded")
+    assert len(refunded) == 1 and refunded[0]["reversal_id"] == reversals[0].id
+    db.expire_all()
+    assert db.get(Chat, r.chat.id).status == decline
+
+
+# ── 10. a cancel after a reader reply exists refunds nothing ─────────────────
+def test_cancel_after_a_reader_reply_refunds_nothing(journey):
+    db = journey.db
+    log = _Log()
+    journey.monkeypatch.setattr(per_message_billing, "logger", log)
+    r = _request_only(journey)
+    db.add(Message(chat_id=r.chat.id, sender_id=r.psychic.id, content="i see him already"))
+    db.commit()
+
+    db.expire_all()
+    resp = r.http.post(f"/api/chat/{r.chat.id}/status", json={"status": ChatStatus.ENDED.value})
+    assert resp.status_code == 201, resp.text
+
+    assert _rows(db, TransactionType.REVERSAL) == []
+    db.refresh(r.client)
+    assert r.client.balance == 20.0 - PRICE
+    assert log.find("per_message_request_refunded") == []
+    assert [f["reason"] for f in log.find("per_message_request_not_refunded")] == ["reader_replied"]
+
+
+# ── 11. End with a reply in flight: the goodbye lands after it ───────────────
+def test_end_waits_for_the_reply_in_flight_before_the_goodbye(journey):
+    db = journey.db
+    log = _Log()
+    journey.monkeypatch.setattr(chats_router, "logger", log)
+    model = _model(journey, [
+        (2.0, "u started timing the replies\n\nand u know exactly how long"),
+        "go gently. that thread is still there when u want it",
+    ])
+    r = _open_reading(journey)
+
+    async def _end_mid_reply():
+        await journey.real_enqueue(r.chat.id, r.hall.id)
+        await asyncio.sleep(0.3)  # the worker is inside the two-second model call
+        assert reading_single._in_flight.get(r.chat.id) == r.hall.id
+        db.expire_all()
+        async with _async_http(journey, r.current) as http:
+            return await http.post(
+                f"/api/chat/{r.chat.id}/status", json={"status": ChatStatus.ENDED.value}
+            )
+
+    started = time.perf_counter()
+    resp = asyncio.run(_end_mid_reply())
+    elapsed = time.perf_counter() - started
+
+    assert resp.status_code == 201, resp.text
+    assert elapsed >= 1.5
+    assert [m.content for m in _reader_messages(db, r.chat, r.psychic)] == [
+        "u started timing the replies",
+        "and u know exactly how long",
+        "go gently. that thread is still there when u want it",
+    ]
+    assert log.find("per_message_end_idle_timeout") == []
+    assert log.find("per_message_goodbye_skipped") == []
+    db.expire_all()
+    assert db.get(Chat, r.chat.id).status == ChatStatus.ENDED
+    assert len(model.calls) == 2
+
+
+# ── 12. a reply that outlives the idle cap does not hold the End ─────────────
+def test_end_gives_up_waiting_for_a_reply_past_the_cap(journey):
+    db = journey.db
+    log = _Log()
+    journey.monkeypatch.setattr(chats_router, "logger", log)
+    journey.monkeypatch.setattr(chats_router, "PER_MESSAGE_END_IDLE_TIMEOUT_S", 0.3)
+    _model(journey, [
+        (2.0, "u started timing the replies"),
+        "go gently. that thread is still there when u want it",
+    ])
+    r = _open_reading(journey)
+
+    async def _end_mid_reply():
+        await journey.real_enqueue(r.chat.id, r.hall.id)
+        await asyncio.sleep(0.2)
+        db.expire_all()
+        async with _async_http(journey, r.current) as http:
+            resp = await http.post(
+                f"/api/chat/{r.chat.id}/status", json={"status": ChatStatus.ENDED.value}
+            )
+        ended_after = time.perf_counter()
+        # Let the reply that was still in flight finish before the loop closes.
+        await reading_single.wait_for_idle(r.chat.id)
+        return resp, ended_after
+
+    started = time.perf_counter()
+    resp, ended_after = asyncio.run(_end_mid_reply())
+
+    assert resp.status_code == 201, resp.text
+    assert ended_after - started < 1.5
+    assert log.find("per_message_end_idle_timeout") == [{"chat_id": r.chat.id, "timeout_s": 0.3}]
+    db.expire_all()
+    assert db.get(Chat, r.chat.id).status == ChatStatus.ENDED
+    contents = [m.content for m in _reader_messages(db, r.chat, r.psychic)]
+    assert "go gently. that thread is still there when u want it" in contents
