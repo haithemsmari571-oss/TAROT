@@ -196,6 +196,15 @@ class AppSettings(BaseSettings):
     SABRI_DELIVERY_MAX_TOKENS: int = 8000
     # Bounded retry if Sabri returns empty/malformed output (never spin, always deliver).
     SABRI_DELIVERY_MAX_ATTEMPTS: int = 2
+    # ── One-call reader (BILLING_MODE=per_message; app/services/ai/reading_single.py) ──
+    # One model call per client message on the reading.single prompt, no Sabri pass:
+    # the call's timeout and token ceiling, how many bubbles a reply may be, the hard
+    # character cap on the whole reply, and the ceiling on any one typing delay.
+    SINGLE_CALL_TIMEOUT_S: int = 25
+    SINGLE_MAX_TOKENS: int = 1500
+    SINGLE_MAX_BUBBLES: int = 3
+    SINGLE_HARD_CHAR_CAP: int = 900
+    SINGLE_MAX_TYPING_MS: int = 4000
     # There is deliberately NO turn-size target and NO message-length cap. Both existed
     # (SABRI_TURN_TARGET_MESSAGES = 8, SABRI_MAX_MESSAGE_WORDS = 26) and both decided, in code,
     # something only Sabri can judge: how much a person says in one breath. A conversation
