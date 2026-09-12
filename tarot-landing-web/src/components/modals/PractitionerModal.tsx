@@ -21,6 +21,8 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
   const [password, setPassword] = useState("");
   const [bio, setBio] = useState("");
   const [pricePerSecond, setPricePerSecond] = useState(0.05);
+  /* Per-message billing (step 5b): kept as typed, so an empty field stays empty. */
+  const [pricePerMessage, setPricePerMessage] = useState("");
   const [isOnline, setIsOnline] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [availability, setAvailability] = useState<PsychicAvailabilityCreate[]>([]);
@@ -35,6 +37,7 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
       setPassword(""); 
       setBio(initialData.bio || "");
       setPricePerSecond(initialData.price_per_second ?? 0.05);
+      setPricePerMessage(initialData.price_per_message != null ? String(initialData.price_per_message) : "");
       setIsOnline(initialData.is_online ?? true);
       setSelectedCategories(initialData.categories ? initialData.categories.map(c => c.id) : []);
       setAvailability(initialData.availability ? initialData.availability.map(a => ({
@@ -51,6 +54,7 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
       setPassword("");
       setBio("");
       setPricePerSecond(0.05);
+      setPricePerMessage("");
       setIsOnline(true);
       setSelectedCategories([]);
       setAvailability([{ day_of_the_week: "Monday", start_at: "09:00:00", end_at: "17:00:00" }]);
@@ -85,7 +89,14 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
     }
   };
 
+  /* Per-message billing (step 5b): the field is optional, so empty is allowed
+     and clears the price (null); anything at or below 0 is refused. */
+  const pricePerMessageError =
+    pricePerMessage.trim() !== "" && !(parseFloat(pricePerMessage) > 0) ? "Must be more than 0" : undefined;
+  const pricePerMessageValue = pricePerMessage.trim() === "" ? null : parseFloat(pricePerMessage);
+
   const handleSubmit = () => {
+    if (pricePerMessageError) return;
     const formData = new FormData();
 
     if (initialData) {
@@ -93,6 +104,7 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
         email,
         is_online: isOnline,
         price_per_second: pricePerSecond,
+        price_per_message: pricePerMessageValue,
         categories_ids: selectedCategories,
         bio,
         order,
@@ -115,6 +127,7 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
         password,
         bio,
         price_per_second: pricePerSecond,
+        price_per_message: pricePerMessageValue,
         is_online: isOnline,
         categories_ids: selectedCategories,
         availability,
@@ -285,6 +298,26 @@ const PractitionerModal = ({ isOpen, onClose, onSave, initialData, categories }:
                     type="number"
                     value={pricePerSecond.toString()}
                     onChange={(e) => setPricePerSecond(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+
+              {/* Per-message price (step 5b): optional, shown in both billing modes */}
+              <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.01] flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase text-white tracking-widest">Price per message (£)</span>
+                  <span className="text-[9px] text-white/30 uppercase font-bold mt-0.5">Optional, per-message billing</span>
+                </div>
+                <div className="w-36">
+                  <PrimaryInput
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="Unset"
+                    value={pricePerMessage}
+                    onChange={(e) => setPricePerMessage(e.target.value)}
+                    error={pricePerMessageError}
+                    aria-label="Price per message (£)"
                   />
                 </div>
               </div>

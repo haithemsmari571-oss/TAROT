@@ -221,6 +221,17 @@ const Practitioners = () => {
       ),
     },
     {
+      key: "price_per_message",
+      label: "Per message",
+      render: (p) => (
+        <span className="text-white font-bold text-xs">
+          {p.price_per_message != null && p.price_per_message > 0
+            ? new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(p.price_per_message)
+            : ""}
+        </span>
+      ),
+    },
+    {
       key: "is_online",
       label: "Status",
       render: (p) => {

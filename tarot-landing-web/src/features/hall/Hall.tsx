@@ -56,6 +56,12 @@ const ACCEPT_POLL_MS = 5000;
    has left this screen in practice, and the gate's own mount fallback
    (IncomingReadingModal.tsx:171) still catches the chat on the next page load. */
 const ACCEPT_POLL_BOUND_MS = 10 * 60 * 1000;
+/* Per-message billing (step 5b): the typed question survives the Stripe
+   round-trip. It is saved under this one sessionStorage key the moment a
+   request is refused for balance and the glider opens, put back into the form
+   on the next load of this hall in the same tab, and dropped once Stripe
+   returns with ?topup=1&status=success or the request goes through. */
+export const HALL_DRAFT_KEY = "hall.question.draft";
 
 
 export default function Hall({ mode = "preview", psychicId }:
@@ -96,6 +102,7 @@ export default function Hall({ mode = "preview", psychicId }:
           // Per-message billing refused for balance: the same Stardust glider every
           // other "Add Stardust" in the app opens, returning to this hall after.
           if (r.code === "INSUFFICIENT_BALANCE") {
+            try { sessionStorage.setItem(HALL_DRAFT_KEY, question); } catch { /* storage unavailable */ }
             openTopUpRef.current({
               returnUrl: `${window.location.pathname}?topup=1`,
               reason: r.error,
@@ -103,6 +110,7 @@ export default function Hall({ mode = "preview", psychicId }:
           }
           return false;
         }
+        try { sessionStorage.removeItem(HALL_DRAFT_KEY); } catch { /* storage unavailable */ }
         setWaitingSince(Date.now());
         // This session is now the requester: its own acceptance must carry her
         // straight in, not prompt her to accept a second time.
@@ -111,6 +119,21 @@ export default function Hall({ mode = "preview", psychicId }:
       },
     });
     hallRef.current = hall;
+
+    /* A saved question goes back into the form on any load of this hall in
+       the same tab (the return from Stripe, or a plain reload); the key is
+       dropped only on the return from checkout. */
+    if (!preview) {
+      try {
+        const draft = sessionStorage.getItem(HALL_DRAFT_KEY);
+        const q = document.getElementById("q") as HTMLTextAreaElement | null;
+        if (draft && q && !q.value) q.value = draft;
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("topup") === "1" && params.get("status") === "success") {
+          sessionStorage.removeItem(HALL_DRAFT_KEY);
+        }
+      } catch { /* storage unavailable */ }
+    }
 
     /* The rate reaches the amount buttons the moment the reader lands, so
        "£25" can say how many minutes that actually buys with her. */
@@ -276,7 +299,7 @@ export default function Hall({ mode = "preview", psychicId }:
         <div className="lname">Valentina <em>has your words</em></div>
         <div className="lstat">Preparing your reading</div>
         <div className="cards" id="cards">
-          <div className="card"><span className="cardtext">She is sitting with what you wrote. <strong>Nothing is being charged yet.</strong></span></div>
+          <div className="card"><span className="cardtext">She is sitting with what you wrote. <strong>{perMessage ? "Your first message is paid, nothing more until you reply." : "Nothing is being charged yet."}</strong></span></div>
           {perMessage ? (
             <div className="card"><span className="cardtext"><strong>The question you send is your first message. {reader?.pricePerMessage != null ? formatGbp(reader.pricePerMessage) : ""}.</strong></span></div>
           ) : (

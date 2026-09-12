@@ -7,6 +7,8 @@ interface PriceRangeFilterProps {
   maxPrice?: number;
   onChange: (min?: number, max?: number) => void;
   label?: string;
+  /** what one price buys: a minute (default) or, under per-message billing, a message */
+  unit?: "minute" | "message";
 }
 
 export const PriceRangeFilter = ({
@@ -14,6 +16,7 @@ export const PriceRangeFilter = ({
   maxPrice,
   onChange,
   label = "Price range",
+  unit = "minute",
 }: PriceRangeFilterProps) => {
   const [localMin, setLocalMin] = useState(minPrice?.toString() || "");
   const [localMax, setLocalMax] = useState(maxPrice?.toString() || "");
@@ -53,13 +56,14 @@ export const PriceRangeFilter = ({
 
   const hasApplied = minPrice !== undefined || maxPrice !== undefined;
 
+  const suffix = unit === "message" ? " / message" : "/min";
   const chipLabel = !hasApplied
     ? "Any price"
     : minPrice !== undefined && maxPrice !== undefined
-      ? `£${minPrice}–£${maxPrice}/min`
+      ? `£${minPrice}–£${maxPrice}${suffix}`
       : minPrice !== undefined
-        ? `From £${minPrice}/min`
-        : `Up to £${maxPrice}/min`;
+        ? `From £${minPrice}${suffix}`
+        : `Up to £${maxPrice}${suffix}`;
 
   return (
     <div ref={popRef} className="relative">
@@ -82,7 +86,7 @@ export const PriceRangeFilter = ({
             className="gl-pop p-4"
           >
             <div className="gl-count text-left" style={{ padding: "0 0 12px" }}>
-              Price per minute
+              {unit === "message" ? "Price per message" : "Price per minute"}
             </div>
 
             <div className="flex items-center gap-2">

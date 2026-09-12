@@ -1,7 +1,8 @@
 import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { sanitizeClaims } from "../../../lib/copy";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
@@ -21,11 +22,16 @@ const PsychicDetails = () => {
   const toast = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  /* Per-message billing (step 5b): price a message, not a minute. */
+  const { billingMode } = useBillingMode();
+  const perMessage = billingMode === "per_message";
   
   const psychicId = id ? parseInt(id) : undefined;
   
   // TanStack Query hooks
   const { data: psychic, isLoading: psychicLoading, error: psychicError } = usePsychicDetails(psychicId);
+  const perMessagePrice =
+    psychic?.price_per_message != null && psychic.price_per_message > 0 ? psychic.price_per_message : null;
   const { data: reviewSummary, isLoading: summaryLoading } = usePsychicReviewSummary(psychicId);
   const [reviewsPage, setReviewsPage] = useState(0);
   const [reviewsPerPage] = useState(5);
@@ -402,7 +408,9 @@ const PsychicDetails = () => {
                 </div>
               </div>
 
-              {/* PRICE */}
+              {/* PRICE — under per-message billing (step 5b) a message is priced,
+                  and a reader with no per-message price shows no price block */}
+              {(!perMessage || perMessagePrice != null) && (
               <div className="mb-6 p-4 rounded-xl border" style={{
                 backgroundColor: "color-mix(in srgb, var(--gl-accent) 8%, transparent)",
                 borderColor: "var(--gl-accent-dim)"
@@ -412,16 +420,17 @@ const PsychicDetails = () => {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-black" style={{ color: "var(--gl-accent)" }}>
-                    {getPricePerMinute(psychic.price_per_second)}
+                    {perMessage && perMessagePrice != null ? formatGbp(perMessagePrice) : getPricePerMinute(psychic.price_per_second)}
                   </span>
                   <span className="text-sm uppercase font-bold opacity-60" style={{ color: "var(--gl-text)" }}>
-                    per minute
+                    {perMessage ? "per message" : "per minute"}
                   </span>
                 </div>
               </div>
+              )}
 
               {/* WELCOME-CREDIT BADGE — first reading free, in minutes with this reader */}
-              {welcomeCreditMinutes(psychic.price_per_second) > 0 && (
+              {!perMessage && welcomeCreditMinutes(psychic.price_per_second) > 0 && (
                 <div
                   className="mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
                   style={{

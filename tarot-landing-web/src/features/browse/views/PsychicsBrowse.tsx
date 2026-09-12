@@ -11,12 +11,19 @@ import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
 import { NumericPagination } from "../components/NumericPagination";
 import { PriceRangeFilter } from "../components/PriceRangeFilter";
 import PsychicCard from "../components/PsychicCard";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import "../../../styles/glass.css";
 
 const ITEMS_PER_PAGE = 12;
+/* Per-message billing (step 5b): the backend's price filter is per second
+   only, so under per_message the whole list is fetched and the per-message
+   range and the paging are applied here. */
+const PER_MESSAGE_FETCH_LIMIT = 100;
 
 const PsychicsBrowse = () => {
   const navigate = useNavigate();
+  const { billingMode } = useBillingMode();
+  const perMessage = billingMode === "per_message";
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -72,16 +79,32 @@ const PsychicsBrowse = () => {
           search: debouncedSearch || undefined,
           categories_ids: selectedCategories.length > 0 ? selectedCategories.join(",") : undefined,
           is_online: isOnlineOnly || undefined,
-          min_price: minPricePerSecond,
-          max_price: maxPricePerSecond,
-          skip: (currentPage - 1) * ITEMS_PER_PAGE,
-          limit: ITEMS_PER_PAGE,
+          // Per-message billing (step 5b): the backend's price filter is per
+          // second only, so under per_message the range is applied below, on
+          // price_per_message, over the whole list; per-minute is untouched.
+          min_price: perMessage ? undefined : minPricePerSecond,
+          max_price: perMessage ? undefined : maxPricePerSecond,
+          skip: perMessage ? 0 : (currentPage - 1) * ITEMS_PER_PAGE,
+          limit: perMessage ? PER_MESSAGE_FETCH_LIMIT : ITEMS_PER_PAGE,
         };
 
         const data = await psychicsApi.getPsychics(filters);
-        setPsychics(data.items ?? []);
-        setTotalCount(data.total);
-        setTotalPages(Math.ceil(data.total / ITEMS_PER_PAGE));
+        if (perMessage) {
+          const matching = (data.items ?? []).filter((p) => {
+            if (minPrice === undefined && maxPrice === undefined) return true;
+            const price = p.price_per_message ?? null;
+            if (price == null || price <= 0) return false;
+            return (minPrice === undefined || price >= minPrice) && (maxPrice === undefined || price <= maxPrice);
+          });
+          const start = (currentPage - 1) * ITEMS_PER_PAGE;
+          setPsychics(matching.slice(start, start + ITEMS_PER_PAGE));
+          setTotalCount(matching.length);
+          setTotalPages(Math.ceil(matching.length / ITEMS_PER_PAGE));
+        } else {
+          setPsychics(data.items ?? []);
+          setTotalCount(data.total);
+          setTotalPages(Math.ceil(data.total / ITEMS_PER_PAGE));
+        }
       } catch (err) {
         console.error("Error fetching psychics:", err);
         setError("Failed to load psychics. Please try again later.");
@@ -91,7 +114,7 @@ const PsychicsBrowse = () => {
     };
 
     fetchPsychics();
-  }, [debouncedSearch, selectedCategories, currentPage, minPrice, maxPrice, isOnlineOnly]);
+  }, [debouncedSearch, selectedCategories, currentPage, minPrice, maxPrice, isOnlineOnly, perMessage]);
 
   // Handle category change
   const handleCategoryChange = useCallback((categoryIds: number[]) => {
@@ -214,7 +237,8 @@ const PsychicsBrowse = () => {
             minPrice={minPrice}
             maxPrice={maxPrice}
             onChange={handlePriceChange}
-            label="Price range (per minute)"
+            label={perMessage ? "Price range (per message)" : "Price range (per minute)"}
+            unit={perMessage ? "message" : "minute"}
           />
 
           {hasActiveFilters && (

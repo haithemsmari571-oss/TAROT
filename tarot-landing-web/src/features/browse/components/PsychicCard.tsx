@@ -1,7 +1,8 @@
 import { Icon } from "@iconify/react";
 import type { Psychic } from "../types/psychic.types";
 import { DISPLAY_RATINGS, getTier } from "../../../lib/psychicDisplay";
-import { formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { sanitizeClaims } from "../../../lib/copy";
 import "../../../styles/glass.css";
 
@@ -15,6 +16,13 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
   const freeMinutes = welcomeCreditMinutes(psychic.price_per_second);
   const tier = getTier(perMinute);
   const rating = DISPLAY_RATINGS[psychic.id];
+  /* Per-message billing (step 5b): the card prices a message, not a minute,
+     and a reader with no per-message price shows no price line at all. The
+     minutes-based welcome badge is a per-minute promise, so it stays off too. */
+  const { billingMode } = useBillingMode();
+  const perMessage = billingMode === "per_message";
+  const perMessagePrice =
+    psychic.price_per_message != null && psychic.price_per_message > 0 ? psychic.price_per_message : null;
 
   const categories = psychic.categories ?? [];
   const shownTags = categories.slice(0, 2);
@@ -50,7 +58,7 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
 
         <div className={`gl-tier ${tierClass}`}>{tier.label}</div>
 
-        {freeMinutes > 0 && (
+        {!perMessage && freeMinutes > 0 && (
           <div className="gl-gift">£15 free · {freeMinutes} min</div>
         )}
       </div>
@@ -80,9 +88,17 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
         </div>
 
         <div className="gl-prow2">
-          <div className="gl-price">
-            {formatPerMinuteGbp(perMinute)} <span>/ min</span>
-          </div>
+          {perMessage ? (
+            perMessagePrice != null && (
+              <div className="gl-price">
+                {formatGbp(perMessagePrice)} <span>per message</span>
+              </div>
+            )
+          ) : (
+            <div className="gl-price">
+              {formatPerMinuteGbp(perMinute)} <span>/ min</span>
+            </div>
+          )}
           <button className="gl-start" type="button">
             Start
           </button>

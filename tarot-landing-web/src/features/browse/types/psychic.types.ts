@@ -21,6 +21,8 @@ export interface Psychic {
   username: string;
   email: string;
   price_per_second: number;
+  /** per-message billing: the price of one client message, null or absent when unset */
+  price_per_message?: number | null;
   bio: string;
   is_verified: boolean;
   categories: PsychicCategory[];
@@ -35,6 +37,7 @@ export interface PsychicCreate {
   email: string;
   password: string;
   price_per_second: number;
+  price_per_message?: number | null;
   bio: string;
   is_online: boolean;
   categories_ids: number[];
@@ -45,6 +48,7 @@ export interface PsychicUpdate {
   email?: string;
   is_online?: boolean;
   price_per_second?: number;
+  price_per_message?: number | null;
   categories_ids?: number[];
   availabilities_create?: PsychicAvailabilityCreate[];
   order?: number;

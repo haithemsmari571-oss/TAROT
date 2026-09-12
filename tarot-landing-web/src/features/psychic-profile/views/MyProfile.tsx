@@ -34,6 +34,8 @@ const MyProfile = () => {
   // Form states
   const [bio, setBio] = useState("");
   const [pricePerMinute, setPricePerMinute] = useState(0);
+  /* Per-message billing (step 5b): kept as typed, so an empty field stays empty. */
+  const [pricePerMessage, setPricePerMessage] = useState("");
   const [unitPriceCents, setUnitPriceCents] = useState(100);
   const [isOnline, setIsOnline] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
@@ -81,6 +83,7 @@ const MyProfile = () => {
       setPsychicData(psychicProfile);
       setBio(profileData.bio || "");
       setPricePerMinute(Math.round((psychicProfile.price_per_second || 0) * 60));
+      setPricePerMessage(psychicProfile.price_per_message != null ? String(psychicProfile.price_per_message) : "");
       setIsOnline(psychicProfile.is_online || false);
       setPreviewImage(psychicProfile.profile_picture_url || null);
       setSelectedCategoryIds(psychicProfile.categories?.map((c: PsychicCategory) => c.id) || []);
@@ -163,7 +166,18 @@ const MyProfile = () => {
     setAvailabilities(availabilities.filter((_, i) => i !== index));
   };
 
+  /* Per-message billing (step 5b): the field is optional, so empty is allowed
+     and clears the price (null); anything at or below 0 is refused. */
+  const pricePerMessageError =
+    pricePerMessage.trim() !== "" && !(parseFloat(pricePerMessage) > 0) ? "Must be more than 0" : undefined;
+  const pricePerMessageValue = pricePerMessage.trim() === "" ? null : parseFloat(pricePerMessage);
+
   const handleSaveProfile = async () => {
+    if (pricePerMessageError) {
+      setErrorMessage(pricePerMessageError);
+      setTimeout(() => setErrorMessage(null), 3000);
+      return;
+    }
     setIsSaving(true);
     setErrorMessage(null);
     try {
@@ -184,6 +198,7 @@ const MyProfile = () => {
         await psychicsApi.updatePsychic(user.id, {
           bio,
           price_per_second: pricePerMinute / 60,
+          price_per_message: pricePerMessageValue,
           is_online: isOnline,
           categories_ids: selectedCategoryIds,
           availabilities_create: availabilitiesCreate,
@@ -601,6 +616,27 @@ const MyProfile = () => {
               >
                 Approx. £{((pricePerMinute * unitPriceCents) / 100).toFixed(2)} per minute
               </p>
+            </div>
+
+            {/* Per-message price (step 5b): optional, shown in both billing modes */}
+            <div className="mt-6">
+              <label
+                className="text-[10px] font-black uppercase tracking-widest mb-3 block"
+                style={{ color: COLORS.neutralGray }}
+              >
+                Price per message (£)
+              </label>
+              <PrimaryInput
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="Leave empty if unset"
+                value={pricePerMessage}
+                onChange={(e) => setPricePerMessage(e.target.value)}
+                error={pricePerMessageError}
+                aria-label="Price per message (£)"
+                fullWidth
+              />
             </div>
           </div>
 
