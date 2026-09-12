@@ -16,6 +16,7 @@ from app.services.atlas_client_memory_prompt import (
     load_shipped_atlas_client_memory_instruction,
 )
 from app.services.ai.reading_sabri import SABRI_SYSTEM_PROMPT
+from app.services.ai.reading_single_prompt import READING_SINGLE_PROMPT
 from app.services.ai.reading_valentina import VALENTINA_SYSTEM_PROMPT
 
 # The 22 Major Arcana (key -> name), matching the optimized card art (0-21).
@@ -33,6 +34,11 @@ DAILY_CONTENT_KEY = "daily_content"
 NUMEROLOGY_FULL_READING_KEY = "numerology.full-reading"
 VALENTINA_READING_KEY = "reading.valentina"
 SABRI_DELIVERY_KEY = "reading.sabri"
+SINGLE_READER_KEY = "reading.single"
+# The one-call reader ships pinned to this model rather than to a setting:
+# nothing calls it yet (per-message billing, step 4a), and the step that
+# wires it decides whether it follows READER_MODEL.
+SINGLE_READER_MODEL = "claude-opus-4-6"
 
 # The shipped default prompt — Valentina's voice, ASA-compliant BY CONSTRUCTION,
 # and it asks for strict JSON so the code can parse the five fields reliably.
@@ -172,6 +178,20 @@ def registered_prompts() -> list[dict]:
             ),
             "model": get_app_settings().SABRI_DELIVERY_MODEL,
             "default_prompt": SABRI_SYSTEM_PROMPT,
+            "variables": [],
+            "output_schema": None,
+            "output_schema_version": None,
+            "classification": "OWNER_EDITABLE",
+        },
+        {
+            "key": SINGLE_READER_KEY,
+            "name": "READING SINGLE, the one-call reader",
+            "description": (
+                "Per-message billing reader. One call per client message, writes "
+                "the final texting-voice bubbles directly."
+            ),
+            "model": SINGLE_READER_MODEL,
+            "default_prompt": READING_SINGLE_PROMPT,
             "variables": [],
             "output_schema": None,
             "output_schema_version": None,
