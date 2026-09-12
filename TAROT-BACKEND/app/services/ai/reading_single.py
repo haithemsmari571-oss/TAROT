@@ -21,8 +21,10 @@ broadcast and the proportional typing clock (reading_executor), reader-message
 persistence (services.chats), the draft log, the ledger and the refund
 (services.transactions).
 
-Nothing in the live message path calls this yet (per-message billing, step 4b).
-Wiring is the next step.
+Wired into the live path in step 4c, only under BILLING_MODE=per_message: the
+message handler queues each charged client message on an automatic chat, /join
+queues the hall question, and the client's End drains the queue and asks for the
+goodbye (app/routers/chats.py, app/services/chat/handlers/message_handler.py).
 """
 
 from __future__ import annotations
@@ -214,7 +216,9 @@ def build_single_input(db, chat, answer_message_id=None, ended=False) -> str:
       4. CLIENT FILE
       5. the verified facts block: KNOWN NUMEROLOGY and the gender line, exactly
          as the two-role engine gets them
-      6. THE MESSAGE TO REPLY TO NOW, or with ``ended`` a SYSTEM NOTE that the
+      6. OPERATOR GUIDANCE, only when the operator has left steering notes,
+         rendered exactly as the Valentina input renders them
+      7. THE MESSAGE TO REPLY TO NOW, or with ``ended`` a SYSTEM NOTE that the
          client has ended the reading and there is nothing to answer
 
     The transcript is the engine's own session transcript, caught up from the
@@ -222,7 +226,7 @@ def build_single_input(db, chat, answer_message_id=None, ended=False) -> str:
     answered message is always present as the last entry. Every builder here is
     the existing one. The state this updates is persisted before returning."""
     from app.models.message import Message
-    from app.services.ai import reading_assistant
+    from app.services.ai import reading_assistant, reading_steering
     from app.services.client_dossier import get_client_dob
 
     store = get_session_store()
@@ -266,6 +270,14 @@ def build_single_input(db, chat, answer_message_id=None, ended=False) -> str:
             gender=gender,
         )
     )
+    # Operator steering notes, the same retrieval and the same block as the
+    # Valentina input: get_active_notes returns [] unless the chat is HYBRID
+    # with a current session, and the block is omitted entirely when empty.
+    guidance = reading_steering.format_guidance_block(
+        reading_steering.get_active_notes(db, chat.id)
+    )
+    if guidance:
+        parts.append(guidance)
     if ended:
         parts.append(
             "SYSTEM NOTE: " + ENDED_NOTE + " There is no message to answer. Send your one "

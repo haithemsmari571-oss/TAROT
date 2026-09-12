@@ -307,7 +307,27 @@ class MessageHandler(BaseEventHandler):
             try:
                 from app.services.ai import reading_burst
 
-                if sender_is_paying_client:
+                if sender_is_paying_client and per_message_mode:
+                    # Per-message billing: the charge above succeeded, and the
+                    # reply is the one-call reader's, never the burst pipeline's
+                    # (no burst window, no First Word, no Valentina/Sabri turn).
+                    # An automatic reader answers through reading_single; any
+                    # other mode is a person at the keyboard, so nothing is
+                    # queued and the message simply waits for them.
+                    from app.enums.response_mode import ResponseMode
+
+                    if chat.response_mode == ResponseMode.SABRI:
+                        from app.services.ai import reading_single
+
+                        await reading_single.enqueue_reply(self.chat_id, db_message.id)
+                    else:
+                        logger.info(
+                            "per_message_manual_reader",
+                            chat_id=self.chat_id,
+                            message_id=db_message.id,
+                            response_mode=chat.response_mode.value,
+                        )
+                elif sender_is_paying_client:
                     await reading_burst.note_client_message(
                         self.chat_id,
                         db_message.chat_session_id,

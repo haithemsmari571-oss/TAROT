@@ -863,11 +863,16 @@ class SessionManager:
         #
         # The psychic ending the chat is deliberately not a goodbye either: that
         # is the operator closing a room, not the client leaving a conversation.
+        #
+        # Under per-message billing this closing line is dark: the one-call
+        # reader's own goodbye (reading_single.say_goodbye) is sent by the End
+        # endpoint before end_session runs, and nothing here should speak twice.
         said_goodbye_because = (
             "client ended the chat"
             if should_say_goodbye(
                 reason, ended_by_user_id, getattr(session_state, "client_id", None)
             )
+            and not _per_message_mode()
             else None
         )
         logger.info(
@@ -877,7 +882,12 @@ class SessionManager:
             ended_by_user_id=ended_by_user_id,
             client_id=getattr(session_state, "client_id", None),
             will_speak=said_goodbye_because is not None,
-            why=said_goodbye_because or f"{reason.value}: she may be coming back",
+            why=said_goodbye_because
+            or (
+                "per_message: reading_single says goodbye"
+                if _per_message_mode()
+                else f"{reason.value}: she may be coming back"
+            ),
         )
         if said_goodbye_because:
             try:

@@ -48,6 +48,11 @@ settings = get_app_settings()
 logger = get_logger(__name__)
 
 
+# Per-message billing: how long the client's End waits for the reader's goodbye
+# before ending without it. Module-level so a test can shorten it.
+PER_MESSAGE_GOODBYE_TIMEOUT_S = 12.0
+
+
 @router.post("/request")
 async def requset_chat_endpoint(
     chat_data: ChatStart,
@@ -108,6 +113,37 @@ async def requset_chat_endpoint(
                     "request_refused_reader_unavailable",
                     psychic_id=chat_data.psychic_id,
                     user_id=user.id,
+                )
+                return JSONResponse(
+                    content={
+                        "detail": "READER_UNAVAILABLE",
+                        "required": None,
+                        "balance": spendable,
+                        "psychic_name": psychic_name,
+                    },
+                    status_code=402,
+                )
+            # The one-call reader only answers automatic chats. A chat's response
+            # mode lives on the chat row: req_start_chat reuses the pair's existing
+            # row with whatever mode an operator set on it, and a new row is SABRI.
+            from app.enums.response_mode import ResponseMode
+
+            existing_chat = (
+                db.query(Chat)
+                .filter(Chat.user_id == user.id, Chat.psychic_id == chat_data.psychic_id)
+                .first()
+            )
+            response_mode = (
+                existing_chat.response_mode
+                if existing_chat is not None
+                else ResponseMode.SABRI
+            )
+            if response_mode != ResponseMode.SABRI:
+                logger.warning(
+                    "request_refused_reader_not_automatic",
+                    psychic_id=chat_data.psychic_id,
+                    user_id=user.id,
+                    response_mode=response_mode.value,
                 )
                 return JSONResponse(
                     content={
@@ -207,7 +243,13 @@ async def requset_chat_endpoint(
         from app.services.ai import reading_pre_session
 
         chat_row = db.query(Chat).filter(Chat.id == chat_id).first()
-        if chat_row is not None and chat_row.response_mode == ResponseMode.SABRI:
+        # Per-message billing has no pre-written opening: the hall question is
+        # answered by the one-call reader when she joins (see /join).
+        if (
+            chat_row is not None
+            and chat_row.response_mode == ResponseMode.SABRI
+            and not per_message
+        ):
             # The id of the message she just sent, which req_start_chat wrote a moment ago.
             # Without it the opening turn cannot be told apart from any other turn: the
             # router is free to spend another minute writing a second reading over the one
@@ -885,6 +927,34 @@ async def update_chat_status_endpoint(
 
             return JSONResponse(content=None, status_code=201)
 
+        if settings.BILLING_MODE == "per_message" and user.id == chat_obj.user_id:
+            # Per-message billing, the client's own End: refund whatever she paid
+            # for that has not been started, let the reader say goodbye (unbilled,
+            # and bounded so a slow model cannot hold the End), then end as today.
+            # The clock reader's closing line inside end_session is dark in this
+            # mode. The reader's own End path below is unchanged.
+            from app.services.ai import reading_single
+
+            await reading_single.drain_on_end(chat_id)
+            try:
+                await asyncio.wait_for(
+                    reading_single.say_goodbye(chat_id),
+                    timeout=PER_MESSAGE_GOODBYE_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "per_message_goodbye_skipped",
+                    chat_id=chat_id,
+                    reason="timeout",
+                    timeout_s=PER_MESSAGE_GOODBYE_TIMEOUT_S,
+                )
+            except Exception as goodbye_error:  # noqa: BLE001 - the End must still land
+                logger.warning(
+                    "per_message_goodbye_skipped",
+                    chat_id=chat_id,
+                    reason=type(goodbye_error).__name__,
+                )
+
         # Use SessionManager to end the session
         await session_manager.end_session(
             chat_id, ChatTerminationReason.MANUAL_EXIT, ended_by_user_id=user.id
@@ -1548,19 +1618,46 @@ async def join_chat_endpoint(
             # in her own words, so it varies with who she is talking to. Launched,
             # not awaited: the join response must not wait on a model, and if the
             # greeting fails the client simply speaks first.
-            from app.services.ai import reading_first_word, reading_pre_session
+            if settings.BILLING_MODE == "per_message":
+                # Per-message billing: no greeting and no pre-written opening. Her
+                # hall question was charged as message one at /request, and the
+                # one-call reader answers it now, as the first reply of the reading.
+                from app.services.ai import reading_single
 
-            # If she wrote her question on the request, the reading is already written and
-            # waiting. Open from THAT instead of saying a generic hello: she gets Sabri's
-            # opening line about what she actually wrote, then the pause, then the dots,
-            # then the reading at normal speed. Only when nothing was banked does the plain
-            # greeting still fire, which is every chat that predates this and every one
-            # where the pre-reading failed.
-            opened = await reading_pre_session.open_first_turn(
-                chat_id, info.chat_session_id, chat.psychic_id if chat else None
-            )
-            if not opened:
-                reading_first_word.greet_now(chat_id, info.chat_session_id)
+                hall_question_id = (
+                    db.query(Message.id)
+                    .filter(
+                        Message.chat_id == chat_id,
+                        Message.sender_id == chat.user_id,
+                        Message.is_system.is_(False),
+                    )
+                    .order_by(Message.id.desc())
+                    .limit(1)
+                    .scalar()
+                )
+                if hall_question_id is None:
+                    logger.warning("per_message_no_hall_question", chat_id=chat_id)
+                else:
+                    await reading_single.enqueue_reply(chat_id, int(hall_question_id))
+                    logger.info(
+                        "per_message_first_reply_enqueued",
+                        chat_id=chat_id,
+                        message_id=int(hall_question_id),
+                    )
+            else:
+                from app.services.ai import reading_first_word, reading_pre_session
+
+                # If she wrote her question on the request, the reading is already written
+                # and waiting. Open from THAT instead of saying a generic hello: she gets
+                # Sabri's opening line about what she actually wrote, then the pause, then
+                # the dots, then the reading at normal speed. Only when nothing was banked
+                # does the plain greeting still fire, which is every chat that predates
+                # this and every one where the pre-reading failed.
+                opened = await reading_pre_session.open_first_turn(
+                    chat_id, info.chat_session_id, chat.psychic_id if chat else None
+                )
+                if not opened:
+                    reading_first_word.greet_now(chat_id, info.chat_session_id)
 
             # She has come back. Any earlier reading with this reader that is still waiting
             # to be folded into her long-term memory gets pushed out of the way, so the
