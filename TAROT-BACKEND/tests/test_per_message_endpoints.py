@@ -391,3 +391,18 @@ def test_per_minute_pause_on_an_active_chat_still_works(sqlite, monkeypatch):
     assert db.get(Chat, chat.id).status == ChatStatus.PAUSED
     assert chat.id in manager.paused_sessions
     assert chat.id not in manager.active_sessions
+
+
+# -- 11. GET /api/billing-mode is public and reports the setting ----------------
+def test_billing_mode_endpoint_reports_the_setting(monkeypatch):
+    """One route, no auth, both values: the app reads its mode from here once."""
+    from app.routers import public_settings as public_settings_router
+
+    test_app = FastAPI()
+    test_app.include_router(public_settings_router.router, prefix="/api")
+    http = TestClient(test_app)
+    for mode in ("per_minute", "per_message"):
+        _mode(monkeypatch, mode)
+        resp = http.get("/api/billing-mode")
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"billing_mode": mode}

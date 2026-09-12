@@ -8,12 +8,15 @@
 
 import { psychicsApi } from "../browse/api/psychicsApi";
 import { getPsychicDetails, requestChat } from "../chat/api/chatApi";
+import { formatGbp } from "@/lib/currency";
 
 export interface Reader {
   id: number;
   name: string;
   photo: string | null;
   pricePerMinute: number | null;
+  /** per-message billing: the reader's price for one message (step 3a's field) */
+  pricePerMessage: number | null;
 }
 
 let current: Reader | null = null;
@@ -25,6 +28,9 @@ const toReader = (p: any): Reader => ({
   photo: p.profile_picture_url ?? null,
   pricePerMinute: p.price_per_second != null
     ? Math.round(p.price_per_second * 60 * 100) / 100
+    : null,
+  pricePerMessage: p.price_per_message != null
+    ? Math.round(p.price_per_message * 100) / 100
     : null,
 });
 
@@ -64,7 +70,9 @@ export function applyReaderToDom(r: Reader) {
   }
 }
 
-export type SubmitResult = { ok: true } | { ok: false; error: string };
+export type SubmitResult =
+  | { ok: true }
+  | { ok: false; error: string; code?: string; required?: number | null; balance?: number | null };
 
 /** The real reading request. Never pretends to have succeeded. */
 export async function submitRealRequest(question: string): Promise<SubmitResult> {
@@ -81,7 +89,23 @@ export async function submitRealRequest(question: string): Promise<SubmitResult>
     const status = e?.response?.status;
     const detail = e?.response?.data?.detail ?? e?.response?.data?.message;
     if (status === 401 || status === 403) return { ok: false, error: "Please sign in again to start a reading." };
-    if (status === 402) return { ok: false, error: detail || "You need a little more Stardust to begin this reading." };
+    if (status === 402) {
+      // Per-message billing answers with a code in `detail`; the per-minute gate
+      // answers with a sentence, which is shown exactly as it always was.
+      const code = typeof detail === "string" ? detail : "";
+      const required = e?.response?.data?.required ?? null;
+      const balance = e?.response?.data?.balance ?? null;
+      if (code === "INSUFFICIENT_BALANCE") {
+        return {
+          ok: false, code, required, balance,
+          error: `You need ${formatGbp(Number(required) || 0)} of Stardust to send your question.`,
+        };
+      }
+      if (code === "READER_UNAVAILABLE") {
+        return { ok: false, code, error: "This reader is not available right now." };
+      }
+      return { ok: false, error: detail || "You need a little more Stardust to begin this reading." };
+    }
     if (status === 400 && /already have an active/i.test(String(detail))) {
       return { ok: false, error: detail };
     }

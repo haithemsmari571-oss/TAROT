@@ -161,3 +161,20 @@ html[data-hall="room"] .meter b{font-variant-numeric:tabular-nums;}
 .hdlg-row b{font-family:var(--display);font-size:19px;font-weight:300;color:#FFFBF2;
   font-variant-numeric:tabular-nums;}
 .hdlg-body{margin-top:16px;}
+
+/* ── per-message billing ──────────────────────────────────────────────────
+   The price line where the meter stood, the price on the send button, the
+   counter under the box, and the one line that says why a send did not go.
+   Nothing here draws unless the room runs on per-message billing. */
+html[data-hall="room"] .stats.permsg{align-items:center;}
+html[data-hall="room"] .stats.permsg .stat b{font-size:14.5px;white-space:nowrap;}
+html[data-hall="room"] .composer .sendprice{width:auto;min-width:0;height:52px;padding:0 18px;
+  border-radius:26px;font:inherit;font-size:14px;font-weight:600;letter-spacing:.03em;
+  white-space:nowrap;}
+html[data-hall="room"] .permsg-foot{display:flex;justify-content:space-between;align-items:center;
+  gap:12px;padding:0 30px calc(14px + env(safe-area-inset-bottom));margin-top:-10px;
+  pointer-events:none;}
+html[data-hall="room"] .permsg-foot .count{font-size:11px;letter-spacing:.12em;
+  color:rgba(190,172,150,.75);font-variant-numeric:tabular-nums;}
+html[data-hall="room"] .permsg-foot .permsg-note{font-size:13.5px;line-height:1.5;text-align:right;
+  color:rgba(220,205,184,.9);text-shadow:0 1px 16px rgba(0,0,0,.85);}

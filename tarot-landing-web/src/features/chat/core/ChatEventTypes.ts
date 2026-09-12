@@ -15,6 +15,8 @@ export enum ChatEventType {
   MESSAGE_SENT = 'message:sent',
   MESSAGE_ERROR = 'message:error',
   MESSAGES_READ = 'message:read', // recipient opened the conversation → flip receipts
+  MESSAGE_REJECTED = 'message:rejected', // per-message billing: the server refused to store or charge it
+  MESSAGE_FEE_CHARGED = 'message:fee_charged', // per-message billing: the sender's balance after a charge
   
   // Session Events
   SESSION_STARTED = 'session:started',
@@ -71,6 +73,13 @@ export type ChatEventPayload = {
   [ChatEventType.MESSAGE_SENT]: { content: string };
   [ChatEventType.MESSAGE_ERROR]: { error: string };
   [ChatEventType.MESSAGES_READ]: { chatId: number; readerId: number };
+  [ChatEventType.MESSAGE_REJECTED]: {
+    reason: string; // INSUFFICIENT_BALANCE | READER_UNAVAILABLE | SESSION_NOT_ACTIVE
+    message?: string;
+    pricePerMessage?: number | null;
+    balance?: number | null;
+  };
+  [ChatEventType.MESSAGE_FEE_CHARGED]: { messageId?: number; fee?: number; clientBalance?: number };
   
   [ChatEventType.SESSION_STARTED]: { 
     chatId: number;
@@ -87,7 +96,11 @@ export type ChatEventPayload = {
     chat_status: string;
     session_status: string;
     started_at: string;
-    rate_per_second: number;
+    rate_per_second: number | null;
+    // per-message billing, when the session runs on it
+    billing_mode?: 'per_minute' | 'per_message' | null;
+    price_per_message?: number | null;
+    balance?: number | null;
     // a refresh mid-reflection learns the server's figures from here
     reflect_remaining_seconds?: number;
     reflect_seconds_used?: number;
@@ -118,6 +131,7 @@ export type ChatEventPayload = {
   [ChatEventType.BALANCE_UPDATED]: { 
     newBalance: number;
     amountDeducted?: number;
+    pricePerMessage?: number | null;
   };
   
   [ChatEventType.CHAT_SELECTED]: { chatId: number };

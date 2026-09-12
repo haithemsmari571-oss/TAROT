@@ -31,7 +31,9 @@ import { useNotifications } from "@/features/notifications/hooks/useNotification
 import { NotificationType } from "@/features/notifications/types/notification.types";
 // the same helper the reader's own page uses (browse/views/PsychicDetails.tsx:63),
 // so the price in the hall and the price on her card can never disagree
-import { formatPerMinuteGbp } from "@/lib/currency";
+import { formatGbp, formatPerMinuteGbp } from "@/lib/currency";
+import { useTopUp } from "@/features/payment/context/TopUpContext";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 
 /* How long the arrival takes to play. hall.css:189 runs the `arr` animation for
    2700ms after an 800ms delay, so the sequence is finished at 3500ms; the
@@ -70,6 +72,14 @@ export default function Hall({ mode = "preview", psychicId }:
   const acceptedRef = useRef(false);
   const { user } = useAuth();
   const { onNotification, isConnected, emitLocal } = useNotifications();
+  /* Per-message billing: the app-level mode (no session exists yet here), and
+     the glider for a request refused on balance, read through a ref so the
+     one-shot startHall effect below always sees the current opener. */
+  const { billingMode } = useBillingMode();
+  const perMessage = billingMode === "per_message";
+  const { open: openTopUp } = useTopUp();
+  const openTopUpRef = useRef(openTopUp);
+  useEffect(() => { openTopUpRef.current = openTopUp; }, [openTopUp]);
 
   useEffect(() => {
     /* Marks which mode is on screen so the two companion sheets can scope
@@ -81,7 +91,18 @@ export default function Hall({ mode = "preview", psychicId }:
       onBegin: preview ? undefined : async (question: string) => {
         setError(null);
         const r = await submitRealRequest(question);
-        if (!r.ok) { setError(r.error); return false; }
+        if (!r.ok) {
+          setError(r.error);
+          // Per-message billing refused for balance: the same Stardust glider every
+          // other "Add Stardust" in the app opens, returning to this hall after.
+          if (r.code === "INSUFFICIENT_BALANCE") {
+            openTopUpRef.current({
+              returnUrl: `${window.location.pathname}?topup=1`,
+              reason: r.error,
+            });
+          }
+          return false;
+        }
         setWaitingSince(Date.now());
         // This session is now the requester: its own acceptance must carry her
         // straight in, not prompt her to accept a second time.
@@ -204,9 +225,13 @@ export default function Hall({ mode = "preview", psychicId }:
   }, [isConnected]);
 
   /* Her price, before she can press the button — never a hardcoded number. */
-  const rate = reader?.pricePerMinute != null && reader.pricePerMinute > 0
-    ? `${formatPerMinuteGbp(reader.pricePerMinute)} per minute`
-    : null;
+  const rate = perMessage
+    ? (reader?.pricePerMessage != null && reader.pricePerMessage > 0
+        ? `${formatGbp(reader.pricePerMessage)} per message`
+        : null)
+    : (reader?.pricePerMinute != null && reader.pricePerMinute > 0
+        ? `${formatPerMinuteGbp(reader.pricePerMinute)} per minute`
+        : null);
 
   return (
     <>
@@ -252,7 +277,11 @@ export default function Hall({ mode = "preview", psychicId }:
         <div className="lstat">Preparing your reading</div>
         <div className="cards" id="cards">
           <div className="card"><span className="cardtext">She is sitting with what you wrote. <strong>Nothing is being charged yet.</strong></span></div>
-          <div className="card"><span className="cardtext"><strong>Your minutes do not start until you are in the room with her.</strong></span></div>
+          {perMessage ? (
+            <div className="card"><span className="cardtext"><strong>The question you send is your first message. {reader?.pricePerMessage != null ? formatGbp(reader.pricePerMessage) : ""}.</strong></span></div>
+          ) : (
+            <div className="card"><span className="cardtext"><strong>Your minutes do not start until you are in the room with her.</strong></span></div>
+          )}
           <div className="card"><span className="cardtext">The cards are drawn for you and your dates. <strong>Nothing here is a template.</strong></span></div>
           <div className="card"><span className="cardtext">She remembers you between readings, so you never have to <strong>explain yourself twice.</strong></span></div>
           <div className="card"><span className="cardtext">This opens on its own the moment she is ready. <strong>You do not have to do anything.</strong></span></div>

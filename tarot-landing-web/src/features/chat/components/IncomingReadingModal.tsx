@@ -9,6 +9,7 @@ import { joinChat, getMyChatsWithDetails, getPsychicDetails } from "../api/chatA
 import { paymentApi } from "@/features/payment/api/paymentApi";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { formatGbp } from "@/lib/currency";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import {
   isIncomingHeld, queueIncoming, isIncomingExpected,
 } from "@/features/hall/incomingGate";
@@ -21,6 +22,7 @@ interface Incoming {
   psychicId?: number;
   photo?: string | null;
   perMinute?: number | null; // reader's £/min — for the affordability gate
+  pricePerMessage?: number | null; // per-message billing: the reader's price for one message
 }
 
 /**
@@ -41,6 +43,8 @@ export default function IncomingReadingModal() {
   const { onNotification } = useNotifications();
   const { open: openTopUp } = useTopUp();
   const navigate = useNavigate();
+  const { billingMode } = useBillingMode();
+  const perMessage = billingMode === "per_message";
   const queryClient = useQueryClient();
 
   const [incoming, setIncoming] = useState<Incoming | null>(null);
@@ -158,6 +162,7 @@ export default function IncomingReadingModal() {
                     photo: p?.profile_picture_url ?? cur.photo ?? null,
                     psychicName: p?.username || cur.psychicName,
                     perMinute: perMin ?? cur.perMinute ?? null,
+                    pricePerMessage: p?.price_per_message ?? cur.pricePerMessage ?? null,
                   }
                 : cur
             );
@@ -299,8 +304,12 @@ export default function IncomingReadingModal() {
   // Block Join when the client can't cover even one minute at the reader's rate
   // (the first minute is charged upfront on join, so it would insta-die).
   const perMin = incoming.perMinute ?? null;
-  const cantAffordJoin =
-    perMin != null && perMin > 0 && balance != null && balance < perMin;
+  const perMsg = incoming.pricePerMessage ?? null;
+  // Per-message billing gates on one message, not one minute, and a reader with
+  // no per-minute rate at all (null) never blocks the join.
+  const cantAffordJoin = perMessage
+    ? perMsg != null && perMsg > 0 && balance != null && balance < perMsg
+    : perMin != null && perMin > 0 && balance != null && balance < perMin;
 
   /* The gate, in the hall's own language — src/styles/incoming-gate.css
      restates the hall's tokens as literal values because this can render over
@@ -322,12 +331,18 @@ export default function IncomingReadingModal() {
         <p className="igate-eyebrow">Incoming reading</p>
         <h2 className="igate-name">{incoming.psychicName}</h2>
         <p className="igate-sub">is ready to begin your reading</p>
+        {perMessage && perMsg != null && (
+          <p className="igate-sub igate-rate">{formatGbp(perMsg)} per message</p>
+        )}
 
         {cantAffordJoin ? (
           <>
             <div className="igate-note">
-              You need at least <b>{formatGbp(perMin!)}</b> for one minute with{" "}
-              {incoming.psychicName}.
+              {perMessage ? (
+                <>You need at least <b>{formatGbp(perMsg!)}</b> for one message with{" "}{incoming.psychicName}.</>
+              ) : (
+                <>You need at least <b>{formatGbp(perMin!)}</b> for one minute with{" "}{incoming.psychicName}.</>
+              )}
             </div>
             <button
               className="igate-join"

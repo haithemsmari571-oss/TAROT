@@ -33,6 +33,8 @@ import "../../../styles/starfield.css";
 import PageBackground from "../../../components/PageBackground";
 import chatBackground from "../../../assets/backgrounds/chat-background.webp";
 import { formatGbp } from "../../../lib/currency";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
+import { PER_MESSAGE_COPY, PER_MESSAGE_MAX_CHARS, perMessageReturnUrl } from "../perMessage";
 
 const ClientChat = () => {
   const queryClient = useQueryClient();
@@ -107,6 +109,7 @@ const ClientChat = () => {
   }, [updateChatStatusMutation]);
 
   const { open: openTopUp } = useTopUp();
+  const { billingMode: appBillingMode } = useBillingMode();
 
   // Fetch psychic details for selected chat
   const {
@@ -125,6 +128,7 @@ const ClientChat = () => {
     chatId: selectedChat,
     currentChatStatus: selectedChatData?.status,
     userRole: 'CLIENT',
+    appBillingMode,
     onBalanceWarning: () => {
       console.log('[ClientChat] Low balance warning');
     },
@@ -186,6 +190,34 @@ const ClientChat = () => {
       refetch();
     },
   });
+
+  // ── Per-message billing ───────────────────────────────────────────────────
+  // The session payload's mode wins for this room; until it has arrived the
+  // app-level mode (GET /billing-mode) stands in. Price and balance are what
+  // the payload carries, updated by balance_updated and by every charged send;
+  // nothing here computes money.
+  const perMessage = (sessionState.billingMode ?? appBillingMode) === 'per_message';
+  const perMessagePrice = sessionState.pricePerMessage;
+  const perMessageBalance = sessionState.spendableBalance ?? sessionState.clientBalance;
+  const outOfBalance =
+    perMessage && perMessagePrice != null && perMessageBalance != null && perMessageBalance < perMessagePrice;
+  const perMessageRef = useRef(perMessage);
+  useEffect(() => { perMessageRef.current = perMessage; }, [perMessage]);
+  // the line under the composer (message_rejected, or out of balance)
+  const [composerNotice, setComposerNotice] = useState<string | null>(null);
+  // the text of a send the server has not yet stored: kept in the box until
+  // its own echo arrives, so a rejection never loses what she typed
+  const pendingSendRef = useRef<string | null>(null);
+  // the offering panel: the same glider /billing uses, back to this room after
+  const openPerMessageOffering = useCallback(() => {
+    if (!selectedChat) return;
+    openTopUp({
+      reason: `Add Stardust to keep going with ${selectedChatData?.user_name ?? "your reader"}.${
+        perMessagePrice != null ? ` Each message is ${formatGbp(perMessagePrice)}.` : ""
+      }`,
+      returnUrl: perMessageReturnUrl(selectedChat),
+    });
+  }, [selectedChat, openTopUp, selectedChatData?.user_name, perMessagePrice]);
 
   // Use real-time status from sessionState if available, otherwise fall back to API data
   const currentChatStatus = selectedChat && sessionState.chatId === selectedChat && sessionState.status
@@ -400,7 +432,15 @@ const ClientChat = () => {
     // A message arrived → stop showing the reader typing indicator.
     setIsReaderTyping(false);
     appendMessage(message);
-  }, [reflection.admit, appendMessage]);
+    // Per-message billing: the composer keeps her text until the server has
+    // stored and charged it, which its own echo proves; a rejection leaves it.
+    const pending = pendingSendRef.current;
+    if (pending != null && user && (message.sender_id ?? message.user_id) === user.id && message.content === pending) {
+      pendingSendRef.current = null;
+      setInput("");
+      setComposerNotice(null);
+    }
+  }, [reflection.admit, appendMessage, user]);
 
   // Reader (Logan) typing indicator, from the backend typing_start/typing_stop
   // events broadcast during delivery. We don't send our own typing to the server.
@@ -520,7 +560,7 @@ const ClientChat = () => {
     }
   }, [sessionState.elapsedSeconds, sessionState.estimatedCost, selectedChat, refetch, dispatch]);
 
-  const handleSessionInfo = useCallback(({ chat_id, elapsed_seconds, estimated_cost, remaining_seconds, client_balance, chat_status, started_at, rate_per_second, session_status, reflect_remaining_seconds, reflect_seconds_used, reflecting_since }: { chat_id: number; elapsed_seconds: number; estimated_cost: number; remaining_seconds: number; client_balance: number; chat_status: string; started_at: string; rate_per_second: number; session_status?: string; reflect_remaining_seconds?: number; reflect_seconds_used?: number; reflecting_since?: string | null }) => {
+  const handleSessionInfo = useCallback(({ chat_id, elapsed_seconds, estimated_cost, remaining_seconds, client_balance, chat_status, started_at, rate_per_second, session_status, reflect_remaining_seconds, reflect_seconds_used, reflecting_since, billing_mode, price_per_message, balance }: { chat_id: number; elapsed_seconds: number; estimated_cost: number; remaining_seconds: number; client_balance: number; chat_status: string; started_at: string; rate_per_second: number | null; session_status?: string; reflect_remaining_seconds?: number; reflect_seconds_used?: number; reflecting_since?: string | null; billing_mode?: 'per_minute' | 'per_message' | null; price_per_message?: number | null; balance?: number | null }) => {
     console.log('[ClientChat] Session info received:', { chat_id, elapsed_seconds, remaining_seconds, client_balance, rate_per_second, session_status });
 
     // Initialize timer with data from backend
@@ -539,6 +579,10 @@ const ClientChat = () => {
       reflect_remaining_seconds,
       reflect_seconds_used,
       reflecting_since,
+      // per-message billing, when the session runs on it
+      billing_mode,
+      price_per_message,
+      balance,
     };
 
     console.log('[ClientChat] Dispatching INITIALIZE with session info:', payload);
@@ -740,6 +784,55 @@ const ClientChat = () => {
     toastRef.current.success('Session resumed! Your session continues.');
   }, [selectedChat, sessionState.elapsedSeconds, sessionState.clientBalance, sessionState.psychicRatePerSecond, dispatch]);
 
+  // ── Per-message billing: the server's answers to a send ──────────────────
+  const handleMessageRejected = useCallback(({ reason, message, pricePerMessage, balance }: { reason: string; message?: string; pricePerMessage?: number | null; balance?: number | null }) => {
+    if (!perMessageRef.current) return;
+    if (reason === 'INSUFFICIENT_BALANCE') {
+      if (typeof balance === 'number') {
+        dispatch({ type: 'UPDATE_BALANCE', payload: { balance, price_per_message: pricePerMessage } });
+      }
+      setComposerNotice(PER_MESSAGE_COPY.addStardust);
+      openPerMessageOffering();
+    } else if (reason === 'READER_UNAVAILABLE') {
+      setComposerNotice(PER_MESSAGE_COPY.readerUnavailable);
+    } else if (reason === 'SESSION_NOT_ACTIVE') {
+      setComposerNotice(PER_MESSAGE_COPY.sessionNotActive);
+    } else {
+      setComposerNotice(message || "That message could not be sent.");
+    }
+    // the typed text stays: the input was never cleared, pendingSendRef still holds it
+  }, [dispatch, openPerMessageOffering]);
+
+  const handleMessageFeeCharged = useCallback(({ clientBalance }: { messageId?: number; fee?: number; clientBalance?: number }) => {
+    if (!perMessageRef.current) return;
+    if (typeof clientBalance === 'number') {
+      dispatch({ type: 'UPDATE_BALANCE', payload: { balance: clientBalance } });
+    }
+  }, [dispatch]);
+
+  const handleBalanceUpdated = useCallback(({ newBalance, pricePerMessage }: { newBalance: number; pricePerMessage?: number | null }) => {
+    if (!perMessageRef.current) return;
+    dispatch({ type: 'UPDATE_BALANCE', payload: { balance: newBalance, price_per_message: pricePerMessage } });
+  }, [dispatch]);
+
+  // Out of balance: the composer closes, the line appears, and the offering
+  // panel opens once on the way in. A balance_updated that covers the price
+  // clears it all again.
+  const offeringOpenedForRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!perMessage) return;
+    if (!outOfBalance) {
+      offeringOpenedForRef.current = null;
+      setComposerNotice((n) => (n === PER_MESSAGE_COPY.addStardust ? null : n));
+      return;
+    }
+    if (!selectedChat || !isChatActive) return;
+    setComposerNotice(PER_MESSAGE_COPY.addStardust);
+    if (offeringOpenedForRef.current === selectedChat) return;
+    offeringOpenedForRef.current = selectedChat;
+    openPerMessageOffering();
+  }, [perMessage, outOfBalance, selectedChat, isChatActive, openPerMessageOffering]);
+
   // Subscribe to chat events with stable handlers
   // Removed SESSION_TIMER_TICK, BALANCE_WARNING, BALANCE_CRITICAL - using client-side timer
   useChatEventToasts(selectedChat, 'CLIENT');
@@ -761,6 +854,9 @@ const ClientChat = () => {
       [ChatEventType.SESSION_ENDING_SOON]: handleSessionEndingSoon,
       [ChatEventType.SESSION_ENDED]: handleSessionEndedWebSocket,
       [ChatEventType.BALANCE_INSUFFICIENT]: handleBalanceInsufficient,
+      [ChatEventType.MESSAGE_REJECTED]: handleMessageRejected,
+      [ChatEventType.MESSAGE_FEE_CHARGED]: handleMessageFeeCharged,
+      [ChatEventType.BALANCE_UPDATED]: handleBalanceUpdated,
       [ChatEventType.SESSION_PAUSED]: handleSessionPaused,
       [ChatEventType.SESSION_RESUMED]: handleSessionResumed,
       [ChatEventType.CONNECTED]: handleConnected,
@@ -1013,10 +1109,25 @@ const ClientChat = () => {
       return;
     }
 
+    // Per-message billing: the cap is checked here as well as in the box, an
+    // empty balance opens the offering instead of sending, and the text stays
+    // in the box until the server's own echo says it was stored and charged.
+    const text = input;
+    if (perMessage && text.length > PER_MESSAGE_MAX_CHARS) {
+      toast.error(`Keep it under ${PER_MESSAGE_MAX_CHARS} characters.`);
+      return;
+    }
+    if (perMessage && outOfBalance) {
+      setComposerNotice(PER_MESSAGE_COPY.addStardust);
+      openPerMessageOffering();
+      return;
+    }
+
     try {
       stopClientTyping();
-      await facade.sendMessage(input);
-      setInput("");
+      if (perMessage) pendingSendRef.current = text;
+      await facade.sendMessage(text);
+      if (!perMessage) setInput("");
     } catch (error) {
       console.error('Failed to send message:', error);
       toast.error("Failed to send message. Please try again.");
@@ -1030,6 +1141,11 @@ const ClientChat = () => {
   // /topup, does not itself resume the paused chat).
   const handleAddStardust = useCallback(() => {
     if (!selectedChat) return;
+    if (perMessage) {
+      // Per-message billing: nothing to pause. The same glider, back to this room.
+      openPerMessageOffering();
+      return;
+    }
     const chatId = selectedChat;
     // Already in the out-of-balance GRACE hold? The session is paused, so don't
     // re-pause — instead flag the top-up (/topup → mark_topping_up) to extend the
@@ -1047,7 +1163,7 @@ const ClientChat = () => {
         }
       },
     });
-  }, [selectedChat, openTopUp, sessionState.sessionStatus]);
+  }, [selectedChat, openTopUp, sessionState.sessionStatus, perMessage, openPerMessageOffering]);
 
   const handlePauseForTopUp = handleAddStardust;
   const handleTopUpClick = handleAddStardust;
@@ -1063,6 +1179,15 @@ const ClientChat = () => {
     const chatId = selectedChat;
     const inGrace = sessionState.sessionStatus === 'GRACE';
     try {
+      if (perMessage) {
+        // Per-message billing: no clock to pause. Straight to checkout, and back
+        // to this room; the balance arrives with session_info on reconnect.
+        await createStardustCheckoutSession({
+          amount_usd: amountUsd,
+          return_url: perMessageReturnUrl(chatId),
+        });
+        return;
+      }
       // Mirror of the glider modal's onBeforeCheckout (above): pause the clock
       // before leaving for Stripe, or extend the grace hold while she pays.
       if (inGrace) await pauseChat(chatId).catch(() => {});
@@ -1076,7 +1201,7 @@ const ClientChat = () => {
       // Never strand her mid-hold: the glider modal has its own error surface.
       handleAddStardust();
     }
-  }, [selectedChat, sessionState.sessionStatus, createStardustCheckoutSession, handleAddStardust]);
+  }, [selectedChat, sessionState.sessionStatus, createStardustCheckoutSession, handleAddStardust, perMessage]);
 
   const handleResumeChat = async () => {
     if (!selectedChat) return;
@@ -1113,6 +1238,15 @@ const ClientChat = () => {
 
     if (status === 'success') {
       setSelectedChat(chatIdNum);
+
+      // Per-message billing (per_message=1): the webhook credited her Stardust
+      // and told the room; there is nothing to resume. Back into the room,
+      // which reconnects and reads the new balance from session_info.
+      if (searchParams.get('per_message') === '1') {
+        toastRef.current.success('Payment received — your Stardust is in the room.');
+        navigate(`/chats?chat_id=${chatIdNum}`, { replace: true });
+        return;
+      }
 
       // Glider top-up (resume=1): the Stardust webhook only credits balance — it
       // does NOT resume the chat — so we resume ourselves, retrying to let the
@@ -1347,7 +1481,7 @@ const ClientChat = () => {
           phase={showsClosingCard ? 'ended' : isPaused ? 'pausing' : reflection.reflecting ? 'reflecting' : 'room'}
           /* the reflection: offered in an active reading; both numbers come
              from reflectBudget.ts through the hook, nothing computed here */
-          reflect={isChatActive ? {
+          reflect={isChatActive && !perMessage ? {
             remainingSeconds: reflection.remainingSeconds,
             earnedSeconds: reflection.earnedSeconds,
             timeUp: reflection.timeUp,
@@ -1356,6 +1490,17 @@ const ClientChat = () => {
             onAddTime: (a: number) => handleAddStardustAt(a),
           } : null}
           onMoreOffering={handleTopUpClick}
+          /* per-message billing: the price line where the meter stood, the price on
+             the send button, the counter, the line under the composer, and End
+             held while the goodbye is on its way; the meter, Reflect, the nudge and
+             the hold panel are not mounted at all */
+          perMessage={perMessage ? {
+            price: perMessagePrice,
+            balance: perMessageBalance,
+            notice: composerNotice,
+            maxChars: PER_MESSAGE_MAX_CHARS,
+            endPending: updateChatStatusMutation.isPending,
+          } : null}
           readerName={psychicName}
           readerPhoto={psychicDetails?.profile_picture_url || selectedChatData?.user_profile_pic_url}
           minutesLeft={minutesLeft}
@@ -1396,16 +1541,16 @@ const ClientChat = () => {
           onInput={handleClientInput}
           onSend={() => handleSendMessage({ preventDefault: () => {} } as any)}
           composerPlaceholder={!isConnected ? "Connecting..." : sessionState.status === 'ENDED' ? "Session ended" : "Say anything…"}
-          composerDisabled={!isConnected || sessionState.status === 'ENDED' || !sessionState.isInputEnabled}
+          composerDisabled={!isConnected || sessionState.status === 'ENDED' || !sessionState.isInputEnabled || outOfBalance}
           showComposer={!!isChatActive}
           lowBalance={
-            isChatActive && sessionState.showCriticalWarning
+            isChatActive && !perMessage && sessionState.showCriticalWarning
               ? { text: `You have ${readingTimeLeftLabel} of reading time left. Add Stardust to keep your reading going.`,
                   action: "Add Stardust", onAction: handlePauseForTopUp }
               : null
           }
           hold={
-            isPaused
+            isPaused && !perMessage
               ? {
                   title: isGrace ? 'Out of Stardust' : 'Reading paused',
                   sub: isGrace
@@ -1439,9 +1584,12 @@ const ClientChat = () => {
               ? {
                   minutes: formatDuration(sessionSummaryData.duration),
                   total: formatGbp(sessionSummaryData.cost || 0),
-                  perMinute: psychicDetails?.price_per_second != null
-                    ? formatGbp(Math.round(psychicDetails.price_per_second * 60 * 100) / 100)
-                    : null,
+                  perMinute: perMessage
+                    ? (perMessagePrice != null ? formatGbp(perMessagePrice) : null)
+                    : psychicDetails?.price_per_second != null
+                      ? formatGbp(Math.round(psychicDetails.price_per_second * 60 * 100) / 100)
+                      : null,
+                  rateLabel: perMessage ? "per message" : "per minute",
                   // the server's termination reason, in words — never the raw
                   // enum value (endReasonCopy.ts); "" means no eyebrow at all
                   title: endReasonEyebrow(sessionState.endReason),
@@ -1486,6 +1634,7 @@ const ClientChat = () => {
               bio={psychicDetails?.bio}
               categories={psychicDetails?.categories}
               pricePerSecond={psychicDetails?.price_per_second}
+              pricePerMessage={perMessage ? perMessagePrice : undefined}
             />
           </div>
         )}
@@ -1523,7 +1672,9 @@ const ClientChat = () => {
       <HallDialog open={showEndConfirm} onClose={() => setShowEndConfirm(false)} labelledBy="dlg-end">
         <p className="eyebrow">This action cannot be undone</p>
         <h1 className="ptitle" id="dlg-end">End Chat Session?</h1>
-        <p className="psub">Are you sure you want to end this chat session? You will be charged for the time spent, and the conversation will be closed.</p>
+        <p className="psub">{perMessage
+          ? "Your reader will say goodbye and the conversation will close. Nothing more is charged."
+          : "Are you sure you want to end this chat session? You will be charged for the time spent, and the conversation will be closed."}</p>
         <button className="begin" id="dlg-end-confirm" onClick={handleEndChat} disabled={updateChatStatusMutation.isPending}>
           {updateChatStatusMutation.isPending ? 'Ending...' : 'End Chat'}
         </button>

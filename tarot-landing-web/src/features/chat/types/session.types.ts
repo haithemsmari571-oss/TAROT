@@ -1,3 +1,5 @@
+export type BillingMode = 'per_minute' | 'per_message';
+
 export type ChatStatus = 
   | 'REQUESTED' 
   | 'ACTIVE' 
@@ -21,17 +23,19 @@ export interface ChatSessionData {
   psychic_id?: number;
   chat_status: ChatStatus;
   session_started_at?: string;
-  psychic_rate_per_second: number;
+  // Null under per-message billing, where a reader may carry no per-second
+  // rate at all, and the clock figures come as null too.
+  psychic_rate_per_second: number | null;
   client_balance: number;
-  elapsed_seconds?: number;
-  estimated_cost?: number;
+  elapsed_seconds?: number | null;
+  estimated_cost?: number | null;
   psychic_name?: string;
   // Backend billing status + free/paid split (from /chat/{id}/session-time).
   session_status?: SessionStatus;
   credit_balance?: number;
   paid_balance?: number;
   // Per-minute prepaid model.
-  rate_per_minute?: number;
+  rate_per_minute?: number | null; // null when the reader has no per-minute rate
   remaining_minutes?: number;
   minutes_charged?: number;
   remaining_seconds?: number;
@@ -39,6 +43,12 @@ export interface ChatSessionData {
   reflect_remaining_seconds?: number;
   reflect_seconds_used?: number;
   reflecting_since?: string | null;
+  // Per-message billing (BILLING_MODE=per_message): the mode, the reader's price
+  // for one message and the client's spendable balance, as the session payload
+  // carries them. Absent on an older backend and in per-minute mode.
+  billing_mode?: BillingMode | null;
+  price_per_message?: number | null;
+  balance?: number | null;
 }
 
 // Periodic re-sync from getChatSessionTime — the join-anchored source of truth
@@ -46,14 +56,14 @@ export interface ChatSessionData {
 export interface ChatSessionSyncData {
   elapsed_seconds: number;
   estimated_cost: number;
-  price_per_second: number;
+  price_per_second: number | null;
   client_balance: number;
   credit_balance?: number;
   paid_balance?: number;
   remaining_seconds?: number | null;
   session_status?: SessionStatus;
   // Per-minute prepaid model.
-  rate_per_minute?: number;
+  rate_per_minute?: number | null; // null when the reader has no per-minute rate
   remaining_minutes?: number;
   minutes_charged?: number;
   // Grace / top-up hold.
@@ -64,6 +74,10 @@ export interface ChatSessionSyncData {
   reflect_remaining_seconds?: number;
   reflect_seconds_used?: number;
   reflecting_since?: string | null;
+  // Per-message billing, when the payload carries it.
+  billing_mode?: BillingMode | null;
+  price_per_message?: number | null;
+  balance?: number | null;
 }
 
 export interface ChatSessionState {
@@ -84,6 +98,13 @@ export interface ChatSessionState {
   // credit, purple = paid). Null until the first session-time sync.
   creditBalance: number | null;
   paidBalance: number | null;
+
+  // Per-message billing: the mode this room runs on (null until a payload said),
+  // the reader's price for one message, and the spendable balance the payload
+  // reported. Read from payloads and balance events, never computed here.
+  billingMode: BillingMode | null;
+  pricePerMessage: number | null;
+  spendableBalance: number | null;
 
   // Backend billing sub-state. While null we treat the session as not-yet-known
   // and do NOT tick. The local meter only runs when this is 'ACTIVE'.
@@ -137,6 +158,6 @@ export type ChatSessionAction =
   | { type: 'CHAT_PAUSED'; payload: { reason: string; elapsed_seconds: number; estimated_cost: number } }
   | { type: 'CHAT_RESUMED'; payload: { client_balance: number; elapsed_seconds?: number; remaining_seconds?: number | null; rate_per_second?: number } }
   | { type: 'CHAT_ENDED'; payload?: { elapsed_seconds?: number; estimated_cost?: number; reason?: string } }
-  | { type: 'UPDATE_BALANCE'; payload: { balance: number } }
+  | { type: 'UPDATE_BALANCE'; payload: { balance: number; price_per_message?: number | null } }
   | { type: 'SESSION_ENDED_NO_BALANCE' }
   | { type: 'RESET' };

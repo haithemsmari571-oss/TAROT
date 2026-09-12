@@ -31,10 +31,31 @@ export class ClientChatAdapter extends BaseChatAdapter {
         break;
       
       case 'balance_updated':
-        // Emit balance update
+        // Emit balance update. Per-message billing sends {balance, price_per_message}
+        // (the top-up webhook); the older shape carried new_balance.
         this.eventBus.emit(ChatEventType.BALANCE_UPDATED, {
-          newBalance: data.new_balance || 0,
+          newBalance: data.balance ?? data.new_balance ?? 0,
           amountDeducted: data.amount_deducted,
+          pricePerMessage: data.price_per_message,
+        });
+        break;
+
+      case 'message_rejected':
+        // Per-message billing: the server refused to store or charge the message.
+        this.eventBus.emit(ChatEventType.MESSAGE_REJECTED, {
+          reason: String(data.reason || ''),
+          message: data.message,
+          pricePerMessage: data.price_per_message,
+          balance: data.balance,
+        });
+        break;
+
+      case 'message_fee_charged':
+        // The sender's balance after her message was charged.
+        this.eventBus.emit(ChatEventType.MESSAGE_FEE_CHARGED, {
+          messageId: data.message_id,
+          fee: data.fee,
+          clientBalance: data.client_balance,
         });
         break;
       

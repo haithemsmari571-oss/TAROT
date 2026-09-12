@@ -10,6 +10,7 @@ import { ToastProvider } from './components/Toast'
 import { NotificationProvider } from './features/notifications/context/NotificationContext'
 import IncomingReadingModal from './features/chat/components/IncomingReadingModal'
 import { TopUpProvider } from './features/payment/context/TopUpContext'
+import { BillingModeProvider } from './features/billing-mode/BillingModeContext'
 import { CelebrationProvider } from './features/celebrations/CelebrationProvider'
 import { SanctuaryPlayerProvider } from './features/sanctuary/SanctuaryPlayerProvider'
 
@@ -27,6 +28,8 @@ createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
+        {/* the billing mode, fetched once for every screen that draws a price */}
+        <BillingModeProvider>
         <AuthProvider>
           <NotificationProvider>
             <AuthInitializer>
@@ -44,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
             </AuthInitializer>
           </NotificationProvider>
         </AuthProvider>
+        </BillingModeProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>

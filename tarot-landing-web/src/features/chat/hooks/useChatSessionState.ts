@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { NotificationType } from '@/features/notifications/types/notification.types';
-import { ChatSessionState, ChatSessionAction, SessionStatus } from '../types/session.types';
+import { BillingMode, ChatSessionState, ChatSessionAction, SessionStatus } from '../types/session.types';
 import { getChatSessionTime } from '../api/chatApi';
 // Timer runs independently on client side
 // Initial data fetched from REST API on mount
@@ -18,6 +18,9 @@ const initialState: ChatSessionState = {
   clientBalance: null,
   creditBalance: null,
   paidBalance: null,
+  billingMode: null,
+  pricePerMessage: null,
+  spendableBalance: null,
   sessionStatus: null,
   ratePerMinute: 0,
   minutesCharged: 0,
@@ -67,6 +70,9 @@ export function chatSessionReducer(
         reflect_remaining_seconds,
         reflect_seconds_used,
         reflecting_since,
+        billing_mode,
+        price_per_message,
+        balance,
       } = action.payload;
 
       // Resolve the billing sub-state. The COCKPIT (psychic/admin) defaults to
@@ -77,7 +83,7 @@ export function chatSessionReducer(
         session_status ?? (state.userRole === 'CLIENT' ? 'ACTIVE' : 'AWAITING_JOIN');
 
       const isBilling = resolvedSessionStatus === 'ACTIVE';
-      const perMinute = rate_per_minute ?? (psychic_rate_per_second * 60);
+      const perMinute = rate_per_minute ?? ((psychic_rate_per_second ?? 0) * 60);
       const remainingFromPayload = (action.payload as any).remaining_seconds;
 
       // Per-minute model: `client_balance` is the LIVE remaining balance (already
@@ -86,7 +92,7 @@ export function chatSessionReducer(
       // that falsely flips the session to ENDED. Remaining time = the current
       // prepaid minute still running + every further minute they can afford.
       const affordableFuture = perMinute > 0 ? Math.floor(client_balance / perMinute) : 0;
-      const prepaidRemaining = Math.max(0, (minutes_charged ?? 0) * 60 - elapsed_seconds);
+      const prepaidRemaining = Math.max(0, (minutes_charged ?? 0) * 60 - (elapsed_seconds ?? 0));
       const computedRemaining = prepaidRemaining + affordableFuture * 60;
       const remainingSeconds = remainingFromPayload != null ? remainingFromPayload : computedRemaining;
       const computedRemainingMinutes = affordableFuture + (prepaidRemaining > 0 ? 1 : 0);
@@ -102,15 +108,19 @@ export function chatSessionReducer(
         sessionStatus: resolvedSessionStatus,
         psychicId: psychic_id,
         sessionStartedAt: session_started_at,
-        psychicRatePerSecond: psychic_rate_per_second,
+        psychicRatePerSecond: psychic_rate_per_second ?? 0,
         clientBalance: client_balance,
         creditBalance: credit_balance ?? state.creditBalance,
         paidBalance: paid_balance ?? state.paidBalance,
+        // per-message billing: the payload's own figures, or what was known
+        billingMode: billing_mode ?? state.billingMode,
+        pricePerMessage: price_per_message !== undefined ? price_per_message : state.pricePerMessage,
+        spendableBalance: balance ?? client_balance ?? state.spendableBalance,
         ratePerMinute: perMinute,
         minutesCharged: minutes_charged ?? 0,
         remainingMinutes: remaining_minutes ?? computedRemainingMinutes,
-        elapsedSeconds: elapsed_seconds,
-        estimatedCost: estimated_cost,
+        elapsedSeconds: elapsed_seconds ?? 0,
+        estimatedCost: estimated_cost ?? 0,
         isInputEnabled: actualStatus === 'ACTIVE' && isBilling,
         isPaused: false,
         remainingBalance: client_balance,
@@ -389,6 +399,11 @@ export function chatSessionReducer(
       return {
         ...state,
         clientBalance: newBalance,
+        // per-message billing reads these two; the payload said them, nothing computed
+        spendableBalance: newBalance,
+        pricePerMessage: action.payload.price_per_message !== undefined
+          ? action.payload.price_per_message
+          : state.pricePerMessage,
         remainingBalance: newBalance - state.estimatedCost,
         remainingSeconds,
         showLowBalanceWarning: isBilling && remainingSeconds !== null && remainingSeconds > 60 && remainingSeconds <= 300,
@@ -415,6 +430,9 @@ interface UseChatSessionStateOptions {
   onSessionAccepted?: () => void;
   onSessionPaused?: () => void;
   onSessionEnded?: () => void;
+  /** The app-level billing mode (GET /billing-mode). The session payload's own
+      value wins once it has arrived; this stands in before that. */
+  appBillingMode?: BillingMode | null;
 }
 
 export function useChatSessionState({
@@ -425,11 +443,17 @@ export function useChatSessionState({
   onSessionAccepted,
   onSessionPaused,
   onSessionEnded,
+  appBillingMode = null,
 }: UseChatSessionStateOptions) {
   const [state, dispatch] = useReducer(chatSessionReducer, {
     ...initialState,
     userRole,
   });
+
+  // Per-message billing has no clock: no local tick and no 8s re-anchor. The
+  // payload's mode wins; until it has arrived the app-level mode stands in.
+  const effectiveBillingMode: BillingMode | null = state.billingMode ?? appBillingMode ?? null;
+  const perMessage = effectiveBillingMode === 'per_message';
   
   // DEBUG: Track state changes
   useEffect(() => {
@@ -489,6 +513,10 @@ export function useChatSessionState({
             reflect_remaining_seconds: data.reflect_remaining_seconds,
             reflect_seconds_used: data.reflect_seconds_used,
             reflecting_since: data.reflecting_since,
+            // per-message billing, when the session runs on it
+            billing_mode: data.billing_mode,
+            price_per_message: data.price_per_message,
+            balance: data.balance,
             // Pass the backend billing status through (may be undefined). The
             // reducer applies the role-aware default (CLIENT → ACTIVE, cockpit →
             // AWAITING_JOIN) so the client is never frozen out of their own chat.
@@ -518,6 +546,10 @@ export function useChatSessionState({
     // Only poll while the chat is live (accepted). Ended/requested chats don't
     // have a running session to re-anchor to.
     if (currentChatStatus !== 'ACTIVE') {
+      return;
+    }
+    // Per-message billing has no meter to re-anchor: no poll at all.
+    if (perMessage) {
       return;
     }
 
@@ -570,7 +602,7 @@ export function useChatSessionState({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [chatId, currentChatStatus, userRole]);
+  }, [chatId, currentChatStatus, userRole, perMessage]);
 
   // Initialize paused state when loading a PAUSED chat
   useEffect(() => {
@@ -677,6 +709,10 @@ export function useChatSessionState({
     if (state.status !== 'ACTIVE' || state.isPaused || state.sessionStatus !== 'ACTIVE') {
       return;
     }
+    // Per-message billing: nothing counts down, so nothing ticks.
+    if (perMessage) {
+      return;
+    }
 
     // Stop timer if no remaining time
     if (state.remainingSeconds !== null && state.remainingSeconds <= 0) {
@@ -694,7 +730,7 @@ export function useChatSessionState({
       console.log('[useChatSessionState] Stopping countdown timer');
       clearInterval(timer);
     };
-  }, [state.status, state.isPaused, state.sessionStatus]); // Re-anchors when billing flips on join
+  }, [state.status, state.isPaused, state.sessionStatus, perMessage]); // Re-anchors when billing flips on join
 
   // Out-of-balance GRACE countdown — ticks the local top-up timer down each
   // second. When it reaches 0 the backend ends the session (session_ended).
@@ -731,6 +767,7 @@ export function useChatSessionState({
   
   return {
     sessionState: state,
+    billingMode: effectiveBillingMode,
     dispatch, // Expose dispatch for manual timer sync
     updateBalance,
     isActive: state.status === 'ACTIVE' && !state.isPaused,

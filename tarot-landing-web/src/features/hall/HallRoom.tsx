@@ -17,7 +17,7 @@ import { HallRuntimeContext } from "./HallStage";
 import HoldAmounts from "./HoldAmounts";
 import SoundPills, { REFLECT_LIBRARY_SOUND_LIMIT } from "./SoundPills";
 import { setHallSheetEnabled } from "./hallSheet";
-import { formatMinutesLeft } from "@/lib/currency";
+import { formatGbp, formatMinutesLeft } from "@/lib/currency";
 import { formatReflectClock, formatReflectUsed } from "./reflectBudget";
 
 export type RoomPhase = "room" | "pausing" | "reflecting" | "ended";
@@ -102,6 +102,9 @@ export interface HallRoomProps {
         value). Draws one quiet line under the figures when > 0; at 0 there
         is no element at all. Client-local until the server pass. */
     reflectionSeconds?: number;
+    /** the rate cell's label: "per minute" as always, "per message" under
+        per-message billing (the caller says which) */
+    rateLabel?: string;
   }) | null;
 
   /* #33 anything with no hall home — drawn in the panel in its own words */
@@ -114,6 +117,20 @@ export interface HallRoomProps {
       be seen; it only opens a modal, and nothing bills without a further
       explicit purchase. */
   onMoreOffering?: () => void;
+
+  /* per-message billing. Present only when the room runs on it: the price
+     line stands where the meter stood, the price sits on the send button, the
+     composer is capped with a counter, and one line under it says why a send
+     did not go. The meter, Reflect, the nudge and the hold panel are then not
+     mounted at all. Every number here arrived in a payload. */
+  perMessage?: {
+    price: number | null;
+    balance: number | null;
+    notice?: string | null;
+    maxChars: number;
+    /** End was tapped and the end response has not arrived yet */
+    endPending?: boolean;
+  } | null;
 
   /* #5,#8 header actions */
   onBack: () => void;
@@ -194,6 +211,8 @@ export default function HallRoom(p: HallRoomProps) {
   }, [p.readerPhoto]);
 
   const meter = p.isPaused ? "Paused" : formatMinutesLeft(p.minutesLeft);
+  /* a figure the payload has not given yet draws as a dash, never as £0 */
+  const money = (n: number | null | undefined) => (n == null ? "—" : formatGbp(n));
   const banked = p.reflect ? formatReflectClock(p.reflect.remainingSeconds) : null;
   const bankedOut = !!p.reflect && p.reflect.remainingSeconds <= 0;
   const timeUp = !!p.reflect?.timeUp;
@@ -223,11 +242,20 @@ export default function HallRoom(p: HallRoomProps) {
           {/* DEFECT 2 — the money leads. Spent is the number she will dispute,
               so it is first and largest; elapsed and remaining follow. All three
               read what the session already reports — nothing is computed here. */}
+          {p.perMessage ? (
+            /* per-message billing: no meter. The price and what she has left, both
+               straight from the session payload, refreshed by balance_updated and
+               by every charged send. Nothing is computed here. */
+            <div className="stats permsg">
+              <div className="stat"><b id="permsg-line">{money(p.perMessage.price)} per message · {money(p.perMessage.balance)} left</b></div>
+            </div>
+          ) : (
           <div className="stats">
             <div className="stat spent"><b id="spent">{p.spentLabel ?? "£0.00"}</b><i>spent</i></div>
             <div className="stat"><b id="elapsed">{(p.elapsedLabel || "").replace(/\s*elapsed\s*$/, "") || "0:00"}</b><i>elapsed</i></div>
             <div className="stat"><b id="mins">{meter}</b><i>{p.isPaused ? "paused" : "left"}</i></div>
           </div>
+          )}
           {/* The trailing controls travel as one cell, so on a narrow header
               they wrap to the next row TOGETHER and hug its right edge — a
               Reflect that stayed up beside the name while End and Readers fell
@@ -237,7 +265,7 @@ export default function HallRoom(p: HallRoomProps) {
                 startHall's wireRoomControls (id="reflect"), like the hold's
                 controls, so it carries a real listener the DOM can count. At
                 0:00 it stays, quiet: aria-disabled, and the handler declines. */}
-            {p.reflect && (
+            {p.reflect && !p.perMessage && (
               <button className="rbtn rreflect" id="reflect" type="button"
                       aria-disabled={bankedOut ? "true" : undefined}
                       aria-label={bankedOut ? "Reflect — no time banked yet" : `Reflect — ${banked} banked`}>
@@ -245,7 +273,12 @@ export default function HallRoom(p: HallRoomProps) {
               </button>
             )}
             {p.onEnd && (
-              <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading">End</button>
+              /* per-message billing: End holds, disabled, from the tap until the
+                 end response lands (the reader's goodbye is on its way) */
+              <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading"
+                      disabled={!!p.perMessage?.endPending}>
+                {p.perMessage?.endPending ? "Closing…" : "End"}
+              </button>
             )}
             {p.onLeave && (
               <button className="rbtn rleave" onClick={p.onLeave} aria-label="Leave for the readers">Readers</button>
@@ -284,7 +317,7 @@ export default function HallRoom(p: HallRoomProps) {
         </div>
 
         {/* #27 the low-balance warning */}
-        {p.lowBalance && (
+        {p.lowBalance && !p.perMessage && (
           <div className="lowbal">
             <span>{p.lowBalance.text}</span>
             <button id="lowbalact" type="button" onClick={p.lowBalance.onAction}>{p.lowBalance.action}</button>
@@ -293,18 +326,37 @@ export default function HallRoom(p: HallRoomProps) {
 
         {/* #28..#30 the composer */}
         {p.showComposer && (
-          <form className="composer" onSubmit={(e) => { e.preventDefault(); p.onSend(); }}>
+          <form className={"composer" + (p.perMessage ? " permsg" : "")} onSubmit={(e) => { e.preventDefault(); p.onSend(); }}>
             <input
               className="box" id="roominput"
               value={p.input}
-              onChange={(e) => p.onInput(e.target.value)}
+              onChange={(e) => p.onInput(p.perMessage ? e.target.value.slice(0, p.perMessage.maxChars) : e.target.value)}
               placeholder={p.composerPlaceholder}
               disabled={p.composerDisabled}
+              maxLength={p.perMessage ? p.perMessage.maxChars : undefined}
               aria-label="Your message"
             />
-            <button className="send" id="send" type="submit" aria-label="send"
-                    disabled={p.composerDisabled || !p.input.trim()}>↑</button>
+            {p.perMessage ? (
+              /* the price is on the button, always, so what a tap costs is never a
+                 surprise; the cap and its counter sit under the box */
+              <button className="send sendprice" id="send" type="submit"
+                      aria-label={`Send for ${money(p.perMessage.price)}`}
+                      disabled={p.composerDisabled || !p.input.trim()}>
+                Send · {money(p.perMessage.price)}
+              </button>
+            ) : (
+              <button className="send" id="send" type="submit" aria-label="send"
+                      disabled={p.composerDisabled || !p.input.trim()}>↑</button>
+            )}
           </form>
+        )}
+        {p.showComposer && p.perMessage && (
+          <div className="permsg-foot">
+            <span className="count" id="roomcount" aria-live="polite">{p.input.length}/{p.perMessage.maxChars}</span>
+            {p.perMessage.notice && (
+              <span className="permsg-note" id="permsg-note" role="status">{p.perMessage.notice}</span>
+            )}
+          </div>
         )}
 
         {/* #33 and anything with no hall home — its own words, hall structure */}
@@ -323,7 +375,8 @@ export default function HallRoom(p: HallRoomProps) {
         )}
       </div>
 
-      {/* ══ 5 · the hold ══ */}
+      {/* ══ 5 · the hold ══ (not mounted under per-message billing: no clock, no hold) */}
+      {!p.perMessage && (
       <main className="stage stage2" id="pausestage">
         <section className="panel" id="pausepanel">
           <p className="eyebrow">{p.hold?.title ?? "Your minutes have run out"}</p>
@@ -350,12 +403,15 @@ export default function HallRoom(p: HallRoomProps) {
           <p className="legal">{p.hold?.costLine ?? "You are charged for the minutes you use, nothing more."}</p>
         </section>
       </main>
+      )}
 
       {/* ══ 7 · the reflection ══
           The third stage. The countdown is drawn from the caller's numbers on
           every render (React owns #rfcdnum here; startHall's own countdown
           touches only #cdnum). At 0:00 the clock holds at 0:00 and the panel
-          stays until Return — what should happen then is an open decision. */}
+          stays until Return — what should happen then is an open decision.
+          Not mounted under per-message billing: there is no clock to freeze. */}
+      {!p.perMessage && (
       <main className="stage stage2" id="reflectstage">
         <section className="panel" id="reflectpanel" data-timeup={timeUp ? "true" : undefined}>
           <p className="eyebrow">Sit with this</p>
@@ -383,6 +439,7 @@ export default function HallRoom(p: HallRoomProps) {
           <p className="legal">Your minutes do not run while you reflect.</p>
         </section>
       </main>
+      )}
 
       {/* ══ 6 · the receipt ══ */}
       <main className="stage stage2" id="endstage">
@@ -395,7 +452,7 @@ export default function HallRoom(p: HallRoomProps) {
           <div className="receipt">
             <div className="rcell"><b className="rnum" id="rmins">—</b><span className="slab">duration</span></div>
             <div className="rcell"><b className="rnum" id="rtotal">—</b><span className="slab">total</span></div>
-            <div className="rcell"><b className="rnum" id="rrate">—</b><span className="slab">per minute</span></div>
+            <div className="rcell"><b className="rnum" id="rrate">—</b><span className="slab">{p.receipt?.rateLabel ?? "per minute"}</span></div>
           </div>
           {/* decision 3 — reflection used, one quiet line under the figures;
               omitted entirely when nothing was used (formatReflectUsed → "") */}

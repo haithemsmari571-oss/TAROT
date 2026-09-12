@@ -16,7 +16,9 @@ export interface PsychicDetails {
   id: number;
   username: string;
   email: string;
-  price_per_second: number;
+  price_per_second: number | null;
+  /** Per-message billing: the reader's price for one message (null until set). */
+  price_per_message?: number | null;
   bio: string;
   is_verified: boolean;
   is_online: boolean;
@@ -130,7 +132,8 @@ export interface ChatDetails {
     id: number;
     username: string;
     email: string;
-    price_per_second: number;
+    price_per_second: number | null;
+    price_per_message?: number | null;
   };
   client: {
     id: number;
@@ -173,8 +176,8 @@ export const getChatMessages = async (
 export interface ChatSessionTime {
   elapsed_seconds: number;
   estimated_cost: number;
-  price_per_second: number;
-  rate_per_minute?: number; // exact per-minute charge (price_per_second * 60)
+  price_per_second: number | null; // null when the reader has no per-minute rate
+  rate_per_minute?: number | null; // exact per-minute charge (price_per_second * 60)
   client_balance: number; // total spendable = credit + paid
   credit_balance?: number; // free welcome/gift credit remaining
   paid_balance?: number; // purchased balance remaining
@@ -188,6 +191,11 @@ export interface ChatSessionTime {
   reflect_remaining_seconds?: number;
   reflect_seconds_used?: number;
   reflecting_since?: string | null; // ISO while REFLECTING, else null
+  // Per-message billing (BILLING_MODE=per_message), carried by every session
+  // shape: the mode, the reader's price for one message, the spendable balance.
+  billing_mode?: "per_minute" | "per_message";
+  price_per_message?: number | null;
+  balance?: number | null;
 }
 
 /**

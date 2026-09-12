@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
-import { formatPerMinuteGbp } from "../../../lib/currency";
+import { formatGbp, formatPerMinuteGbp } from "../../../lib/currency";
 import { sanitizeClaims } from "../../../lib/copy";
 
 interface Category {
@@ -17,6 +17,8 @@ interface PsychicProfileCardProps {
   bio?: string | null;
   categories?: Category[];
   pricePerSecond?: number | null;
+  /** per-message billing: the reader's price for one message, shown in place of the per-minute rate */
+  pricePerMessage?: number | null;
 }
 
 const BIO_LIMIT = 180;
@@ -35,6 +37,7 @@ export const PsychicProfileCard = ({
   bio,
   categories,
   pricePerSecond,
+  pricePerMessage,
 }: PsychicProfileCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const trimmedBio = sanitizeClaims(bio || "").trim();
@@ -133,8 +136,19 @@ export const PsychicProfileCard = ({
         </div>
       )}
 
-      {/* Rate — calm, transparent */}
-      {pricePerSecond ? (
+      {/* Rate — calm, transparent. Per-message billing shows the price of one
+          message; a reader with no per-minute rate at all shows nothing. */}
+      {pricePerMessage != null ? (
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/40">
+            Your rate
+          </span>
+          <span className="text-base font-bold tabular-nums text-white">
+            {formatGbp(pricePerMessage)}
+            <span className="text-xs font-normal text-white/45">/message</span>
+          </span>
+        </div>
+      ) : pricePerSecond ? (
         <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
           <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/40">
             Your rate
