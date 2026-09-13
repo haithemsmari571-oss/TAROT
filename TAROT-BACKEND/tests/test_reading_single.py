@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import time
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -89,15 +91,17 @@ class _FakeWebSocket:
 
     def __init__(self):
         self.sent = []
+        self.times = []
 
     async def send_json(self, payload):
         self.sent.append(payload)
+        self.times.append(reading_single._monotonic())
 
     def messages(self):
         return [p for p in self.sent if p.get("type") == "message"]
 
     def typing(self):
-        return [p["event"] for p in self.sent if "event" in p]
+        return [p["event"] for p in self.sent if p.get("event") in ("typing_start", "typing_stop")]
 
 
 class _Model:
@@ -128,6 +132,7 @@ def engine(sqlite, monkeypatch):
     db, Local = sqlite
     settings = get_app_settings()
     monkeypatch.setattr(settings, "BILLING_MODE", "per_message")
+    monkeypatch.setattr(reading_single, "random", random.Random(1))
     registry.seed_prompts(db)  # reading.single resolves from the registry, not the fallback
 
     store = SessionStore(session_factory=Local)
@@ -152,6 +157,7 @@ def engine(sqlite, monkeypatch):
     monkeypatch.setattr(reading_single, "_queues", {})
     monkeypatch.setattr(reading_single, "_workers", {})
     monkeypatch.setattr(reading_single, "_in_flight", {})
+    monkeypatch.setattr(reading_single, "_presence", {})
     monkeypatch.setattr(reading_burst, "_message_flow_locks", {})
     monkeypatch.setattr(
         reading_assistant, "build_client_file", lambda db, client_id: "CLIENT FILE TEXT"
@@ -529,3 +535,271 @@ def test_hard_cap_trims_the_last_bubble_at_a_sentence_end():
 
     untouched, note = reading_single._apply_hard_cap(["short", "reply"], 900)
     assert untouched == ["short", "reply"] and note is None
+
+
+class _Clock:
+    """Advance concurrent sleeps to their deadlines, without wall-clock delays."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.epoch = datetime.now(timezone.utc)
+        self.waiters = []
+        self.sleeps = []
+
+    def utc(self):
+        return self.epoch + timedelta(seconds=self.now)
+
+    async def sleep(self, seconds):
+        self.sleeps.append((self.now, seconds))
+        future = asyncio.get_running_loop().create_future()
+        self.waiters.append((self.now + seconds, future))
+        await future
+
+    async def run(self, coroutine):
+        task = asyncio.create_task(coroutine)
+        for _ in range(1000):
+            # Drain ready continuations before moving time, including task cleanup.
+            for _ in range(20):
+                await asyncio.sleep(0)
+            if task.done():
+                return task.result()
+            self.waiters = [(at, f) for at, f in self.waiters if not f.done()]
+            assert self.waiters, "presence task stalled without a scheduled deadline"
+            self.now = min(at for at, _ in self.waiters)
+            for at, future in self.waiters:
+                if at <= self.now and not future.done():
+                    future.set_result(None)
+        pytest.fail("presence timeline did not finish")
+
+
+@pytest.fixture
+def presence_clock(engine):
+    clock = _Clock()
+    engine.monkeypatch.setattr(reading_single, "_monotonic", lambda: clock.now)
+    engine.monkeypatch.setattr(reading_single, "_utc_now", clock.utc)
+    engine.monkeypatch.setattr(reading_single, "_sleep", clock.sleep)
+    engine.monkeypatch.setattr(engine.settings, "PRESENCE_JITTER", 0)
+    engine.monkeypatch.setattr(engine.settings, "PRESENCE_BETWEEN_BUBBLES_MS_MIN", 1000)
+    engine.monkeypatch.setattr(engine.settings, "PRESENCE_BETWEEN_BUBBLES_MS_MAX", 1000)
+    engine.monkeypatch.setattr(reading_single.random, "random", lambda: 1.0)
+    return clock
+
+
+def _timed_model(engine, clock, replies):
+    replies = iter(replies)
+    calls = []
+
+    async def generate(user_input, thinking, settings):
+        calls.append((clock.now, user_input))
+        seconds, text = next(replies)
+        await clock.sleep(seconds)
+        if isinstance(text, Exception):
+            raise text
+        return text, "test-model"
+
+    engine.monkeypatch.setattr(reading_single, "_generate", generate)
+    return calls
+
+
+def _timed_answer(engine, clock, text, replies):
+    client, psychic, chat = _people(engine.db)
+    ws = _room(engine, chat, client)
+    message = _paid_message(engine.db, chat, client, text)
+    calls = _timed_model(engine, clock, replies)
+
+    async def answer():
+        await reading_single.enqueue_reply(chat.id, message.id, committed_at=clock.epoch)
+        await reading_single.wait_for_idle(chat.id)
+
+    asyncio.run(clock.run(answer()))
+    assert not reading_single._presence
+    return ws, message, calls
+
+
+def _events(ws):
+    return [p.get("event", p.get("type")) for p in ws.sent]
+
+
+def _at(ws, event):
+    return [at for at, name in zip(ws.times, _events(ws)) if name == event]
+
+
+def test_presence_two_bubbles_have_exact_event_order(engine, presence_clock):
+    ws, message, calls = _timed_answer(
+        engine, presence_clock, "x" * 39 + "?", [(0.2, "first bubble\n\nsecond bubble")]
+    )
+    assert _events(ws) == [
+        "message_delivered", "message_seen", "typing_start", "message", "typing_stop",
+        "typing_start", "message", "typing_stop",
+    ]
+    assert ws.sent[:2] == [
+        {"event": "message_delivered", "data": {"message_id": message.id}},
+        {"event": "message_seen", "data": {"message_id": message.id}},
+    ]
+    assert calls[0][0] == 0  # The model starts before any presence deadline.
+    assert _at(ws, "message") == pytest.approx([8.3, 11.8])
+    assert _at(ws, "typing_stop") == _at(ws, "message")
+    log = engine.log.find("reading_single_reply")[0]
+    assert log["first_bubble_ms"] == pytest.approx(8300, abs=1)
+    assert log["total_delivery_ms"] == pytest.approx(11800, abs=1)
+
+
+def test_presence_question_uses_seen_and_think_formulas(engine, presence_clock):
+    ws, _, _ = _timed_answer(engine, presence_clock, "x" * 39 + "?", [(0.2, "yes")])
+    log = engine.log.find("reading_single_reply")[0]
+    assert log["seen_ms"] == 1200 + 15 * 40 == 1800
+    assert log["think_ms"] == 1500 + 25 * 40 + 1500 == 4000
+    assert _at(ws, "message_seen") == [1.8]
+    assert _at(ws, "typing_start") == [5.8]
+
+
+def test_presence_reaction_is_seen_and_answered_fast(engine, presence_clock):
+    ws, _, _ = _timed_answer(engine, presence_clock, "ok", [(0.2, "here with u")])
+    log = engine.log.find("reading_single_reply")[0]
+    assert log["seen_ms"] == 800
+    assert log["think_ms"] == 1000
+    assert _at(ws, "message_seen") == [0.8]
+    assert _at(ws, "typing_start") == [1.8]
+
+
+def test_presence_hiccup_turns_typing_off_for_the_configured_pause(engine, presence_clock):
+    engine.monkeypatch.setattr(reading_single.random, "random", lambda: 0.0)
+    ws, _, _ = _timed_answer(engine, presence_clock, "ok", [(0.2, "a" * 200)])
+    assert _events(ws) == [
+        "message_delivered", "message_seen", "typing_start", "typing_stop",
+        "typing_start", "message", "typing_stop",
+    ]
+    assert _at(ws, "typing_start") == pytest.approx([1.8, 9.3])
+    assert _at(ws, "typing_stop") == pytest.approx([7.3, 14.8])
+    assert _at(ws, "typing_start")[1] - _at(ws, "typing_stop")[0] == pytest.approx(
+        engine.settings.PRESENCE_HICCUP_PAUSE_MS / 1000
+    )
+    assert _at(ws, "message") == pytest.approx([14.8])
+
+
+def test_presence_slow_model_lands_300ms_after_completion(engine, presence_clock):
+    ws, _, calls = _timed_answer(engine, presence_clock, "x" * 39 + "?", [(20, "yes")])
+    assert calls[0][0] == 0
+    assert _at(ws, "typing_start") == [5.8]  # Not delayed until model completion.
+    assert _at(ws, "message") == [20.3]
+    assert engine.log.find("reading_single_reply")[0]["model_ms"] == 20000
+
+
+def test_presence_typing_jitter_is_seeded_and_stays_inside_clamp(engine):
+    values = []
+    for seed in (1, 2):
+        engine.monkeypatch.setattr(reading_single, "random", random.Random(seed))
+        values.append(reading_single._typing_ms("a" * 200))
+        for size in (1, 200, 1000):
+            assert 2500 <= reading_single._typing_ms("a" * size) <= 14000
+    assert values[0] != values[1]
+    assert all(8250 <= value <= 13750 for value in values)
+
+
+def test_presence_long_message_and_word_bonus_are_capped(engine, presence_clock):
+    text = "a " * 13
+    assert reading_single._seen_and_think_ms(text) == (1590, 3650)
+    assert reading_single._seen_and_think_ms("x" * 1000 + "?") == (6000, 8000)
+
+
+def test_presence_queued_messages_get_receipts_before_serial_replies(engine, presence_clock):
+    clock = presence_clock
+    client, psychic, chat = _people(engine.db)
+    ws = _room(engine, chat, client)
+    other_client_socket = _FakeWebSocket()
+    reader_socket = _FakeWebSocket()
+    from app.manager import manager
+
+    manager.active_chats[str(chat.id)].extend([
+        (other_client_socket, client.id), (reader_socket, psychic.id),
+    ])
+    first = _paid_message(engine.db, chat, client, "x" * 39 + "?")
+    second = _paid_message(engine.db, chat, client, "ok")
+    calls = _timed_model(engine, clock, [(6, "first answer"), (1, "second answer")])
+
+    async def answer():
+        await reading_single.enqueue_reply(chat.id, first.id, committed_at=clock.epoch)
+        await reading_single.enqueue_reply(chat.id, first.id, committed_at=clock.epoch)
+        await reading_single.enqueue_reply(chat.id, second.id, committed_at=clock.epoch)
+        await reading_single.wait_for_idle(chat.id)
+
+    asyncio.run(clock.run(answer()))
+    receipts = [(at, p) for at, p in zip(ws.times, ws.sent) if p.get("event", "").startswith("message_")]
+    assert len(receipts) == 4  # Duplicate enqueue adds neither receipts nor a call.
+    assert max(at for at, _ in receipts) == 1.8
+    assert {p["data"]["message_id"] for _, p in receipts} == {first.id, second.id}
+    assert [p["content"] for p in ws.messages()] == ["first answer", "second answer"]
+    assert calls[1][0] == _at(ws, "message")[0]
+    assert "first answer" in calls[1][1]
+    assert other_client_socket.sent == ws.sent
+    assert all(not p.get("event", "").startswith("message_") for p in reader_socket.sent)
+    assert not reading_single._presence
+
+
+def test_presence_deadlines_use_commit_not_worker_start(engine, presence_clock):
+    clock = presence_clock
+    client, _, chat = _people(engine.db)
+    ws = _room(engine, chat, client)
+    message = _paid_message(engine.db, chat, client, "ok")
+    _timed_model(engine, clock, [(0.1, "yes")])
+    clock.now = 0.2  # Time spent broadcasting the committed client message.
+
+    async def answer():
+        await reading_single.enqueue_reply(chat.id, message.id, committed_at=clock.epoch)
+        await reading_single.wait_for_idle(chat.id)
+
+    asyncio.run(clock.run(answer()))
+    assert _at(ws, "message_seen") == pytest.approx([0.8])
+    assert _at(ws, "typing_start") == pytest.approx([1.8])
+
+
+def test_presence_goodbye_starts_at_think_and_stops_after_one_bubble(engine, presence_clock):
+    clock = presence_clock
+    client, _, chat = _people(engine.db)
+    ws = _room(engine, chat, client)
+    _timed_model(engine, clock, [(0.1, "go gently\n\nignored")])
+    asyncio.run(clock.run(reading_single.say_goodbye(chat.id)))
+    assert _events(ws) == ["typing_start", "message", "typing_stop"]
+    think = 1.5 + len(reading_single.ENDED_NOTE) * 0.025
+    assert _at(ws, "typing_start") == [think]
+    assert _at(ws, "message") == [think + 2.5]
+
+
+def test_presence_cancelled_worker_clears_typing_and_receipt_tasks(engine, presence_clock):
+    clock = presence_clock
+    client, _, chat = _people(engine.db)
+    ws = _room(engine, chat, client)
+    message = _paid_message(engine.db, chat, client, "ok")
+    _timed_model(engine, clock, [(20, "not delivered")])
+
+    async def cancel():
+        await reading_single.enqueue_reply(chat.id, message.id, committed_at=clock.epoch)
+        await clock.sleep(2)
+        worker = reading_single._workers[chat.id]
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+
+    asyncio.run(clock.run(cancel()))
+    assert _events(ws) == ["message_delivered", "message_seen", "typing_start", "typing_stop"]
+    assert not ws.messages()
+    assert not reading_single._presence
+    assert not reading_single._workers
+
+
+def test_presence_drain_cancels_unstarted_receipts(engine, presence_clock):
+    clock = presence_clock
+    client, _, chat = _people(engine.db)
+    ws = _room(engine, chat, client)
+    message = _paid_message(engine.db, chat, client, "ok")
+    model = _model(engine, [])
+
+    async def drain():
+        await reading_single.enqueue_reply(chat.id, message.id, committed_at=clock.epoch)
+        await reading_single.drain_on_end(chat.id)
+        await reading_single.wait_for_idle(chat.id)
+
+    asyncio.run(clock.run(drain()))
+    assert not ws.sent
+    assert not model.calls
+    assert not reading_single._presence
+    assert len(_rows(engine.db, TransactionType.REVERSAL, message.id)) == 1

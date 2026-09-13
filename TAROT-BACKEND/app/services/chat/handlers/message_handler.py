@@ -1,7 +1,7 @@
 """Handler for message sending and receiving"""
 
 from typing import Any, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 from app.config import get_app_settings
 from app.services.chat.handlers.base import BaseEventHandler
 from app.events.types import ChatEventType
@@ -118,6 +118,7 @@ class MessageHandler(BaseEventHandler):
         # file behaves exactly as it always has.
         per_message_mode = get_app_settings().BILLING_MODE == "per_message"
         per_message_charge = None  # (message, price) once the charge has run
+        message_committed_at = None
         if per_message_mode and sender_is_paying_client:
             from app.services.per_message_billing import (
                 PerMessageRefusal,
@@ -131,6 +132,7 @@ class MessageHandler(BaseEventHandler):
                 per_message_charge = await charge_client_message(
                     self.db, chat, content, user
                 )
+                message_committed_at = datetime.now(timezone.utc)
             except PerMessageRefusal as refusal:
                 logger.info(
                     "per_message_rejected",
@@ -319,7 +321,9 @@ class MessageHandler(BaseEventHandler):
                     if chat.response_mode == ResponseMode.SABRI:
                         from app.services.ai import reading_single
 
-                        await reading_single.enqueue_reply(self.chat_id, db_message.id)
+                        await reading_single.enqueue_reply(
+                            self.chat_id, db_message.id, committed_at=message_committed_at
+                        )
                     else:
                         logger.info(
                             "per_message_manual_reader",

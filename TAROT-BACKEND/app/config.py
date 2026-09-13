@@ -199,12 +199,29 @@ class AppSettings(BaseSettings):
     # ── One-call reader (BILLING_MODE=per_message; app/services/ai/reading_single.py) ──
     # One model call per client message on the reading.single prompt, no Sabri pass:
     # the call's timeout and token ceiling, how many bubbles a reply may be, the hard
-    # character cap on the whole reply, and the ceiling on any one typing delay.
+    # character cap on the whole reply, and the per-message presence timeline.
     SINGLE_CALL_TIMEOUT_S: int = 25
     SINGLE_MAX_TOKENS: int = 1500
     SINGLE_MAX_BUBBLES: int = 3
     SINGLE_HARD_CHAR_CAP: int = 900
-    SINGLE_MAX_TYPING_MS: int = 4000
+    PRESENCE_DELIVERED_MS_MIN: int = 400
+    PRESENCE_DELIVERED_MS_MAX: int = 900
+    PRESENCE_SEEN_BASE_MS: int = 1200
+    PRESENCE_SEEN_MS_PER_CHAR: int = 15
+    PRESENCE_SEEN_MAX_MS: int = 6000
+    PRESENCE_THINK_BASE_MS: int = 1500
+    PRESENCE_THINK_MS_PER_CHAR: int = 25
+    PRESENCE_THINK_QUESTION_BONUS_MS: int = 1500
+    PRESENCE_THINK_MAX_MS: int = 8000
+    PRESENCE_TYPING_MS_PER_CHAR: int = 55
+    PRESENCE_TYPING_MIN_MS: int = 2500
+    PRESENCE_TYPING_MAX_MS: int = 14000
+    PRESENCE_HICCUP_MIN_CHARS: int = 150
+    PRESENCE_HICCUP_PAUSE_MS: int = 2000
+    PRESENCE_BETWEEN_BUBBLES_MS_MIN: int = 900
+    PRESENCE_BETWEEN_BUBBLES_MS_MAX: int = 2200
+    PRESENCE_JITTER: float = 0.25
+    PRESENCE_REACTION_MAX_CHARS: int = 15
     # There is deliberately NO turn-size target and NO message-length cap. Both existed
     # (SABRI_TURN_TARGET_MESSAGES = 8, SABRI_MAX_MESSAGE_WORDS = 26) and both decided, in code,
     # something only Sabri can judge: how much a person says in one breath. A conversation

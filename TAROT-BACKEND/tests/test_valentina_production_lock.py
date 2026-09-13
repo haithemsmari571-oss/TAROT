@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 19 files."""
+"""Verification of the eleven Production Lock Version 20 files."""
 
 from __future__ import annotations
 
@@ -9,6 +9,11 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
+    # Production Lock Version 20: per-message texting presence replaces only
+    # SINGLE_MAX_TYPING_MS with the eighteen PRESENCE_* settings in config.py.
+    # No per-minute setting or prompt changed; the other ten locked files are
+    # byte-identical to Version 19 (with the same newline normalization).
+    #
     # Production Lock Version 19: per-message billing, step 4b, adds FIVE settings to
     # config.py for the one-call reader engine (app/services/ai/reading_single.py, not
     # a locked file): SINGLE_CALL_TIMEOUT_S, SINGLE_MAX_TOKENS, SINGLE_MAX_BUBBLES,
@@ -103,7 +108,7 @@ LOCKED_SHA256 = {
     #                     That is how "sitting with you For weeks" reached clients.
     #
     # Versions 1-11 stay preserved in Second Brain.
-    "app/config.py": "446D1DB6CBEBB35A2C213F6F75585B150AA4C14DCD3DE2FCA190C2CACBEBD8FF",
+    "app/config.py": "621AB919B6B1BEB7DD2AA3095827751B8D484B24767CBBCCED882E9CB0A93585",
     "app/services/ai/client.py": "35E42B59265880441751DE0F53A7637A032B51D60A1D9B64A12AAD20865658CB",
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
     "app/services/ai/reading_duo.py": "33CCA0B8405E0E9872E71C7218C0A31202135554682F329E3E0AD06B6ED6AE2A",

@@ -17,7 +17,7 @@ What it reuses rather than copies: the session capsule (reading_capsule), the
 verified facts block (reading_client_facts), the Atlas memory fetch
 (reading_reveal), the client file (reading_assistant), Sabri's bubble sanitiser
 (reading_sabri), the per-chat message flow lock (reading_burst), the typing
-broadcast and the proportional typing clock (reading_executor), reader-message
+broadcast (reading_executor), reader-message
 persistence (services.chats), the draft log, the ledger and the refund
 (services.transactions).
 
@@ -32,8 +32,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import random
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -79,9 +81,121 @@ _SENTENCE_END_RE = re.compile(r"[.!?](?=\s|$)")
 _queues: Dict[int, List[int]] = {}
 _workers: Dict[int, asyncio.Task] = {}
 _in_flight: Dict[int, int] = {}
+_presence: Dict[Tuple[int, int], "_Presence"] = {}
 
-# Test seam for the typing delays and the gap between bubbles.
+# Test seams for all presence deadlines. Use monotonic time for waiting and UTC
+# for the commit anchor and delivery logs.
 _sleep = asyncio.sleep
+_monotonic = time.monotonic
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _jitter_ms(ms: float) -> float:
+    jitter = get_app_settings().PRESENCE_JITTER
+    return max(0.0, ms * random.uniform(1 - jitter, 1 + jitter))
+
+
+def _seen_and_think_ms(text: str) -> Tuple[float, float]:
+    s = get_app_settings()
+    if len(text) <= s.PRESENCE_REACTION_MAX_CHARS and "?" not in text:
+        return _jitter_ms(800), _jitter_ms(1000)
+    seen = min(
+        s.PRESENCE_SEEN_MAX_MS,
+        s.PRESENCE_SEEN_BASE_MS + s.PRESENCE_SEEN_MS_PER_CHAR * len(text),
+    )
+    think = s.PRESENCE_THINK_BASE_MS + s.PRESENCE_THINK_MS_PER_CHAR * len(text)
+    if "?" in text or len(text.split()) > 12:
+        think += s.PRESENCE_THINK_QUESTION_BONUS_MS
+    return _jitter_ms(seen), _jitter_ms(min(think, s.PRESENCE_THINK_MAX_MS))
+
+
+def _typing_ms(text: str) -> float:
+    s = get_app_settings()
+    base = max(
+        s.PRESENCE_TYPING_MIN_MS,
+        min(len(text) * s.PRESENCE_TYPING_MS_PER_CHAR, s.PRESENCE_TYPING_MAX_MS),
+    )
+    # The jitter never takes a bubble outside the configured typing bounds.
+    return max(
+        s.PRESENCE_TYPING_MIN_MS, min(_jitter_ms(base), s.PRESENCE_TYPING_MAX_MS)
+    )
+
+
+async def _sleep_until(deadline: float) -> None:
+    remaining = deadline - _monotonic()
+    if remaining > 0:
+        await _sleep(remaining)
+
+
+@dataclass
+class _Presence:
+    committed_at: datetime
+    origin: float
+    seen_ms: float
+    think_ms: float
+    receipts: Optional[asyncio.Task] = None
+
+
+class _Typing:
+    def __init__(self, chat_id: int, psychic_id):
+        self.chat_id = chat_id
+        self.psychic_id = psychic_id
+        self.on = False
+        self.started = None
+
+    async def set(self, on: bool) -> None:
+        if self.on != on:
+            self.on = on
+            if on:
+                self.started = _monotonic()
+            await _typing(self.chat_id, on, self.psychic_id)
+
+
+def _new_presence(text: str, committed_at: datetime) -> _Presence:
+    seen_ms, think_ms = _seen_and_think_ms(text)
+    age = max(0.0, (_utc_now() - committed_at).total_seconds())
+    return _Presence(committed_at, _monotonic() - age, seen_ms, think_ms)
+
+
+async def _receipts(chat_id: int, message_id: int, client_id: int, presence: _Presence) -> None:
+    from app.manager import manager
+
+    s = get_app_settings()
+    delivered_ms = _jitter_ms(random.uniform(
+        s.PRESENCE_DELIVERED_MS_MIN, s.PRESENCE_DELIVERED_MS_MAX
+    ))
+    # A jittered short reaction must never be seen before it is delivered.
+    delivered_ms = min(delivered_ms, presence.seen_ms)
+    for event, delay in (
+        ("message_delivered", delivered_ms), ("message_seen", presence.seen_ms)
+    ):
+        await _sleep_until(presence.origin + delay / 1000)
+        await manager.send_to_user_in_chat(
+            {"event": event, "data": {"message_id": message_id}}, str(chat_id), client_id
+        )
+
+
+async def _start_typing(presence: _Presence, typing: _Typing) -> None:
+    if presence.receipts is not None:
+        await presence.receipts
+    await _sleep_until(presence.origin + (presence.seen_ms + presence.think_ms) / 1000)
+    await typing.set(True)
+
+
+async def _cancel_task(task: Optional[asyncio.Task]) -> None:
+    if task is not None:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def _clear_presence(chat_id: int, message_id: int) -> None:
+    presence = _presence.pop((chat_id, message_id), None)
+    if presence is not None:
+        await _cancel_task(presence.receipts)
 
 
 class _EmptyReply(Exception):
@@ -91,7 +205,9 @@ class _EmptyReply(Exception):
 # ═════════════════════════════════════════════════════════════════════════════
 # Public surface
 # ═════════════════════════════════════════════════════════════════════════════
-async def enqueue_reply(chat_id: int, message_id: int) -> None:
+async def enqueue_reply(
+    chat_id: int, message_id: int, *, committed_at: Optional[datetime] = None
+) -> None:
     """Queue ``message_id`` for a reply and start the chat's worker if it is idle.
 
     Idempotent for a message already queued or already being answered. Must be
@@ -99,6 +215,29 @@ async def enqueue_reply(chat_id: int, message_id: int) -> None:
     queue = _queues.setdefault(chat_id, [])
     if message_id in queue or _in_flight.get(chat_id) == message_id:
         return
+    from app.database.client import SessionLocal
+    from app.models.chat import Chat
+    from app.models.message import Message
+
+    with SessionLocal() as db:
+        chat = db.get(Chat, chat_id)
+        message = db.get(Message, message_id)
+        if chat is None or message is None or message.chat_id != chat_id:
+            logger.warning(
+                "reading_single_message_missing", chat_id=chat_id, message_id=message_id
+            )
+            return
+        # Live sends supply their commit clock. Hall questions already persisted
+        # before join use the row's timestamp, never a new clock at worker start.
+        presence = _new_presence(
+            message.content or "",
+            _aware(committed_at or message.created_at) or _utc_now(),
+        )
+        client_id = chat.user_id
+    presence.receipts = asyncio.create_task(
+        _receipts(chat_id, message_id, client_id, presence)
+    )
+    _presence[(chat_id, message_id)] = presence
     queue.append(message_id)
     queue.sort()
     worker = _workers.get(chat_id)
@@ -119,6 +258,10 @@ async def say_goodbye(chat_id: int) -> None:
 
     settings = get_app_settings()
     turn_number = 0
+    presence = _new_presence(ENDED_NOTE, _utc_now())
+    presence.seen_ms = 0  # The goodbye starts at think; it has no receipt events.
+    typing = None
+    ready = None
     try:
         with SessionLocal() as db:
             chat = db.get(Chat, chat_id)
@@ -126,18 +269,16 @@ async def say_goodbye(chat_id: int) -> None:
                 logger.warning("reading_single_goodbye_no_chat", chat_id=chat_id)
                 return
             state = _state_for(chat)
+            typing = _Typing(chat_id, chat.psychic_id)
+            ready = asyncio.create_task(_start_typing(presence, typing))
             await _atlas_memory(state, chat.user_id, chat.psychic_id)
             user_input = build_single_input(db, chat, ended=True)
             psychic_id = chat.psychic_id
         turn_number = state.messages_sent_count
-        started = time.monotonic()
-        raw, model = await asyncio.wait_for(
-            asyncio.to_thread(
-                _call_model, user_input, thinking_for_turn(None), settings.SINGLE_MAX_TOKENS
-            ),
-            timeout=settings.SINGLE_CALL_TIMEOUT_S,
-        )
-        model_ms = int((time.monotonic() - started) * 1000)
+        started = _monotonic()
+        raw, model = await _generate(user_input, thinking_for_turn(None), settings)
+        model_done = _monotonic()
+        model_ms = int((model_done - started) * 1000)
         bubbles, notes = _parse_reply(raw, chat_id=chat_id)
         bubbles = bubbles[:1]
         _log_attempt(
@@ -146,11 +287,18 @@ async def say_goodbye(chat_id: int) -> None:
         if not bubbles:
             logger.warning("reading_single_goodbye_empty", chat_id=chat_id)
             return
-        await _deliver(chat_id, psychic_id, bubbles, state)
+        first_bubble_at = await _deliver(
+            chat_id, psychic_id, bubbles, state,
+            typing=typing, ready=ready, model_done=model_done,
+        )
         logger.info(
             "reading_single_goodbye",
             chat_id=chat_id,
             model_ms=model_ms,
+            first_bubble_ms=_ms_between(presence.committed_at, first_bubble_at),
+            total_delivery_ms=_ms_between(presence.committed_at, _utc_now()),
+            seen_ms=0,
+            think_ms=presence.think_ms,
             chars=len(bubbles[0]),
             model=model,
         )
@@ -160,6 +308,10 @@ async def say_goodbye(chat_id: int) -> None:
             message = f"timeout after {settings.SINGLE_CALL_TIMEOUT_S}s"
         _log_attempt(chat_id, turn_number, 1, STAGE_GOODBYE, error=message)
         logger.warning("reading_single_goodbye_failed", chat_id=chat_id, error=message)
+    finally:
+        await _cancel_task(ready)
+        if typing is not None:
+            await typing.set(False)
 
 
 async def drain_on_end(chat_id: int) -> None:
@@ -170,6 +322,7 @@ async def drain_on_end(chat_id: int) -> None:
     queued = list(_queues.pop(chat_id, []))
     refunded = []
     for message_id in queued:
+        await _clear_presence(chat_id, message_id)
         try:
             with SessionLocal() as db:
                 reversal = refund_message(db, message_id)
@@ -321,11 +474,31 @@ async def _worker(chat_id: int) -> None:
             )
         finally:
             _in_flight.pop(chat_id, None)
+            await _clear_presence(chat_id, message_id)
 
 
 async def _reply(chat_id: int, message_id: int) -> None:
+    from app.database.client import SessionLocal
+    from app.models.chat import Chat
+
+    with SessionLocal() as db:
+        chat = db.get(Chat, chat_id)
+        if chat is None:
+            return
+        typing = _Typing(chat_id, chat.psychic_id)
+    presence = _presence[(chat_id, message_id)]
+    ready = asyncio.create_task(_start_typing(presence, typing))
+    try:
+        await _reply_turn(chat_id, message_id, presence, typing, ready)
+    finally:
+        await _cancel_task(ready)
+        await typing.set(False)
+
+
+async def _reply_turn(chat_id, message_id, presence, typing, ready) -> None:
     """One paid client message: build, call (retry once), parse, deliver, record.
-    Both attempts failing means her money back and one honest line."""
+    Both attempts failing means her money back and one honest line. Calls stay
+    serial so the next input contains this reply; presence runs alongside them."""
     from app.database.client import SessionLocal
     from app.models.chat import Chat
     from app.models.message import Message
@@ -343,19 +516,16 @@ async def _reply(chat_id: int, message_id: int) -> None:
         await _atlas_memory(state, chat.user_id, chat.psychic_id)
         user_input = build_single_input(db, chat, answer_message_id=message_id)
         client_text = message.content or ""
-        asked_at = _aware(message.created_at)
+        asked_at = presence.committed_at
         psychic_id = chat.psychic_id
 
     thinking = thinking_for_turn(client_text)
     turn_number = state.messages_sent_count
     last_error: Optional[str] = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        started = time.monotonic()
+        started = _monotonic()
         try:
-            raw, model = await asyncio.wait_for(
-                asyncio.to_thread(_call_model, user_input, thinking, settings.SINGLE_MAX_TOKENS),
-                timeout=settings.SINGLE_CALL_TIMEOUT_S,
-            )
+            raw, model = await _generate(user_input, thinking, settings)
         except asyncio.TimeoutError:
             last_error = f"timeout after {settings.SINGLE_CALL_TIMEOUT_S}s"
             _log_attempt(chat_id, turn_number, attempt, STAGE_REPLY, error=last_error)
@@ -378,7 +548,8 @@ async def _reply(chat_id: int, message_id: int) -> None:
                 error=last_error,
             )
             continue
-        model_ms = int((time.monotonic() - started) * 1000)
+        model_done = _monotonic()
+        model_ms = int((model_done - started) * 1000)
         bubbles, notes = _parse_reply(raw, chat_id=chat_id, message_id=message_id)
         if not bubbles:
             last_error = "empty parsed output"
@@ -396,7 +567,10 @@ async def _reply(chat_id: int, message_id: int) -> None:
         _log_attempt(
             chat_id, turn_number, attempt, STAGE_REPLY, raw=raw, notes=notes, delivered=True
         )
-        first_bubble_at = await _deliver(chat_id, psychic_id, bubbles, state)
+        first_bubble_at = await _deliver(
+            chat_id, psychic_id, bubbles, state,
+            typing=typing, ready=ready, model_done=model_done,
+        )
         logger.info(
             "reading_single_reply",
             chat_id=chat_id,
@@ -404,6 +578,9 @@ async def _reply(chat_id: int, message_id: int) -> None:
             attempt=attempt,
             model_ms=model_ms,
             first_bubble_ms=_ms_between(asked_at, first_bubble_at),
+            total_delivery_ms=_ms_between(asked_at, _utc_now()),
+            seen_ms=presence.seen_ms,
+            think_ms=presence.think_ms,
             bubbles=len(bubbles),
             chars=sum(len(b) for b in bubbles),
             thinking=bool(thinking.get("thinking")),
@@ -411,10 +588,13 @@ async def _reply(chat_id: int, message_id: int) -> None:
         )
         return
 
-    await _refund_and_notify(chat_id, psychic_id, message_id, state, last_error)
+    await _refund_and_notify(
+        chat_id, psychic_id, message_id, state, last_error,
+        typing=typing, ready=ready, model_done=_monotonic(),
+    )
 
 
-async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error) -> None:
+async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error, **pacing) -> None:
     """Both attempts failed: reverse the message's debit, then one bubble in the
     reader's voice saying so, persisted like any reader message."""
     from app.database.client import SessionLocal
@@ -433,7 +613,7 @@ async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error)
             error=str(error),
         )
     try:
-        await _deliver(chat_id, psychic_id, [UNREACHABLE_NOTICE], state)
+        await _deliver(chat_id, psychic_id, [UNREACHABLE_NOTICE], state, **pacing)
     except Exception as error:  # noqa: BLE001 - never raise out of the worker
         logger.error(
             "reading_single_notice_failed",
@@ -454,6 +634,13 @@ async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error)
 # ═════════════════════════════════════════════════════════════════════════════
 # The call, the parse, the delivery
 # ═════════════════════════════════════════════════════════════════════════════
+async def _generate(user_input: str, thinking: dict, settings) -> Tuple[str, str]:
+    return await asyncio.wait_for(
+        asyncio.to_thread(_call_model, user_input, thinking, settings.SINGLE_MAX_TOKENS),
+        timeout=settings.SINGLE_CALL_TIMEOUT_S,
+    )
+
+
 def _call_model(user_input: str, thinking: dict, max_tokens: int) -> Tuple[str, str]:
     """Blocking: resolve the registry prompt and model, stream one reply to full
     text. The same streaming helper write_valentina uses. Call from a thread."""
@@ -566,40 +753,52 @@ def _apply_hard_cap(bubbles: List[str], cap: int) -> Tuple[List[str], Optional[d
     }
 
 
-async def _deliver(chat_id: int, psychic_id, bubbles: List[str], state) -> Optional[datetime]:
-    """Send the bubbles as the psychic: typing on, a capped proportional typing
-    delay, persist and broadcast under the chat's message flow lock, the usual
-    gap between bubbles. Each delivered bubble goes on the transcript and into the
-    ledger; the state is persisted and a capsule fold is scheduled afterwards.
-    Returns when the first bubble was broadcast."""
+async def _deliver(
+    chat_id: int, psychic_id, bubbles: List[str], state, *,
+    typing=None, ready=None, model_done=None,
+) -> Optional[datetime]:
+    """Reveal ordered bubbles against the typing and model-completion clocks.
+    The first typing clock may already be running while the model generates.
+    Every gap and hiccup is explicitly silent; cleanup only clears active dots."""
     from app.services.ai.reading_burst import message_flow_lock
-    from app.services.ai.reading_executor import (
-        compute_proportional_typing_ms,
-        proportional_reveal_config_from_settings,
-    )
 
     settings = get_app_settings()
-    config = proportional_reveal_config_from_settings()
+    typing = typing or _Typing(chat_id, psychic_id)
     first_bubble_at: Optional[datetime] = None
     try:
+        if ready is not None:
+            await ready
         for index, bubble in enumerate(bubbles):
             if index:
-                await _sleep(config.between_bubbles_ms / 1000.0)
-            await _typing(chat_id, True, psychic_id)
-            typing_ms = min(
-                compute_proportional_typing_ms(bubble, config), settings.SINGLE_MAX_TYPING_MS
-            )
-            await _sleep(max(0, typing_ms) / 1000.0)
+                gap_ms = _jitter_ms(random.uniform(
+                    settings.PRESENCE_BETWEEN_BUBBLES_MS_MIN,
+                    settings.PRESENCE_BETWEEN_BUBBLES_MS_MAX,
+                ))
+                await _sleep(gap_ms / 1000)
+            await typing.set(True)
+            typing_start = typing.started
+            duration = _typing_ms(bubble) / 1000
+            deadline = typing_start + duration
+            if len(bubble) > settings.PRESENCE_HICCUP_MIN_CHARS and random.random() < 0.5:
+                await _sleep_until(typing_start + duration / 2)
+                await typing.set(False)
+                pause = _jitter_ms(settings.PRESENCE_HICCUP_PAUSE_MS) / 1000
+                await _sleep(pause)
+                await typing.set(True)
+                deadline += pause
+            if index == 0 and model_done is not None:
+                deadline = max(deadline, model_done + _jitter_ms(300) / 1000)
+            await _sleep_until(deadline)
             async with message_flow_lock(chat_id):
                 sent_id, sent_at = await _persist_and_broadcast(chat_id, bubble)
+                await typing.set(False)
             if first_bubble_at is None:
                 first_bubble_at = sent_at
             record_sent_message(state, bubble)
             state.chat_transcript[-1]["message_id"] = sent_id
             record_commitments(state, bubble)
-            await _typing(chat_id, False, psychic_id)
     finally:
-        await _typing(chat_id, False, psychic_id)
+        await typing.set(False)
         get_session_store().put(state)
     schedule_fold(chat_id)
     return first_bubble_at
@@ -617,7 +816,7 @@ async def _persist_and_broadcast(chat_id: int, text: str) -> Tuple[int, datetime
         db.commit()
         db.refresh(message)
         await broadcast_persisted_ai_message(db, chat, message)
-        return message.id, datetime.now(timezone.utc)
+        return message.id, _utc_now()
 
 
 async def _typing(chat_id: int, on: bool, psychic_id) -> None:
