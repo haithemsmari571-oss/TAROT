@@ -15,6 +15,17 @@ export class ClientChatAdapter extends BaseChatAdapter {
     const data = raw.data || raw;
 
     switch (eventType) {
+      case 'message_delivered':
+      case 'message_seen': {
+        const messageId = Number(data.message_id);
+        if (!Number.isInteger(messageId) || messageId <= 0) break;
+        this.eventBus.emit(
+          eventType === 'message_seen' ? ChatEventType.MESSAGE_SEEN : ChatEventType.MESSAGE_DELIVERED,
+          { messageId },
+        );
+        break;
+      }
+
       case 'low_balance_warning':
         // Emit balance warning for client
         this.eventBus.emit(ChatEventType.BALANCE_WARNING, {

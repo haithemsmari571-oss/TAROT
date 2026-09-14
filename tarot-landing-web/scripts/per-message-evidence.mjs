@@ -36,6 +36,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
+import assert from "node:assert/strict";
 
 const require = createRequire(
   process.env.PW_HOST || "C:/Users/Haithem/Desktop/LAMMA/secondbrain/crm/package.json"
@@ -130,10 +131,13 @@ async function mockHttp(page, s) {
     if (p.startsWith("/reviews")) return json([]);
     if (p === "/chat/" || p === "/chat") return json([CHAT]);
     if (p === "/chat/my-chats") return json([{ ...CHAT, user_id: 100, psychic_username: "Sophie", client_joined_at: NOW }]);
-    if (p === "/chat/1/messages") return json({ messages: MESSAGES, total: MESSAGES.length, offset: 0, limit: 10 });
+    if (p === "/chat/1/messages") {
+      const messages = s.messages ?? MESSAGES;
+      return json({ messages, total: messages.length, offset: 0, limit: 10 });
+    }
     if (p === "/chat/1/session-time") return json(s.session);
     if (p === "/chat/1/details") return json({ id: 1, status: "ACTIVE", response_mode: "SABRI", user_id: 100, psychic_id: 7, created_at: NOW, updated_at: NOW, psychic: { id: 7, username: "Sophie", email: READER.email, price_per_second: null, price_per_message: 2 }, client: { id: 100, username: "khw", email: CLIENT.email }, billing_mode: s.mode, price_per_message: 2, balance: s.session.balance });
-    if (p === "/psychic/7") return json(READER);
+    if (/^\/psychic\/\d+$/.test(p) && m === "GET") return json(s.readers?.find(r => r.id === Number(p.split('/').pop())) ?? READER);
     if (p === "/chat/request" && m === "POST") return s.request ? json(s.request.body, s.request.status) : json(null, 201);
     if (p === "/transactions/me/balance") return json({ balance: s.session.balance, credit_balance: 0, paid_balance: s.session.balance });
     if (p === "/payment/unit-price") return json({ unit_price_cents: 100 });
@@ -155,6 +159,7 @@ async function mockSockets(page, s) {
     });
   });
   await page.routeWebSocket((url) => url.pathname.startsWith("/api/chat/ws/"), (ws) => {
+    s.socket = ws;
     let nextId = 100;
     ws.onMessage((raw) => {
       const m = JSON.parse(String(raw));
@@ -170,6 +175,7 @@ async function mockSockets(page, s) {
         return;
       }
       if (m.type === "message") {
+        if (s.onSend) { s.onSend(m); return; }
         if (s.reject) {
           ws.send(JSON.stringify({ event: "message_rejected", data: s.reject }));
           return;
@@ -204,6 +210,192 @@ async function shoot(page, name) {
   console.log("  wrote", path.relative(ROOT, file));
 }
 
+/** Frontend presence proof only: no landing-page or CRM scenarios. Run with
+    node scripts/per-message-evidence.mjs --presence. All frames below traverse
+    the real WebSocket client, facade, adapter and room. */
+async function presenceEvidence(browser) {
+  const evidence = [];
+  const waitFor = async (condition) => {
+    const deadline = Date.now() + 15000;
+    while (!condition()) {
+      if (Date.now() > deadline) throw new Error('Mock did not receive the expected socket action');
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+  const record = async (page, name, extra = {}) => {
+    await page.waitForTimeout(900); // let the room's bubble entrance finish
+    const dom = await page.evaluate(() => ({
+      header: document.querySelector('.whotext')?.textContent?.trim(),
+      bubbles: [...document.querySelectorAll('.bub')].map(el => ({
+        id: el.getAttribute('data-message-id'), text: el.textContent?.trim(),
+        receipt: el.querySelector('.message-receipt')?.getAttribute('data-receipt') ?? null,
+        colour: el.querySelector('.message-receipt') ? getComputedStyle(el.querySelector('.message-receipt')).color : null,
+        ticks: el.querySelectorAll('.message-receipt path').length,
+      })),
+      typing: document.querySelector('.typing')?.textContent?.trim() ?? 'none',
+      cards: [...document.querySelectorAll('.gl-pc')].map(el => ({
+        name: el.querySelector('.gl-pname')?.textContent?.trim(),
+        price: el.querySelector('.gl-price')?.textContent?.trim(),
+        gift: el.querySelector('.gl-gift')?.textContent?.trim() ?? null,
+      })),
+    }));
+    evidence.push({ file: name, ...dom, ...extra });
+    console.log(`${name} DOM: ${JSON.stringify({ ...dom, ...extra })}`);
+    await shoot(page, name);
+  };
+  const receipt = async (page, id, state, paths) => {
+    const el = page.locator(`[data-message-id="${id}"] .message-receipt`);
+    await el.locator(`xpath=self::*[@data-receipt='${state}']`).waitFor();
+    assert.equal(await el.locator('path').count(), paths);
+    assert.equal(await el.evaluate(e => getComputedStyle(e).color), state === 'seen' ? 'rgb(22, 139, 210)' : 'rgb(112, 117, 122)');
+  };
+  const scenario = {
+    mode: 'per_message', session: perMessageSession(18),
+    messages: [...MESSAGES.map(m => ({ ...m, status: 'SENT' })),
+      { id: 13, chat_id: 1, sender_id: 100, content: 'I keep checking my phone.', created_at: NOW, status: 'READ' }],
+    onSend: m => { scenario.sent = m; },
+  };
+  {
+    const { context, page } = await openPage(browser, scenario);
+    try {
+      await page.goto(`${APP}/chats?chat_id=1`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('#roominput:not([disabled])');
+      await receipt(page, 10, 'seen', 2);
+      await receipt(page, 13, 'delivered', 2);
+      assert.equal(await page.textContent('#st'), 'online');
+      await record(page, 'presence-online.png');
+      const question = 'Do you think he will reach out?';
+      await page.fill('#roominput', question);
+      await page.click('#send');
+      await waitFor(() => scenario.sent);
+      assert.equal(scenario.sent.content, question);
+      await receipt(page, 'pending', 'sent', 1);
+      assert.equal(await page.inputValue('#roominput'), question);
+      assert.equal(await page.locator('.typing').count(), 0);
+      await record(page, 'presence-sent.png');
+      const frame = data => scenario.socket.send(JSON.stringify(data));
+      const echo = { type: 'message', id: 100, content: question, sender_id: 100, chat_id: 1, created_at: NOW, status: 'READ' };
+      scenario.messages.push(echo);
+      frame(echo);
+      await receipt(page, 100, 'sent', 1);
+      assert.equal(await page.locator('[data-message-id="pending"]').count(), 0);
+      assert.equal(await page.locator('[data-message-id="100"]').count(), 1);
+      assert.equal(await page.inputValue('#roominput'), '');
+      // Old bulk READ, an unrelated receipt, and our own typing do not affect it.
+      frame({ event: 'messages_read', chat_id: 1, reader_id: 7 });
+      frame({ event: 'message_seen', data: { message_id: 999 } });
+      frame({ event: 'typing_start', chat_id: 1, sender_id: 100 });
+      await page.waitForTimeout(100);
+      await receipt(page, 100, 'sent', 1);
+      assert.equal(await page.locator('.typing').count(), 0);
+      frame({ event: 'message_delivered', data: { message_id: 100 } });
+      await receipt(page, 100, 'delivered', 2);
+      await record(page, 'presence-delivered.png');
+      frame({ event: 'message_seen', data: { message_id: 100 } });
+      await receipt(page, 100, 'seen', 2);
+      frame({ event: 'message_delivered', data: { message_id: 100 } });
+      await record(page, 'presence-seen.png');
+      await receipt(page, 100, 'seen', 2);
+      frame({ event: 'typing_start', chat_id: 1, sender_id: 7 });
+      await page.waitForSelector('.typing');
+      await record(page, 'presence-dots-showing.png');
+      const reply = { type: 'message', id: 101, content: 'he is still thinking about what you said.', sender_id: 7, chat_id: 1, created_at: NOW };
+      scenario.messages.push(reply);
+      frame(reply);
+      await page.waitForSelector('[data-message-id="101"]');
+      assert.equal(await page.locator('.typing').count(), 1);
+      await record(page, 'presence-bubble-before-typing-stop.png');
+      frame({ event: 'typing_stop', chat_id: 1, sender_id: 7 });
+      await page.waitForSelector('.typing', { state: 'detached' });
+      await record(page, 'presence-dots-hidden.png');
+      // The next typing pulse is controlled solely by its two frames, too.
+      frame({ event: 'typing_start', chat_id: 1, sender_id: 7 });
+      await page.waitForSelector('.typing');
+      frame({ event: 'typing_stop', chat_id: 1, sender_id: 7 });
+      await page.waitForSelector('.typing', { state: 'detached' });
+      // Reconnection loads DB history; system lines do not count as replies.
+      scenario.messages.push(
+        { id: 102, chat_id: 1, sender_id: 100, content: 'And what happens next?', created_at: NOW, status: 'READ' },
+        { id: 103, chat_id: 1, sender_id: null, content: 'Connection restored', is_system: true, created_at: NOW },
+      );
+      const before = scenario.socket;
+      before.close({ code: 1012, reason: 'mock reconnect proof' });
+      await page.waitForSelector('#roominput[disabled]');
+      assert.equal(await page.textContent('#st'), 'online');
+      // The existing transport reconnects when the room is re-entered; it has
+      // no automatic retry loop. Exercise that real UI path without reloading.
+      await page.click('#roomback');
+      await page.locator('.hrow').filter({ hasText: 'Sophie' }).click();
+      await waitFor(() => scenario.socket !== before);
+      await receipt(page, 100, 'seen', 2);
+      await receipt(page, 102, 'delivered', 2);
+      assert.equal(await page.textContent('#st'), 'online');
+      assert.equal(await page.locator('.typing').count(), 0);
+      await record(page, 'presence-reconnected.png');
+      await page.reload({ waitUntil: 'networkidle' });
+      // /chats deliberately returns to the list on reload. Reopen the room.
+      await page.locator('.hrow').filter({ hasText: 'Sophie' }).click();
+      await receipt(page, 100, 'seen', 2);
+      await receipt(page, 102, 'delivered', 2);
+      await record(page, 'presence-reloaded.png');
+    } finally { await context.close(); }
+  }
+  {
+    const priced = { ...READER, price_per_message: 1.9 };
+    const { context, page } = await openPage(browser, { mode: 'per_message', session: perMessageSession(18), readers: [priced, READER_NO_MESSAGE_PRICE] });
+    try {
+      await page.goto(`${APP}/psychics-browse`, { waitUntil: 'networkidle' });
+      const card = page.locator('.gl-pc').filter({ has: page.locator('.gl-pname', { hasText: 'Sophie' }) });
+      await card.locator('.gl-gift').waitFor();
+      assert.equal(await card.locator('.gl-gift').textContent(), '£15 free · 7 messages');
+      assert.equal(await page.locator('.gl-pc').filter({ hasText: 'Marta' }).locator('.gl-gift').count(), 0);
+      await card.scrollIntoViewIfNeeded();
+      await record(page, 'presence-free-credit-browse.png');
+      await page.goto(`${APP}/psychics/7/details`, { waitUntil: 'networkidle' });
+      const badge = page.getByText('£15 free · 7 messages', { exact: true });
+      await badge.waitFor();
+      await badge.scrollIntoViewIfNeeded();
+      console.log('details badge DOM:', await badge.textContent());
+      await record(page, 'presence-free-credit-details.png', { badge: await badge.textContent() });
+      await page.goto(`${APP}/psychics/8/details`, { waitUntil: 'networkidle' });
+      await page.getByText('Marta', { exact: true }).first().waitFor();
+      assert.equal(await page.getByText(/free · .* messages/).count(), 0);
+      console.log('Unpriced details: no free-message badge');
+    } finally { await context.close(); }
+  }
+  {
+    const { context, page } = await openPage(browser, { mode: 'per_minute', session: PER_MINUTE_SESSION, readers: [READER_PER_MINUTE] });
+    try {
+      await page.goto(`${APP}/chats?chat_id=1`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('#spent');
+      await page.waitForSelector('#reflect');
+      assert.equal(await page.locator('.message-receipt').count(), 0);
+      assert.equal(await page.textContent('#st'), 'reading for you');
+      await record(page, 'presence-per-minute-room-control.png');
+      await page.goto(`${APP}/psychics-browse`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('.gl-gift');
+      assert.equal(await page.locator('.gl-gift').textContent(), '£15 free · 5 min');
+      await page.locator('.gl-pc').scrollIntoViewIfNeeded();
+      await record(page, 'presence-per-minute-browse-control.png');
+    } finally { await context.close(); }
+  }
+  {
+    const { context, page } = await openPage(browser, { mode: 'per_message', session: perMessageSession(18), reject: { reason: 'READER_UNAVAILABLE' } });
+    try {
+      await page.goto(`${APP}/chats?chat_id=1`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('#roominput:not([disabled])');
+      await page.fill('#roominput', 'keep my question');
+      await page.click('#send');
+      await page.waitForSelector('#permsg-note');
+      assert.equal(await page.inputValue('#roominput'), 'keep my question');
+      assert.equal(await page.locator('[data-message-id="pending"]').count(), 0);
+      console.log('Rejected send DOM:', await page.textContent('#permsg-note'), '| draft:', await page.inputValue('#roominput'), '| pending bubbles: 0');
+    } finally { await context.close(); }
+  }
+  fs.writeFileSync(path.join(OUT, 'presence-dom.json'), JSON.stringify(evidence, null, 2) + '\n');
+  console.log('PRESENCE EVIDENCE: all assertions passed at 390 px');
+}
+
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   const vite = startVite();
@@ -211,6 +403,10 @@ async function main() {
     await waitForServer(`${APP}/`);
     const browser = await chromium.launch();
     try {
+      if (process.argv.includes('--presence')) {
+        await presenceEvidence(browser);
+        return;
+      }
       // 1. the hall with a per-message reader, then the wait
       {
         const { context, page } = await openPage(browser, { mode: "per_message", session: perMessageSession(18) });

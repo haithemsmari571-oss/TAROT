@@ -17,6 +17,8 @@ export enum ChatEventType {
   MESSAGES_READ = 'message:read', // recipient opened the conversation → flip receipts
   MESSAGE_REJECTED = 'message:rejected', // per-message billing: the server refused to store or charge it
   MESSAGE_FEE_CHARGED = 'message:fee_charged', // per-message billing: the sender's balance after a charge
+  MESSAGE_DELIVERED = 'message:delivered',
+  MESSAGE_SEEN = 'message:seen',
   
   // Session Events
   SESSION_STARTED = 'session:started',
@@ -47,6 +49,8 @@ export enum ChatEventType {
 /**
  * Message interface
  */
+export type MessageReceipt = 'sent' | 'delivered' | 'seen';
+
 export interface ChatMessage {
   id?: number;
   type?: string;
@@ -80,6 +84,8 @@ export type ChatEventPayload = {
     balance?: number | null;
   };
   [ChatEventType.MESSAGE_FEE_CHARGED]: { messageId?: number; fee?: number; clientBalance?: number };
+  [ChatEventType.MESSAGE_DELIVERED]: { messageId: number };
+  [ChatEventType.MESSAGE_SEEN]: { messageId: number };
   
   [ChatEventType.SESSION_STARTED]: { 
     chatId: number;

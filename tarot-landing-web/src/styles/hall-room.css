@@ -166,6 +166,13 @@ html[data-hall="room"] .meter b{font-variant-numeric:tabular-nums;}
    The price line where the meter stood, the price on the send button, the
    counter under the box, and the one line that says why a send did not go.
    Nothing here draws unless the room runs on per-message billing. */
+html[data-hall="room"] .message-receipt{display:flex;justify-content:flex-end;margin-top:3px;
+  height:14px;color:#70757a;line-height:1;}
+html[data-hall="room"] .message-receipt[data-receipt="seen"]{color:#168bd2;}
+html[data-hall="room"] .message-receipt svg{width:20px;height:14px;fill:none;
+  stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+html[data-hall="room"] .presence-label{position:absolute;width:1px;height:1px;padding:0;
+  margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;}
 html[data-hall="room"] .stats.permsg{align-items:center;}
 html[data-hall="room"] .stats.permsg .stat b{font-size:14.5px;white-space:nowrap;}
 html[data-hall="room"] .composer .sendprice{width:auto;min-width:0;height:52px;padding:0 18px;

@@ -1,0 +1,488 @@
+[
+  {
+    "file": "presence-online.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-sent.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      },
+      {
+        "id": "pending",
+        "text": "Do you think he will reach out?Sent",
+        "receipt": "sent",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 1
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-delivered.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-seen.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-dots-showing.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      }
+    ],
+    "typing": "Sophie is typing",
+    "cards": []
+  },
+  {
+    "file": "presence-bubble-before-typing-stop.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "101",
+        "text": "he is still thinking about what you said.",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      }
+    ],
+    "typing": "Sophie is typing",
+    "cards": []
+  },
+  {
+    "file": "presence-dots-hidden.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "101",
+        "text": "he is still thinking about what you said.",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-reconnected.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "101",
+        "text": "he is still thinking about what you said.",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "102",
+        "text": "And what happens next?Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-reloaded.png",
+    "header": "Sophieonline",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in marchSeen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "13",
+        "text": "I keep checking my phone.Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "100",
+        "text": "Do you think he will reach out?Seen",
+        "receipt": "seen",
+        "colour": "rgb(22, 139, 210)",
+        "ticks": 2
+      },
+      {
+        "id": "101",
+        "text": "he is still thinking about what you said.",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "102",
+        "text": "And what happens next?Delivered",
+        "receipt": "delivered",
+        "colour": "rgb(112, 117, 122)",
+        "ticks": 2
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-free-credit-browse.png",
+    "bubbles": [],
+    "typing": "none",
+    "cards": [
+      {
+        "name": "Marta",
+        "gift": null
+      },
+      {
+        "name": "Sophie",
+        "price": "£1.9 per message",
+        "gift": "£15 free · 7 messages"
+      }
+    ]
+  },
+  {
+    "file": "presence-free-credit-details.png",
+    "bubbles": [],
+    "typing": "none",
+    "cards": [],
+    "badge": "£15 free · 7 messages"
+  },
+  {
+    "file": "presence-per-minute-room-control.png",
+    "header": "Sophiereading for you",
+    "bubbles": [
+      {
+        "id": "10",
+        "text": "will he come back? we broke up in march",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "11",
+        "text": "u started timing the replies. u wouldn't admit it but u know exactly how long it takes",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      },
+      {
+        "id": "12",
+        "text": "fast and u breathe. slow and ur body braces",
+        "receipt": null,
+        "colour": null,
+        "ticks": 0
+      }
+    ],
+    "typing": "none",
+    "cards": []
+  },
+  {
+    "file": "presence-per-minute-browse-control.png",
+    "bubbles": [],
+    "typing": "none",
+    "cards": [
+      {
+        "name": "Sophie",
+        "price": "£3.00 / min",
+        "gift": "£15 free · 5 min"
+      }
+    ]
+  }
+]

@@ -1,7 +1,7 @@
 import { Icon } from "@iconify/react";
 import type { Psychic } from "../types/psychic.types";
 import { DISPLAY_RATINGS, getTier } from "../../../lib/psychicDisplay";
-import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes, WELCOME_CREDIT_GBP } from "../../../lib/currency";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { sanitizeClaims } from "../../../lib/copy";
 import "../../../styles/glass.css";
@@ -17,8 +17,7 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
   const tier = getTier(perMinute);
   const rating = DISPLAY_RATINGS[psychic.id];
   /* Per-message billing (step 5b): the card prices a message, not a minute,
-     and a reader with no per-message price shows no price line at all. The
-     minutes-based welcome badge is a per-minute promise, so it stays off too. */
+     and a reader with no per-message price shows no price line or badge. */
   const { billingMode } = useBillingMode();
   const perMessage = billingMode === "per_message";
   const perMessagePrice =
@@ -58,7 +57,9 @@ const PsychicCard = ({ psychic, onClick }: PsychicCardProps) => {
 
         <div className={`gl-tier ${tierClass}`}>{tier.label}</div>
 
-        {!perMessage && freeMinutes > 0 && (
+        {perMessage && perMessagePrice != null ? (
+          <div className="gl-gift">{formatGbp(WELCOME_CREDIT_GBP)} free · {Math.floor(WELCOME_CREDIT_GBP / perMessagePrice)} messages</div>
+        ) : !perMessage && freeMinutes > 0 && (
           <div className="gl-gift">£15 free · {freeMinutes} min</div>
         )}
       </div>

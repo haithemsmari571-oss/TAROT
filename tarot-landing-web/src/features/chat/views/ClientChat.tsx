@@ -28,7 +28,7 @@ import { SessionBar } from "../components/SessionBar";
 import { PsychicProfileCard } from "../components/PsychicProfileCard";
 import { useChatFacade } from "../hooks/useChatFacade";
 import { useChatEvents } from "../hooks/useChatEvents";
-import { ChatEventType, ChatMessage } from "../core/ChatEventTypes";
+import { ChatEventType, ChatMessage, type MessageReceipt } from "../core/ChatEventTypes";
 import "../../../styles/starfield.css";
 import PageBackground from "../../../components/PageBackground";
 import chatBackground from "../../../assets/backgrounds/chat-background.webp";
@@ -207,7 +207,10 @@ const ClientChat = () => {
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   // the text of a send the server has not yet stored: kept in the box until
   // its own echo arrives, so a rejection never loses what she typed
-  const pendingSendRef = useRef<string | null>(null);
+  const pendingSendRef = useRef<{ text: string; afterId: number } | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [messageReceipts, setMessageReceipts] = useState<Record<number, MessageReceipt>>({});
+  const [historyMessageIds, setHistoryMessageIds] = useState<Set<number>>(new Set());
   // the offering panel: the same glider /billing uses, back to this room after
   const openPerMessageOffering = useCallback(() => {
     if (!selectedChat) return;
@@ -324,12 +327,23 @@ const ClientChat = () => {
       // a refresh mid-reflection: lines the reader wrote after reflecting_since
       // are held again, in order, not shown (useReflection.holdFromHistory)
       setMessages(holdFromHistoryRef.current(normalizedMessages));
+      setHistoryMessageIds(prev => new Set([...prev, ...normalizedMessages.map(m => m.id)]));
+      // A reconnect may recover a stored send whose echo was lost. Match only
+      // messages newer than the ones present when she pressed Send.
+      const pending = pendingSendRef.current;
+      if (pending && normalizedMessages.some(m => m.id > pending.afterId &&
+          m.sender_id === user?.id && m.content === pending.text)) {
+        pendingSendRef.current = null;
+        setPendingMessage(null);
+        setInput(current => current === pending.text ? "" : current);
+        setComposerNotice(null);
+      }
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
       setLoadingMessages(false);
     }
-  }, [selectedChat]);
+  }, [selectedChat, user?.id]);
 
   // The ONE path by which a live message enters the thread. handleMessageReceived
   // below and the reflection's release both come through here.
@@ -385,12 +399,12 @@ const ClientChat = () => {
 
   const reflection = useReflection<ChatMessage>({
     paidSeconds: sessionState.elapsedSeconds || 0,
-    canBegin: !!isChatActive,
+    canBegin: !!isChatActive && !perMessage,
     isHeld: (m) =>
       !(m.type === 'system' || m.is_system) &&
       (m.sender_id ?? m.user_id) !== user?.id,
     append: appendMessage,
-    setReaderTyping: setIsReaderTyping,
+    setReaderTyping: (on) => { if (!perMessageRef.current) setIsReaderTyping(on); },
     // no longer a live reading (ended, or paused by the server): release all
     flush: !isChatActive,
     resetKey: selectedChat,
@@ -411,33 +425,35 @@ const ClientChat = () => {
         : Promise.resolve(null),
     },
   });
-  holdFromHistoryRef.current = reflection.holdFromHistory;
+  holdFromHistoryRef.current = perMessage ? (list) => list : reflection.holdFromHistory;
 
   // The history can load before session-time answers: once the server's
   // reflecting_since is known while reflecting, re-hold what it covers.
   useEffect(() => {
-    if (reflection.reflecting && sessionState.reflectingSince) {
+    if (!perMessage && reflection.reflecting && sessionState.reflectingSince) {
       setMessages((prev) => reflection.holdFromHistory(prev));
     }
-  }, [reflection.reflecting, sessionState.reflectingSince, reflection.holdFromHistory]);
+  }, [perMessage, reflection.reflecting, sessionState.reflectingSince, reflection.holdFromHistory]);
 
   // Stable event handlers using useCallback
   const handleMessageReceived = useCallback(({ message }: { message: ChatMessage }) => {
     console.log('[ClientChat] Message received handler called:', message);
     // Reflecting? A reader message is held here, in order, and shown on Return.
-    if (!reflection.admit(message)) {
+    if (!perMessageRef.current && !reflection.admit(message)) {
       console.log('[ClientChat] Held for reflection:', message.id);
       return;
     }
-    // A message arrived → stop showing the reader typing indicator.
-    setIsReaderTyping(false);
+    // Per-message typing lasts until typing_stop, including across a bubble.
+    if (!perMessageRef.current) setIsReaderTyping(false);
     appendMessage(message);
     // Per-message billing: the composer keeps her text until the server has
     // stored and charged it, which its own echo proves; a rejection leaves it.
     const pending = pendingSendRef.current;
-    if (pending != null && user && (message.sender_id ?? message.user_id) === user.id && message.content === pending) {
+    if (pending != null && user && message.id != null && message.id > pending.afterId &&
+        (message.sender_id ?? message.user_id) === user.id && message.content === pending.text) {
       pendingSendRef.current = null;
-      setInput("");
+      setPendingMessage(null);
+      setInput(current => current === pending.text ? "" : current);
       setComposerNotice(null);
     }
   }, [reflection.admit, appendMessage, user]);
@@ -446,16 +462,29 @@ const ClientChat = () => {
   // events broadcast during delivery. We don't send our own typing to the server.
   const handleTypingStart = useCallback(({ userId }: { userId: number }) => {
     if (user && userId === user.id) return; // ignore our own id (defensive)
-    if (!reflection.canShowTyping()) return; // held: the reader is not shown typing
+    if (!perMessageRef.current && !reflection.canShowTyping()) return;
     setIsReaderTyping(true);
   }, [user, reflection.canShowTyping]);
-  const handleTypingStop = useCallback(() => {
-    if (!reflection.canShowTyping()) return; // the release drives the dots itself
+  const handleTypingStop = useCallback(({ userId }: { userId: number }) => {
+    if (perMessageRef.current && userId === user?.id) return;
+    if (!perMessageRef.current && !reflection.canShowTyping()) return;
     setIsReaderTyping(false);
-  }, [reflection.canShowTyping]);
+  }, [user?.id, reflection.canShowTyping]);
+
+  // Receipts are keyed by the stored ID, independently of legacy READ status.
+  // Keep early receipts until the echo arrives; late delivered cannot undo seen.
+  const handleMessageDelivered = useCallback(({ messageId }: { messageId: number }) => {
+    if (!perMessageRef.current) return;
+    setMessageReceipts(prev => ({ ...prev, [messageId]: prev[messageId] === 'seen' ? 'seen' : 'delivered' }));
+  }, []);
+  const handleMessageSeen = useCallback(({ messageId }: { messageId: number }) => {
+    if (!perMessageRef.current) return;
+    setMessageReceipts(prev => ({ ...prev, [messageId]: 'seen' }));
+  }, []);
 
   // The other party opened the conversation → flip our sent messages to "seen".
   const handleMessagesRead = useCallback(({ readerId }: { chatId: number; readerId: number }) => {
+    if (perMessageRef.current) return;
     if (!user || readerId === user.id) return;
     setMessages(prev =>
       prev.map(m =>
@@ -714,6 +743,7 @@ const ClientChat = () => {
 
   const handleConnected = useCallback(async () => {
     console.log('[ClientChat] Connected to chat');
+    if (perMessageRef.current) setIsReaderTyping(false);
     // Load previous messages when connected
     loadPreviousMessages();
     // Session data is now loaded via REST API in useChatSessionState hook
@@ -721,6 +751,7 @@ const ClientChat = () => {
 
   const handleDisconnected = useCallback(() => {
     console.log('[ClientChat] Disconnected from chat');
+    if (perMessageRef.current) setIsReaderTyping(false);
   }, []);
 
   const handleError = useCallback(({ error }: { error: Error }) => {
@@ -787,6 +818,8 @@ const ClientChat = () => {
   // ── Per-message billing: the server's answers to a send ──────────────────
   const handleMessageRejected = useCallback(({ reason, message, pricePerMessage, balance }: { reason: string; message?: string; pricePerMessage?: number | null; balance?: number | null }) => {
     if (!perMessageRef.current) return;
+    pendingSendRef.current = null;
+    setPendingMessage(null);
     if (reason === 'INSUFFICIENT_BALANCE') {
       if (typeof balance === 'number') {
         dispatch({ type: 'UPDATE_BALANCE', payload: { balance, price_per_message: pricePerMessage } });
@@ -800,7 +833,7 @@ const ClientChat = () => {
     } else {
       setComposerNotice(message || "That message could not be sent.");
     }
-    // the typed text stays: the input was never cleared, pendingSendRef still holds it
+    // The typed text stays; only the unaccepted optimistic bubble is removed.
   }, [dispatch, openPerMessageOffering]);
 
   const handleMessageFeeCharged = useCallback(({ clientBalance }: { messageId?: number; fee?: number; clientBalance?: number }) => {
@@ -842,6 +875,8 @@ const ClientChat = () => {
     enabled: !!selectedChat,
     events: {
       [ChatEventType.MESSAGE_RECEIVED]: handleMessageReceived,
+      [ChatEventType.MESSAGE_DELIVERED]: handleMessageDelivered,
+      [ChatEventType.MESSAGE_SEEN]: handleMessageSeen,
       [ChatEventType.TYPING_START]: handleTypingStart,
       [ChatEventType.TYPING_STOP]: handleTypingStop,
       [ChatEventType.MESSAGES_READ]: handleMessagesRead,
@@ -870,6 +905,10 @@ const ClientChat = () => {
     console.log('[ClientChat] selectedChat changed to:', selectedChat);
     setMessages([]);
     setIsReaderTyping(false);
+    pendingSendRef.current = null;
+    setPendingMessage(null);
+    setMessageReceipts({});
+    setHistoryMessageIds(new Set());
   }, [selectedChat]);
 
   // NOTE: billing is anchored ONLY by an explicit click on the global
@@ -1067,6 +1106,7 @@ const ClientChat = () => {
 
       // Add only new messages to older messages (prepend to start)
       setOlderMessages(prev => [...newMessages, ...prev]);
+      setHistoryMessageIds(prev => new Set([...prev, ...newMessages.map(m => m.id)]));
 
       toast.success(`Loaded ${newMessages.length} older message${newMessages.length !== 1 ? 's' : ''}`);
     } catch (err) {
@@ -1113,6 +1153,7 @@ const ClientChat = () => {
     // empty balance opens the offering instead of sending, and the text stays
     // in the box until the server's own echo says it was stored and charged.
     const text = input;
+    if (perMessage && pendingSendRef.current) return;
     if (perMessage && text.length > PER_MESSAGE_MAX_CHARS) {
       toast.error(`Keep it under ${PER_MESSAGE_MAX_CHARS} characters.`);
       return;
@@ -1125,10 +1166,17 @@ const ClientChat = () => {
 
     try {
       stopClientTyping();
-      if (perMessage) pendingSendRef.current = text;
+      if (perMessage) {
+        pendingSendRef.current = { text, afterId: Math.max(0, ...olderMessages.map(m => m.id ?? 0), ...messages.map(m => m.id ?? 0)) };
+        setPendingMessage(text);
+      }
       await facade.sendMessage(text);
       if (!perMessage) setInput("");
     } catch (error) {
+      if (perMessage) {
+        pendingSendRef.current = null;
+        setPendingMessage(null);
+      }
       console.error('Failed to send message:', error);
       toast.error("Failed to send message. Please try again.");
     }
@@ -1354,6 +1402,28 @@ const ClientChat = () => {
     return [...olderMessages, ...messages];
   }, [olderMessages, messages]);
 
+  const roomMessages = useMemo(() => {
+    const lastReaderIndex = allMessages.reduce((last, msg, i) =>
+      !msg.is_system && msg.type !== 'system' &&
+      (msg.sender_id ?? msg.user_id) != null && (msg.sender_id ?? msg.user_id) !== user?.id ? i : last, -1);
+    const stored = allMessages.map((msg, i) => {
+      const historical = historyMessageIds.has(msg.id);
+      const explicit = messageReceipts[msg.id];
+      const receipt: MessageReceipt = explicit === 'seen' || (historical && i < lastReaderIndex)
+        ? 'seen' : explicit ?? (historical ? 'delivered' : 'sent');
+      return {
+        id: msg.id ?? i,
+        mine: (msg.sender_id ?? msg.user_id) === user?.id,
+        text: msg.content,
+        system: msg.type === 'system' || msg.is_system,
+        receipt: perMessage ? receipt : undefined,
+      };
+    });
+    return perMessage && pendingMessage != null
+      ? [...stored, { id: 'pending', mine: true, text: pendingMessage, receipt: 'sent' as const }]
+      : stored;
+  }, [allMessages, historyMessageIds, messageReceipts, pendingMessage, perMessage, user?.id]);
+
   // ── LOCAL-ONLY PREVIEW (dev only): /chats?preview=active|lowbalance|paused|ended|ranout
   //    Renders the redesigned session states with mock data so they can be eyeballed
   //    without a live reading. Remove this block (and ChatStatePreview below) before shipping.
@@ -1499,6 +1569,7 @@ const ClientChat = () => {
             balance: perMessageBalance,
             notice: composerNotice,
             maxChars: PER_MESSAGE_MAX_CHARS,
+            sendPending: pendingMessage != null,
             endPending: updateChatStatusMutation.isPending,
           } : null}
           readerName={psychicName}
@@ -1509,12 +1580,7 @@ const ClientChat = () => {
           spentLabel={formatGbp(sessionState.estimatedCost || 0)}
           isConnected={isConnected}
           statusWord={isChatActive ? (reflection.reflecting ? 'holding the thread' : 'reading for you') : isPaused ? 'holding your place' : currentChatStatus === 'ENDED' ? 'ended' : currentChatStatus === 'REQUESTED' ? 'pending' : currentChatStatus === 'ARCHIVED' ? 'cancelled' : ''}
-          messages={allMessages.map((msg: any, i: number) => ({
-            id: msg.id ?? i,
-            mine: (msg.sender_id || msg.user_id) === user?.id,
-            text: msg.content,
-            system: msg.type === 'system' || msg.is_system,
-          }))}
+          messages={roomMessages}
           loadingMessages={loadingMessages}
           readerTyping={isReaderTyping && currentChatStatus === 'ACTIVE'}
           hasMore={hasMoreMessages}

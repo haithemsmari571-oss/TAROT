@@ -19,6 +19,7 @@ import SoundPills, { REFLECT_LIBRARY_SOUND_LIMIT } from "./SoundPills";
 import { setHallSheetEnabled } from "./hallSheet";
 import { formatGbp, formatMinutesLeft } from "@/lib/currency";
 import { formatReflectClock, formatReflectUsed } from "./reflectBudget";
+import type { MessageReceipt } from "@/features/chat/core/ChatEventTypes";
 
 export type RoomPhase = "room" | "pausing" | "reflecting" | "ended";
 
@@ -27,6 +28,7 @@ export interface HallRoomMessage {
   mine: boolean;
   text: string;
   time?: string;
+  receipt?: MessageReceipt;
   /** #22 — a system/event line ("Valentina accepted the chat request"). The old
       room drew these as a centred muted pill, never as the reader speaking. */
   system?: boolean;
@@ -128,6 +130,7 @@ export interface HallRoomProps {
     balance: number | null;
     notice?: string | null;
     maxChars: number;
+    sendPending?: boolean;
     /** End was tapped and the end response has not arrived yet */
     endPending?: boolean;
   } | null;
@@ -236,7 +239,7 @@ export default function HallRoom(p: HallRoomProps) {
           <div className="whotext">
             <div className="nm">{p.readerName}</div>
             <div className="st" id="st">
-              {p.isConnected ? p.statusWord : "Reconnecting…"}
+              {p.perMessage ? "online" : p.isConnected ? p.statusWord : "Reconnecting…"}
             </div>
           </div>
           {/* DEFECT 2 — the money leads. Spent is the number she will dispute,
@@ -302,10 +305,25 @@ export default function HallRoom(p: HallRoomProps) {
             {p.messages.map((m) => (
               m.system
                 ? <div key={m.id} className="rnote rsys">{m.text}</div>
-                : <div key={m.id} className={"bub " + (m.mine ? "me" : "her")}>{m.text}</div>
+                : <div key={m.id} className={"bub " + (m.mine ? "me" : "her")} data-message-id={m.id}>
+                    {m.text}
+                    {p.perMessage && m.mine && (
+                      <span className="message-receipt" data-receipt={m.receipt ?? "sent"}
+                            role="img" aria-label={m.receipt === "seen" ? "Seen" : m.receipt === "delivered" ? "Delivered" : "Sent"}>
+                        <svg viewBox="0 0 20 14" aria-hidden="true">
+                          <path d="m2 7 3 3 8-8" />
+                          {m.receipt && m.receipt !== "sent" && <path d="m9 9 1 1 8-8" />}
+                        </svg>
+                        <span className="presence-label">{m.receipt === "seen" ? "Seen" : m.receipt === "delivered" ? "Delivered" : "Sent"}</span>
+                      </span>
+                    )}
+                  </div>
             ))}
             {/* #23 */}
-            {p.readerTyping && <div className="typing"><i></i><i></i><i></i></div>}
+            {p.readerTyping && <div className="typing" role={p.perMessage ? "status" : undefined}>
+              <i></i><i></i><i></i>
+              {p.perMessage && <span className="presence-label">{p.readerName} is typing</span>}
+            </div>}
             {/* #24,#25,#26 — the banner keeps that state's own words */}
             {p.banner && (
               <div className="rbanner hbanner">
@@ -341,7 +359,7 @@ export default function HallRoom(p: HallRoomProps) {
                  surprise; the cap and its counter sit under the box */
               <button className="send sendprice" id="send" type="submit"
                       aria-label={`Send for ${money(p.perMessage.price)}`}
-                      disabled={p.composerDisabled || !p.input.trim()}>
+                      disabled={p.composerDisabled || p.perMessage.sendPending || !p.input.trim()}>
                 Send · {money(p.perMessage.price)}
               </button>
             ) : (

@@ -1,7 +1,7 @@
 import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes, WELCOME_CREDIT_GBP } from "../../../lib/currency";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { sanitizeClaims } from "../../../lib/copy";
 import { reviewsApi } from "../api/reviewsApi";
@@ -429,8 +429,8 @@ const PsychicDetails = () => {
               </div>
               )}
 
-              {/* WELCOME-CREDIT BADGE — first reading free, in minutes with this reader */}
-              {!perMessage && welcomeCreditMinutes(psychic.price_per_second) > 0 && (
+              {/* The same welcome credit, counted in this reader's billing unit. */}
+              {(perMessage ? perMessagePrice != null : welcomeCreditMinutes(psychic.price_per_second) > 0) && (
                 <div
                   className="mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
                   style={{
@@ -440,7 +440,9 @@ const PsychicDetails = () => {
                   }}
                 >
                   <Icon icon="ph:gift-fill" className="text-sm" />
-                  First £15 free = {welcomeCreditMinutes(psychic.price_per_second)} min with {psychic.username}
+                  {perMessage && perMessagePrice != null
+                    ? `${formatGbp(WELCOME_CREDIT_GBP)} free · ${Math.floor(WELCOME_CREDIT_GBP / perMessagePrice)} messages`
+                    : <>First £15 free = {welcomeCreditMinutes(psychic.price_per_second)} min with {psychic.username}</>}
                 </div>
               )}
 
