@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import datetime, time
 import json
 from typing import List, Optional, Generic, TypeVar
 
@@ -11,6 +11,7 @@ from pydantic import (
 )
 
 from app.schemas.psychic_availability import PsychicAvailiabilityCreate
+from app.services.reader_hours import validate_online_hours
 
 T = TypeVar("T")
 
@@ -22,6 +23,14 @@ class PsychicBase(BaseModel):
     price_per_message: Optional[float] = Field(default=None, gt=0)
     bio: str | None = None
     order: int | None = None
+    online_from: time | None = None
+    online_to: time | None = None
+    is_listed: bool = True
+
+    @model_validator(mode="after")
+    def validate_hours(self):
+        validate_online_hours(self.online_from, self.online_to)
+        return self
 
 
 class PsychicCategoryRead(BaseModel):
@@ -44,6 +53,7 @@ class PsychicRead(PsychicBase):
     availability: List[PsychicAvailabilityRead]
     profile_picture_url: str | None = None
     is_online: bool
+    next_online_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -66,6 +76,9 @@ class PsychicCreate(PsychicBase):
 class PsychicUpdate(BaseModel):
     email: EmailStr | None = None
     is_online: bool | None = None
+    online_from: time | None = None
+    online_to: time | None = None
+    is_listed: bool = True
     price_per_second: float | None = None
     price_per_message: Optional[float] = Field(default=None, gt=0)
     categories_ids: List[int] | None = None
@@ -74,6 +87,15 @@ class PsychicUpdate(BaseModel):
     replace_availabilities: bool | None = None
     bio: str | None = None
     order: int | None = None  # ✅ Captured field
+
+    @model_validator(mode="after")
+    def validate_hours(self):
+        hours = {"online_from", "online_to"}
+        if self.model_fields_set & hours:
+            if not hours <= self.model_fields_set:
+                raise ValueError("Update online_from and online_to together")
+            validate_online_hours(self.online_from, self.online_to)
+        return self
 
     @field_validator("order", mode="before")
     @classmethod

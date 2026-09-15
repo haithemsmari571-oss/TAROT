@@ -46,7 +46,8 @@ def get_psychic_endpoint(
 ):
     sql_filters = build_psychics_filters(filters)
     result = psychic_service.get_psychics(
-        db, sql_filters, skip=filters.skip, limit=filters.limit, viewer=viewer
+        db, sql_filters, skip=filters.skip, limit=filters.limit, viewer=viewer,
+        is_online=filters.is_online,
     )
     return result
 
@@ -67,7 +68,7 @@ def create_psychic_endpoint(
 # Fields a psychic may NOT change on their own profile: marketplace ranking
 # and login email stay admin-only. Rate (price_per_second) is intentionally
 # self-service — the My Profile page has a rate control.
-SELF_SERVICE_EXCLUDED_FIELDS = {"order", "email"}
+SELF_SERVICE_EXCLUDED_FIELDS = {"order", "email", "is_listed"}
 
 
 @router.patch("/{psychic_id}")

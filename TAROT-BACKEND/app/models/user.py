@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, time
 from typing import List, Optional
 
-from sqlalchemy import Date, Enum, Integer, Numeric, String
+from sqlalchemy import CheckConstraint, Date, Enum, Integer, Numeric, String, Time, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.gender import Gender
@@ -13,6 +13,17 @@ from app.services.client_code import generate_client_code
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "(online_from IS NULL AND online_to IS NULL) OR "
+            "(online_from IS NOT NULL AND online_to IS NOT NULL)",
+            name="ck_users_online_hours_pair",
+        ),
+        CheckConstraint(
+            "online_from IS NULL OR online_from <> online_to",
+            name="ck_users_online_hours_distinct",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     # Human-readable, non-enumerable identifier shown in the Second Brain CRM
@@ -41,6 +52,10 @@ class User(Base):
     )
     is_verified: Mapped[bool] = mapped_column(default=False)
     is_online: Mapped[bool] = mapped_column(default=True)
+    # UK daily hours are display data. Keep the legacy presence flag above intact.
+    online_from: Mapped[Optional[time]] = mapped_column(Time(), nullable=True)
+    online_to: Mapped[Optional[time]] = mapped_column(Time(), nullable=True)
+    is_listed: Mapped[bool] = mapped_column(default=True, server_default=true(), nullable=False)
     price_per_second: Mapped[float] = mapped_column(nullable=True)
     # Per-message billing (BILLING_MODE=per_message): the reader's price for one client
     # message. Same Float as price_per_second; NULL until the reader sets it.

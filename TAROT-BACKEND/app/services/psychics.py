@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import UploadFile
@@ -19,6 +20,7 @@ from app.schemas.psychic import (
 )
 from app.services.medias import delete_media, save_media, update_media
 from app.services.psychics_availabilities import sync_availability
+from app.services.reader_hours import reader_availability
 from app.utils.security import hash_password
 
 settings = get_app_settings()
@@ -30,27 +32,36 @@ def get_psychics(
     skip: int = 0,
     limit: int = 0,
     viewer: User | None = None,
+    is_online: bool | None = None,
 ):
     # 💡 Ordered explicitly by display priority sequence ascending, then by newest practitioner ID descending
-    stmt = select(User).where(User.role == Role.PSYCHIC).order_by(User.order.asc(), User.id.desc())
+    visible = (User.role == Role.PSYCHIC, User.is_listed.is_(True))
+    stmt = select(User).where(*visible).order_by(User.order.asc(), User.id.desc())
 
     if filters:
         stmt = stmt.where(*filters)
 
-    # Get total count
-    count_stmt = select(func.count()).select_from(User).where(User.role == Role.PSYCHIC)
-    if filters:
-        count_stmt = count_stmt.where(*filters)
-    total = db.scalar(count_stmt)
-
-    if skip:
-        stmt = stmt.offset(skip)
-    if limit:
-        stmt = stmt.limit(limit)
-
-    psychics = db.scalars(stmt).all()
+    # Use one instant for the whole response, including filtering and pagination.
+    now = datetime.now(timezone.utc)
+    if is_online is not None:
+        psychics = [
+            p for p in db.scalars(stmt).all()
+            if reader_availability(p.online_from, p.online_to, now=now).is_online == is_online
+        ]
+        total = len(psychics)
+        psychics = psychics[skip:skip + limit if limit else None]
+    else:
+        count_stmt = select(func.count()).select_from(User).where(*visible)
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = db.scalar(count_stmt)
+        if skip:
+            stmt = stmt.offset(skip)
+        if limit:
+            stmt = stmt.limit(limit)
+        psychics = db.scalars(stmt).all()
     return {
-        "items": [_psychic_to_out(p, viewer) for p in psychics],
+        "items": [_psychic_to_out(p, viewer, now=now) for p in psychics],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -76,6 +87,9 @@ def create_psychic(
         bio=psychic_data.bio,
         profile_picture_path=profile_picture_path,
         order=psychic_data.order if psychic_data.order is not None else 9999,
+        online_from=psychic_data.online_from,
+        online_to=psychic_data.online_to,
+        is_listed=psychic_data.is_listed,
     )
 
     db.add(psychic)
@@ -90,7 +104,9 @@ def create_psychic(
     return _psychic_to_out(psychic, viewer)
 
 
-def _psychic_to_out(psychic: User, viewer: User | None = None) -> PsychicRead:
+def _psychic_to_out(
+    psychic: User, viewer: User | None = None, *, now: datetime | None = None
+) -> PsychicRead:
     can_view_email = viewer is not None and (
         viewer.role in (Role.ADMIN, Role.SUPERADMIN)
         or (viewer.role == Role.PSYCHIC and viewer.id == psychic.id)
@@ -113,6 +129,7 @@ def _psychic_to_out(psychic: User, viewer: User | None = None) -> PsychicRead:
         for aval in psychic.availability
     ]
 
+    online = reader_availability(psychic.online_from, psychic.online_to, now=now)
     return PsychicRead(
         id=psychic.id,
         username=psychic.username,
@@ -124,7 +141,11 @@ def _psychic_to_out(psychic: User, viewer: User | None = None) -> PsychicRead:
         availability=availability_mapped,
         bio=psychic.bio,
         profile_picture_url=_pdp_path_to_url(psychic.profile_picture_path),
-        is_online=psychic.is_online,
+        online_from=psychic.online_from,
+        online_to=psychic.online_to,
+        is_listed=psychic.is_listed,
+        is_online=online.is_online,
+        next_online_at=online.next_online_at,
         order=psychic.order,
     )
 

@@ -7,8 +7,7 @@ from app.schemas.psychic import PsychicFilter
 def build_psychics_filters(filters: PsychicFilter):
     sql_filters = []
 
-    if filters.is_online is not None:
-        sql_filters.append(User.is_online.is_(filters.is_online))
+    # The roster service filters online status using the UK-hours calculation.
     if filters.min_price is not None:
         sql_filters.append(User.price_per_second >= filters.min_price)
     if filters.max_price is not None:
