@@ -1,7 +1,7 @@
 """Handler for message sending and receiving"""
 
 from typing import Any, Dict
-from datetime import datetime, timezone
+from datetime import datetime
 from app.config import get_app_settings
 from app.services.chat.handlers.base import BaseEventHandler
 from app.events.types import ChatEventType
@@ -112,27 +112,23 @@ class MessageHandler(BaseEventHandler):
         # -- Per-message billing (BILLING_MODE=per_message) -------------------
         # Replaces the out-of-session fee below ENTIRELY. The charge itself lives
         # in app.services.per_message_billing, one source shared with /request:
-        # this handler checks the reading is ACTIVE, calls it, and maps a refusal
-        # onto the room's message_rejected frame. Each refusal persists nothing
-        # and charges nothing. In per_minute mode this branch is skipped and the
-        # file behaves exactly as it always has.
+        # this handler revives a quiet thread inside the message's transaction,
+        # and maps a refusal onto the room's message_rejected frame. Each refusal
+        # persists nothing and charges nothing. In per_minute mode this branch
+        # is skipped and the file behaves exactly as it always has.
         per_message_mode = get_app_settings().BILLING_MODE == "per_message"
         per_message_charge = None  # (message, price) once the charge has run
         message_committed_at = None
         if per_message_mode and sender_is_paying_client:
-            from app.services.per_message_billing import (
-                PerMessageRefusal,
-                charge_client_message,
-                require_active_session,
-            )
-            from app.services.stardust_rewards import get_spendable_stardust
+            from app.services.per_message_billing import PerMessageRefusal
+            from app.services.per_message_start import send_client_message
 
             try:
-                require_active_session(chat)
-                per_message_charge = await charge_client_message(
-                    self.db, chat, content, user
+                outcome = await send_client_message(
+                    self.db, user, chat, content
                 )
-                message_committed_at = datetime.now(timezone.utc)
+                message, price, client_balance_after, message_committed_at = outcome
+                per_message_charge = (message, price)
             except PerMessageRefusal as refusal:
                 logger.info(
                     "per_message_rejected",
@@ -144,7 +140,6 @@ class MessageHandler(BaseEventHandler):
                 return
 
             fee_charged = per_message_charge[1]
-            client_balance_after = round(get_spendable_stardust(self.db, user), 2)
 
         if (
             not per_message_mode

@@ -1,4 +1,4 @@
-"""Start an automatic per-message conversation in one database transaction."""
+"""Start or revive per-message conversations inside the message transaction."""
 
 from datetime import datetime, timezone
 
@@ -25,6 +25,97 @@ from app.services.stardust_rewards import get_spendable_stardust
 
 
 AUTOMATIC_READER_OPENER = "Hello, I'm here with you."
+
+
+def _prepare_joined_session(db: Session, chat: Chat) -> ChatSession:
+    """Stage a clockless session while the caller holds the client's row lock."""
+    reading_session = (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.chat_id == chat.id,
+            ChatSession.status.in_([
+                ChatSessionStatus.ACTIVE, ChatSessionStatus.REQUESTED,
+            ]),
+        )
+        .order_by(ChatSession.id.desc())
+        .populate_existing()
+        .first()
+    )
+    starting_session = (
+        reading_session is None or reading_session.status != ChatSessionStatus.ACTIVE
+    )
+    if reading_session is None:
+        reading_session = ChatSession(chat_id=chat.id, status=ChatSessionStatus.ACTIVE)
+        db.add(reading_session)
+    else:
+        reading_session.status = ChatSessionStatus.ACTIVE
+
+    if starting_session or chat.status != ChatStatus.ACTIVE or chat.client_joined_at is None:
+        chat.client_joined_at = datetime.now()
+    chat.status = ChatStatus.ACTIVE
+    chat.paused_at = None
+    db.flush()
+    return reading_session
+
+
+async def _store_charged_message(
+    db: Session, chat: Chat, reading_session: ChatSession, client: User, content: str
+) -> tuple[Message, float]:
+    """Stage the message and its debit without committing the caller's session."""
+    message = Message(
+        chat_id=chat.id,
+        chat_session_id=reading_session.id,
+        sender_id=client.id,
+        content=content,
+        is_system=False,
+        status=MessageStatus.SENT,
+    )
+    db.add(message)
+    db.flush()
+    return await charge_client_message(
+        db, chat, content, client, commit=False, message=message
+    )
+
+
+async def send_client_message(
+    db: Session, user: User, chat: Chat, content: str
+) -> tuple[Message, float, float, datetime]:
+    """Commit a socket send, reviving its existing conversation if needed.
+
+    Refresh rows held by the long-lived socket session under the same client
+    lock as /request. No opener or accept/join event belongs to a returning send.
+    The socket handler queues the reply after broadcasting the committed message.
+    """
+    from app.services.session_manager import get_session_manager
+
+    session_manager = get_session_manager()
+    try:
+        client = (
+            db.query(User)
+            .filter(User.id == user.id)
+            .populate_existing()
+            .with_for_update()
+            .one()
+        )
+        chat = (
+            db.query(Chat)
+            .filter(Chat.id == chat.id, Chat.user_id == client.id)
+            .populate_existing()
+            .one()
+        )
+        reading_session = _prepare_joined_session(db, chat)
+        message, price = await _store_charged_message(
+            db, chat, reading_session, client, content
+        )
+        balance = round(get_spendable_stardust(db, client), 2)
+        db.commit()
+        committed_at = datetime.now(timezone.utc)
+    except BaseException:
+        db.rollback()
+        raise
+
+    session_manager.track_joined_per_message_session(chat, reading_session, balance)
+    return message, price, balance, committed_at
 
 
 async def start_automatic_conversation(db: Session, user: User, request: ChatStart) -> dict:
@@ -84,28 +175,7 @@ async def start_automatic_conversation(db: Session, user: User, request: ChatSta
             db.add(chat)
             db.flush()
 
-        reading_session = (
-            db.query(ChatSession)
-            .filter(
-                ChatSession.chat_id == chat.id,
-                ChatSession.status.in_([
-                    ChatSessionStatus.ACTIVE, ChatSessionStatus.REQUESTED,
-                ]),
-            )
-            .order_by(ChatSession.id.desc())
-            .first()
-        )
-        if reading_session is None:
-            reading_session = ChatSession(chat_id=chat.id, status=ChatSessionStatus.ACTIVE)
-            db.add(reading_session)
-        else:
-            reading_session.status = ChatSessionStatus.ACTIVE
-
-        if chat.status != ChatStatus.ACTIVE or chat.client_joined_at is None:
-            chat.client_joined_at = datetime.now()
-        chat.status = ChatStatus.ACTIVE
-        chat.paused_at = None
-        db.flush()
+        reading_session = _prepare_joined_session(db, chat)
 
         opener = None
         if new_chat:
@@ -122,18 +192,8 @@ async def start_automatic_conversation(db: Session, user: User, request: ChatSta
             # Assign the opener's ID before inserting the client's question.
             db.flush()
 
-        question = Message(
-            chat_id=chat.id,
-            chat_session_id=reading_session.id,
-            sender_id=client.id,
-            content=request.message,
-            is_system=False,
-            status=MessageStatus.SENT,
-        )
-        db.add(question)
-        db.flush()
-        _, price = await charge_client_message(
-            db, chat, request.message, client, commit=False, message=question
+        question, price = await _store_charged_message(
+            db, chat, reading_session, client, request.message
         )
         balance = round(get_spendable_stardust(db, client), 2)
         result = {

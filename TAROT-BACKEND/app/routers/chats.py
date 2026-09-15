@@ -48,14 +48,6 @@ settings = get_app_settings()
 logger = get_logger(__name__)
 
 
-# Per-message billing: how long the client's End waits for the reader's goodbye
-# before ending without it. Module-level so a test can shorten it.
-PER_MESSAGE_GOODBYE_TIMEOUT_S = 12.0
-# How long the client's End waits for a reply already being generated or
-# delivered before the goodbye goes out regardless.
-PER_MESSAGE_END_IDLE_TIMEOUT_S = 10.0
-
-
 def _refund_unanswered_request_safely(db: Session, chat_id: int) -> None:
     """Per-message billing: a request that ends before any reader reply gives
     the hall question's charge back. Never raises into an endpoint: the request
@@ -790,6 +782,19 @@ async def update_chat_status_endpoint(
             status_code=403,
         )
 
+    if (
+        settings.BILLING_MODE == "per_message"
+        and chat.status == ChatStatus.ENDED
+        and user.id == chat_obj.user_id
+    ):
+        return JSONResponse(
+            content={
+                "reason": "PER_MESSAGE_END_DISABLED",
+                "detail": "Per-message conversations stay open. You can leave and return at any time.",
+            },
+            status_code=403,
+        )
+
     session_manager = get_session_manager()
 
     # Handle status change to ACTIVE (psychic accepts chat)
@@ -1006,48 +1011,6 @@ async def update_chat_status_endpoint(
             )
 
             return JSONResponse(content=None, status_code=201)
-
-        if settings.BILLING_MODE == "per_message" and user.id == chat_obj.user_id:
-            # Per-message billing, the client's own End: refund whatever she paid
-            # for that has not been started, wait (bounded) for a reply already
-            # in flight so the goodbye lands after it, let the reader say goodbye
-            # (unbilled, and bounded so a slow model cannot hold the End), then
-            # end as today. The clock reader's closing line inside end_session is
-            # dark in this mode. The reader's own End path below is unchanged.
-            from app.services.ai import reading_single
-
-            await reading_single.drain_on_end(chat_id)
-            try:
-                await asyncio.wait_for(
-                    reading_single.wait_for_idle(chat_id),
-                    timeout=PER_MESSAGE_END_IDLE_TIMEOUT_S,
-                )
-            except asyncio.TimeoutError:
-                # The reply keeps going and lands when it lands; the goodbye
-                # does not wait any longer for it.
-                logger.warning(
-                    "per_message_end_idle_timeout",
-                    chat_id=chat_id,
-                    timeout_s=PER_MESSAGE_END_IDLE_TIMEOUT_S,
-                )
-            try:
-                await asyncio.wait_for(
-                    reading_single.say_goodbye(chat_id),
-                    timeout=PER_MESSAGE_GOODBYE_TIMEOUT_S,
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "per_message_goodbye_skipped",
-                    chat_id=chat_id,
-                    reason="timeout",
-                    timeout_s=PER_MESSAGE_GOODBYE_TIMEOUT_S,
-                )
-            except Exception as goodbye_error:  # noqa: BLE001 - the End must still land
-                logger.warning(
-                    "per_message_goodbye_skipped",
-                    chat_id=chat_id,
-                    reason=type(goodbye_error).__name__,
-                )
 
         # Use SessionManager to end the session
         await session_manager.end_session(
