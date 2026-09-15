@@ -106,8 +106,14 @@ async def lifespan(app: FastAPI):
 
     logger.info("application_started", message="All background tasks initialized")
 
+    import asyncio
+    from app.tasks.offline_reply_task import start_offline_reply_thread
+
+    offline_reply_stop = start_offline_reply_thread(asyncio.get_running_loop())
+
     yield
 
+    offline_reply_stop.set()
     logger.info("application_shutting_down")
 
     try:

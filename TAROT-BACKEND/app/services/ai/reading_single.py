@@ -82,6 +82,7 @@ _queues: Dict[int, List[int]] = {}
 _workers: Dict[int, asyncio.Task] = {}
 _in_flight: Dict[int, int] = {}
 _presence: Dict[Tuple[int, int], "_Presence"] = {}
+_queue_tokens: Dict[Tuple[int, int], str] = {}
 
 # Test seams for all presence deadlines. Use monotonic time for waiting and UTC
 # for the commit anchor and delivery logs.
@@ -160,7 +161,7 @@ def _new_presence(text: str, committed_at: datetime) -> _Presence:
     return _Presence(committed_at, _monotonic() - age, seen_ms, think_ms)
 
 
-async def _receipts(chat_id: int, message_id: int, client_id: int, presence: _Presence) -> None:
+async def _receipts(chat_id: int, message_id: int, client_id: int, presence: _Presence, queue_token=None) -> None:
     from app.manager import manager
 
     s = get_app_settings()
@@ -173,15 +174,25 @@ async def _receipts(chat_id: int, message_id: int, client_id: int, presence: _Pr
         ("message_delivered", delivered_ms), ("message_seen", presence.seen_ms)
     ):
         await _sleep_until(presence.origin + delay / 1000)
+        if queue_token is not None:
+            from app.services.offline_replies import receipt
+
+            if not receipt(message_id, queue_token, event):
+                return
         await manager.send_to_user_in_chat(
             {"event": event, "data": {"message_id": message_id}}, str(chat_id), client_id
         )
 
 
-async def _start_typing(presence: _Presence, typing: _Typing) -> None:
+async def _start_typing(presence: _Presence, typing: _Typing, message_id=None, queue_token=None) -> None:
     if presence.receipts is not None:
         await presence.receipts
     await _sleep_until(presence.origin + (presence.seen_ms + presence.think_ms) / 1000)
+    if queue_token is not None:
+        from app.services.offline_replies import receipt
+
+        if not receipt(message_id, queue_token, "typing"):
+            return
     await typing.set(True)
 
 
@@ -206,7 +217,8 @@ class _EmptyReply(Exception):
 # Public surface
 # ═════════════════════════════════════════════════════════════════════════════
 async def enqueue_reply(
-    chat_id: int, message_id: int, *, committed_at: Optional[datetime] = None
+    chat_id: int, message_id: int, *, committed_at: Optional[datetime] = None,
+    queue_token: Optional[str] = None,
 ) -> None:
     """Queue ``message_id`` for a reply and start the chat's worker if it is idle.
 
@@ -227,6 +239,27 @@ async def enqueue_reply(
                 "reading_single_message_missing", chat_id=chat_id, message_id=message_id
             )
             return
+        if queue_token is None and get_app_settings().BILLING_MODE == "per_message":
+            from app.services.offline_replies import stage_if_offline, is_queued
+
+            deferred = stage_if_offline(db, chat, message) or is_queued(db, message_id)
+            if deferred:
+                db.commit()
+                from app.manager import manager
+
+                await manager.send_to_user_in_chat(
+                    {"event": "message_delivered", "data": {"message_id": message_id}},
+                    str(chat_id), chat.user_id,
+                )
+                return
+        if queue_token is not None:
+            from app.services.offline_replies import renew
+
+            if not renew(message_id, queue_token):
+                return
+            # Wake presence starts now, not at yesterday's send timestamp.
+            committed_at = _utc_now()
+            _queue_tokens[(chat_id, message_id)] = queue_token
         # Live sends supply their commit clock. Hall questions already persisted
         # before join use the row's timestamp, never a new clock at worker start.
         presence = _new_presence(
@@ -235,7 +268,7 @@ async def enqueue_reply(
         )
         client_id = chat.user_id
     presence.receipts = asyncio.create_task(
-        _receipts(chat_id, message_id, client_id, presence)
+        _receipts(chat_id, message_id, client_id, presence, queue_token)
     )
     _presence[(chat_id, message_id)] = presence
     queue.append(message_id)
@@ -473,6 +506,11 @@ async def _worker(chat_id: int) -> None:
                 error=str(error),
             )
         finally:
+            token = _queue_tokens.pop((chat_id, message_id), None)
+            if token is not None:
+                from app.services.offline_replies import release
+
+                release(message_id, token)
             _in_flight.pop(chat_id, None)
             await _clear_presence(chat_id, message_id)
 
@@ -487,15 +525,29 @@ async def _reply(chat_id: int, message_id: int) -> None:
             return
         typing = _Typing(chat_id, chat.psychic_id)
     presence = _presence[(chat_id, message_id)]
-    ready = asyncio.create_task(_start_typing(presence, typing))
+    token = _queue_tokens.get((chat_id, message_id))
+    ready = asyncio.create_task(_start_typing(presence, typing, message_id, token))
+    lease = None
+    if token is not None:
+        lease = asyncio.create_task(_renew_lease(message_id, token))
     try:
-        await _reply_turn(chat_id, message_id, presence, typing, ready)
+        await _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=token)
     finally:
+        await _cancel_task(lease)
         await _cancel_task(ready)
         await typing.set(False)
 
 
-async def _reply_turn(chat_id, message_id, presence, typing, ready) -> None:
+async def _renew_lease(message_id, token):
+    from app.services.offline_replies import renew
+
+    while True:
+        await asyncio.sleep(30)
+        if not renew(message_id, token):
+            return
+
+
+async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=None) -> None:
     """One paid client message: build, call (retry once), parse, deliver, record.
     Both attempts failing means her money back and one honest line. Calls stay
     serial so the next input contains this reply; presence runs alongside them."""
@@ -518,6 +570,20 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready) -> None:
         client_text = message.content or ""
         asked_at = presence.committed_at
         psychic_id = chat.psychic_id
+
+    if queue_token is not None:
+        from app.services.offline_replies import saved_reply
+
+        saved = saved_reply(message_id, queue_token)
+        if saved is None:
+            return
+        if saved.get("bubbles"):
+            await _deliver(
+                chat_id, psychic_id, saved["bubbles"], state, typing=typing, ready=ready,
+                queue_message_id=message_id, queue_token=queue_token,
+                start_position=len(saved["reply_ids"]),
+            )
+            return
 
     thinking = thinking_for_turn(client_text)
     turn_number = state.messages_sent_count
@@ -567,9 +633,15 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready) -> None:
         _log_attempt(
             chat_id, turn_number, attempt, STAGE_REPLY, raw=raw, notes=notes, delivered=True
         )
+        if queue_token is not None:
+            from app.services.offline_replies import save_reply
+
+            if not save_reply(message_id, queue_token, bubbles):
+                return
         first_bubble_at = await _deliver(
             chat_id, psychic_id, bubbles, state,
             typing=typing, ready=ready, model_done=model_done,
+            queue_message_id=message_id, queue_token=queue_token,
         )
         logger.info(
             "reading_single_reply",
@@ -591,19 +663,27 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready) -> None:
     await _refund_and_notify(
         chat_id, psychic_id, message_id, state, last_error,
         typing=typing, ready=ready, model_done=_monotonic(),
+        queue_token=queue_token,
     )
 
 
-async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error, **pacing) -> None:
+async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error, queue_token=None, **pacing) -> None:
     """Both attempts failed: reverse the message's debit, then one bubble in the
     reader's voice saying so, persisted like any reader message."""
     from app.database.client import SessionLocal
 
     reversal_id = None
     try:
-        with SessionLocal() as db:
-            reversal = refund_message(db, message_id)
-            reversal_id = reversal.id if reversal is not None else None
+        if queue_token is not None:
+            from app.services.offline_replies import refund_queued
+
+            reversal_id = refund_queued(message_id, token=queue_token)
+            if reversal_id is None:
+                return  # Already expired, reclaimed or answered: no late bubble.
+        else:
+            with SessionLocal() as db:
+                reversal = refund_message(db, message_id)
+                reversal_id = reversal.id if reversal is not None else None
     except Exception as error:  # noqa: BLE001 - the notice still goes out
         logger.error(
             "reading_single_refund_failed",
@@ -612,6 +692,8 @@ async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error,
             error_type=type(error).__name__,
             error=str(error),
         )
+        if queue_token is not None:
+            return  # Keep the durable item retryable until its refund succeeds.
     try:
         await _deliver(chat_id, psychic_id, [UNREACHABLE_NOTICE], state, **pacing)
     except Exception as error:  # noqa: BLE001 - never raise out of the worker
@@ -756,6 +838,7 @@ def _apply_hard_cap(bubbles: List[str], cap: int) -> Tuple[List[str], Optional[d
 async def _deliver(
     chat_id: int, psychic_id, bubbles: List[str], state, *,
     typing=None, ready=None, model_done=None,
+    queue_message_id=None, queue_token=None, start_position=0,
 ) -> Optional[datetime]:
     """Reveal ordered bubbles against the typing and model-completion clocks.
     The first typing clock may already be running while the model generates.
@@ -769,6 +852,8 @@ async def _deliver(
         if ready is not None:
             await ready
         for index, bubble in enumerate(bubbles):
+            if index < start_position:
+                continue
             if index:
                 gap_ms = _jitter_ms(random.uniform(
                     settings.PRESENCE_BETWEEN_BUBBLES_MS_MIN,
@@ -790,7 +875,15 @@ async def _deliver(
                 deadline = max(deadline, model_done + _jitter_ms(300) / 1000)
             await _sleep_until(deadline)
             async with message_flow_lock(chat_id):
-                sent_id, sent_at = await _persist_and_broadcast(chat_id, bubble)
+                if queue_token is None:
+                    stored = await _persist_and_broadcast(chat_id, bubble)
+                else:
+                    stored = await _persist_and_broadcast(
+                        chat_id, bubble, queue_message_id, queue_token, index
+                    )
+                if stored is None:
+                    return first_bubble_at
+                sent_id, sent_at = stored
                 await typing.set(False)
             if first_bubble_at is None:
                 first_bubble_at = sent_at
@@ -804,7 +897,7 @@ async def _deliver(
     return first_bubble_at
 
 
-async def _persist_and_broadcast(chat_id: int, text: str) -> Tuple[int, datetime]:
+async def _persist_and_broadcast(chat_id: int, text: str, queue_message_id=None, queue_token=None, position=0) -> Optional[Tuple[int, datetime]]:
     """Store one reader message and push it to the room. Returns (id, sent at)."""
     from app.database.client import SessionLocal
     from app.models.chat import Chat
@@ -812,7 +905,14 @@ async def _persist_and_broadcast(chat_id: int, text: str) -> Tuple[int, datetime
 
     with SessionLocal() as db:
         chat = db.get(Chat, chat_id)
-        message = prepare_ai_message(db, chat, text)
+        if queue_token is None:
+            message = prepare_ai_message(db, chat, text)
+        else:
+            from app.services.offline_replies import persist_bubble
+
+            message = persist_bubble(db, chat, text, queue_message_id, queue_token, position)
+            if message is None:
+                return None
         db.commit()
         db.refresh(message)
         await broadcast_persisted_ai_message(db, chat, message)

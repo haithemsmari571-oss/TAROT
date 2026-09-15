@@ -228,7 +228,14 @@ class MessageHandler(BaseEventHandler):
         from app.enums.message_status import MessageStatus
 
         recipient_id = chat.psychic_id if user.id == chat.user_id else chat.user_id
-        if recipient_id in manager.users_in_chat(str(self.chat_id)):
+        offline_queued = False
+        if per_message_charge is not None:
+            from app.services.offline_replies import is_queued
+
+            offline_queued = is_queued(self.db, db_message.id)
+        if offline_queued:
+            status = MessageStatus.DELIVERED
+        elif recipient_id in manager.users_in_chat(str(self.chat_id)):
             status = MessageStatus.READ
         elif notification_manager.is_user_connected(recipient_id):
             status = MessageStatus.DELIVERED

@@ -72,9 +72,13 @@ async def _store_charged_message(
     )
     db.add(message)
     db.flush()
-    return await charge_client_message(
+    result = await charge_client_message(
         db, chat, content, client, commit=False, message=message
     )
+    from app.services.offline_replies import stage_if_offline
+
+    stage_if_offline(db, chat, message)
+    return result
 
 
 async def send_client_message(
