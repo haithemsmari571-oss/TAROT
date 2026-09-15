@@ -87,6 +87,30 @@ async def requset_chat_endpoint(
             status_code=403,
         )
 
+    if settings.BILLING_MODE == "per_message":
+        from app.enums.response_mode import ResponseMode
+        from app.services.per_message_billing import PerMessageRefusal
+        from app.services.per_message_start import start_automatic_conversation
+
+        response_mode = db.query(Chat.response_mode).filter(
+            Chat.user_id == user.id, Chat.psychic_id == chat_data.psychic_id
+        ).scalar()
+        if response_mode is None or response_mode == ResponseMode.SABRI:
+            try:
+                result = await start_automatic_conversation(db, user, chat_data)
+            except PerMessageRefusal as refusal:
+                reader = db.get(User, chat_data.psychic_id)
+                return JSONResponse(
+                    content={
+                        "detail": refusal.reason,
+                        "required": refusal.payload.get("price_per_message"),
+                        "balance": refusal.payload.get("balance"),
+                        "psychic_name": reader.username if reader else None,
+                    },
+                    status_code=402,
+                )
+            return JSONResponse(content=result, status_code=201)
+
     # Only admins/superadmins can have multiple active/paused chats
     if user.role not in (Role.ADMIN, Role.SUPERADMIN):
         existing_active_or_paused = (

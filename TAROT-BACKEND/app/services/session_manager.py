@@ -462,6 +462,38 @@ class SessionManager:
         self.requested_sessions.discard(chat_id)
         logger.info("chat_request_unregistered", chat_id=chat_id)
 
+    def track_joined_per_message_session(
+        self, chat: Chat, session: ChatSession, balance: float
+    ) -> None:
+        """Cache an already-committed, joined, clockless conversation.
+
+        /request owns its database transaction. This method neither persists
+        rows nor runs the accept/join lifecycle or any per-minute billing.
+        """
+        if not _per_message_mode():
+            raise ValueError("A clockless conversation requires per_message mode")
+        if chat.client_joined_at is None:
+            raise ValueError("The conversation must already be joined")
+        self.unregister_request(chat.id)
+        self.paused_sessions.pop(chat.id, None)
+        current = self.active_sessions.get(chat.id)
+        if current is not None and current.session_id == session.id and not current.awaiting_join:
+            return
+        self.active_sessions[chat.id] = SessionState(
+            chat_id=chat.id,
+            session_id=session.id,
+            interval_id=None,
+            started_at=chat.client_joined_at,
+            client_id=chat.user_id,
+            psychic_id=chat.psychic_id,
+            rate_per_second=0.0,
+            max_session_duration_seconds=0,
+            initial_balance=balance,
+            awaiting_join=False,
+            client_joined_at=chat.client_joined_at,
+            minutes_charged=0,
+        )
+
     async def start_session(self, chat_id: int) -> SessionInfo:
         """
         Start a new chat session.
