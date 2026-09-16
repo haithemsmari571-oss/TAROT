@@ -15,6 +15,7 @@ import { crmDestinationForAdminPath } from "./admin-crm-routes";
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
 const ClientAppShell = lazy(() => import("./features/client-app/ClientAppShell"));
+const ClientThreadScreen = lazy(() => import("./features/client-app/ClientThreadScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -119,6 +120,7 @@ export default function App() {
         <Route path="home" element={<h1 className="client-app-title">Home</h1>} />
         <Route path="readers" element={<h1 className="client-app-title">Readers</h1>} />
         <Route path="chats" element={<h1 className="client-app-title">Chats</h1>} />
+        <Route path="chats/:chatId" element={<Suspense fallback={null}><ClientThreadScreen /></Suspense>} />
         <Route path="you" element={<h1 className="client-app-title">You</h1>} />
       </Route>
 

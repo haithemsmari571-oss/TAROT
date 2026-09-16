@@ -1,0 +1,103 @@
+.client-app-shell-thread .client-app-content {
+  display: block;
+  padding: 0;
+  min-height: 0;
+  height: calc(100vh - 66px);
+  height: calc(100dvh - 66px);
+  overflow: hidden;
+}
+
+.client-thread {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.client-thread-header {
+  flex: 0 0 62px;
+  height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 0 6px;
+  border-bottom: 1px solid #161B22;
+}
+
+.client-thread-back {
+  flex: 0 0 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: #E6EDF3;
+}
+
+.client-thread-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #161B22;
+  color: #D2B9FF;
+}
+
+.client-thread-avatar img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+.client-thread-online-dot { position: absolute; width: 9px; height: 9px; right: 0; bottom: 0; border: 2px solid #0B0B0B; border-radius: 50%; background: #6E7681; }
+.client-thread-online-dot.is-online { background: #3FB950; }
+.client-thread-reader { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.client-thread-name { font-size: 15.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.client-thread-availability { font-size: 11px; color: #6E7681; }
+.client-thread-availability.is-online { color: #3FB950; }
+
+.client-thread-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px 20px;
+  scrollbar-color: #21262D #0B0B0B;
+}
+
+.client-thread-date { text-align: center; color: #6E7681; font-size: 11px; margin: 18px 0; }
+.client-thread-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 16px; }
+.client-thread-message.same-run { margin-top: 9px; }
+.client-thread-message.mine { align-items: flex-end; }
+.client-thread-bubble { max-width: 84%; padding: 11px 15px; background: #161B22; border-radius: 18px; font-size: 14.5px; line-height: 1.5; color: #E6EDF3; white-space: pre-wrap; overflow-wrap: anywhere; }
+.client-thread-message.mine .client-thread-bubble { max-width: 80%; background: #3A2B55; }
+.client-thread-message.reader .client-thread-bubble.tail { border-bottom-left-radius: 5px; }
+.client-thread-message.mine .client-thread-bubble.tail { border-bottom-right-radius: 5px; }
+.client-thread-receipt { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 10.5px; color: #6E7681; }
+.client-thread-ticks { color: #6E7681; }
+.client-thread-ticks-seen { color: #D2B9FF; }
+.client-thread-thinking { display: flex; align-items: center; gap: 5px; width: fit-content; padding: 16px; margin-top: 16px; background: #161B22; border-radius: 18px 18px 18px 5px; }
+.client-thread-thinking span { width: 6px; height: 6px; border-radius: 50%; background: #6E7681; animation: client-thread-dot 1.2s ease-in-out infinite; }
+.client-thread-thinking span:nth-child(2) { background: #8B949E; animation-delay: .15s; }
+.client-thread-thinking span:nth-child(3) { background: #C9D1D9; animation-delay: .3s; }
+@keyframes client-thread-dot { 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .client-thread-thinking span { animation: none; } }
+
+.client-thread-composer { flex-shrink: 0; padding: 12px 16px 10px; border-top: 1px solid #161B22; }
+.client-thread-compose-row { display: flex; align-items: flex-end; gap: 9px; }
+.client-thread-compose-row textarea { display: block; flex: 1; min-width: 0; min-height: 46px; height: 46px; max-height: 140px; resize: none; border: 1px solid #21262D; border-radius: 23px; background: #0D1117; color: #E6EDF3; padding: 11px 15px; font-size: 14.5px; line-height: 22px; }
+.client-thread-compose-row textarea::placeholder { color: #6E7681; opacity: 1; }
+.client-thread-compose-row textarea { scrollbar-color: #21262D #0D1117; }
+.client-thread-send { display: grid; place-items: center; flex: 0 0 46px; height: 46px; border-radius: 50%; background: #8A63D2; color: #FFFFFF; cursor: pointer; }
+.client-thread-send:disabled { opacity: .5; cursor: default; }
+.client-thread-price { display: flex; justify-content: center; align-items: center; gap: 7px; margin-top: 8px; font-size: 12px; color: #8B949E; }
+.client-thread-price-dot { width: 3px; height: 3px; border-radius: 50%; background: #30363D; }
+.client-thread-balance { color: #F2AE40; font-weight: 500; }
+.client-thread-error { font-size: 12px; color: #8B949E; margin: 8px 0 0; }
+.client-thread-error a, .client-thread-notice a { color: #D2B9FF; text-decoration: underline; }
+.client-thread-older { display: block; min-height: 44px; margin: 0 auto; font-size: 12px; color: #8B949E; cursor: pointer; }
+.client-thread-notice { padding: 20px; color: #8B949E; }
+.client-thread :is(a, button, textarea):focus-visible { outline: 2px solid #8A63D2; outline-offset: 2px; }
+
+@media (min-width: 900px) {
+  .client-app-shell-thread .client-app-content { height: 100vh; height: 100dvh; }
+  .client-thread { border-left: 1px solid #161B22; border-right: 1px solid #161B22; }
+  .client-thread-messages { padding-left: 24px; padding-right: 24px; }
+}

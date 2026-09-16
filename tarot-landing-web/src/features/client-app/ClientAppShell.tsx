@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useMatch } from "react-router-dom";
 import { useInboxUnreadCount } from "./useInboxUnreadCount";
 import "./client-app.css";
 
@@ -23,6 +23,7 @@ function TabIcon({ tab }: { tab: (typeof tabs)[number]["path"] }) {
 
 export default function ClientAppShell() {
   const { data: unreadCount = 0 } = useInboxUnreadCount();
+  const isThread = useMatch("/app/chats/:chatId");
 
   useEffect(() => {
     // Keep the app's font stylesheet out of the public/marketing layouts.
@@ -34,11 +35,11 @@ export default function ClientAppShell() {
   }, []);
 
   return (
-    <div className="client-app-shell">
+    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}`}>
       <main className="client-app-content"><Outlet /></main>
       <nav className="client-app-nav" aria-label="App navigation">
         {tabs.map(({ path, label }) => (
-          <NavLink key={path} to={`/app/${path}`} className={({ isActive }) => `client-app-tab${isActive ? " client-app-tab-active" : ""}`} aria-label={path === "chats" && unreadCount > 0 ? `Chats, ${unreadCount} unread messages` : label}>
+          <NavLink key={path} to={`/app/${path}`} className={({ isActive }) => `client-app-tab${isActive ? " client-app-tab-active" : ""}`} aria-label={path === "chats" && unreadCount > 0 ? `Chats, ${unreadCount} unread conversations` : label}>
             <span className="client-app-icon">
               <TabIcon tab={path} />
               {path === "chats" && unreadCount > 0 && <span className="client-app-badge" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}

@@ -24,7 +24,7 @@ export function useInboxUnreadCount() {
           params: { offset, limit: 100 },
           signal,
         });
-        unreadCount += data.items.reduce((sum, chat) => sum + chat.unread_count, 0);
+        unreadCount += data.items.filter(chat => chat.unread_count > 0).length;
         if (!data.has_more || data.items.length === 0) return unreadCount;
         offset += data.items.length;
       }
