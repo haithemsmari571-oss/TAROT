@@ -4,7 +4,7 @@ import PublicLayout from "./layouts/PublicLayout";
 import "./App.css";
 import type { RouteConfig } from "./routes/app.routes";
 import routes from "./routes/app.routes";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import NotFound from "./features/misc/views/NotFound";
 import { ProtectedRoute, RoleProtectedRoute } from "./features/auth/components";
 import { useAuth } from "./features/auth/hooks";
@@ -13,6 +13,8 @@ import BrandedLoader from "./components/motion/BrandedLoader";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
+
+const ClientAppShell = lazy(() => import("./features/client-app/ClientAppShell"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -103,6 +105,23 @@ export default function App() {
 
   return (
     <Routes>
+      <Route
+        path="/app"
+        element={
+          <RoleProtectedRoute allowedRoles={[UserRole.USER]}>
+            <Suspense fallback={null}>
+              <ClientAppShell />
+            </Suspense>
+          </RoleProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="home" replace />} />
+        <Route path="home" element={<h1 className="client-app-title">Home</h1>} />
+        <Route path="readers" element={<h1 className="client-app-title">Readers</h1>} />
+        <Route path="chats" element={<h1 className="client-app-title">Chats</h1>} />
+        <Route path="you" element={<h1 className="client-app-title">You</h1>} />
+      </Route>
+
       {/* Public Layout Routes (Landing pages without sidebar) */}
       <Route
         element={
