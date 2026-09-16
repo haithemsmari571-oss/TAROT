@@ -42,8 +42,10 @@ from app.services.chats import (
     update_chat_status,
 )
 from sqlalchemy import desc
+from app.routers.client_inbox import router as client_inbox_router
 
 router = APIRouter()
+router.include_router(client_inbox_router)
 settings = get_app_settings()
 logger = get_logger(__name__)
 
@@ -2039,6 +2041,11 @@ async def websocket_endpoint(
 
         # 2. Verify chat access
         chat = await verify_chat_access(db, user_id=user.id, chat_id=int(chat_id))
+
+        if settings.BILLING_MODE == "per_message" and user.id == chat.user_id:
+            from app.services.client_inbox import mark_chat_opened
+
+            mark_chat_opened(db, int(chat_id), user.id)
 
         # 3. Send auth success
         await websocket.send_json({"type": "auth_success"})

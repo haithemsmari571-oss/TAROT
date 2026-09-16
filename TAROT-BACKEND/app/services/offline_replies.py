@@ -141,15 +141,13 @@ def release(message_id, token):
 
 
 def receipt(message_id, token, event):
+    from app.services.per_message_receipts import advance_client_receipt
+
     with SessionLocal() as db:
         debit, queue = _owned(db, message_id, token)
         if debit is None:
             return False
-        message = db.get(Message, message_id)
-        if event == "message_seen":
-            message.status = MessageStatus.READ
-        elif event == "message_delivered" and message.status != MessageStatus.READ:
-            message.status = MessageStatus.DELIVERED
+        advance_client_receipt(db, message_id, event)
         queue.setdefault(event + "_at", _now().isoformat())
         _write(debit, queue)
         db.commit()

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Enum, ForeignKey
+from sqlalchemy import Enum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.author_type import AuthorType
@@ -10,6 +10,7 @@ from app.models.base import Base
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (Index("ix_messages_chat_activity", "chat_id", "created_at", "id"),)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"))
     chat_session_id: Mapped[Optional[int]] = mapped_column(

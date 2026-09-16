@@ -179,6 +179,13 @@ async def _receipts(chat_id: int, message_id: int, client_id: int, presence: _Pr
 
             if not receipt(message_id, queue_token, event):
                 return
+        elif get_app_settings().BILLING_MODE == "per_message":
+            from app.database.client import SessionLocal
+            from app.services.per_message_receipts import advance_client_receipt
+
+            with SessionLocal() as db:
+                advance_client_receipt(db, message_id, event)
+                db.commit()
         await manager.send_to_user_in_chat(
             {"event": event, "data": {"message_id": message_id}}, str(chat_id), client_id
         )

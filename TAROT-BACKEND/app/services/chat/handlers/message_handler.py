@@ -235,6 +235,9 @@ class MessageHandler(BaseEventHandler):
             offline_queued = is_queued(self.db, db_message.id)
         if offline_queued:
             status = MessageStatus.DELIVERED
+        elif per_message_charge is not None and chat.response_mode.value == "SABRI":
+            # Automatic reader receipts advance this row on the presence clock.
+            status = MessageStatus.SENT
         elif recipient_id in manager.users_in_chat(str(self.chat_id)):
             status = MessageStatus.READ
         elif notification_manager.is_user_connected(recipient_id):

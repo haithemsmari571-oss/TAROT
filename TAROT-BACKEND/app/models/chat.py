@@ -1,5 +1,5 @@
 from typing import List
-from sqlalchemy import Enum, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, UniqueConstraint
 from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,10 @@ class Chat(Base):
     # the client joins, so an accepted-but-never-joined chat never starts the clock.
     client_joined_at: Mapped[datetime | None] = mapped_column(
         default=None, nullable=True
+    )
+    # Per-message inbox read marker; only an explicit client open advances it.
+    client_last_opened_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
     )
 
     psychic: Mapped["User"] = relationship(
