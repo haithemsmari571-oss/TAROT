@@ -82,7 +82,10 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
     const controller = new AbortController();
     let opening: Promise<void> | null = null;
     let openAgain = false;
-    const invalidateBadge = () => queryClient.invalidateQueries({ queryKey: ["client-app-inbox-unread", userId] });
+    const invalidateBadge = () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["client-app-inbox-unread", userId] }),
+      queryClient.invalidateQueries({ queryKey: ["client-inbox", userId] }),
+    ]);
     const markOpen = () => {
       if (disposed || document.visibilityState !== "visible") return;
       if (opening) { openAgain = true; return; }

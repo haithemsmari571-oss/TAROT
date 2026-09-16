@@ -24,6 +24,7 @@ function TabIcon({ tab }: { tab: (typeof tabs)[number]["path"] }) {
 export default function ClientAppShell() {
   const { data: unreadCount = 0 } = useInboxUnreadCount();
   const isThread = useMatch("/app/chats/:chatId");
+  const isInbox = useMatch("/app/chats");
 
   useEffect(() => {
     // Keep the app's font stylesheet out of the public/marketing layouts.
@@ -35,7 +36,7 @@ export default function ClientAppShell() {
   }, []);
 
   return (
-    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}`}>
+    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}`}>
       <main className="client-app-content"><Outlet /></main>
       <nav className="client-app-nav" aria-label="App navigation">
         {tabs.map(({ path, label }) => (
