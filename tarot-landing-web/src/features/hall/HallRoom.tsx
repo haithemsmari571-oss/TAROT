@@ -275,7 +275,7 @@ export default function HallRoom(p: HallRoomProps) {
                 <span>Reflect</span><b id="reflectbank">{banked}</b>
               </button>
             )}
-            {p.onEnd && (
+            {p.onEnd && !p.perMessage && (
               /* per-message billing: End holds, disabled, from the tap until the
                  end response lands (the reader's goodbye is on its way) */
               <button className="rbtn rend" onClick={p.onEnd} aria-label="End the reading"
