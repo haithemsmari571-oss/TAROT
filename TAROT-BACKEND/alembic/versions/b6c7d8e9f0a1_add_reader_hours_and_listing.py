@@ -1,4 +1,4 @@
-"""Add UK reader hours and hide the two test readers from the roster.
+"""Add UK reader hours and listing visibility, with every reader listed by default.
 
 Revision ID: b6c7d8e9f0a1
 Revises: a5b6c7d8e9f0
@@ -30,18 +30,6 @@ def upgrade() -> None:
             "ck_users_online_hours_distinct",
             "online_from IS NULL OR online_from <> online_to",
         )
-
-    # No hours are backfilled. UPDATE is harmless when either ID is absent and
-    # cannot hide a client account that happens to use one of these IDs locally.
-    users = sa.table(
-        "users", sa.column("id", sa.Integer()), sa.column("role", sa.String()),
-        sa.column("is_listed", sa.Boolean()),
-    )
-    op.execute(
-        users.update()
-        .where(users.c.id.in_([97, 99]), users.c.role == "PSYCHIC")
-        .values(is_listed=False)
-    )
 
 
 def downgrade() -> None:
