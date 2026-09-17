@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { useClientInbox, type InboxConversation } from "./useClientInbox";
 import "./client-chats.css";
@@ -25,32 +25,33 @@ function activityTime(value: string, now: Date) {
 }
 
 function ConversationRow({ conversation, now }: { conversation: InboxConversation; now: Date }) {
+  const navigate = useNavigate();
   const { reader, last_message: last, unread_count: unread } = conversation;
   const state = conversation.client_last_message_state ?? "sent";
   return (
     <li>
-      <Link to={`/app/chats/${conversation.chat_id}`} className={`client-chats-row${unread > 0 ? " has-unread" : ""}`} data-chat-id={conversation.chat_id}>
+      <button type="button" onClick={() => navigate(`/app/chats/${conversation.chat_id}`)} className={`client-chats-row${unread > 0 ? " has-unread" : ""}`} data-chat-id={conversation.chat_id}>
         <span className="client-chats-avatar">
           <span className="client-chats-initial" aria-hidden="true">{reader.display_name.slice(0, 1).toUpperCase()}</span>
           {reader.profile_picture_url && <img src={reader.profile_picture_url} alt="" onError={event => { event.currentTarget.hidden = true; }} />}
           <span className={`client-chats-online-dot${reader.is_online ? " is-online" : ""}`} aria-label={reader.is_online ? "Online" : "Offline"} />
         </span>
         <span className="client-chats-summary">
-          <span className="client-chats-first-line">
-            <span className="client-chats-name">{reader.display_name}</span>
-            <time className="client-chats-time" dateTime={conversation.last_activity_at}>{activityTime(conversation.last_activity_at, now)}</time>
-          </span>
+          <span className="client-chats-name">{reader.display_name}</span>
           <span className="client-chats-preview-line">
-            {last?.sent_by === "client" && <svg className={`client-chats-ticks ${state}`} width="17" height="12" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={state}>
+            {last?.sent_by === "client" && <svg className={`client-chats-ticks ${state}`} width="17" height="12" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={state}>
               <path d="m2 8 4 4L16 2" />
               {state !== "sent" && <path d="m10 11 2 2L22 3" />}
             </svg>}
             <span className="client-chats-preview">{last?.text ?? ""}</span>
-            {unread > 0 && <span className="client-chats-unread" aria-label={`${unread} unread messages`}>{unread}</span>}
           </span>
           {!reader.is_online && reader.next_online_at && <span className="client-chats-back">Back at {ukClock.format(new Date(reader.next_online_at))}</span>}
         </span>
-      </Link>
+        <span className="client-chats-meta">
+          <time className="client-chats-time" dateTime={conversation.last_activity_at}>{activityTime(conversation.last_activity_at, now)}</time>
+          {unread > 0 && <span className="client-chats-unread" aria-label={`${unread} unread messages`}>{unread}</span>}
+        </span>
+      </button>
     </li>
   );
 }
@@ -89,7 +90,10 @@ function ClientChatsList() {
 
   return (
     <section className="client-chats" aria-label="Chats">
-      <h1 className="client-chats-title">Chats</h1>
+      <header className="client-chats-header">
+        <p className="client-chats-eyebrow">Your readings</p>
+        <h1 className="client-chats-title">Chats</h1>
+      </header>
       <div className={`client-chats-scroll${empty ? " is-empty" : ""}`} ref={scroller}>
         {empty ? <div className="client-chats-empty">
           <p>No conversations yet</p>
