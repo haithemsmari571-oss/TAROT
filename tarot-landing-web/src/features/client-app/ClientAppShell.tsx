@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { NavLink, Outlet, useMatch } from "react-router-dom";
+import HallStage from "../hall/HallStage";
 import { useInboxUnreadCount } from "./useInboxUnreadCount";
 import "./client-app.css";
 
@@ -26,29 +26,22 @@ export default function ClientAppShell() {
   const isThread = useMatch("/app/chats/:chatId");
   const isInbox = useMatch("/app/chats");
 
-  useEffect(() => {
-    // Keep the app's font stylesheet out of the public/marketing layouts.
-    const fonts = document.createElement("link");
-    fonts.rel = "stylesheet";
-    fonts.href = "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Poppins:wght@400;500;600&display=swap";
-    document.head.appendChild(fonts);
-    return () => fonts.remove();
-  }, []);
-
   return (
     <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}`}>
-      <main className="client-app-content"><Outlet /></main>
-      <nav className="client-app-nav" aria-label="App navigation">
-        {tabs.map(({ path, label }) => (
-          <NavLink key={path} to={`/app/${path}`} className={({ isActive }) => `client-app-tab${isActive ? " client-app-tab-active" : ""}`} aria-label={path === "chats" && unreadCount > 0 ? `Chats, ${unreadCount} unread conversations` : label}>
-            <span className="client-app-icon">
-              <TabIcon tab={path} />
-              {path === "chats" && unreadCount > 0 && <span className="client-app-badge" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}
-            </span>
-            <span className="client-app-label">{label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      <HallStage backdrop>
+        <main className="client-app-content"><Outlet /></main>
+        <nav className="client-app-nav" aria-label="App navigation">
+          {tabs.map(({ path, label }) => (
+            <NavLink key={path} to={`/app/${path}`} className={({ isActive }) => `client-app-tab${isActive ? " client-app-tab-active" : ""}`} aria-label={path === "chats" && unreadCount > 0 ? `Chats, ${unreadCount} unread conversations` : label}>
+              <span className="client-app-icon">
+                <TabIcon tab={path} />
+                {path === "chats" && unreadCount > 0 && <span className="client-app-badge" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+              </span>
+              <span className="client-app-label">{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </HallStage>
     </div>
   );
 }

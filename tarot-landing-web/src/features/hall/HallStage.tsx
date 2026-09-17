@@ -11,11 +11,12 @@
    setHallSheetEnabled is deliberately NOT called here. It stays exactly where
    it was, in HallRoom, doing exactly what it did.
 
-   Scoped to /chats: it is mounted by ClientChat and by nothing else, and it
-   tears the whole runtime down on unmount so no hall state can reach another
-   route. */
+   ClientChat keeps the viewport-owning default. The app shell uses backdrop
+   mode without the room's document scroll lock or reader orb. Both hosts
+   tear the runtime down on unmount. */
 import { createContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { startHall } from "./startHall";
+import "../../styles/hall.css";
 
 /** The room's callbacks, held in a ref so startHall's closures always read the
     latest props — exactly as the original in-HallRoom closures did. */
@@ -39,12 +40,13 @@ export interface HallRuntime {
 
 export const HallRuntimeContext = createContext<HallRuntime | null>(null);
 
-export default function HallStage({ children }: { children: ReactNode }) {
+export default function HallStage({ children, backdrop = false }: { children: ReactNode; backdrop?: boolean }) {
   const handlers = useRef<HallHandlers>({});
   const [hall, setHall] = useState<ReturnType<typeof startHall> | null>(null);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-hall", "room");
+    // Only the original hall owns the document. A backdrop's host owns scrolling.
+    if (!backdrop) document.documentElement.setAttribute("data-hall", "room");
 
     const h = startHall({
       mode: "room",
@@ -74,30 +76,37 @@ export default function HallStage({ children }: { children: ReactNode }) {
       h.stop();
       document.getElementById("w1")?.replaceChildren();
       document.getElementById("w2")?.replaceChildren();
-      document.documentElement.removeAttribute("data-hall");
+      if (!backdrop) document.documentElement.removeAttribute("data-hall");
     };
     // startHall builds imperative DOM once and its callbacks read the latest
-    // handlers through the ref above, so it must not be torn down per render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // handlers through the ref above. Restart only if its hosting mode changes.
+  }, [backdrop]);
+
+  const sky = <>
+    <canvas id="gl"></canvas>
+    <div className="wheel"><svg id="w1" viewBox="0 0 100 100"></svg></div>
+    <div className="wheel2"><svg id="w2" viewBox="0 0 100 100"></svg></div>
+    <canvas id="dust"></canvas>
+    <div className="grain"></div>
+  </>;
 
   return (
     <HallRuntimeContext.Provider value={{ hall, handlers }}>
-      {/* ══ the sky — byte-for-byte the markup HallRoom rendered before ══ */}
-      <canvas id="gl"></canvas>
-      <div className="wheel"><svg id="w1" viewBox="0 0 100 100"></svg></div>
-      <div className="wheel2"><svg id="w2" viewBox="0 0 100 100"></svg></div>
-      <canvas id="dust"></canvas>
-      <div className="grain"></div>
-      <div className="orbfix"><div className="orb" id="orb">
-        <div className="aura"></div><div className="halo2"></div><div className="halo"></div>
-        <div className="photo"></div>
-      </div></div>
-      <div className="flash"></div>
+      {backdrop ? <div className="hall-stage-backdrop" aria-hidden="true">
+        {sky}
+        <canvas id="touch"></canvas>
+      </div> : <>
+        {sky}
+        <div className="orbfix"><div className="orb" id="orb">
+          <div className="aura"></div><div className="halo2"></div><div className="halo"></div>
+          <div className="photo"></div>
+        </div></div>
+        <div className="flash"></div>
+      </>}
 
       {children}
 
-      <canvas id="touch"></canvas>
+      {!backdrop && <canvas id="touch"></canvas>}
     </HallRuntimeContext.Provider>
   );
 }

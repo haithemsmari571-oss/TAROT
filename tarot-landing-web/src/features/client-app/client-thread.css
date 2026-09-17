@@ -2,8 +2,8 @@
   display: block;
   padding: 0;
   min-height: 0;
-  height: calc(100vh - 66px);
-  height: calc(100dvh - 66px);
+  height: calc(100vh - var(--client-app-nav-space));
+  height: calc(100dvh - var(--client-app-nav-space));
   overflow: hidden;
 }
 

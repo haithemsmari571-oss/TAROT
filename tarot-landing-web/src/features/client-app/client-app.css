@@ -1,22 +1,40 @@
 .client-app-shell,
 .client-app-shell * {
   box-sizing: border-box;
-  font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .client-app-shell {
-  min-height: 100vh;
-  min-height: 100dvh;
-  background: #0B0B0B;
+  --client-app-nav-space: calc(66px + env(safe-area-inset-bottom, 0px));
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0A0616;
   color: #E6EDF3;
   font-size: 14px;
   font-weight: 400;
-  padding-bottom: 66px;
+  padding-bottom: var(--client-app-nav-space);
+}
+
+.client-app-shell .hall-stage-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  isolation: isolate;
+  pointer-events: none;
+  background: #0A0616;
 }
 
 .client-app-content {
-  min-height: calc(100vh - 66px);
-  min-height: calc(100dvh - 66px);
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  height: calc(100vh - var(--client-app-nav-space));
+  height: calc(100dvh - var(--client-app-nav-space));
+  overflow-y: auto;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -24,10 +42,15 @@
 
 .client-app-shell .client-app-title {
   margin: 0;
-  font-family: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
   font-size: 32px;
   font-weight: 700;
   line-height: 1.2;
+}
+
+.client-app-shell .client-chats-name,
+.client-app-shell .client-thread-name {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
 }
 
 .client-app-nav {
@@ -36,11 +59,14 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 66px;
+  height: var(--client-app-nav-space);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: #0D1117;
-  border-top: 1px solid #161B22;
+  background: linear-gradient(165deg, rgba(30,18,48,.60), rgba(12,6,24,.50));
+  border-top: 1px solid rgba(255,214,150,.22);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
 }
 
 .client-app-tab {
@@ -51,16 +77,16 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  color: #6E7681;
+  color: #A8917B;
   text-decoration: none;
 }
 
 .client-app-tab-active {
-  color: #D2B9FF;
+  color: var(--gold);
 }
 
 .client-app-tab:focus-visible {
-  outline: 2px solid #8A63D2;
+  outline: 2px solid var(--gold);
   outline-offset: -4px;
   border-radius: 4px;
 }
@@ -74,8 +100,10 @@
 
 .client-app-label {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 15px;
+  text-transform: uppercase;
+  letter-spacing: .18em;
 }
 
 .client-app-badge {
@@ -86,36 +114,33 @@
   height: 17px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #8A63D2;
-  color: #FFFFFF;
+  background: var(--gold);
+  color: #2A1A10;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 17px;
   text-align: center;
 }
 
 @media (min-width: 900px) {
   .client-app-shell {
+    --client-app-nav-space: 0px;
     padding-bottom: 0;
-    padding-left: 112px;
-  }
-
-  .client-app-content {
-    min-height: 100vh;
-    min-height: 100dvh;
+    padding-left: 88px;
   }
 
   .client-app-nav {
     top: 0;
     right: auto;
-    width: 112px;
+    width: 88px;
     height: 100vh;
     height: 100dvh;
     padding-top: 24px;
+    padding-bottom: 0;
     grid-template-columns: 1fr;
     grid-auto-rows: 72px;
     align-content: start;
     border-top: 0;
-    border-right: 1px solid #161B22;
+    border-right: 1px solid rgba(255,214,150,.22);
   }
 }
