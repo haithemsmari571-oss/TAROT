@@ -1,0 +1,49 @@
+/* The hall room inside the app shell.
+
+   hall.css and hall-room.css draw the room exactly as written: the
+   conversation screen sets html[data-hall="room"] for as long as it is mounted.
+   Only what the shell changes about the room is here. */
+
+/* What the hall's document rule hands the old room by inheritance. The shell
+   sets a colour, size and weight of its own, so the room takes the hall's back. */
+.client-app-shell .client-room {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 300;
+}
+
+/* Phone: no tab bar inside a conversation. The room owns the viewport. */
+.client-app-shell.client-app-shell-thread { --client-app-nav-space: 0px; }
+.client-app-shell.client-app-shell-thread .client-app-nav { display: none; }
+
+/* The room fills the shell's content area instead of the window, so on desktop
+   nothing of it sits under the rail, and its header, thread and composer share
+   one centred column. */
+.client-app-shell .room {
+  position: absolute;
+  padding-inline: max(0px, calc((100% - 760px) / 2));
+}
+
+/* The orb sits over the profile button wherever the header puts it. The
+   conversation screen measures the button and hands its centre down, before
+   the first paint, so the orb is in place at once and never travels. */
+html[data-state="room"] .client-app-shell .orbfix {
+  --ox: var(--client-room-orb-x);
+  --oy: var(--client-room-orb-y);
+  transition: none;
+}
+
+/* Before the room can mount: one quiet note, or the sentence and the way back,
+   over the sky. */
+.client-app-shell .client-room-wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .client-app-shell.client-app-shell-thread .client-app-nav { display: grid; }
+}

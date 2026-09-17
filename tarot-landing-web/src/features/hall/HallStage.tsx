@@ -40,6 +40,18 @@ export interface HallRuntime {
 
 export const HallRuntimeContext = createContext<HallRuntime | null>(null);
 
+/** Her reader's orb. One markup for both hosts: the hall's default stage
+    renders it between the sky and the flash, and the app renders it on the
+    conversation screen only, where the backdrop has none. */
+export function HallOrb() {
+  return (
+    <div className="orbfix"><div className="orb" id="orb">
+      <div className="aura"></div><div className="halo2"></div><div className="halo"></div>
+      <div className="photo"></div>
+    </div></div>
+  );
+}
+
 export default function HallStage({ children, backdrop = false }: { children: ReactNode; backdrop?: boolean }) {
   const handlers = useRef<HallHandlers>({});
   const [hall, setHall] = useState<ReturnType<typeof startHall> | null>(null);
@@ -97,10 +109,7 @@ export default function HallStage({ children, backdrop = false }: { children: Re
         <canvas id="touch"></canvas>
       </div> : <>
         {sky}
-        <div className="orbfix"><div className="orb" id="orb">
-          <div className="aura"></div><div className="halo2"></div><div className="halo"></div>
-          <div className="photo"></div>
-        </div></div>
+        <HallOrb />
         <div className="flash"></div>
       </>}
 

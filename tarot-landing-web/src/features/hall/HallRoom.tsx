@@ -8,7 +8,7 @@
 
    The states it covers are numbered against ROOM-STATES.md. */
 
-import { useContext, useEffect, useRef } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef } from "react";
 import "../../styles/hall.css";
 import "../../styles/hall-room.css";
 import "../../styles/hall-list.css";
@@ -133,7 +133,16 @@ export interface HallRoomProps {
     sendPending?: boolean;
     /** End was tapped and the end response has not arrived yet */
     endPending?: boolean;
+    /** The header's status word, from a caller that knows the reader's hours.
+        Left out, the header reads "online" as it always has. null is that
+        same word; a string is shown as given. Once a caller passes either,
+        the reconnecting word stands in while the socket is down. */
+    status?: string | null;
   } | null;
+
+  /** Keep her place in the thread when an older page is prepended, instead of
+      following the newest message. Off unless the caller asks for it. */
+  keepPlaceOnOlder?: boolean;
 
   /* #5,#8 header actions */
   onBack: () => void;
@@ -200,9 +209,30 @@ export default function HallRoom(p: HallRoomProps) {
 
   useEffect(() => { hallInstance?.setRate(p.hold?.perMinute ?? null); }, [hallInstance, p.hold?.perMinute]);
 
+  /* keepPlaceOnOlder — where she is, measured from the newest message and kept
+     current by her own scrolling, beside the thread as it was last drawn. An
+     older page grows the thread and leaves its last row alone; then she stays
+     where she was reading, set before the frame paints. Without the prop
+     nothing here listens and nothing here moves the thread. */
+  const lastRowId = p.messages[p.messages.length - 1]?.id;
+  const place = useRef({ fromEnd: 0, rows: 0, lastRowId, held: false });
+  useEffect(() => {
+    const t = threadRef.current; if (!t || !p.keepPlaceOnOlder) return;
+    const note = () => { place.current.fromEnd = t.scrollHeight - t.scrollTop; };
+    t.addEventListener("scroll", note, { passive: true });
+    return () => t.removeEventListener("scroll", note);
+  }, [p.keepPlaceOnOlder]);
+  useLayoutEffect(() => {
+    const t = threadRef.current, was = place.current; if (!t || !p.keepPlaceOnOlder) return;
+    was.held = was.rows > 0 && p.messages.length > was.rows && lastRowId === was.lastRowId;
+    if (was.held) t.scrollTop = t.scrollHeight - was.fromEnd;
+    was.rows = p.messages.length; was.lastRowId = lastRowId;
+  }, [p.keepPlaceOnOlder, p.messages.length, lastRowId]);
+
   /* keep the newest message in view, the way a chat should */
   useEffect(() => {
-    const t = threadRef.current; if (t) t.scrollTop = t.scrollHeight;
+    const t = threadRef.current; if (!t) return;
+    if (place.current.held) place.current.held = false; else t.scrollTop = t.scrollHeight;
   }, [p.messages.length, p.readerTyping]);
 
   useEffect(() => {
@@ -239,7 +269,9 @@ export default function HallRoom(p: HallRoomProps) {
           <div className="whotext">
             <div className="nm">{p.readerName}</div>
             <div className="st" id="st">
-              {p.perMessage ? "online" : p.isConnected ? p.statusWord : "Reconnecting…"}
+              {(p.perMessage && p.perMessage.status === undefined) || p.isConnected
+                ? (p.perMessage ? p.perMessage.status ?? "online" : p.statusWord)
+                : "Reconnecting…"}
             </div>
           </div>
           {/* DEFECT 2 — the money leads. Spent is the number she will dispute,

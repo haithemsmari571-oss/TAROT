@@ -1,12 +1,26 @@
-import { Fragment, useLayoutEffect, useRef, useState, type FormEvent } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+/* The conversation screen: the hall's own room, inside the app shell.
+
+   A container and nothing more. useThreadConnection is the engine (history,
+   socket, sends, receipts, typing, rejection, live balance and price);
+   HallRoom draws. The sky and the hall runtime already belong to the shell's
+   backdrop stage, so this screen adds only what the backdrop leaves out: the
+   room's document flag and the reader's orb. */
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
-import { PER_MESSAGE_MAX_CHARS } from "@/features/chat/perMessage";
+import { PER_MESSAGE_COPY, PER_MESSAGE_MAX_CHARS } from "@/features/chat/perMessage";
+import HallRoom, { type HallRoomMessage } from "@/features/hall/HallRoom";
+import { HallOrb } from "@/features/hall/HallStage";
+import { useTopUp } from "@/features/payment/context/TopUpContext";
 import axiosClient from "@/lib/axiosClient";
-import { messageDate as instant, receiptOf, useThreadConnection, type Receipt } from "./useThreadConnection";
+import { formatGbp } from "@/lib/currency";
+import { messageDate as instant, receiptOf, useThreadConnection } from "./useThreadConnection";
+import "./client-chats.css";
 import "./client-thread.css";
+import "./client-room.css";
 
 interface ThreadDetails {
   id: number;
@@ -26,26 +40,69 @@ interface ThreadReader {
 // Older socket payloads use UTC without a suffix. Always display UK local time.
 const time = (value: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }).format(instant(value));
 const day = (value: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric" }).format(instant(value));
-const money = (value: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(value);
 
-function Ticks({ state }: { state: Receipt }) {
-  return (
-    <svg className={`client-thread-ticks client-thread-ticks-${state}`} width="16" height="11" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={state}>
-      <path d="m2 8 4 4L16 2" />
-      {state !== "sent" && <path d="m10 11 2 2L22 3" />}
-    </svg>
-  );
-}
+const CHATS = "/app/chats";
+/* The hall's own words. They are literals inside ClientChat.tsx (the composer
+   placeholders) and HallRoom.tsx (the connecting note), which this work may not
+   touch, so they are repeated here once, under the hall's name. */
+const HALL_PLACEHOLDER = "Say anything…";
+const HALL_PLACEHOLDER_CONNECTING = "Connecting...";
+const HALL_CONNECTING_NOTE = "Connecting…";
+/* The server's reasons for refusing a send, in the room's own lines. */
+const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
+const REJECTION_COPY: Record<string, string> = {
+  READER_UNAVAILABLE: PER_MESSAGE_COPY.readerUnavailable,
+  SESSION_NOT_ACTIVE: PER_MESSAGE_COPY.sessionNotActive,
+};
+const noProfileYet = () => {};
 
 export default function ClientThreadScreen() {
   const { chatId: rawId } = useParams();
   const chatId = Number(rawId);
   const { billingMode, loaded } = useBillingMode();
+  usePaymentReturn(chatId, loaded && billingMode === "per_message");
   if (!Number.isSafeInteger(chatId) || chatId <= 0) return <p role="alert">Chat not found.</p>;
-  if (!loaded) return <p role="status">Loading chat…</p>;
+  if (!loaded) return <RoomDocument><Waiting /></RoomDocument>;
   // The existing per-minute room remains the destination in that mode.
   if (billingMode !== "per_message") return <Navigate to={`/chats?chat_id=${chatId}`} replace />;
-  return <ThreadLoader key={chatId} chatId={chatId} />;
+  return <RoomDocument><ThreadLoader key={chatId} chatId={chatId} /></RoomDocument>;
+}
+
+/* Back from Stripe Checkout: say so once, then leave a clean URL behind. */
+function usePaymentReturn(chatId: number, enabled: boolean) {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const paid = enabled && params.get("status") === "success";
+  const told = useRef(false);
+  useEffect(() => {
+    if (!paid) { told.current = false; return; }
+    if (told.current) return;
+    told.current = true;
+    toast.success(PER_MESSAGE_COPY.paymentReceived);
+    navigate(`${CHATS}/${chatId}`, { replace: true });
+  }, [paid, chatId, navigate, toast]);
+}
+
+/* hall-room.css is written for html[data-hall="room"], and the shell's backdrop
+   leaves that flag unset on purpose. The conversation screen sets it for as
+   long as it is mounted — in a layout effect, so the room never paints a frame
+   without its styles — and takes it away again on the way out. */
+function RoomDocument({ children }: { children: ReactNode }) {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-hall", "room");
+    return () => root.removeAttribute("data-hall");
+  }, []);
+  /* Arriving from the old hall in one commit, its stage drops the same flag in
+     a passive cleanup, which runs after the layout effect above. Passive mount
+     effects run after every passive cleanup, so this one has the last word. */
+  useEffect(() => { document.documentElement.setAttribute("data-hall", "room"); }, []);
+  return <>{children}</>;
+}
+
+function Waiting() {
+  return <div className="client-room client-room-wait"><div className="rnote" role="status">{HALL_CONNECTING_NOTE}</div></div>;
 }
 
 function ThreadLoader({ chatId }: { chatId: number }) {
@@ -61,124 +118,137 @@ function ThreadLoader({ chatId }: { chatId: number }) {
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
-  if (details.isError || reader.isError) return <p className="client-thread-notice" role="alert">This chat could not be loaded. <Link to="/app/chats">Back to chats</Link></p>;
-  if (!details.data || !reader.data) return <p className="client-thread-notice" role="status">Loading chat…</p>;
-  return <Thread details={details.data} reader={reader.data} />;
+  if (details.isError || reader.isError) return (
+    <div className="client-room client-room-wait">
+      <div className="client-chats-empty">
+        <p role="alert">This chat could not be loaded.</p>
+        <Link to={CHATS}>Back to chats</Link>
+      </div>
+    </div>
+  );
+  if (!details.data || !reader.data) return <Waiting />;
+  return <Room details={details.data} reader={reader.data} />;
 }
 
-function Thread({ details, reader }: { details: ThreadDetails; reader: ThreadReader }) {
+function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReader }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { open: openTopUp } = useTopUp();
   const chat = useThreadConnection(details.id, details.balance, details.price_per_message);
-  const scroller = useRef<HTMLDivElement>(null);
-  const input = useRef<HTMLTextAreaElement>(null);
-  const stickToBottom = useRef(true);
+  const seat = useRef<HTMLDivElement>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState(false);
-  // SYSTEM authorship labels the fixed opener, which still has the reader's
-  // sender_id and is_system=false. It belongs in the thread as a reader bubble.
-  const messages = chat.messages.filter(message => !message.is_system);
-  if (chat.pending) messages.push(chat.pending);
-  const lastClient = [...messages].reverse().find(message => message.sender_id === user?.id);
+  const [askedForStardust, setAskedForStardust] = useState(false);
 
+  /* The orb over the profile button. The header's metrics are the hall's, so
+     the button is measured rather than its numbers repeated; the centre goes
+     down as two custom properties that client-room.css hands to .orbfix. */
   useLayoutEffect(() => {
-    if (stickToBottom.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
-  }, [messages.length, chat.thinking, chat.loading]);
+    const host = seat.current;
+    const who = host?.querySelector<HTMLElement>(".whobtn");
+    const header = host?.querySelector<HTMLElement>(".top");
+    if (!host || !who || !header) return;
+    const place = () => {
+      const box = who.getBoundingClientRect();
+      host.style.setProperty("--client-room-orb-x", `${box.left + box.width / 2}px`);
+      host.style.setProperty("--client-room-orb-y", `${box.top + box.height / 2}px`);
+    };
+    place();
+    const watcher = new ResizeObserver(place);
+    watcher.observe(header);
+    window.addEventListener("resize", place);
+    return () => { watcher.disconnect(); window.removeEventListener("resize", place); };
+  }, []);
 
-  useLayoutEffect(() => {
-    const element = input.current;
-    if (!element) return;
-    element.style.height = "46px";
-    if (chat.draft) element.style.height = `${Math.min(140, element.scrollHeight)}px`;
-  }, [chat.draft]);
+  const rows = useMemo(() => {
+    // SYSTEM authorship labels the fixed opener, which still has the reader's
+    // sender_id and is_system=false. It belongs in the thread as a reader bubble.
+    const messages = chat.messages.filter(message => !message.is_system);
+    if (chat.pending) messages.push(chat.pending);
+    const drawn: HallRoomMessage[] = [];
+    let lastDay: string | null = null;
+    for (const message of messages) {
+      const date = day(message.created_at);
+      // one separator before the first message of each UK calendar day
+      if (date !== lastDay) drawn.push({ id: `day-${date}`, mine: false, text: date, system: true });
+      lastDay = date;
+      drawn.push({ id: message.id, mine: message.sender_id === user?.id, text: message.content, receipt: receiptOf(message.status) });
+    }
+    return drawn;
+  }, [chat.messages, chat.pending, user?.id]);
 
-  const loadOlder = async () => {
-    const element = scroller.current;
-    if (!element || loadingOlder) return;
-    const oldHeight = element.scrollHeight;
-    const oldTop = element.scrollTop;
-    stickToBottom.current = false;
-    setLoadingOlder(true);
-    setOlderError(false);
-    try {
-      await chat.loadOlder();
-      requestAnimationFrame(() => { element.scrollTop = oldTop + element.scrollHeight - oldHeight; });
-    } catch { setOlderError(true); }
-    finally { setLoadingOlder(false); }
-  };
-  const send = (event: FormEvent) => {
-    event.preventDefault();
-    stickToBottom.current = true;
+  const short = chat.price != null && chat.balance < chat.price;
+  // the same glider /billing uses, in place, back to this room afterwards
+  const offerStardust = useCallback(() => {
+    openTopUp({
+      reason: `Add Stardust to keep going with ${reader.username}.${chat.price != null ? ` Each message is ${formatGbp(chat.price)}.` : ""}`,
+      returnUrl: `${CHATS}/${details.id}?topup=1`,
+    });
+  }, [openTopUp, reader.username, chat.price, details.id]);
+  const offer = useRef(offerStardust);
+  useEffect(() => { offer.current = offerStardust; }, [offerStardust]);
+  // the server refused a send for want of balance: her draft is back in the box
+  useEffect(() => { if (chat.rejection === INSUFFICIENT_BALANCE) offer.current(); }, [chat.rejection]);
+
+  const send = () => {
+    if (!chat.draft.trim() || chat.pending || !chat.connected || chat.price == null) return;
+    // Entering never asks. Pressing Send without the price does, and sends nothing.
+    if (short) { setAskedForStardust(true); offerStardust(); return; }
+    setAskedForStardust(false);
     chat.send();
   };
+  const loadOlder = async () => {
+    if (loadingOlder) return;
+    setLoadingOlder(true);
+    setOlderError(false);
+    try { await chat.loadOlder(); }
+    catch { setOlderError(true); }
+    finally { setLoadingOlder(false); }
+  };
+
+  /* One line under the composer. The Add Stardust line lives only while the
+     balance is short of the price, so it clears the moment a top-up lands. */
+  const refusal = short && (askedForStardust || chat.rejection === INSUFFICIENT_BALANCE)
+    ? PER_MESSAGE_COPY.addStardust
+    : chat.rejection && chat.rejection !== INSUFFICIENT_BALANCE ? REJECTION_COPY[chat.rejection] ?? chat.rejection : null;
+  const notice = refusal ?? chat.error ?? (olderError ? "Could not load older messages. Try again." : null);
 
   return (
-    <section className="client-thread" aria-label={`Chat with ${reader.username}`}>
-      <header className="client-thread-header">
-        <Link to="/app/chats" className="client-thread-back" aria-label="Back to chats">
-          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14" /></svg>
-        </Link>
-        <span className="client-thread-avatar">
-          {reader.profile_picture_url ? <img src={reader.profile_picture_url} alt="" /> : <span aria-hidden="true">{reader.username.slice(0, 1).toUpperCase()}</span>}
-          <span className={`client-thread-online-dot${reader.is_online ? " is-online" : ""}`} />
-        </span>
-        <div className="client-thread-reader">
-          <span className="client-thread-name">{reader.username}</span>
-          <span className={`client-thread-availability${reader.is_online ? " is-online" : ""}`}>
-            {reader.is_online ? "Online" : reader.next_online_at ? `Back at ${time(reader.next_online_at)}` : "Offline"}
-          </span>
-        </div>
-      </header>
-
-      <div className="client-thread-messages" ref={scroller} onScroll={() => {
-        const element = scroller.current;
-        if (element) stickToBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 60;
-      }} aria-label="Messages">
-        {chat.hasOlder && <button className="client-thread-older" onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? "Loading…" : "Load older messages"}</button>}
-        {olderError && <p role="alert">Could not load older messages. Try again.</p>}
-        {chat.loading && <p className="client-thread-notice" role="status">Loading messages…</p>}
-        {messages.map((message, index) => {
-          const previous = messages[index - 1];
-          const next = messages[index + 1];
-          const mine = message.sender_id === user?.id;
-          const date = day(message.created_at);
-          const sameRun = previous?.sender_id === message.sender_id && day(previous.created_at) === date;
-          const lastInRun = next?.sender_id !== message.sender_id || day(next.created_at) !== date;
-          return (
-            <Fragment key={message.id}>
-              {(!previous || day(previous.created_at) !== date) && <div className="client-thread-date">{date}</div>}
-              <div className={`client-thread-message${mine ? " mine" : " reader"}${sameRun ? " same-run" : ""}`} data-message-id={message.id}>
-                <div className={`client-thread-bubble${lastInRun ? " tail" : ""}`}>{message.content}</div>
-                {mine && message.id === lastClient?.id && <div className="client-thread-receipt" data-state={receiptOf(message.status)}>
-                  <time dateTime={instant(message.created_at).toISOString()}>{time(message.created_at)}</time>
-                  <Ticks state={receiptOf(message.status)} />
-                </div>}
-              </div>
-            </Fragment>
-          );
-        })}
-        {chat.thinking && <div className="client-thread-thinking" role="status" aria-label={`${reader.username} is thinking`}><span /><span /><span /></div>}
-      </div>
-
-      <form className="client-thread-composer" onSubmit={send}>
-        <div className="client-thread-compose-row">
-          <textarea ref={input} aria-label={`Message ${reader.username}`} placeholder={`Message ${reader.username}`} value={chat.draft} maxLength={PER_MESSAGE_MAX_CHARS} rows={1}
-            onChange={event => chat.setDraft(event.target.value)}
-            onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!chat.pending && chat.connected && chat.price != null) { stickToBottom.current = true; chat.send(); } } }} />
-          <button className="client-thread-send" type="submit" aria-label="Send message" disabled={!chat.connected || !!chat.pending || !chat.draft.trim() || chat.price == null}>
-            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20V4m-7 7 7-7 7 7" /></svg>
-          </button>
-        </div>
-        {chat.rejection && <p className="client-thread-error" role="alert">
-          {chat.rejection === "INSUFFICIENT_BALANCE" ? <>Insufficient balance. <Link to="/billing">Top up</Link> to send your message.</> : "Your message could not be sent. Please try again."}
-        </p>}
-        {chat.error && <p className="client-thread-error" role="alert">{chat.error}</p>}
-        {!chat.connected && !chat.error && <p className="client-thread-error" role="status">Connecting…</p>}
-        <div className="client-thread-price">
-          <span>{chat.price == null ? "Price unavailable" : `${money(chat.price)} per message`}</span>
-          <span className="client-thread-price-dot" aria-hidden="true" />
-          <span className="client-thread-balance">{money(chat.balance)} balance</span>
-        </div>
-      </form>
-    </section>
+    <div className="client-room" ref={seat}>
+      <HallOrb />
+      <HallRoom
+        phase="room"
+        readerName={reader.username}
+        readerPhoto={reader.profile_picture_url}
+        minutesLeft={null}
+        isPaused={false}
+        elapsedLabel=""
+        statusWord=""
+        isConnected={chat.connected}
+        messages={rows}
+        loadingMessages={chat.loading}
+        readerTyping={chat.thinking}
+        hasMore={chat.hasOlder}
+        loadingMore={loadingOlder}
+        onLoadMore={loadOlder}
+        keepPlaceOnOlder
+        input={chat.draft}
+        onInput={chat.setDraft}
+        onSend={send}
+        composerPlaceholder={chat.connected ? HALL_PLACEHOLDER : HALL_PLACEHOLDER_CONNECTING}
+        composerDisabled={!chat.connected || chat.price == null}
+        showComposer
+        perMessage={{
+          price: chat.price,
+          balance: chat.balance,
+          notice,
+          maxChars: PER_MESSAGE_MAX_CHARS,
+          sendPending: !!chat.pending,
+          status: reader.is_online ? null : reader.next_online_at ? `back at ${time(reader.next_online_at)}` : "offline",
+        }}
+        onBack={() => navigate(CHATS)}
+        onOpenProfile={noProfileYet}
+      />
+    </div>
   );
 }

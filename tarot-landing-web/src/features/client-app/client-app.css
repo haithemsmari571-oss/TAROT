@@ -48,8 +48,7 @@
   line-height: 1.2;
 }
 
-.client-app-shell .client-chats-name,
-.client-app-shell .client-thread-name {
+.client-app-shell .client-chats-name {
   font-family: "Fraunces", Georgia, "Times New Roman", serif;
 }
 

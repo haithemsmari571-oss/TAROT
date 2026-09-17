@@ -13,6 +13,8 @@ export const PER_MESSAGE_COPY = {
   readerUnavailable: "This reader is not available right now.",
   /** message_rejected SESSION_NOT_ACTIVE */
   sessionNotActive: "The reader has not joined yet.",
+  /** back in the room from Stripe Checkout with status=success */
+  paymentReceived: "Payment received. Your Stardust is in the room.",
 } as const;
 
 /** Where Stripe Checkout returns after a per-message top-up: this room, with a
