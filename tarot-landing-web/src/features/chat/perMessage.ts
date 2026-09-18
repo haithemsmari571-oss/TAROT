@@ -15,6 +15,8 @@ export const PER_MESSAGE_COPY = {
   sessionNotActive: "The reader has not joined yet.",
   /** back in the room from Stripe Checkout with status=success */
   paymentReceived: "Payment received. Your Stardust is in the room.",
+  /** POST /chat/conversation failed for any reason other than READER_UNAVAILABLE */
+  openFailed: "This conversation could not be opened. Try again.",
 } as const;
 
 /** Where Stripe Checkout returns after a per-message top-up: this room, with a

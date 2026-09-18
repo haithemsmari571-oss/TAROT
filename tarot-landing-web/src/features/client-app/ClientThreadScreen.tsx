@@ -17,7 +17,8 @@ import { HallOrb } from "@/features/hall/HallStage";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import axiosClient from "@/lib/axiosClient";
 import { formatGbp } from "@/lib/currency";
-import { messageDate as instant, receiptOf, useThreadConnection } from "./useThreadConnection";
+import { receiptOf, useThreadConnection } from "./useThreadConnection";
+import { clockAt, dayOf } from "./ukTime";
 import "./client-chats.css";
 import "./client-thread.css";
 import "./client-room.css";
@@ -36,10 +37,6 @@ interface ThreadReader {
   is_online: boolean;
   next_online_at: string | null;
 }
-
-// Older socket payloads use UTC without a suffix. Always display UK local time.
-const time = (value: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }).format(instant(value));
-const day = (value: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric" }).format(instant(value));
 
 const CHATS = "/app/chats";
 /* The hall's own words. They are literals inside ClientChat.tsx (the composer
@@ -168,7 +165,7 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
     const drawn: HallRoomMessage[] = [];
     let lastDay: string | null = null;
     for (const message of messages) {
-      const date = day(message.created_at);
+      const date = dayOf(message.created_at);
       // one separator before the first message of each UK calendar day
       if (date !== lastDay) drawn.push({ id: `day-${date}`, mine: false, text: date, system: true });
       lastDay = date;
@@ -244,7 +241,7 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
           notice,
           maxChars: PER_MESSAGE_MAX_CHARS,
           sendPending: !!chat.pending,
-          status: reader.is_online ? null : reader.next_online_at ? `back at ${time(reader.next_online_at)}` : "offline",
+          status: reader.is_online ? null : reader.next_online_at ? `back at ${clockAt(reader.next_online_at)}` : "offline",
         }}
         onBack={() => navigate(CHATS)}
         onOpenProfile={noProfileYet}

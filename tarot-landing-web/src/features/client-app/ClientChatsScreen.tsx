@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { useClientInbox, type InboxConversation } from "./useClientInbox";
+import { ukClock } from "./ukTime";
 import "./client-chats.css";
 
-const ukClock = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
 const ukDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
 const ukShortDate = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short" });
 const calendarDay = (date: Date) => {

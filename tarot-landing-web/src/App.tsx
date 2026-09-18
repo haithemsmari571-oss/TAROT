@@ -17,6 +17,8 @@ export { crmDestinationForAdminPath } from "./admin-crm-routes";
 const ClientAppShell = lazy(() => import("./features/client-app/ClientAppShell"));
 const ClientThreadScreen = lazy(() => import("./features/client-app/ClientThreadScreen"));
 const ClientChatsScreen = lazy(() => import("./features/client-app/ClientChatsScreen"));
+const ClientReadersScreen = lazy(() => import("./features/client-app/ClientReadersScreen"));
+const ClientReaderProfileScreen = lazy(() => import("./features/client-app/ClientReaderProfileScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -119,7 +121,8 @@ export default function App() {
       >
         <Route index element={<Navigate to="home" replace />} />
         <Route path="home" element={<h1 className="client-app-title">Home</h1>} />
-        <Route path="readers" element={<h1 className="client-app-title">Readers</h1>} />
+        <Route path="readers" element={<Suspense fallback={null}><ClientReadersScreen /></Suspense>} />
+        <Route path="readers/:psychicId" element={<Suspense fallback={null}><ClientReaderProfileScreen /></Suspense>} />
         <Route path="chats" element={<Suspense fallback={null}><ClientChatsScreen /></Suspense>} />
         <Route path="chats/:chatId" element={<Suspense fallback={null}><ClientThreadScreen /></Suspense>} />
         <Route path="you" element={<h1 className="client-app-title">You</h1>} />

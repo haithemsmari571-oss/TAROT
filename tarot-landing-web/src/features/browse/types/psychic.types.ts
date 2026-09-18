@@ -29,6 +29,8 @@ export interface Psychic {
   availability: PsychicAvailability[];
   profile_picture_url: string;
   is_online: boolean;
+  /** when offline: the ISO instant the reader's UK hours next open; null while online or with no hours */
+  next_online_at?: string | null;
   order?: number;
 }
 

@@ -1,0 +1,140 @@
+/* The Readers tab and the reader profile inside the app shell.
+
+   The roster draws the site's reader card (glass.css) and the profile draws
+   the hall's request panel (hall.css), each exactly as written there. Only
+   what these two screens add is here. Fraunces and Inter come through the
+   hall's --display and --ui, gold through --gold. */
+
+/* Both screens scroll as one page inside the content area, the way
+   client-chats.css:1-8 lays out the inbox (which scrolls its own list). */
+.client-app-shell-readers .client-app-content {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+/* ── the roster ── */
+.client-app-shell .client-readers {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+/* The grid keeps its own column rule; the wrapper already holds the side padding. */
+.client-app-shell .client-readers .gl-grid { padding: 0; }
+/* client-app.css hands every element in the shell Inter, and its rule sits
+   after glass.css in the cascade. The card's two serif lines take theirs back
+   so the card reads as it does on the site. */
+.client-app-shell .client-readers .gl-pname,
+.client-app-shell .client-readers .gl-price { font-family: var(--gl-serif); }
+
+/* ── the profile ── */
+.client-app-shell .client-reader-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 0 16px 24px;
+  /* what the hall's document rule hands the panel by inheritance */
+  color: var(--text);
+  font-weight: 300;
+}
+.client-app-shell .client-reader-profile-top {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 12px 0 0;
+}
+/* The room's back button, hall-room.css:47-52. That rule is scoped to
+   html[data-hall="room"], and the profile never sets the flag. */
+.client-app-shell .client-reader-back {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  font: inherit;
+  font-size: 19px;
+  color: rgba(224, 210, 190, .9);
+  background: rgba(255, 240, 214, .05);
+  border: 1px solid rgba(255, 214, 150, .22);
+  transition: background .4s var(--ease), color .4s var(--ease);
+}
+.client-app-shell .client-reader-back:hover { background: rgba(255, 214, 150, .16); color: #fff; }
+.client-app-shell .client-reader-back:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.client-app-shell .client-reader-profile .client-chats-notice { text-align: center; }
+
+/* The panel keeps the hall's recipe. hall.css:336-353 shrink it and hide
+   .psub on short windows, right for the request form and wrong here: the
+   photo's seat and the bio hold at every height. The margin makes room for
+   the half of the photo that rises above the panel. */
+.client-app-shell .client-reader-profile .panel {
+  position: relative;
+  margin-top: 60px;
+  padding-top: 84px;
+}
+.client-app-shell .client-reader-profile .psub { display: block; }
+.client-app-shell .client-reader-profile .pill { cursor: default; }
+/* The hall's reset (hall.css:17) zeroes these under html[data-hall]; the
+   profile carries no flag, so the browser's own paragraph and heading
+   margins are taken away here. The title is the hall's serif, which the
+   shell's Inter rule would otherwise cover. */
+.client-app-shell .client-reader-profile .eyebrow { margin: 0; }
+.client-app-shell .client-reader-profile .ptitle { margin-bottom: 0; font-family: var(--display); }
+
+/* The photo: a circle centred on the panel's top edge, half above, half below.
+   The disc clips the picture round; the dot sits on the disc's lower right,
+   outside the clip, in the chats avatar's values (client-chats.css:77-78). */
+.client-app-shell .client-reader-photo {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 120px;
+}
+.client-app-shell .client-reader-photo-disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(232, 200, 139, .4);
+  background: rgba(232, 200, 139, .12);
+}
+.client-app-shell .client-reader-photo-disc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.client-app-shell .client-reader-initial { font: 400 44px/1 var(--display); color: var(--gold); }
+.client-app-shell .client-reader-photo .client-chats-online-dot { width: 14px; height: 14px; right: 9px; bottom: 9px; }
+
+/* The price row and, under it, the card's gift line in the chats "Back at"
+   recipe (client-chats.css:90), in gold. */
+.client-app-shell .client-reader-price {
+  margin: 22px 0 0;
+  text-align: center;
+  font: 300 26px/1.2 var(--display);
+  color: #FFFCF4;
+}
+.client-app-shell .client-reader-price span { font: 300 13px/1.4 var(--ui); color: rgba(220, 205, 184, .9); }
+.client-app-shell .client-reader-gift {
+  margin: 3px 0 0;
+  text-align: center;
+  font: 500 10px/1.4 var(--ui);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Message, while the conversation opens; and the one line under it. */
+.client-app-shell .client-reader-profile .begin:disabled { opacity: .6; }
+.client-app-shell .client-reader-refusal {
+  margin: 12px 0 0;
+  text-align: center;
+  font: 300 13px/1.5 var(--ui);
+  color: rgba(220, 205, 184, .9);
+}
