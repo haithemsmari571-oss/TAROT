@@ -2,7 +2,7 @@
    the way the site's article page fetches it, drawn in the app's column on the
    living sky. No marketing layout, no related articles. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { Article } from "@/features/articles/ArticlesPages";
 import { resolveLibraryMediaUrl } from "@/features/sanctuary/api/libraryItemsApi";
 import axiosClient from "@/lib/axiosClient";
@@ -51,15 +51,20 @@ export default function ClientArticleScreen() {
 }
 
 /* The way back at the top left, then the column. The content area is the
-   shell's one scroller, shared with the feed, so a new post opens at its top. */
+   shell's one scroller, shared with the feed, so a new post opens at its top.
+   Back steps back through history, so the feed returns with its search and
+   kind still in the URL; a post opened straight from a link has nothing
+   behind it in the app and goes to Home. */
 function Column({ slug, children }: { slug: string | undefined; children: ReactNode }) {
   const navigate = useNavigate();
+  const { key } = useLocation();
+  const back = () => (key === "default" ? navigate(HOME_PATH) : navigate(-1));
   const column = useRef<HTMLElement>(null);
   useEffect(() => { column.current?.closest(".client-app-content")?.scrollTo(0, 0); }, [slug]);
   return (
     <section className="client-home" aria-label="Post" ref={column}>
       <div className="client-reader-profile-top">
-        <button type="button" className="client-reader-back" aria-label="Back to Home" onClick={() => navigate(HOME_PATH)}>‹</button>
+        <button type="button" className="client-reader-back" aria-label="Back to Home" onClick={back}>‹</button>
       </div>
       {children}
     </section>

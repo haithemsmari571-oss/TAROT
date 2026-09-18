@@ -133,6 +133,107 @@
 }
 .client-app-shell .client-home-post:hover .client-home-verb { background: rgba(255, 214, 150, .16); color: #fff; }
 
+/* ── search and kinds ── */
+/* The search row: the chats row's glass (client-chats.css, .client-chats-row),
+   as client-you.css copies it, drawn as a pill. */
+.client-app-shell .client-home-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 48px;
+  margin: 0 0 12px;
+  padding: 0 6px 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, .18);
+  background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+}
+.client-app-shell .client-home-search:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
+.client-app-shell .client-home-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  appearance: none;
+  background: transparent;
+  font: 300 15px/1.2 var(--ui);
+  color: #F8F1E4;
+}
+.client-app-shell .client-home-search input::placeholder { color: #A8917B; opacity: 1; }
+/* The row draws its own clear button. */
+.client-app-shell .client-home-search input::-webkit-search-cancel-button,
+.client-app-shell .client-home-search input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+.client-app-shell .client-home-search-clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font: 300 22px/1 var(--ui);
+  color: #A8917B;
+  background: transparent;
+  transition: color .4s var(--ease);
+}
+.client-app-shell .client-home-search-clear:hover { color: #F8F1E4; }
+.client-app-shell .client-home-search-clear:focus-visible { outline: 2px solid var(--gold); outline-offset: 0; }
+
+/* The kind chips: the You tab's pill (client-you.css, .client-you-pill), 36px
+   tall; the chosen one wears the send gradient. One line that scrolls on a
+   phone, wrapping from 900px. */
+.client-app-shell .client-home-kinds {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 0 0 10px;
+  /* room for the chips' focus ring inside the scroller */
+  padding: 4px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.client-app-shell .client-home-kinds::-webkit-scrollbar { display: none; }
+.client-app-shell .client-home-kind {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  font: 500 12px/1 var(--ui);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(224, 210, 190, .9);
+  background: rgba(255, 240, 214, .05);
+  border: 1px solid rgba(255, 214, 150, .22);
+  transition: background .4s var(--ease), color .4s var(--ease);
+}
+.client-app-shell .client-home-kind:hover { background: rgba(255, 214, 150, .16); color: #fff; }
+.client-app-shell .client-home-kind[aria-pressed="true"] {
+  padding: 0 17px;
+  border: 0;
+  background: linear-gradient(140deg, #FFECC4, #E6C48C);
+  color: #2A1A10;
+}
+.client-app-shell .client-home-kind:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* the chats list's time line (client-chats.css, .client-chats-time) */
+.client-app-shell .client-home-count {
+  margin: 0 0 10px;
+  font: 500 11px/1.4 var(--ui);
+  color: #A8917B;
+}
+
+@media (min-width: 900px) {
+  .client-app-shell .client-home-kinds { flex-wrap: wrap; overflow-x: visible; }
+}
+
 /* ── the reading screen ── */
 .client-app-shell .client-home .client-chats-notice { text-align: center; }
 .client-app-shell .client-home-article { display: block; padding-top: 12px; }
