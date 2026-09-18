@@ -42,6 +42,9 @@ export interface SanctuaryBrowseItem {
 
 const API_ORIGIN = String(import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
+/** A public article's browse key is this prefix and its slug. */
+export const ARTICLE_KEY_PREFIX = "article:";
+
 /** Keep absolute R2 URLs untouched while still tolerating a future relative media path. */
 export const resolveLibraryMediaUrl = (value?: string | null): string | null => {
   if (!value) return null;
@@ -112,7 +115,7 @@ export const getSanctuaryBrowseItems = async (): Promise<SanctuaryBrowseItem[]> 
       source: "library",
     })),
     ...articles.map((article): SanctuaryBrowseItem => ({
-      key: `article:${article.slug}`,
+      key: `${ARTICLE_KEY_PREFIX}${article.slug}`,
       type: "article",
       title: article.title,
       description: article.excerpt,

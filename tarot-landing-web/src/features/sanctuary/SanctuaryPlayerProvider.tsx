@@ -382,6 +382,7 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
         <>
           <aside
             className={`${styles.playerLayer} ${styles.playerBar}`}
+            data-sanctuary-player="bar"
             aria-label="Now playing"
             onClick={(event) => {
               if (!(event.target instanceof Element) || !event.target.closest("button, input")) openNowPlaying();

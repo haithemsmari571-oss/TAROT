@@ -5,7 +5,7 @@
 }
 
 .client-app-shell {
-  --client-app-nav-space: calc(66px + env(safe-area-inset-bottom, 0px));
+  --client-app-nav-space: calc(var(--client-app-tabbar-h) + env(safe-area-inset-bottom, 0px));
   position: fixed;
   inset: 0;
   height: 100vh;
@@ -125,13 +125,13 @@
   .client-app-shell {
     --client-app-nav-space: 0px;
     padding-bottom: 0;
-    padding-left: 88px;
+    padding-left: var(--client-app-rail-w);
   }
 
   .client-app-nav {
     top: 0;
     right: auto;
-    width: 88px;
+    width: var(--client-app-rail-w);
     height: 100vh;
     height: 100dvh;
     padding-top: 24px;
@@ -141,5 +141,28 @@
     align-content: start;
     border-top: 0;
     border-right: 1px solid rgba(255,214,150,.22);
+  }
+}
+
+/* The Sanctuary's mini player bar (SanctuaryPlayerProvider.tsx) is mounted beside
+   the app, not inside it, and is fixed near the bottom of the window. While the
+   shell is mounted it rises above the tab bar by the bar's height, keeping its
+   own gap and safe-area inset (SanctuaryPage.module.css, .playerBar), and beside
+   the rail it starts where the rail ends. The two sizes live on :root so the
+   shell above and the bar, which sits outside the shell, read the same numbers. */
+:root {
+  --client-app-tabbar-h: 66px;
+  --client-app-rail-w: 88px;
+}
+
+@media (max-width: 899.98px) {
+  html:has(.client-app-shell) [data-sanctuary-player="bar"] {
+    translate: 0 calc(-1 * var(--client-app-tabbar-h));
+  }
+}
+
+@media (min-width: 900px) {
+  html:has(.client-app-shell) [data-sanctuary-player="bar"] {
+    margin-left: var(--client-app-rail-w);
   }
 }

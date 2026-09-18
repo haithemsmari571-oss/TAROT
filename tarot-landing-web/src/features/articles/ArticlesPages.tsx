@@ -6,7 +6,7 @@ import "../../styles/glass.css";
 import "./articles.css";
 
 type TocItem = { level: number; text: string; id: string };
-type Article = {
+export type Article = {
   id: number;
   slug: string;
   category: string;

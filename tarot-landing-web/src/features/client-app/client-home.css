@@ -1,0 +1,200 @@
+/* The Home tab inside the app shell: the feed of posts and the reading screen.
+
+   Header, notices and the empty block are the chats list's own
+   (client-chats.css), the back control is the reader profile's
+   (client-readers.css). Only what these two screens add is here. Fraunces and
+   Inter come through the hall's --display and --ui, gold through --gold.
+   client-app.css:1-5 hands every element in the shell Inter, so each serif
+   line below restates its family at (0,2,0). */
+
+/* Both screens scroll as one page inside the content area, the way
+   client-you.css lays out the You tab. */
+.client-app-shell-home .client-app-content {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.client-app-shell .client-home {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  /* what the hall's document rule hands a panel by inheritance */
+  color: var(--text);
+  font-weight: 300;
+}
+
+/* ── the feed ── */
+.client-app-shell .client-home-posts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One post is one button: the chats row's glass (client-chats.css,
+   .client-chats-row), as client-you.css copies it. */
+.client-app-shell .client-home-post {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 214, 150, .18);
+  background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--text);
+  font-weight: 300;
+  transition: border-color 300ms var(--ease);
+}
+.client-app-shell .client-home-post:hover { border-color: rgba(232, 200, 139, .42); }
+.client-app-shell .client-home-post:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
+
+/* The Sanctuary's cover (cover.tsx). The generated art already fills its box
+   (SanctuaryPage.module.css, .generatedCover and .libraryCoverArt, the svg
+   sliced to fit); a real picture fills it the same way. The art's gold stops
+   read --sanctuary-gold, which only the Sanctuary's own page defines, so the
+   box hands them the hall's gold. The shell's Inter rule would also reach the
+   monogram inside the art, so the art's own face is handed back to it. */
+.client-app-shell .client-home-cover {
+  --sanctuary-gold: var(--gold);
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.client-app-shell .client-home-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.client-app-shell .client-home-cover svg text { font-family: revert-layer; }
+
+.client-app-shell .client-home-copy {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+/* the chats list's small caps line (client-chats.css, .client-chats-back) */
+.client-app-shell .client-home-meta {
+  display: block;
+  font: 500 10px/1.4 var(--ui);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #A8917B;
+}
+.client-app-shell .client-home-title {
+  display: block;
+  margin-top: 6px;
+  font: 400 20px/1.25 var(--display);
+  color: #F8F1E4;
+}
+.client-app-shell .client-home-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-top: 6px;
+  font: 300 14px/1.55 var(--ui);
+  color: rgba(220, 205, 184, .9);
+}
+
+/* Listen and Read: the You tab's pill (client-you.css, .client-you-pill),
+   36px tall, at the bottom right of the post. */
+.client-app-shell .client-home-verb {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  margin-top: 14px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: 500 12px/1 var(--ui);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(224, 210, 190, .9);
+  background: rgba(255, 240, 214, .05);
+  border: 1px solid rgba(255, 214, 150, .22);
+  transition: background .4s var(--ease), color .4s var(--ease);
+}
+.client-app-shell .client-home-post:hover .client-home-verb { background: rgba(255, 214, 150, .16); color: #fff; }
+
+/* ── the reading screen ── */
+.client-app-shell .client-home .client-chats-notice { text-align: center; }
+.client-app-shell .client-home-article { display: block; padding-top: 12px; }
+.client-app-shell .client-home-article-cover {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 214, 150, .18);
+}
+.client-app-shell .client-home-article-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.client-app-shell .client-home-article-title {
+  margin: 8px 0 20px;
+  font: 300 30px/1.15 var(--display);
+  color: #FFFCF4;
+}
+
+/* The article body, as the app draws it. The site's own skin (articles.css) is
+   not imported here, but it stays in the page once /articles has been visited,
+   so every property it sets is restated. */
+.client-app-shell .article-body {
+  font: 300 16px/1.7 var(--ui);
+  color: #DCCDB8;
+}
+.client-app-shell .article-body p { margin: 0 0 1em; }
+.client-app-shell .article-body h2,
+.client-app-shell .article-body h3 {
+  margin: 1.4em 0 .5em;
+  font-family: var(--display);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: normal;
+  color: #F8F1E4;
+}
+.client-app-shell .article-body h2 { font-size: 24px; }
+.client-app-shell .article-body h3 { font-size: 20px; }
+.client-app-shell .article-body a { color: var(--gold); text-decoration: underline; }
+.client-app-shell .article-body img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border-radius: 10px;
+}
+.client-app-shell .article-body blockquote {
+  margin: 0 0 1em;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid rgba(255, 214, 150, .4);
+  font: inherit;
+  color: inherit;
+}
+.client-app-shell .article-body ul,
+.client-app-shell .article-body ol { margin: 0 0 1em; padding-left: 20px; }
+.client-app-shell .article-body li { margin: 0; }
+
+@media (max-width: 479.98px) {
+  .client-app-shell .client-home-article-title { font-size: 26px; }
+}
