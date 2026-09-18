@@ -6,6 +6,7 @@ import { useAuth } from "./useAuth";
 import { UserRole } from "../types/auth.types";
 import type { LoginRequest, User } from "../types";
 import { decodeToken } from "../utils/tokenStorage";
+import { HOME_PATH } from "@/features/client-app/clientAppPaths";
 
 export const useLogin = () => {
   const navigate = useNavigate();
@@ -51,11 +52,9 @@ export const useLogin = () => {
         console.log("Redirecting to /admin/chats");
         navigate("/admin/chats");
       } else if (data.role === UserRole.USER) {
-        console.log("Redirecting to /psychics-browse");
-        // Regular users go to browse psychics
-        navigate("/psychics-browse");
+        // Clients land in the app
+        navigate(HOME_PATH);
       } else {
-        console.log("Fallback redirect to /psychics-browse. Role was:", data.role);
         // Fallback to psychics browse
         navigate("/psychics-browse");
       }

@@ -6,6 +6,8 @@ import { paymentApi } from "../features/payment/api/paymentApi";
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
 import { formatStardust } from "../lib/currency";
 import { useGlassTheme } from "../lib/glassTheme";
+import { UserRole } from "../features/auth/types/auth.types";
+import { HOME_PATH } from "../features/client-app/clientAppPaths";
 import "../styles/glass.css";
 
 export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
@@ -60,7 +62,15 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navItems = [
+  // A signed-in client's front door is the app: its item comes first and is
+  // always drawn as the current one. Guests and the other roles keep theirs.
+  const isClient = isAuthenticated && user?.role === UserRole.USER;
+  const navItems: { name: string; path: string; primary?: boolean }[] = isClient ? [
+    { name: "Open the app", path: HOME_PATH, primary: true },
+    { name: "Sanctuary", path: "/sanctuary" },
+    { name: "Articles", path: "/articles/" },
+    { name: "Life Path & Zodiac", path: "/oracle" },
+  ] : [
     { name: "Sanctuary", path: "/sanctuary" },
     ...(isAuthenticated
       ? [
@@ -77,6 +87,8 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
       ]),
   ];
 
+  const logoPath = isClient ? HOME_PATH : isAuthenticated ? "/psychics-browse" : "/";
+
   const avatarInitial = (user?.username || "✦").charAt(0).toUpperCase();
 
   return (
@@ -87,7 +99,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
       >
         <div className="gl-nav-inner">
           <div
-            onClick={() => navigate("/psychics-browse")}
+            onClick={() => navigate(logoPath)}
             className="gl-logo"
             title="Ask Valentina — home"
           >
@@ -97,7 +109,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
 
           <nav className="gl-links hidden lg:flex">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive = item.primary || location.pathname === item.path;
               return (
                 <button
                   key={item.name}
@@ -220,7 +232,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
             style={{ borderBottom: "1px solid var(--gl-hair-soft)" }}
           >
             <div
-              onClick={() => { navigate("/psychics-browse"); setMobileNavOpen(false); }}
+              onClick={() => { navigate(logoPath); setMobileNavOpen(false); }}
               className="gl-logo"
             >
               <img src="/logo short normal.svg" alt="Ask Valentina home" className="gl-logo-img" />
@@ -260,7 +272,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                 </button>
               )}
               {navItems.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = item.primary || location.pathname === item.path;
                 return (
                   <button
                     key={item.name}

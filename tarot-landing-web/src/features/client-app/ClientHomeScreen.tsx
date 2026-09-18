@@ -12,11 +12,11 @@ import { Cover, formatDuration } from "@/features/sanctuary/cover";
 import { useLibraryItems } from "@/features/sanctuary/hooks/useLibraryItems";
 import { useSanctuaryPlayer } from "@/features/sanctuary/SanctuaryPlayerProvider";
 import { sanitizeClaims } from "@/lib/copy";
+import { HOME_PATH } from "./clientAppPaths";
 import { dayOf } from "./ukTime";
 import "./client-chats.css";
 import "./client-home.css";
 
-export const HOME_PATH = "/app/home";
 const readPath = (slug: string) => `${HOME_PATH}/read/${slug}`;
 
 /* Newest first. Array sort is stable, so posts published at the same moment

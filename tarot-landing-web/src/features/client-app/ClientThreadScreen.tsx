@@ -17,6 +17,7 @@ import { HallOrb } from "@/features/hall/HallStage";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import axiosClient from "@/lib/axiosClient";
 import { formatGbp } from "@/lib/currency";
+import { CHATS_PATH } from "./clientAppPaths";
 import { receiptOf, useThreadConnection } from "./useThreadConnection";
 import { clockAt, dayOf } from "./ukTime";
 import "./client-chats.css";
@@ -38,7 +39,6 @@ interface ThreadReader {
   next_online_at: string | null;
 }
 
-const CHATS = "/app/chats";
 /* The hall's own words. They are literals inside ClientChat.tsx (the composer
    placeholders) and HallRoom.tsx (the connecting note), which this work may not
    touch, so they are repeated here once, under the hall's name. */
@@ -75,12 +75,12 @@ function usePaymentReturn(chatId: number, enabled: boolean) {
   const cancelled = enabled && params.get("status") === "cancelled";
   const told = useRef(false);
   useEffect(() => {
-    if (cancelled) { navigate(`${CHATS}/${chatId}`, { replace: true }); return; }
+    if (cancelled) { navigate(`${CHATS_PATH}/${chatId}`, { replace: true }); return; }
     if (!paid) { told.current = false; return; }
     if (told.current) return;
     told.current = true;
     toast.success(PER_MESSAGE_COPY.paymentReceived);
-    navigate(`${CHATS}/${chatId}`, { replace: true });
+    navigate(`${CHATS_PATH}/${chatId}`, { replace: true });
   }, [paid, cancelled, chatId, navigate, toast]);
 }
 
@@ -122,7 +122,7 @@ function ThreadLoader({ chatId }: { chatId: number }) {
     <div className="client-room client-room-wait">
       <div className="client-chats-empty">
         <p role="alert">This chat could not be loaded.</p>
-        <Link to={CHATS}>Back to chats</Link>
+        <Link to={CHATS_PATH}>Back to chats</Link>
       </div>
     </div>
   );
@@ -182,7 +182,7 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
   const offerStardust = useCallback(() => {
     openTopUp({
       reason: `Add Stardust to keep going with ${reader.username}.${chat.price != null ? ` Each message is ${formatGbp(chat.price)}.` : ""}`,
-      returnUrl: `${CHATS}/${details.id}?topup=1`,
+      returnUrl: `${CHATS_PATH}/${details.id}?topup=1`,
     });
   }, [openTopUp, reader.username, chat.price, details.id]);
   const offer = useRef(offerStardust);
@@ -246,7 +246,7 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
           sendPending: !!chat.pending,
           status: reader.is_online ? null : reader.next_online_at ? `back at ${clockAt(reader.next_online_at)}` : "offline",
         }}
-        onBack={() => navigate(CHATS)}
+        onBack={() => navigate(CHATS_PATH)}
         onOpenProfile={noProfileYet}
       />
     </div>

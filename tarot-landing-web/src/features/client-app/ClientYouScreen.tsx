@@ -10,11 +10,11 @@ import { TransactionStatus, TransactionType, type Transaction } from "@/features
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { usePayment } from "@/features/payment/hooks/usePayment";
 import { formatGbp } from "@/lib/currency";
+import { YOU_PATH } from "./clientAppPaths";
 import { clockAt, dayOf } from "./ukTime";
 import "./client-chats.css";
 import "./client-you.css";
 
-export const YOU_PATH = "/app/you";
 const ACTIVITY_PAGE_SIZE = 10;
 
 const ACTIVITY_TITLES: Partial<Record<TransactionType, string>> = {

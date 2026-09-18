@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { Article } from "@/features/articles/ArticlesPages";
 import { resolveLibraryMediaUrl } from "@/features/sanctuary/api/libraryItemsApi";
 import axiosClient from "@/lib/axiosClient";
-import { HOME_PATH } from "./ClientHomeScreen";
+import { HOME_PATH } from "./clientAppPaths";
 import { dayOf } from "./ukTime";
 import "./client-chats.css";
 import "./client-readers.css";

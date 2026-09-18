@@ -5,10 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { psychicsApi } from "@/features/browse/api/psychicsApi";
 import PsychicCard from "@/features/browse/components/PsychicCard";
 import type { Psychic } from "@/features/browse/types/psychic.types";
+import { READERS_PATH } from "./clientAppPaths";
 import "./client-chats.css";
 import "./client-readers.css";
-
-export const READERS_PATH = "/app/readers";
 
 /* Online readers first, then the others, each group in the API's own order,
    which is the site's display order. Two filters rather than a comparator, so

@@ -11,6 +11,8 @@ import { useAuth } from "./features/auth/hooks";
 import { UserRole } from "./features/auth/types/auth.types";
 import BrandedLoader from "./components/motion/BrandedLoader";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
+import RedirectSignedInClient, { type ClientAppRedirect } from "./features/client-app/RedirectSignedInClient";
+import { CHATS_PATH, HOME_PATH, READERS_PATH, YOU_PATH } from "./features/client-app/clientAppPaths";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
@@ -43,6 +45,24 @@ function AdminCrmRedirect() {
   return <BrandedLoader fullscreen label="Opening the CRM…" />;
 }
 
+// The old addresses a signed-in client may still hold, and the app screen each
+// one now opens. /chats/:chatId had no page before; everyone else still gets
+// the 404 there.
+const CLIENT_APP_REDIRECTS: Record<string, ClientAppRedirect> = {
+  "/": { to: () => HOME_PATH },
+  "/home": { to: () => HOME_PATH },
+  "/chats": { to: () => CHATS_PATH, perMessageOnly: true },
+  "/chats/:chatId": { to: ({ chatId }) => `${CHATS_PATH}/${chatId}`, perMessageOnly: true },
+  "/billing": { to: () => YOU_PATH },
+  "/psychics-browse": { to: () => READERS_PATH },
+  "/psychics/:id/details": { to: ({ id }) => `${READERS_PATH}/${id}` },
+};
+
+function withClientAppRedirect(path: string, element: React.ReactNode) {
+  const redirect = CLIENT_APP_REDIRECTS[path];
+  return redirect ? <RedirectSignedInClient {...redirect}>{element}</RedirectSignedInClient> : element;
+}
+
 // --- ROUTE GUARD ---
 function RouteGuard({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -73,8 +93,7 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   //     return <Navigate to="/admin/chats" replace />;
   //   }
   // }
-  // Logged-in USER role. "/" and "/home" have no standalone homepage — the
-  // HomeRedirect route component sends them to /psychics-browse.
+  // Logged-in USER role. "/" and "/home" open the app (CLIENT_APP_REDIRECTS).
   if (isAuthenticated && user?.role === UserRole.USER) {
     return <>{children}</>;
   }
@@ -148,15 +167,16 @@ export default function App() {
               <Route
                 key={r.path}
                 path={r.path}
-                element={
+                element={withClientAppRedirect(
+                  r.path,
                   <ProtectedRoute>
                     <r.component />
                   </ProtectedRoute>
-                }
+                )}
               />
             );
           }
-          return <Route key={r.path} path={r.path} element={<r.component />} />;
+          return <Route key={r.path} path={r.path} element={withClientAppRedirect(r.path, <r.component />)} />;
         })}
       </Route>
 
@@ -197,8 +217,9 @@ export default function App() {
       {routes
         .filter((r) => r.layout === "guest")
         .map((r: RouteConfig) => (
-          <Route key={r.path} path={r.path} element={<r.component />} />
+          <Route key={r.path} path={r.path} element={withClientAppRedirect(r.path, <r.component />)} />
         ))}
+      <Route path="/chats/:chatId" element={withClientAppRedirect("/chats/:chatId", <NotFound />)} />
 
       {/* 404 fallback - branded, on-voice page */}
       <Route path="*" element={<NotFound />} />

@@ -11,7 +11,7 @@ import { PER_MESSAGE_COPY } from "@/features/chat/perMessage";
 import axiosClient from "@/lib/axiosClient";
 import { sanitizeClaims } from "@/lib/copy";
 import { formatGbp, WELCOME_CREDIT_GBP } from "@/lib/currency";
-import { READERS_PATH } from "./ClientReadersScreen";
+import { READERS_PATH } from "./clientAppPaths";
 import { clockAt } from "./ukTime";
 import "./client-chats.css";
 import "./client-readers.css";
