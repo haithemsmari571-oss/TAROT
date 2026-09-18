@@ -19,6 +19,7 @@ type SanctuaryPlayerContextValue = {
   activeItem: SanctuaryBrowseItem | null;
   isPlaying: boolean;
   playItem: (item: SanctuaryBrowseItem) => void;
+  pause: () => void;
   setTrackList: (items: SanctuaryBrowseItem[]) => void;
 };
 
@@ -372,8 +373,9 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
     activeItem,
     isPlaying,
     playItem,
+    pause: requestPause,
     setTrackList,
-  }), [activeItem, isPlaying, playItem, setTrackList]);
+  }), [activeItem, isPlaying, playItem, requestPause, setTrackList]);
 
   return (
     <SanctuaryPlayerContext.Provider value={contextValue}>

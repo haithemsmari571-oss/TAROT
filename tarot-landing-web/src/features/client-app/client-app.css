@@ -61,7 +61,7 @@
   height: var(--client-app-nav-space);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   background: linear-gradient(165deg, rgba(30,18,48,.60), rgba(12,6,24,.50));
   border-top: 1px solid rgba(255,214,150,.22);
   -webkit-backdrop-filter: blur(26px) saturate(1.2);

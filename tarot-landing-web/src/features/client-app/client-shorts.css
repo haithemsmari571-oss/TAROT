@@ -1,0 +1,165 @@
+/* The Shorts tab inside the app shell: one reel at a time, full height of the
+   content area, on the living sky.
+
+   The notices and the empty block are the chats list's own (client-chats.css).
+   Only what this screen adds is here. Fraunces and Inter come through the
+   hall's --display and --ui, gold through --gold. client-app.css:1-5 hands
+   every element in the shell Inter, so the serif line below restates its
+   family at (0,2,0). */
+
+/* The screen itself is the scroller, so the content area only holds it. */
+.client-app-shell-shorts .client-app-content {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* The content area still hands its children justify-items: center
+   (client-app.css, .client-app-content), which would shrink the screen to the
+   stage's own width, so the screen claims the full width. */
+.client-app-shell .client-shorts-screen { width: 100%; height: 100%; }
+
+/* Loading, failure and the empty block, centred on the sky. */
+.client-app-shell .client-shorts-state {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 0 16px;
+  text-align: center;
+}
+
+/* ── the scroller: one slide per reel, snapping ── */
+.client-app-shell .client-shorts {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.client-app-shell .client-shorts::-webkit-scrollbar { display: none; }
+.client-app-shell .client-shorts:focus { outline: none; }
+.client-app-shell .client-shorts:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+
+.client-app-shell .client-shorts-slide {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* A 9:16 portrait as tall as the slide, never wider than it: the full width on
+   a phone, a centred column beside the rail. */
+.client-app-shell .client-shorts-stage {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 9 / 16;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 0;
+  background: #0A0616;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.client-app-shell .client-shorts-video {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── the caption ── */
+.client-app-shell .client-shorts-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(10, 6, 22, .72));
+}
+.client-app-shell .client-shorts-title {
+  margin: 0;
+  font: 400 20px/1.25 var(--display);
+  color: #F8F1E4;
+}
+.client-app-shell .client-shorts-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 6px 0 0;
+  font: 300 14px/1.55 var(--ui);
+  color: rgba(220, 205, 184, .9);
+}
+
+/* The sound switch: the room's back control (hall-room.css:47-52), its
+   size, colours and border, copied. That rule is scoped to
+   html[data-hall="room"], and this screen never sets the flag. */
+.client-app-shell .client-shorts-sound {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(224, 210, 190, .9);
+  background: rgba(255, 240, 214, .05);
+  border: 1px solid rgba(255, 214, 150, .22);
+  transition: background .4s var(--ease), color .4s var(--ease);
+}
+.client-app-shell .client-shorts-sound:hover { background: rgba(255, 214, 150, .16); color: #fff; }
+.client-app-shell .client-shorts-sound:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+/* Shown only while the client has paused the reel in view. */
+.client-app-shell .client-shorts-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+  color: #F8F1E4;
+  background: rgba(10, 6, 22, .45);
+  border: 1px solid rgba(255, 214, 150, .22);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.client-app-shell .client-shorts-play svg { margin-left: 3px; }
+
+/* The progress line along the very bottom of the stage. */
+.client-app-shell .client-shorts-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+  background: rgba(255, 255, 255, .18);
+}
+.client-app-shell .client-shorts-progress {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--gold);
+}
+
+@media (min-width: 900px) {
+  .client-app-shell .client-shorts-stage {
+    border-radius: 18px;
+    border: 1px solid rgba(255, 214, 150, .18);
+  }
+}

@@ -22,6 +22,7 @@ const ClientReaderProfileScreen = lazy(() => import("./features/client-app/Clien
 const ClientYouScreen = lazy(() => import("./features/client-app/ClientYouScreen"));
 const ClientHomeScreen = lazy(() => import("./features/client-app/ClientHomeScreen"));
 const ClientArticleScreen = lazy(() => import("./features/client-app/ClientArticleScreen"));
+const ClientShortsScreen = lazy(() => import("./features/client-app/ClientShortsScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -127,6 +128,7 @@ export default function App() {
         <Route path="home/read/:slug" element={<Suspense fallback={null}><ClientArticleScreen /></Suspense>} />
         <Route path="readers" element={<Suspense fallback={null}><ClientReadersScreen /></Suspense>} />
         <Route path="readers/:psychicId" element={<Suspense fallback={null}><ClientReaderProfileScreen /></Suspense>} />
+        <Route path="shorts" element={<Suspense fallback={null}><ClientShortsScreen /></Suspense>} />
         <Route path="chats" element={<Suspense fallback={null}><ClientChatsScreen /></Suspense>} />
         <Route path="chats/:chatId" element={<Suspense fallback={null}><ClientThreadScreen /></Suspense>} />
         <Route path="you" element={<Suspense fallback={null}><ClientYouScreen /></Suspense>} />

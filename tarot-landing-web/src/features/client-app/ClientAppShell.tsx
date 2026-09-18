@@ -6,6 +6,7 @@ import "./client-app.css";
 const tabs = [
   { path: "home", label: "Home" },
   { path: "readers", label: "Readers" },
+  { path: "shorts", label: "Shorts" },
   { path: "chats", label: "Chats" },
   { path: "you", label: "You" },
 ] as const;
@@ -15,6 +16,7 @@ function TabIcon({ tab }: { tab: (typeof tabs)[number]["path"] }) {
     <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {tab === "home" && <><path d="M3 10.5 12 3l9 7.5" /><path d="M5.5 9.5V21h13V9.5" /></>}
       {tab === "readers" && <><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20c0-3 2.5-5.2 5.5-5.2s5.5 2.2 5.5 5.2" /><path d="M16 5.5a3.2 3.2 0 0 1 0 6" /><path d="M17.5 14.9c2 .6 3.5 2.5 3.5 5.1" /></>}
+      {tab === "shorts" && <><rect x="7" y="4" width="10" height="16" rx="2.5" /><path d="M10.5 9.5v5l4-2.5-4-2.5Z" /></>}
       {tab === "chats" && <path d="M4 5.5h16v11H9l-5 4V5.5Z" />}
       {tab === "you" && <><circle cx="12" cy="8.5" r="3.6" /><path d="M4.5 20.5c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" /></>}
     </svg>
@@ -28,9 +30,10 @@ export default function ClientAppShell() {
   const isReaders = useMatch("/app/readers/*");
   const isYou = useMatch("/app/you");
   const isHome = useMatch("/app/home/*");
+  const isShorts = useMatch("/app/shorts");
 
   return (
-    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}${isReaders ? " client-app-shell-readers" : ""}${isYou ? " client-app-shell-you" : ""}${isHome ? " client-app-shell-home" : ""}`}>
+    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}${isReaders ? " client-app-shell-readers" : ""}${isYou ? " client-app-shell-you" : ""}${isHome ? " client-app-shell-home" : ""}${isShorts ? " client-app-shell-shorts" : ""}`}>
       <HallStage backdrop>
         <main className="client-app-content"><Outlet /></main>
         <nav className="client-app-nav" aria-label="App navigation">
