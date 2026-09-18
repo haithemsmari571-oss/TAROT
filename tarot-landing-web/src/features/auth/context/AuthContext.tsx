@@ -94,11 +94,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = () => {
-    console.log("Before logout", localStorage);
     clearTokens();
     setToken(null);
     setUser(null);
-    console.log("After logout", localStorage);
   };
 
   const updateUser = (newUser: User) => {

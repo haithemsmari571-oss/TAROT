@@ -40,10 +40,13 @@ from app.services.library_items import (
     update_library_item,
     video_url,
 )
+from app.services.object_storage import StorageUnreachableError
 
 
 public_router = APIRouter()
 admin_router = APIRouter(dependencies=[Depends(require_permission(Permission.MANAGE_SETTINGS))])
+
+STORAGE_UNREACHABLE_MESSAGE = "Storage could not be reached. Try again."
 
 
 def _admin_view(item: LibraryItem) -> LibraryItemAdmin:
@@ -206,6 +209,8 @@ async def admin_create_library_item(
         )
     except LibraryItemError as exc:
         _raise_library_error(exc)
+    except StorageUnreachableError:
+        raise HTTPException(503, STORAGE_UNREACHABLE_MESSAGE)
     return _admin_view(item)
 
 
@@ -261,6 +266,8 @@ async def admin_create_video_item(
         )
     except LibraryItemError as exc:
         _raise_library_error(exc)
+    except StorageUnreachableError:
+        raise HTTPException(503, STORAGE_UNREACHABLE_MESSAGE)
     return _admin_view(item)
 
 

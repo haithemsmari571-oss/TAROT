@@ -113,8 +113,10 @@ export default function ClientYouScreen() {
 
   // Back from Stripe: the line stays for as long as the screen is mounted,
   // the address goes back to the plain tab, as /billing does.
+  // A cancelled checkout reads as a failed one: nothing was charged.
   const status = params.get("status");
-  const outcome: PaymentOutcome | null = status === "success" || status === "error" ? status : null;
+  const outcome: PaymentOutcome | null =
+    status === "success" ? "success" : status === "error" || status === "cancelled" ? "error" : null;
   if (outcome && outcome !== payment) setPayment(outcome);
   useEffect(() => {
     if (!outcome) return;

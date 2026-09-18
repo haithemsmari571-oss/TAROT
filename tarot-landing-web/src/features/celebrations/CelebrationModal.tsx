@@ -76,7 +76,10 @@ const CelebrationModal = ({
 
   return (
     // Backdrop: deep violet-black at ~70% with a soft blur. Tap outside closes.
+    // data-hall-exempt: over a hall screen, the reset in hall.css skips this
+    // dialog, as it does the top-up window (TopUpContext.tsx).
     <div
+      data-hall-exempt=""
       onClick={safeDismiss}
       className="fixed inset-0 z-[9999] flex items-center justify-center p-5"
       style={{

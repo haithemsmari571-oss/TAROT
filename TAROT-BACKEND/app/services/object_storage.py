@@ -11,11 +11,20 @@ import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore.exceptions import ClientError
+from botocore.exceptions import ConnectionError as BotoConnectionError
+from botocore.exceptions import HTTPClientError
 
 from app.config import AppSettings, get_app_settings
 
 
 _MULTIPART_CHUNK_BYTES = 8 * 1024 * 1024
+# An unreachable endpoint must fail fast enough for an admin form to answer
+# within about three seconds: two attempts in all and a short connect timeout. The read
+# timeout stays at botocore's default, so a slow multipart part is not cut off.
+_CONNECT_TIMEOUT_SECONDS = 1
+_MAX_ATTEMPTS = 2
+# Connection refused, DNS failure, connect or read timeout, dropped connection.
+_UNREACHABLE_ERRORS = (BotoConnectionError, HTTPClientError)
 
 
 class StorageConfigurationError(RuntimeError):
@@ -24,6 +33,10 @@ class StorageConfigurationError(RuntimeError):
 
 class ObjectNotFoundError(FileNotFoundError):
     """The requested storage key does not exist."""
+
+
+class StorageUnreachableError(ConnectionError):
+    """The storage endpoint could not be reached (connection or timeout)."""
 
 
 @dataclass(frozen=True)
@@ -83,7 +96,8 @@ class ObjectStorage:
                 signature_version="s3v4",
                 request_checksum_calculation="when_required",
                 response_checksum_validation="when_required",
-                retries={"max_attempts": 4, "mode": "standard"},
+                connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+                retries={"total_max_attempts": _MAX_ATTEMPTS, "mode": "standard"},
                 s3={"addressing_style": "path"},
             ),
         )
@@ -107,6 +121,8 @@ class ObjectStorage:
                 },
                 Config=self._transfer_config,
             )
+        except _UNREACHABLE_ERRORS as exc:
+            raise StorageUnreachableError(str(exc)) from exc
         finally:
             if not fileobj.closed:
                 fileobj.seek(0)
@@ -160,6 +176,8 @@ class ObjectStorage:
             if code in {"404", "NoSuchKey", "NotFound"}:
                 raise ObjectNotFoundError(key) from exc
             raise
+        except _UNREACHABLE_ERRORS as exc:
+            raise StorageUnreachableError(str(exc)) from exc
         return StoredObject(
             size_bytes=int(result["ContentLength"]),
             content_type=result.get("ContentType"),
@@ -168,7 +186,10 @@ class ObjectStorage:
         )
 
     def delete_object(self, key: str) -> None:
-        self._client.delete_object(Bucket=self._bucket, Key=key)
+        try:
+            self._client.delete_object(Bucket=self._bucket, Key=key)
+        except _UNREACHABLE_ERRORS as exc:
+            raise StorageUnreachableError(str(exc)) from exc
 
     def public_url(self, key: str) -> str:
         return self._public_base_url + "/" + quote(key, safe="/")

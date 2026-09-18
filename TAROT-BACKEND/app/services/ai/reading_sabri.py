@@ -406,10 +406,16 @@ def _canonicalize_protected_literals(text: str, *, source_content: str = "", nam
 # so it is stripped here, before both the check and delivery.
 _KEEP_TOKEN_RE = re.compile(r"\[\[\s*KEEP[_\s]*\d*\s*\]\]", re.IGNORECASE)
 
+# End-of-sequence and turn markers a model can leak into its text. Removed anywhere in a
+# bubble; each leaves a space behind, which the final whitespace collapse folds away.
+STRAY_MODEL_TOKENS = ("</s>", "<|endoftext|>", "<|eot_id|>", "<|im_end|>")
+
 
 def sanitize_delivery_text(text: str) -> str:
     """Remove deterministic AI tells from a client-visible bubble without changing meaning."""
     cleaned = _KEEP_TOKEN_RE.sub("", text or "")
+    for token in STRAY_MODEL_TOKENS:
+        cleaned = cleaned.replace(token, " ")
     cleaned = cleaned.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
     cleaned = cleaned.replace("\ufeff", "").replace("\u00a0", " ")
     cleaned = cleaned.replace("—", ", ").replace("–", "-")

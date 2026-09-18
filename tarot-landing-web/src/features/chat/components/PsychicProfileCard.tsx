@@ -48,8 +48,11 @@ export const PsychicProfileCard = ({
       : trimmedBio.slice(0, BIO_LIMIT).trimEnd() + "…";
   const firstName = name.split(" ")[0] || name;
 
+  // data-hall-exempt: the card opens inside the hall's dialog, and the reset in
+  // hall.css would strip its Tailwind spacing, as it did the top-up window.
   return (
     <div
+      data-hall-exempt=""
       className="flex flex-col gap-6"
       style={{ fontFamily: TYPOGRAPHY.fontFamily.body }}
     >

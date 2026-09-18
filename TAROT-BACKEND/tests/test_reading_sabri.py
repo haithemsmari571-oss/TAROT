@@ -450,6 +450,16 @@ def test_sanitize_strips_token_variants():
         assert "KEEP" not in S.sanitize_delivery_text(f"hey {token} there")
 
 
+def test_sanitize_strips_stray_end_of_sequence_tokens_anywhere():
+    assert S.sanitize_delivery_text("Hello there</s>") == "Hello there"
+    assert S.sanitize_delivery_text("one<|endoftext|> two") == "one two"
+    assert S.sanitize_delivery_text("clean text") == "clean text"
+    assert S.sanitize_delivery_text("<|im_end|>he waits<|eot_id|>for you") == "he waits for you"
+    assert S.sanitize_delivery_text("so</s>.") == "so."
+    for token in S.STRAY_MODEL_TOKENS:
+        assert token not in S.sanitize_delivery_text(f"a {token}b{token} c{token}")
+
+
 def test_an_ordinary_sentence_opener_is_never_capitalised_mid_sentence():
     """Live turn one produced: "like Maybe you built it all yourself".
 

@@ -393,3 +393,15 @@ def update_user_profile(
         raise UserAlreadyExistsError("Username or email already exists")
 
     return user
+
+
+def set_profile_picture_path(db: Session, user_id: int, picture_path: str) -> User:
+    """Store the path of a picture the server itself saved for this user.
+
+    Kept apart from update_user_profile on purpose: UserProfileUpdate is what a
+    client may send, and the picture path is not something a client may set."""
+    user = get_user_by_id(db, user_id)
+    user.profile_picture_path = picture_path
+    db.commit()
+    db.refresh(user)
+    return user

@@ -27,6 +27,20 @@ logger = get_logger(__name__)
 settings = get_app_settings()
 
 
+def checkout_return_urls(return_url: str | None) -> tuple[str, str]:
+    """The success and cancel URLs for a Stripe Checkout session.
+
+    With a return_url the client comes back to the page it left, with
+    ``&status=success`` or ``&status=cancelled``; without one it lands on /billing."""
+    base = settings.FRONT_BASE_URL
+    if return_url:
+        return (
+            f"{base}{return_url}&status=success",
+            f"{base}{return_url}&status=cancelled",
+        )
+    return f"{base}/billing?status=success", f"{base}/billing?status=cancelled"
+
+
 @router.get("/stardust-tiers")
 async def get_stardust_tiers():
     """Read-only view of the live Stardust bonus tiers (public).
@@ -123,15 +137,8 @@ async def create_checkout_session(
         points_amount = request.points_amount
         total_amount_cents = unit_price_cents * points_amount
 
-        # Determine success URL
-        if request.return_url:
-            # Use custom return URL (for chat pause/resume flow)
-            success_url = (
-                f"{settings.FRONT_BASE_URL}{request.return_url}&status=success"
-            )
-        else:
-            # Default to billing page
-            success_url = f"{settings.FRONT_BASE_URL}/billing?status=success"
+        # Custom return URL (chat pause/resume flow), else the billing page
+        success_url, cancel_url = checkout_return_urls(request.return_url)
 
         # Create Stripe checkout session
         session = stripe.checkout.Session.create(
@@ -149,7 +156,7 @@ async def create_checkout_session(
             mode="payment",
             metadata={"user_id": str(user.id), "points": str(points_amount)},
             success_url=success_url,
-            cancel_url=f"{settings.FRONT_BASE_URL}/billing?status=cancelled",
+            cancel_url=cancel_url,
         )
 
         logger.info(
@@ -231,11 +238,7 @@ async def create_stardust_checkout_session(
         else:
             product_name = f"{quote.total_points} Stardust"
 
-        success_url = (
-            f"{settings.FRONT_BASE_URL}{request.return_url}&status=success"
-            if request.return_url
-            else f"{settings.FRONT_BASE_URL}/billing?status=success"
-        )
+        success_url, cancel_url = checkout_return_urls(request.return_url)
 
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -262,7 +265,7 @@ async def create_stardust_checkout_session(
                 "lifetime": "true" if quote.is_lifetime else "false",
             },
             success_url=success_url,
-            cancel_url=f"{settings.FRONT_BASE_URL}/billing?status=cancelled",
+            cancel_url=cancel_url,
         )
 
         logger.info(

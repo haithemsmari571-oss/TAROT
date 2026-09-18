@@ -31,8 +31,9 @@ export function welcomeCreditMinutes(pricePerSecond: number): number {
 }
 
 /**
- * THE shared money/stardust formatter — use everywhere (header, session bar,
- * cockpit, modals, ledger, admin) so every screen shows the exact same number.
+ * THE shared Stardust count formatter (no £ symbol) — use everywhere (header,
+ * session bar, modals) so every screen shows the exact same number. Amounts in
+ * pounds go through formatGbp below.
  *
  * Shows the EXACT value: whole numbers stay whole ("15"), fractional values keep
  * their decimals up to 2 dp ("9.6", "0.2"), never truncated, floored or rounded,
@@ -48,12 +49,21 @@ export function formatStardust(amount: number | null | undefined): string {
 }
 
 /**
- * Format an amount already denominated in GBP (wallet top-ups, session cost,
- * balances) with the £ symbol. Uses the shared exact formatter (1 credit = £1),
- * so "£15", "£9.6", "£0.2" — matching the Stardust figure everywhere.
+ * THE pounds formatter: every amount shown with the £ symbol (prices, wallet
+ * top-ups, session cost, balances) goes through here. One rule: a thousands
+ * separator always, two decimals when there are pence, none when the amount is
+ * whole. "£2.50", "£15", "£9,997.50", "£10,000".
  */
 export function formatGbp(amount: number): string {
-  return `${GBP}${formatStardust(amount)}`;
+  const n = Number(amount);
+  // Snap to whole pence first, as formatStardust does, so float noise never shows.
+  const pence = isFinite(n) ? Math.round((n + Number.EPSILON) * 100) : 0;
+  const decimals = pence % 100 === 0 ? 0 : 2;
+  const pounds = (pence / 100 || 0).toLocaleString("en-GB", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  return `${GBP}${pounds}`;
 }
 
 /**

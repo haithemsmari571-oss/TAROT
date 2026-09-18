@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 20 files."""
+"""Verification of the eleven Production Lock Version 21 files."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
+    # Production Lock Version 21: sanitize_delivery_text strips STRAY_MODEL_TOKENS;
+    # no prompt or setting changed; the other ten files are byte-identical.
+    #
     # Production Lock Version 20: per-message texting presence replaces only
     # SINGLE_MAX_TYPING_MS with the eighteen PRESENCE_* settings in config.py.
     # No per-minute setting or prompt changed; the other ten locked files are
@@ -113,7 +116,7 @@ LOCKED_SHA256 = {
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
     "app/services/ai/reading_duo.py": "33CCA0B8405E0E9872E71C7218C0A31202135554682F329E3E0AD06B6ED6AE2A",
     "app/services/ai/reading_valentina.py": "D3FA28E9688157F2E81FD34D4979FBDCBC11D08AFF3D0061B1B3A2F4C15C198C",
-    "app/services/ai/reading_sabri.py": "DD4745ACD47972C3B12247F64BC8E5E503B09E88D253288BBF64BF2E78AC3B02",
+    "app/services/ai/reading_sabri.py": "E444D5CCA44130ED1D11BA01AF9391CD81529D8889055DDD10C4F8FEBBFA8B1C",
     "app/services/ai/reading_reveal.py": "422150164423E8DA74058D5A390DD992C06DA8E5792F1310194EFE120F7B8AE2",
     "app/services/ai/reading_reader.py": "C06D47F6E15D0846BB47F35FB077B9EAB44BAE83ABE703C9C0BCE91192D60A53",
     "app/services/ai/reading_assistant.py": "7A184E9E2F3D503C3B3D7943E2D0549D83E76EB2A0CD28660D6D488427CE6408",

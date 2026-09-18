@@ -13,11 +13,13 @@ export const useCurrentUser = () => {
     retry: false,
   });
 
+  // Only while signed in: after logout the cached /auth/me answer is still
+  // here, and setUser would write it back to localStorage (auth_user).
   useEffect(() => {
-    if (query.data) {
+    if (token && query.data) {
       setUser(query.data);
     }
-  }, [query.data, setUser]);
+  }, [token, query.data, setUser]);
 
   return query;
 };

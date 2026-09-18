@@ -13,7 +13,8 @@ from app.schemas.auth import ChangePasswordReq
 from app.logging_config import get_logger
 from app.schemas.user import PushTokenReq, UserProfileRead, UserProfileUpdate
 from app.services.auth import change_password
-from app.services.users import update_user_profile
+from app.services.psychics import _pdp_path_to_url
+from app.services.users import set_profile_picture_path, update_user_profile
 
 router = APIRouter()
 settings = get_app_settings()
@@ -38,9 +39,9 @@ def transform_profile_picture_url(user: User) -> UserProfileRead:
         if profile_data.profile_picture_path.startswith(("http://", "https://")):
             return profile_data
 
-        # Otherwise, prepend base URL
-        profile_data.profile_picture_path = (
-            f"{settings.APP_BASE_URL}/media{profile_data.profile_picture_path}"
+        # Otherwise, the same URL the reader listing builds for the stored path
+        profile_data.profile_picture_path = _pdp_path_to_url(
+            profile_data.profile_picture_path
         )
 
     return profile_data
@@ -79,9 +80,9 @@ def update_my_profile(
     - username (min 3 characters)
     - email (valid email format)
     - bio (max 500 characters)
-    - profile_picture_path
 
     **Not allowed:**
+    - profile_picture_path (set only by POST /me/picture; ignored here)
     - role (admin only)
     - balance (use payment system)
     - status (admin only)
@@ -151,14 +152,9 @@ async def upload_profile_picture(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
-    # Update user profile with new picture path
-    # Store relative path without /media prefix (will be added on retrieval)
-    relative_path = f"/uploads/{unique_filename}"
-
-    from app.schemas.user import UserProfileUpdate
-
-    profile_update = UserProfileUpdate(profile_picture_path=relative_path)
-    updated_user = update_user_profile(db, user.id, profile_update)
+    # Store the path in the shape save_media writes for reader pictures
+    # ("media/uploads/<file>"), which every reader of the column turns into a URL.
+    updated_user = set_profile_picture_path(db, user.id, file_path.as_posix())
 
     return transform_profile_picture_url(updated_user)
 

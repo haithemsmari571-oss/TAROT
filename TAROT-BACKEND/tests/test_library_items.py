@@ -7,6 +7,7 @@ from pathlib import Path
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from botocore.exceptions import ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -20,7 +21,12 @@ from app.enums.role import Role
 from app.models.library_item import LibraryItem
 from app.routers.library_items import admin_router, public_router
 from app.schemas.library_item import MAX_LIBRARY_AUDIO_SIZE_BYTES, MAX_LIBRARY_VIDEO_SIZE_BYTES
-from app.services.object_storage import ObjectNotFoundError, ObjectStorage, StoredObject
+from app.services.object_storage import (
+    ObjectNotFoundError,
+    ObjectStorage,
+    StorageUnreachableError,
+    StoredObject,
+)
 
 
 def _mp3(frame_count: int = 3) -> bytes:
@@ -803,3 +809,82 @@ def test_video_migration_is_reversible_and_refuses_to_drop_videos(monkeypatch):
         assert connection.execute(text("SELECT key FROM library_items")).scalars().all() == ["tone"]
         video.upgrade()
     engine.dispose()
+
+
+class _UnreachableClient:
+    """A boto client whose endpoint cannot be reached, as botocore reports it."""
+
+    def __init__(self, error) -> None:
+        self.error = error
+
+    def head_object(self, **_kwargs):
+        raise self.error
+
+    def delete_object(self, **_kwargs):
+        raise self.error
+
+    def upload_fileobj(self, *_args, **_kwargs):
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        EndpointConnectionError(endpoint_url="http://storage.invalid"),
+        ConnectTimeoutError(endpoint_url="http://storage.invalid"),
+        ReadTimeoutError(endpoint_url="http://storage.invalid"),
+    ],
+)
+def test_unreachable_storage_is_one_error_for_head_put_and_delete(error):
+    storage = ObjectStorage(
+        client=_UnreachableClient(error),
+        bucket="bucket",
+        public_base_url="https://media.example.test",
+    )
+    with pytest.raises(StorageUnreachableError):
+        storage.head_object("library/video/x.mp4")
+    with pytest.raises(StorageUnreachableError):
+        storage.delete_object("library/video/x.mp4")
+    with pytest.raises(StorageUnreachableError):
+        storage.put_object("library/covers/x.webp", BytesIO(b"x"), content_type="image/webp")
+
+
+def test_storage_client_fails_fast_when_the_endpoint_is_unreachable():
+    from app.config import get_app_settings
+
+    settings = get_app_settings().model_copy(
+        update={
+            "R2_ENDPOINT": "http://storage.example.test",
+            "R2_BUCKET": "bucket",
+            "R2_ACCESS_KEY_ID": "id",
+            "R2_SECRET_ACCESS_KEY": "secret",
+            "R2_PUBLIC_BASE_URL": "https://media.example.test",
+        }
+    )
+    config = ObjectStorage.from_settings(settings)._client.meta.config
+    assert config.retries["total_max_attempts"] <= 2
+    assert config.connect_timeout <= 1
+
+
+def test_create_routes_answer_503_and_write_nothing_when_storage_is_unreachable(
+    db, make_user, fake_storage
+):
+    client = _client(db, make_user(role=Role.ADMIN))
+    audio_form = _grant_and_complete(client, fake_storage, _audio_claim())
+    audio_form.update({"type": "meditation", "title": "Tone"})
+    video_claim = _video_claim()
+    grant = client.post("/api/admin/library-items/video-upload-url", json=video_claim).json()
+    video_form = {**_video_form(grant, video_claim), "title": "Reel"}
+
+    def unreachable(key):
+        raise StorageUnreachableError(key)
+
+    fake_storage.head_object = unreachable
+    for url, form in (
+        ("/api/admin/library-items", audio_form),
+        ("/api/admin/library-items/video", video_form),
+    ):
+        response = client.post(url, data=form)
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Storage could not be reached. Try again."}
+    assert db.query(LibraryItem).count() == 0

@@ -65,20 +65,23 @@ export default function ClientThreadScreen() {
   return <RoomDocument><ThreadLoader key={chatId} chatId={chatId} /></RoomDocument>;
 }
 
-/* Back from Stripe Checkout: say so once, then leave a clean URL behind. */
+/* Back from Stripe Checkout: say so once, then leave a clean URL behind. A
+   cancelled checkout only cleans the URL, with no toast. */
 function usePaymentReturn(chatId: number, enabled: boolean) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
   const paid = enabled && params.get("status") === "success";
+  const cancelled = enabled && params.get("status") === "cancelled";
   const told = useRef(false);
   useEffect(() => {
+    if (cancelled) { navigate(`${CHATS}/${chatId}`, { replace: true }); return; }
     if (!paid) { told.current = false; return; }
     if (told.current) return;
     told.current = true;
     toast.success(PER_MESSAGE_COPY.paymentReceived);
     navigate(`${CHATS}/${chatId}`, { replace: true });
-  }, [paid, chatId, navigate, toast]);
+  }, [paid, cancelled, chatId, navigate, toast]);
 }
 
 /* hall-room.css is written for html[data-hall="room"], and the shell's backdrop
