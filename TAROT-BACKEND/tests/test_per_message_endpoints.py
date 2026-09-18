@@ -1,6 +1,7 @@
 """Per-message billing: the endpoints.
 
-/request charges the hall question as message one. The five clock-only endpoints
+/request opens the thread with the reader's unbilled opener and charges the
+question as the first paid message. The five clock-only endpoints
 answer 409. The Stripe webhook credits without resuming and tells the room. The
 restart reload and a client disconnect are clockless. These drive the real
 routers through a FastAPI test client (the pattern of tests/test_rejoin_greeting.py)
@@ -120,13 +121,22 @@ def _msg_fee_debits(db):
     return db.query(Transaction).filter(Transaction.idempotency_key.like("msg_fee:%")).all()
 
 
-# -- 1. /request charges the hall question as message one --------------------
-def test_request_stores_and_charges_the_question_as_message_one(sqlite, monkeypatch):
+# -- 1. /request opens the thread in one call and charges only the question ---
+def test_request_opens_the_thread_and_charges_only_the_question(sqlite, monkeypatch):
+    """One transaction (per_message_start.py start_automatic_conversation): the
+    chat is ACTIVE and automatic at once, the reader's opener sits first and is
+    never billed, the question is charged with the msg_fee key, and the reply is
+    handed to the engine straight away. No REQUESTED state, no accept, no /join."""
+    from app.enums.author_type import AuthorType
+    from app.enums.response_mode import ResponseMode
+    from app.services.per_message_start import AUTOMATIC_READER_OPENER
+
     db, _ = sqlite
     _mode(monkeypatch, "per_message")
-    _quiet_request_side_effects(monkeypatch)
+    calls = _quiet_reply_side_effects(monkeypatch)
     client, psychic = _people(db, balance=10.0)
-    http = _client(db, client, SessionManager(), monkeypatch)
+    manager = SessionManager()
+    http = _client(db, client, manager, monkeypatch)
 
     resp = http.post(
         "/api/chat/request",
@@ -134,12 +144,20 @@ def test_request_stores_and_charges_the_question_as_message_one(sqlite, monkeypa
     )
 
     assert resp.status_code == 201, resp.text
+    body = resp.json()
     chat = db.query(Chat).one()
-    assert chat.status == ChatStatus.REQUESTED
-    message = db.query(Message).filter(Message.is_system.is_(False)).one()
+    assert chat.status == ChatStatus.ACTIVE
+    assert chat.response_mode == ResponseMode.SABRI
+    session = db.query(ChatSession).one()
+    assert session.status == ChatSessionStatus.ACTIVE
+    opener, message = db.query(Message).order_by(Message.id).all()
+    assert (opener.sender_id, opener.author_type, opener.content) == (
+        psychic.id, AuthorType.SYSTEM, AUTOMATIC_READER_OPENER,
+    )
     assert message.sender_id == client.id
     assert message.content == "will my ex come back"
-    debit = db.query(Transaction).one()
+    assert opener.id < message.id
+    debit = db.query(Transaction).one()  # the opener is not billed
     assert debit.transaction_type == TransactionType.DEBIT
     assert debit.description == f"Message #{message.id}"
     assert debit.related_message_id == message.id
@@ -147,6 +165,16 @@ def test_request_stores_and_charges_the_question_as_message_one(sqlite, monkeypa
     assert float(debit.amount) == PRICE
     db.refresh(client)
     assert float(client.balance) == 10.0 - PRICE
+    assert body["chat_id"] == chat.id
+    assert body["status"] == "ACTIVE"
+    assert body["opener_message_id"] == opener.id
+    assert body["message_id"] == message.id
+    assert body["price_per_message"] == PRICE
+    assert body["client_balance"] == 10.0 - PRICE
+    assert calls["enqueue"] == [(chat.id, message.id)]
+    assert calls["stage"] == [message.id]  # the offline check ran on the charge
+    assert manager.active_sessions[chat.id].session_id == session.id
+    assert chat.id not in manager.requested_sessions
 
 
 # -- 2. /request below the price: refused, nothing created --------------------
@@ -181,11 +209,15 @@ def test_request_with_an_unpriced_reader_is_refused_with_nothing_created(
 
     resp = http.post("/api/chat/request", json={"psychic_id": psychic.id, "message": "hello"})
 
+    # The refusal comes from the one charge (per_message_billing.py
+    # require_priced_reader) and is shaped by the router's one 402
+    # (_per_message_refusal_response), so /request answers exactly as
+    # /conversation does: no price, and no balance.
     assert resp.status_code == 402
     assert resp.json() == {
         "detail": "READER_UNAVAILABLE",
         "required": None,
-        "balance": 10.0,
+        "balance": None,
         "psychic_name": psychic.username,
     }
     assert db.query(Chat).count() == 0

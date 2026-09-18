@@ -67,13 +67,30 @@ class _FakeNotifications:
 class _NoLiveSessions:
     """The session manager is a process global that only main.py initialises, so
     tests stand in this empty one: it reports the truth here, that no chat has a
-    live per-minute session."""
+    live per-minute session. A per-message send takes it before anything else
+    (per_message_start.py send_client_message) and, once the message and its
+    debit are committed, hands it the joined clockless session, which is
+    recorded here."""
 
-    active_sessions = {}
+    def __init__(self):
+        self.active_sessions = {}
+        self.tracked = []
+
+    def track_joined_per_message_session(self, chat, session, balance):
+        self.tracked.append((chat.id, session.id, balance))
 
 
 def _mode(monkeypatch, mode):
     monkeypatch.setattr(mh, "get_app_settings", lambda: _Settings(mode))
+
+
+def _no_live_sessions(monkeypatch):
+    """Stand the empty session manager in, and return it."""
+    import app.services.session_manager as sm
+
+    manager = _NoLiveSessions()
+    monkeypatch.setattr(sm, "get_session_manager", lambda: manager)
+    return manager
 
 
 def _stub_delivery(monkeypatch):
@@ -81,15 +98,15 @@ def _stub_delivery(monkeypatch):
 
     Returns the list that records every note_client_message call, so a test can
     prove the handler reached the reading pipeline rather than merely not
-    crashing."""
+    crashing. The per-message reply hand-off (reading_single.enqueue_reply) is
+    silenced too, so no reply worker and no model call is ever started."""
     import app.notification_manager as nm
     import app.routers.chats as chats_router
-    import app.services.session_manager as sm
-    from app.services.ai import reading_burst
+    from app.services.ai import reading_burst, reading_single
 
     monkeypatch.setattr(chats_router, "manager", _FakeManager())
     monkeypatch.setattr(nm, "notification_manager", _FakeNotifications())
-    monkeypatch.setattr(sm, "get_session_manager", lambda: _NoLiveSessions())
+    _no_live_sessions(monkeypatch)
 
     noted = []
 
@@ -97,7 +114,11 @@ def _stub_delivery(monkeypatch):
         noted.append((args, kwargs))
         return None
 
+    async def _no_reply(*args, **kwargs):
+        return None
+
     monkeypatch.setattr(reading_burst, "note_client_message", _record)
+    monkeypatch.setattr(reading_single, "enqueue_reply", _no_reply)
     return noted
 
 
@@ -181,6 +202,7 @@ def test_a_second_debit_for_the_same_message_is_refused_by_the_database(
 # -- 3. Balance below price: refused, nothing persisted, nothing charged -----
 def test_balance_below_price_is_refused_and_stores_nothing(db, make_user, monkeypatch):
     _mode(monkeypatch, "per_message")
+    _no_live_sessions(monkeypatch)
     client, psychic = _people(db, make_user, balance=0.5, price=2.0)
     chat = _chat(db, client, psychic)
 
@@ -203,6 +225,7 @@ def test_balance_below_price_is_refused_and_stores_nothing(db, make_user, monkey
 # -- 4. No per-message price set: the reader is unavailable ------------------
 def test_a_reader_with_no_per_message_price_is_unavailable(db, make_user, monkeypatch):
     _mode(monkeypatch, "per_message")
+    _no_live_sessions(monkeypatch)
     client, psychic = _people(db, make_user, balance=10.0, price=None)
     chat = _chat(db, client, psychic)
 
@@ -221,31 +244,37 @@ def test_a_reader_with_no_per_message_price_is_unavailable(db, make_user, monkey
     assert db.query(Transaction).count() == 0
 
 
-# -- 5. Outside an ACTIVE reading: refused, and never charged either way -----
-def test_a_message_outside_an_active_reading_is_refused_not_charged(
-    db, make_user, monkeypatch
+# -- 5. A quiet thread is revived by the send and charged, never refused ------
+@pytest.mark.parametrize("quiet", [ChatStatus.REQUESTED, ChatStatus.ENDED])
+def test_a_message_to_a_quiet_thread_revives_it_and_charges_the_price(
+    db, make_user, monkeypatch, quiet
 ):
-    """Per-message mode replaces the out-of-session fee entirely: there is no
-    path here that quietly bills OUT_OF_SESSION_MESSAGE_FEE instead."""
+    """The thread never closes: a send to a chat that is not ACTIVE revives it
+    inside the message's own transaction (per_message_start.py
+    send_client_message and _prepare_joined_session) and charges the reader's
+    price with the msg_fee key. Per-message mode replaces the out-of-session fee
+    entirely, so OUT_OF_SESSION_MESSAGE_FEE is never billed instead."""
     _mode(monkeypatch, "per_message")
+    _stub_delivery(monkeypatch)
     client, psychic = _people(db, make_user, balance=10.0, price=2.0)
-    chat = _chat(db, client, psychic, status=ChatStatus.REQUESTED)
+    chat = _chat(db, client, psychic, status=quiet)
+    _accept(db, chat)  # accepted once: the per-minute fee would apply here
 
     ws = _send(db, chat, client)
 
-    assert ws.sent == [
-        {
-            "event": "message_rejected",
-            "data": {
-                "reason": "SESSION_NOT_ACTIVE",
-                "message": "The reader has not joined yet.",
-            },
-        }
-    ]
-    assert db.query(Message).count() == 0
-    assert db.query(Transaction).count() == 0
+    assert not [f for f in ws.sent if f.get("event") == "message_rejected"]
+    db.refresh(chat)
+    assert chat.status == ChatStatus.ACTIVE
+    assert chat.client_joined_at is not None
+    message = db.query(Message).one()
+    debit = db.query(Transaction).one()
+    assert debit.idempotency_key == f"msg_fee:{message.id}"
+    assert debit.related_message_id == message.id
+    assert float(debit.amount) == 2.0
     db.refresh(client)
-    assert float(client.balance) == 10.0  # not even the 1.0 out-of-session fee
+    assert float(client.balance) == 8.0  # the price, not the 1.0 out-of-session fee
+    session = db.get(ChatSession, message.chat_session_id)
+    assert (session.chat_id, session.status) == (chat.id, ChatSessionStatus.ACTIVE)
 
 
 # -- 6. Atomicity: a failed charge leaves no message behind ------------------
