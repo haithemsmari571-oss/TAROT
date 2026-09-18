@@ -14,7 +14,16 @@
    it too it landed in the main bundle and applied to every page from first
    paint. Scoping to html[data-hall] — which only the hall screens set — makes
    that impossible regardless of which bundle the file ends up in. */
-:where(html[data-hall]) *{box-sizing:border-box;margin:0;padding:0;}
+:where(html[data-hall]) :where(:not([data-hall-exempt], [data-hall-exempt] *)){box-sizing:border-box;margin:0;padding:0;}
+/* The payment window and the toasts are mounted outside the hall and styled with Tailwind
+   utilities, which live in a cascade layer that the unlayered reset above always beats. Their
+   roots carry data-hall-exempt, so the reset skips them, and the four properties the body rule
+   below hands down by inheritance go back to their initial values: nothing in the site sets
+   colour, weight, user-select or smoothing on html or body, so the authored values ARE the
+   initial ones (measured: rgb(0,0,0), 400, auto, auto). Utilities inside the overlays are
+   untouched; this rule outranks a utility for these four on the root itself, and neither
+   root carries one. */
+html[data-hall] [data-hall-exempt]{color:initial;font-weight:initial;-webkit-user-select:initial;user-select:initial;-webkit-font-smoothing:initial;}
 html[data-hall],html[data-hall] body{height:100%;overflow:hidden;overscroll-behavior:none;}
 html[data-hall] body{background:#0A0616;color:var(--text);font-family:var(--ui);font-weight:300;
   -webkit-font-smoothing:antialiased;touch-action:none;-webkit-user-select:none;user-select:none;}

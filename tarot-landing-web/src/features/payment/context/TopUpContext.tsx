@@ -98,6 +98,7 @@ function StardustGliderModal({
 
   return (
     <div
+      data-hall-exempt=""
       className="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto p-4 sm:p-6"
       style={{
         backgroundColor: "rgba(5,5,8,0.94)",
