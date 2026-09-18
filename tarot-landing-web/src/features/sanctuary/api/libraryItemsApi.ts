@@ -11,6 +11,20 @@ export interface LibraryItem {
   published_at: string;
 }
 
+/** One video on the reels shelf, as GET /library-items/reels returns it. */
+export interface ReelItem {
+  key: string;
+  type: string;
+  title: string;
+  description: string | null;
+  video_url: string;
+  cover_url: string | null;
+  duration_seconds: number;
+  video_width: number | null;
+  video_height: number | null;
+  published_at: string;
+}
+
 interface PublicArticle {
   slug: string;
   title: string;
@@ -62,6 +76,11 @@ export const resolveLibraryMediaUrl = (value?: string | null): string | null => 
 
 export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   const response = await axiosClient.get<LibraryItem[]>("/library-items");
+  return response.data;
+};
+
+export const getReels = async (): Promise<ReelItem[]> => {
+  const response = await axiosClient.get<ReelItem[]>("/library-items/reels");
   return response.data;
 };
 

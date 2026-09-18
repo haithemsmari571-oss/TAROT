@@ -1,4 +1,4 @@
-"""Owner-managed audio content for the public Sanctuary library."""
+"""Owner-managed audio and video content for the public library."""
 
 from datetime import datetime
 
@@ -21,6 +21,18 @@ class LibraryItem(Base):
             "AND cover_size_bytes IS NOT NULL)",
             name="ck_library_items_cover_metadata_paired",
         ),
+        # Every item carries exactly one medium: an audio file or a video file.
+        CheckConstraint(
+            "(audio_file_path IS NULL) <> (video_file_path IS NULL)",
+            name="ck_library_items_one_media",
+        ),
+        CheckConstraint(
+            "(video_file_path IS NULL AND video_content_type IS NULL "
+            "AND video_size_bytes IS NULL AND video_sha256 IS NULL) "
+            "OR (video_file_path IS NOT NULL AND video_content_type IS NOT NULL "
+            "AND video_size_bytes IS NOT NULL AND video_sha256 IS NOT NULL)",
+            name="ck_library_items_video_metadata_paired",
+        ),
         Index(
             "ix_library_items_public_sort",
             "enabled",
@@ -37,10 +49,19 @@ class LibraryItem(Base):
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    audio_file_path: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    audio_content_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    audio_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
-    audio_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    audio_file_path: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    audio_content_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    audio_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audio_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    video_file_path: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    video_content_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    video_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    video_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    video_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    video_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Required for both media.
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
 
     cover_image_path: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)

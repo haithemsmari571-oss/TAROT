@@ -8,10 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 MAX_LIBRARY_ITEM_TYPE_LENGTH = 80
 MAX_LIBRARY_ITEM_TITLE_LENGTH = 100
 MAX_LIBRARY_AUDIO_SIZE_BYTES = 2_147_483_647
+MAX_LIBRARY_VIDEO_SIZE_BYTES = 300 * 1024 * 1024
 
 
-class LibraryAudioUploadRequest(BaseModel):
-    """Metadata calculated locally before a direct-to-R2 audio upload."""
+class _LibraryMediaUploadRequest(BaseModel):
+    """Metadata calculated locally before a direct-to-R2 media upload."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,6 +49,17 @@ class LibraryAudioUploadRequest(BaseModel):
         return value
 
 
+class LibraryAudioUploadRequest(_LibraryMediaUploadRequest):
+    """Metadata calculated locally before a direct-to-R2 audio upload."""
+
+
+class LibraryVideoUploadRequest(_LibraryMediaUploadRequest):
+    """Metadata calculated locally before a direct-to-R2 video upload."""
+
+    width: int | None = Field(default=None, gt=0)
+    height: int | None = Field(default=None, gt=0)
+
+
 class LibraryAudioUploadGrant(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -58,7 +70,15 @@ class LibraryAudioUploadGrant(BaseModel):
     headers: dict[str, str]
 
 
+# Audio and video grants share one shape.
+LibraryVideoUploadGrant = LibraryAudioUploadGrant
+
+
 class LibraryAudioReference(LibraryAudioUploadRequest):
+    object_key: str
+
+
+class LibraryVideoReference(LibraryVideoUploadRequest):
     object_key: str
 
 
@@ -77,6 +97,23 @@ class LibraryItemPublic(BaseModel):
     published_at: datetime
 
 
+class LibraryReelPublic(BaseModel):
+    """The public contract for one video item on the reels shelf."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    type: str
+    title: str
+    description: str | None
+    video_url: str
+    cover_url: str | None
+    duration_seconds: float
+    video_width: int | None
+    video_height: int | None
+    published_at: datetime
+
+
 class LibraryItemAdmin(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -85,11 +122,18 @@ class LibraryItemAdmin(BaseModel):
     type: str
     title: str
     description: str | None
-    audio_file_path: str
-    audio_url: str
-    audio_content_type: str
-    audio_size_bytes: int
-    audio_sha256: str
+    audio_file_path: str | None
+    audio_url: str | None
+    audio_content_type: str | None
+    audio_size_bytes: int | None
+    audio_sha256: str | None
+    video_file_path: str | None
+    video_url: str | None
+    video_content_type: str | None
+    video_size_bytes: int | None
+    video_sha256: str | None
+    video_width: int | None
+    video_height: int | None
     duration_seconds: float
     cover_image_path: str | None
     cover_url: str | None

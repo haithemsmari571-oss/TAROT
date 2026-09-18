@@ -11,14 +11,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.enums.role import Role
 from app.models.library_item import LibraryItem
 from app.routers.library_items import admin_router, public_router
-from app.schemas.library_item import MAX_LIBRARY_AUDIO_SIZE_BYTES
+from app.schemas.library_item import MAX_LIBRARY_AUDIO_SIZE_BYTES, MAX_LIBRARY_VIDEO_SIZE_BYTES
 from app.services.object_storage import ObjectNotFoundError, ObjectStorage, StoredObject
 
 
@@ -505,4 +506,300 @@ def test_library_items_migration_upgrades_downgrades_and_reupgrades_cleanly(monk
         assert "library_items" not in inspect(connection).get_table_names()
         migration.upgrade()
         assert "library_items" in inspect(connection).get_table_names()
+    engine.dispose()
+
+
+def _video_claim(
+    data: bytes = b"\x00\x00\x00\x18ftypmp42" + bytes(64),
+    *,
+    content_type: str = "video/mp4",
+    size_bytes: int | None = None,
+    original_filename: str = "reel.mp4",
+) -> dict:
+    return {
+        "content_type": content_type,
+        "size_bytes": len(data) if size_bytes is None else size_bytes,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "content_md5": base64.b64encode(hashlib.md5(data).digest()).decode(),
+        "duration_seconds": 6.0,
+        "width": 720,
+        "height": 1280,
+        "original_filename": original_filename,
+    }
+
+
+def _video_form(grant: dict, claim: dict) -> dict:
+    return {
+        "video_key": grant["object_key"],
+        "video_content_type": claim["content_type"],
+        "video_size_bytes": str(claim["size_bytes"]),
+        "video_sha256": claim["sha256"],
+        "video_md5": claim["content_md5"],
+        "duration_seconds": str(claim["duration_seconds"]),
+        "video_width": str(claim["width"]),
+        "video_height": str(claim["height"]),
+        "video_original_filename": claim["original_filename"],
+    }
+
+
+def _create_video(
+    client: TestClient,
+    storage: FakeStorage,
+    *,
+    title: str,
+    enabled: bool = True,
+    published_at: datetime | None = None,
+):
+    claim = _video_claim(original_filename=f"{title}.mp4")
+    response = client.post("/api/admin/library-items/video-upload-url", json=claim)
+    assert response.status_code == 200, response.text
+    grant = response.json()
+    storage.complete_direct_upload(grant["object_key"], claim)
+    data = _video_form(grant, claim)
+    data.update({"title": title, "enabled": str(enabled).lower()})
+    if published_at is not None:
+        data["published_at"] = published_at.isoformat()
+    return client.post("/api/admin/library-items/video", data=data)
+
+
+def test_video_upload_url_signs_mp4_and_refuses_other_types_and_oversize(
+    db, make_user, fake_storage
+):
+    client = _client(db, make_user(role=Role.ADMIN))
+    granted = client.post("/api/admin/library-items/video-upload-url", json=_video_claim())
+    assert granted.status_code == 200, granted.text
+    grant = granted.json()
+    assert grant["object_key"].startswith("library/video/")
+    assert grant["object_key"].endswith(".mp4")
+    assert set(grant) == {"object_key", "upload_url", "method", "expires_in_seconds", "headers"}
+    assert fake_storage.presigns[-1]["content_type"] == "video/mp4"
+
+    wrong = client.post(
+        "/api/admin/library-items/video-upload-url",
+        json=_video_claim(content_type="video/quicktime"),
+    )
+    assert wrong.status_code == 415
+    assert wrong.json() == {"detail": "Upload an MP4 video file."}
+    at_cap = client.post(
+        "/api/admin/library-items/video-upload-url",
+        json=_video_claim(size_bytes=MAX_LIBRARY_VIDEO_SIZE_BYTES),
+    )
+    assert at_cap.status_code == 200
+    oversized = client.post(
+        "/api/admin/library-items/video-upload-url",
+        json=_video_claim(size_bytes=MAX_LIBRARY_VIDEO_SIZE_BYTES + 1),
+    )
+    assert oversized.status_code == 413
+    assert oversized.json() == {"detail": "Library video files must be no larger than 300 MB."}
+    assert len(fake_storage.presigns) == 2
+
+
+def test_video_create_runs_the_verification_gate_before_writing_a_row(
+    db, make_user, fake_storage
+):
+    client = _client(db, make_user(role=Role.ADMIN))
+    claim = _video_claim()
+    grant = client.post("/api/admin/library-items/video-upload-url", json=claim).json()
+    data = _video_form(grant, claim)
+    data["title"] = "First reel"
+
+    not_uploaded = client.post("/api/admin/library-items/video", data=data)
+    assert not_uploaded.status_code == 409
+    assert not_uploaded.json() == {"detail": "The direct video upload has not completed in storage yet."}
+
+    for wrong in (
+        {"size_bytes": claim["size_bytes"] + 1},
+        {"content_md5": "AAAAAAAAAAAAAAAAAAAAAA=="},
+        {"content_type": "video/webm"},
+    ):
+        fake_storage.complete_direct_upload(grant["object_key"], {**claim, **wrong})
+        assert client.post("/api/admin/library-items/video", data=data).status_code == 409
+    foreign_key = client.post(
+        "/api/admin/library-items/video",
+        data={**data, "video_key": "library/audio/" + "a" * 32 + ".mp3"},
+    )
+    assert foreign_key.status_code == 400
+    assert db.query(LibraryItem).count() == 0
+
+    fake_storage.complete_direct_upload(grant["object_key"], claim)
+    created = client.post("/api/admin/library-items/video", data=data)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["type"] == "reel"
+    assert body["video_file_path"] == grant["object_key"]
+    assert body["video_url"] == "https://media.example.test/" + grant["object_key"]
+    assert (body["video_width"], body["video_height"]) == (720, 1280)
+    assert body["audio_file_path"] is None and body["audio_url"] is None
+
+    reused = client.post("/api/admin/library-items/video", data={**data, "title": "Again"})
+    assert reused.status_code == 409
+    assert reused.json() == {"detail": "That direct video upload has already been used."}
+    assert db.query(LibraryItem).count() == 1
+
+
+def test_public_reels_list_newest_first_and_audio_list_excludes_video(
+    db, make_user, fake_storage
+):
+    client = _client(db, make_user(role=Role.ADMIN))
+    empty = client.get("/api/library-items/reels")
+    assert empty.status_code == 200 and empty.json() == []
+
+    now = datetime.now(timezone.utc)
+    older = _create_video(client, fake_storage, title="Older reel", published_at=now - timedelta(days=2)).json()
+    newer = _create_video(client, fake_storage, title="Newer reel", published_at=now - timedelta(hours=1)).json()
+    _create_video(client, fake_storage, title="Hidden reel", enabled=False, published_at=now - timedelta(days=1))
+    _create_video(client, fake_storage, title="Draft reel")
+    _create_video(client, fake_storage, title="Future reel", published_at=now + timedelta(days=1))
+    audio = _create(client, fake_storage, title="Evening tone", published_at=now - timedelta(days=1)).json()
+
+    reels = client.get("/api/library-items/reels")
+    assert reels.status_code == 200
+    assert [item["key"] for item in reels.json()] == [newer["key"], older["key"]]
+    assert set(reels.json()[0]) == {
+        "key",
+        "type",
+        "title",
+        "description",
+        "video_url",
+        "cover_url",
+        "duration_seconds",
+        "video_width",
+        "video_height",
+        "published_at",
+    }
+    assert reels.json()[0]["video_url"] == "https://media.example.test/" + newer["video_file_path"]
+
+    audio_list = client.get("/api/library-items")
+    assert [item["key"] for item in audio_list.json()] == [audio["key"]]
+    assert "video" not in audio_list.text
+
+    one_reel = client.get(f"/api/library-items/{newer['key']}")
+    assert one_reel.status_code == 200
+    assert "video_url" in one_reel.json() and "audio_url" not in one_reel.json()
+    one_audio = client.get(f"/api/library-items/{audio['key']}")
+    assert "audio_url" in one_audio.json() and "video_url" not in one_audio.json()
+
+
+def test_video_item_update_keeps_video_columns_and_delete_removes_video(
+    db, make_user, fake_storage
+):
+    client = _client(db, make_user(role=Role.ADMIN))
+    created = _create_video(client, fake_storage, title="Editable reel").json()
+    updated = client.patch(
+        f"/api/admin/library-items/{created['id']}",
+        data={"title": "Edited reel", "sort_order": "3", "enabled": "false"},
+        files={"cover_image": ("cover.png", _png(), "image/png")},
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["title"] == "Edited reel"
+    assert body["cover_image_path"].startswith("library/covers/")
+    for field in (
+        "video_file_path",
+        "video_content_type",
+        "video_size_bytes",
+        "video_sha256",
+        "video_width",
+        "video_height",
+    ):
+        assert body[field] == created[field]
+
+    audio_claim = _audio_claim()
+    audio_fields = _grant_and_complete(client, fake_storage, audio_claim)
+    refused = client.patch(f"/api/admin/library-items/{created['id']}", data=audio_fields)
+    assert refused.status_code == 400
+    assert refused.json() == {"detail": "This item is a video. It has no audio to replace."}
+
+    assert client.delete(f"/api/admin/library-items/{created['id']}").status_code == 204
+    assert created["video_file_path"] in fake_storage.deleted
+    assert body["cover_image_path"] in fake_storage.deleted
+    assert None not in fake_storage.deleted
+
+
+def test_every_item_holds_exactly_one_complete_medium(db):
+    audio = {
+        "audio_file_path": "library/audio/a.mp3",
+        "audio_content_type": "audio/mpeg",
+        "audio_size_bytes": 10,
+        "audio_sha256": "a" * 64,
+    }
+    video = {
+        "video_file_path": "library/video/v.mp4",
+        "video_content_type": "video/mp4",
+        "video_size_bytes": 10,
+        "video_sha256": "b" * 64,
+    }
+
+    def insert(key: str, media: dict) -> None:
+        db.add(LibraryItem(key=key, type="reel", title="T", duration_seconds=6, **media))
+        db.commit()
+
+    for key, media in (
+        ("both", {**audio, **video}),
+        ("neither", {}),
+        ("video-without-sha", {**video, "video_sha256": None}),
+    ):
+        with pytest.raises(IntegrityError):
+            insert(key, media)
+        db.rollback()
+    insert("audio", audio)
+    insert("video", video)
+    assert db.query(LibraryItem).count() == 2
+
+
+def test_video_migration_is_reversible_and_refuses_to_drop_videos(monkeypatch):
+    versions = Path(__file__).parents[1] / "alembic" / "versions"
+
+    def load(name):
+        spec = spec_from_file_location(name, versions / f"{name}.py")
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    base = load("e2f3a4b5c6d7_add_library_items")
+    video = load("f0a1b2c3d4e5_add_library_item_video")
+    assert video.down_revision == "d9e0f1a2b3c4"
+
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        operations = Operations(MigrationContext.configure(connection))
+        monkeypatch.setattr(base, "op", operations)
+        monkeypatch.setattr(video, "op", operations)
+        base.upgrade()
+        connection.execute(
+            text(
+                "INSERT INTO library_items (key, type, title, audio_file_path, audio_content_type, "
+                "audio_size_bytes, audio_sha256, duration_seconds) "
+                "VALUES ('tone', 'meditation', 'Tone', 'library/audio/t.mp3', 'audio/mpeg', 10, :sha, 6)"
+            ),
+            {"sha": "a" * 64},
+        )
+
+        video.upgrade()
+        columns = {column["name"] for column in inspect(connection).get_columns("library_items")}
+        assert {
+            "video_file_path",
+            "video_content_type",
+            "video_size_bytes",
+            "video_sha256",
+            "video_width",
+            "video_height",
+        } <= columns
+        connection.execute(
+            text(
+                "INSERT INTO library_items (key, type, title, video_file_path, video_content_type, "
+                "video_size_bytes, video_sha256, duration_seconds) "
+                "VALUES ('reel', 'reel', 'Reel', 'library/video/r.mp4', 'video/mp4', 10, :sha, 6)"
+            ),
+            {"sha": "b" * 64},
+        )
+        with pytest.raises(RuntimeError):
+            video.downgrade()
+
+        connection.execute(text("DELETE FROM library_items WHERE key = 'reel'"))
+        video.downgrade()
+        columns = {column["name"] for column in inspect(connection).get_columns("library_items")}
+        assert not any(name.startswith("video_") for name in columns)
+        assert connection.execute(text("SELECT key FROM library_items")).scalars().all() == ["tone"]
+        video.upgrade()
     engine.dispose()

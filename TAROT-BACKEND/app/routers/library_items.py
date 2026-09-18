@@ -1,4 +1,4 @@
-"""Public and owner-managed routes for the Sanctuary content library."""
+"""Public and owner-managed routes for the library of audio and video."""
 
 from datetime import datetime
 
@@ -18,6 +18,10 @@ from app.schemas.library_item import (
     LibraryItemAdmin,
     LibraryItemPublic,
     LibraryItemUpdate,
+    LibraryReelPublic,
+    LibraryVideoReference,
+    LibraryVideoUploadGrant,
+    LibraryVideoUploadRequest,
 )
 from app.services.library_items import (
     MAX_LIBRARY_COVER_BYTES,
@@ -26,11 +30,15 @@ from app.services.library_items import (
     cover_url,
     create_audio_upload_grant,
     create_library_item,
+    create_video_item,
+    create_video_upload_grant,
     delete_library_item,
     get_public_by_key,
     list_all,
     list_public,
+    list_public_reels,
     update_library_item,
+    video_url,
 )
 
 
@@ -50,6 +58,13 @@ def _admin_view(item: LibraryItem) -> LibraryItemAdmin:
         audio_content_type=item.audio_content_type,
         audio_size_bytes=item.audio_size_bytes,
         audio_sha256=item.audio_sha256,
+        video_file_path=item.video_file_path,
+        video_url=video_url(item),
+        video_content_type=item.video_content_type,
+        video_size_bytes=item.video_size_bytes,
+        video_sha256=item.video_sha256,
+        video_width=item.video_width,
+        video_height=item.video_height,
         duration_seconds=item.duration_seconds,
         cover_image_path=item.cover_image_path,
         cover_url=cover_url(item),
@@ -77,6 +92,21 @@ def _public_view(item: LibraryItem) -> LibraryItemPublic:
     )
 
 
+def _reel_view(item: LibraryItem) -> LibraryReelPublic:
+    return LibraryReelPublic(
+        key=item.key,
+        type=item.type,
+        title=item.title,
+        description=item.description,
+        video_url=video_url(item),
+        cover_url=cover_url(item),
+        duration_seconds=item.duration_seconds,
+        video_width=item.video_width,
+        video_height=item.video_height,
+        published_at=item.published_at,
+    )
+
+
 def _get_or_404(db: Session, item_id: int) -> LibraryItem:
     item = db.query(LibraryItem).filter(LibraryItem.id == item_id).first()
     if item is None:
@@ -95,16 +125,31 @@ def _audio_reference(**values) -> LibraryAudioReference:
         raise HTTPException(422, "Invalid direct audio upload metadata.")
 
 
+def _video_reference(**values) -> LibraryVideoReference:
+    try:
+        return LibraryVideoReference.model_validate(values)
+    except ValidationError:
+        raise HTTPException(422, "Invalid direct video upload metadata.")
+
+
 @public_router.get("", response_model=list[LibraryItemPublic])
 def public_list_library_items(db: Session = Depends(get_db)):
     return [_public_view(item) for item in list_public(db)]
 
 
-@public_router.get("/{key}", response_model=LibraryItemPublic)
+# Declared before /{key} so "reels" is never read as an item key.
+@public_router.get("/reels", response_model=list[LibraryReelPublic])
+def public_list_reels(db: Session = Depends(get_db)):
+    return [_reel_view(item) for item in list_public_reels(db)]
+
+
+@public_router.get("/{key}", response_model=LibraryItemPublic | LibraryReelPublic)
 def public_get_library_item(key: str, db: Session = Depends(get_db)):
     item = get_public_by_key(db, key)
     if item is None:
         raise HTTPException(404, "Library item not found.")
+    if item.video_file_path is not None:
+        return _reel_view(item)
     return _public_view(item)
 
 
@@ -152,6 +197,61 @@ async def admin_create_library_item(
             create_library_item,
             db,
             audio=audio,
+            type_value=type,
+            title=title,
+            description=description,
+            sort_order=sort_order,
+            enabled=enabled,
+            published_at=published_at,
+        )
+    except LibraryItemError as exc:
+        _raise_library_error(exc)
+    return _admin_view(item)
+
+
+@admin_router.post("/video-upload-url", response_model=LibraryVideoUploadGrant)
+def admin_create_video_upload_url(upload: LibraryVideoUploadRequest):
+    try:
+        return create_video_upload_grant(upload)
+    except LibraryItemError as exc:
+        _raise_library_error(exc)
+
+
+@admin_router.post("/video", response_model=LibraryItemAdmin, status_code=201)
+async def admin_create_video_item(
+    video_key: str = Form(...),
+    video_content_type: str = Form(...),
+    video_size_bytes: int = Form(...),
+    video_sha256: str = Form(...),
+    video_md5: str = Form(...),
+    duration_seconds: float = Form(...),
+    video_width: int | None = Form(default=None),
+    video_height: int | None = Form(default=None),
+    video_original_filename: str | None = Form(default=None),
+    type: str = Form("reel", min_length=1, max_length=80),
+    title: str = Form(..., min_length=1, max_length=100),
+    description: str | None = Form(default=None),
+    sort_order: int = Form(0),
+    enabled: bool = Form(True),
+    published_at: datetime | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    video = _video_reference(
+        object_key=video_key,
+        content_type=video_content_type,
+        size_bytes=video_size_bytes,
+        sha256=video_sha256,
+        content_md5=video_md5,
+        duration_seconds=duration_seconds,
+        width=video_width,
+        height=video_height,
+        original_filename=video_original_filename,
+    )
+    try:
+        item = await run_in_threadpool(
+            create_video_item,
+            db,
+            video=video,
             type_value=type,
             title=title,
             description=description,
