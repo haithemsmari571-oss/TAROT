@@ -26,9 +26,10 @@ export default function ClientAppShell() {
   const isThread = useMatch("/app/chats/:chatId");
   const isInbox = useMatch("/app/chats");
   const isReaders = useMatch("/app/readers/*");
+  const isYou = useMatch("/app/you");
 
   return (
-    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}${isReaders ? " client-app-shell-readers" : ""}`}>
+    <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}${isReaders ? " client-app-shell-readers" : ""}${isYou ? " client-app-shell-you" : ""}`}>
       <HallStage backdrop>
         <main className="client-app-content"><Outlet /></main>
         <nav className="client-app-nav" aria-label="App navigation">

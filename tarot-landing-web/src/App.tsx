@@ -19,6 +19,7 @@ const ClientThreadScreen = lazy(() => import("./features/client-app/ClientThread
 const ClientChatsScreen = lazy(() => import("./features/client-app/ClientChatsScreen"));
 const ClientReadersScreen = lazy(() => import("./features/client-app/ClientReadersScreen"));
 const ClientReaderProfileScreen = lazy(() => import("./features/client-app/ClientReaderProfileScreen"));
+const ClientYouScreen = lazy(() => import("./features/client-app/ClientYouScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -125,7 +126,7 @@ export default function App() {
         <Route path="readers/:psychicId" element={<Suspense fallback={null}><ClientReaderProfileScreen /></Suspense>} />
         <Route path="chats" element={<Suspense fallback={null}><ClientChatsScreen /></Suspense>} />
         <Route path="chats/:chatId" element={<Suspense fallback={null}><ClientThreadScreen /></Suspense>} />
-        <Route path="you" element={<h1 className="client-app-title">You</h1>} />
+        <Route path="you" element={<Suspense fallback={null}><ClientYouScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}

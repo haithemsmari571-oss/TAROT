@@ -1,0 +1,136 @@
+/* The You tab inside the app shell: three frosted cards on the living sky.
+
+   Header and section eyebrows are the chats list's own (client-chats.css), the
+   Add Stardust button is the hall's .begin (hall.css). Only what this screen
+   adds is here. Fraunces and Inter come through the hall's --display and --ui,
+   gold through --gold. client-app.css:1-5 hands every element in the shell
+   Inter, so each serif line below restates its family at (0,2,0). */
+
+/* The screen scrolls as one page inside the content area, the way
+   client-readers.css:10-15 lays out the roster. */
+.client-app-shell-you .client-app-content {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.client-app-shell .client-you {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  /* what the hall's document rule hands a panel by inheritance */
+  color: var(--text);
+  font-weight: 300;
+}
+
+/* One frosted recipe for the three cards: the chats row's glass
+   (client-chats.css, .client-chats-row), copied. */
+.client-app-shell .client-you-card {
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 214, 150, .18);
+  background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--text);
+  font-weight: 300;
+}
+.client-app-shell .client-you-card .client-chats-notice { margin: 0; }
+
+/* ── Stardust ── */
+.client-app-shell .client-you-figure {
+  margin: 0;
+  font: 300 40px/1.1 var(--display);
+  color: #FFFCF4;
+}
+.client-app-shell .client-you-sub {
+  margin: 4px 0 0;
+  font: 300 13px/1.5 var(--ui);
+  color: rgba(220, 205, 184, .9);
+}
+.client-app-shell .client-you-payment {
+  margin: 10px 0 0;
+  font: 300 13px/1.5 var(--ui);
+  color: var(--gold);
+}
+.client-app-shell .client-you-payment.is-error { color: rgba(220, 205, 184, .9); }
+.client-app-shell .client-you-stardust .begin:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+/* ── Recent activity ── */
+.client-app-shell .client-you-rows { list-style: none; margin: 0; padding: 0; }
+.client-app-shell .client-you-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+}
+.client-app-shell .client-you-row:first-child { padding-top: 0; }
+.client-app-shell .client-you-row:last-child { padding-bottom: 0; }
+.client-app-shell .client-you-row + .client-you-row { border-top: 1px solid rgba(255, 214, 150, .12); }
+.client-app-shell .client-you-row-text { flex: 1; min-width: 0; }
+.client-app-shell .client-you-row-title {
+  display: block;
+  font: 400 15px/1.3 var(--display);
+  color: #F8F1E4;
+}
+/* the chats list's small caps line (client-chats.css, .client-chats-back) */
+.client-app-shell .client-you-row-time {
+  display: block;
+  margin-top: 3px;
+  font: 500 10px/1.4 var(--ui);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #A8917B;
+}
+.client-app-shell .client-you-amount {
+  flex: none;
+  white-space: nowrap;
+  font: 300 17px/1.2 var(--display);
+  color: #DCCDB8;
+}
+.client-app-shell .client-you-amount.is-in { color: var(--gold); }
+
+/* Show more and Log out: the room's back control (hall-room.css:47-52), its
+   colours and border, drawn as a pill. That rule is scoped to
+   html[data-hall="room"], and this screen never sets the flag. */
+.client-app-shell .client-you-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  margin-top: 16px;
+  padding: 0 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 500 12px/1 var(--ui);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(224, 210, 190, .9);
+  background: rgba(255, 240, 214, .05);
+  border: 1px solid rgba(255, 214, 150, .22);
+  transition: background .4s var(--ease), color .4s var(--ease);
+}
+.client-app-shell .client-you-pill:hover { background: rgba(255, 214, 150, .16); color: #fff; }
+.client-app-shell .client-you-pill:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+/* ── Account ── */
+.client-app-shell .client-you-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: 400 17px/1.3 var(--display);
+  color: #F8F1E4;
+}
+.client-app-shell .client-you-email {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font: 300 13px/1.5 var(--ui);
+  color: rgba(220, 205, 184, .9);
+}
+.client-app-shell .client-you-logout { height: 48px; margin-top: 18px; }
