@@ -31,6 +31,7 @@ from app.enums.chat_termination_reason import ChatTerminationReason
 from app.schemas.chat import (
     ChatStart,
     ChatUpdate,
+    ConversationOpen,
     SocketAuthData,
     SocketMessageData,
     MessageOut,
@@ -48,6 +49,24 @@ router = APIRouter()
 router.include_router(client_inbox_router)
 settings = get_app_settings()
 logger = get_logger(__name__)
+
+PSYCHICS_CANNOT_REQUEST = "Psychics cannot request chats"
+
+
+def _per_message_refusal_response(
+    db: Session, refusal: "PerMessageRefusal", psychic_id: int
+) -> JSONResponse:
+    """The 402 a per-message refusal becomes, for /request and /conversation alike."""
+    reader = db.get(User, psychic_id)
+    return JSONResponse(
+        content={
+            "detail": refusal.reason,
+            "required": refusal.payload.get("price_per_message"),
+            "balance": refusal.payload.get("balance"),
+            "psychic_name": reader.username if reader else None,
+        },
+        status_code=402,
+    )
 
 
 def _refund_unanswered_request_safely(db: Session, chat_id: int) -> None:
@@ -77,7 +96,7 @@ async def requset_chat_endpoint(
 
     if user.role == Role.PSYCHIC:
         return JSONResponse(
-            content={"detail": "Psychics cannot request chats"},
+            content={"detail": PSYCHICS_CANNOT_REQUEST},
             status_code=403,
         )
 
@@ -93,16 +112,7 @@ async def requset_chat_endpoint(
             try:
                 result = await start_automatic_conversation(db, user, chat_data)
             except PerMessageRefusal as refusal:
-                reader = db.get(User, chat_data.psychic_id)
-                return JSONResponse(
-                    content={
-                        "detail": refusal.reason,
-                        "required": refusal.payload.get("price_per_message"),
-                        "balance": refusal.payload.get("balance"),
-                        "psychic_name": reader.username if reader else None,
-                    },
-                    status_code=402,
-                )
+                return _per_message_refusal_response(db, refusal, chat_data.psychic_id)
             return JSONResponse(content=result, status_code=201)
 
     # Only admins/superadmins can have multiple active/paused chats
@@ -380,6 +390,37 @@ async def requset_chat_endpoint(
         await notification_manager.send_to_user(notification_data, recipient.id)
 
     return JSONResponse(content=None, status_code=201)
+
+
+@router.post("/conversation")
+def open_conversation_endpoint(
+    body: ConversationOpen,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Open (or find) the per-message conversation with a reader.
+
+    The reader's opener is in the thread at once and nothing is charged; her
+    first paid message is the room's send, as always. 201 with created true
+    for a new conversation, 200 with created false for one that already
+    exists, which is left exactly as it was.
+    """
+    from app.dependencies.billing_mode import require_per_message_billing
+    from app.enums.role import Role
+    from app.services.per_message_billing import PerMessageRefusal
+    from app.services.per_message_start import open_conversation
+
+    if user.role == Role.PSYCHIC:
+        return JSONResponse(
+            content={"detail": PSYCHICS_CANNOT_REQUEST},
+            status_code=403,
+        )
+    require_per_message_billing()
+    try:
+        result = open_conversation(db, user, body.psychic_id)
+    except PerMessageRefusal as refusal:
+        return _per_message_refusal_response(db, refusal, body.psychic_id)
+    return JSONResponse(content=result, status_code=201 if result["created"] else 200)
 
 
 @router.get("/")

@@ -20,6 +20,7 @@ from app.services.per_message_billing import (
     PerMessageRefusal,
     READER_UNAVAILABLE,
     charge_client_message,
+    price_of_reader,
 )
 from app.services.stardust_rewards import get_spendable_stardust
 
@@ -58,6 +59,106 @@ def _prepare_joined_session(db: Session, chat: Chat) -> ChatSession:
     return reading_session
 
 
+def _lock_client(db: Session, user: User) -> User:
+    """The client's row, locked for the rest of the caller's transaction."""
+    return (
+        db.query(User)
+        .filter(User.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .one()
+    )
+
+
+def _reader_or_404(db: Session, psychic_id: int) -> User:
+    reader = db.query(User).filter(
+        User.id == psychic_id, User.role == Role.PSYCHIC
+    ).first()
+    if reader is None:
+        raise HTTPException(status_code=404, detail="Reader not found")
+    return reader
+
+
+def _latest_session(db: Session, chat: Chat) -> ChatSession | None:
+    """The conversation's newest session, whatever its status, untouched."""
+    return (
+        db.query(ChatSession)
+        .filter(ChatSession.chat_id == chat.id)
+        .order_by(ChatSession.id.desc())
+        .populate_existing()
+        .first()
+    )
+
+
+def _refuse_unavailable() -> PerMessageRefusal:
+    return PerMessageRefusal(READER_UNAVAILABLE, {"reason": READER_UNAVAILABLE})
+
+
+def find_or_open_conversation(
+    db: Session, client: User, reader: User
+) -> tuple[Chat, ChatSession | None, Message | None]:
+    """The pair's conversation, opened when there is none. The one place the
+    opener is written.
+
+    The caller holds the client's row lock. An existing conversation comes
+    back as it is, with no session and no opener: nothing on it changes here.
+    A new one is created ACTIVE and automatic, with its clockless joined
+    session and the reader's opener, flushed and not committed.
+    """
+    chat = (
+        db.query(Chat)
+        .filter(Chat.user_id == client.id, Chat.psychic_id == reader.id)
+        .populate_existing()
+        .first()
+    )
+    if chat is not None and chat.response_mode != ResponseMode.SABRI:
+        raise _refuse_unavailable()
+    if chat is not None:
+        return chat, None, None
+
+    chat = Chat(
+        user_id=client.id,
+        psychic_id=reader.id,
+        status=ChatStatus.ACTIVE,
+        response_mode=ResponseMode.SABRI,
+    )
+    db.add(chat)
+    db.flush()
+    reading_session = _prepare_joined_session(db, chat)
+    opener = Message(
+        chat_id=chat.id,
+        chat_session_id=reading_session.id,
+        sender_id=reader.id,
+        content=AUTOMATIC_READER_OPENER,
+        is_system=False,
+        author_type=AuthorType.SYSTEM,
+        status=MessageStatus.SENT,
+    )
+    db.add(opener)
+    # Assign the opener's ID before anything that follows it in the thread.
+    db.flush()
+    return chat, reading_session, opener
+
+
+def _conversation_fields(
+    chat: Chat, reading_session: ChatSession | None, opener: Message | None,
+    price: float | None, balance: float,
+) -> dict:
+    """The conversation as both openers report it."""
+    return {
+        "chat_id": chat.id,
+        "chat_session_id": reading_session.id if reading_session is not None else None,
+        "status": chat.status.value,
+        "billing_mode": "per_message",
+        "client_joined_at": (
+            chat.client_joined_at.isoformat() if chat.client_joined_at is not None else None
+        ),
+        "opener_message_id": opener.id if opener is not None else None,
+        "price_per_message": price,
+        "client_balance": balance,
+    }
+
+
 async def _store_charged_message(
     db: Session, chat: Chat, reading_session: ChatSession, client: User, content: str
 ) -> tuple[Message, float]:
@@ -94,13 +195,7 @@ async def send_client_message(
 
     session_manager = get_session_manager()
     try:
-        client = (
-            db.query(User)
-            .filter(User.id == user.id)
-            .populate_existing()
-            .with_for_update()
-            .one()
-        )
+        client = _lock_client(db, user)
         chat = (
             db.query(Chat)
             .filter(Chat.id == chat.id, Chat.user_id == client.id)
@@ -127,89 +222,29 @@ async def start_automatic_conversation(db: Session, user: User, request: ChatSta
 
     Lock the client before looking up the pair so simultaneous requests cannot
     create duplicate chats, openers or active sessions. Existing conversations
-    keep their history and an already-active session is reused.
+    keep their history and an already-active session is reused. A client may
+    hold a conversation with every reader she likes: threads never close, so
+    one thread never bars another.
     """
     from app.services.ai import reading_single
     from app.services.session_manager import get_session_manager
 
     session_manager = get_session_manager()
     try:
-        client = (
-            db.query(User)
-            .filter(User.id == user.id)
-            .populate_existing()
-            .with_for_update()
-            .one()
-        )
-        reader = db.query(User).filter(
-            User.id == request.psychic_id, User.role == Role.PSYCHIC
-        ).first()
-        if reader is None:
-            raise HTTPException(status_code=404, detail="Reader not found")
-
-        chat = (
-            db.query(Chat)
-            .filter(Chat.user_id == client.id, Chat.psychic_id == reader.id)
-            .populate_existing()
-            .first()
-        )
-        if chat is not None and chat.response_mode != ResponseMode.SABRI:
-            raise PerMessageRefusal(READER_UNAVAILABLE, {"reason": READER_UNAVAILABLE})
-
-        if client.role not in (Role.ADMIN, Role.SUPERADMIN):
-            other_active = db.query(Chat.id).filter(
-                Chat.user_id == client.id,
-                Chat.psychic_id != reader.id,
-                Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
-            ).first()
-            if other_active is not None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="You already have an active or paused chat with another reader.",
-                )
-
-        new_chat = chat is None
-        if new_chat:
-            chat = Chat(
-                user_id=client.id,
-                psychic_id=reader.id,
-                status=ChatStatus.ACTIVE,
-                response_mode=ResponseMode.SABRI,
-            )
-            db.add(chat)
-            db.flush()
-
-        reading_session = _prepare_joined_session(db, chat)
-
-        opener = None
-        if new_chat:
-            opener = Message(
-                chat_id=chat.id,
-                chat_session_id=reading_session.id,
-                sender_id=reader.id,
-                content=AUTOMATIC_READER_OPENER,
-                is_system=False,
-                author_type=AuthorType.SYSTEM,
-                status=MessageStatus.SENT,
-            )
-            db.add(opener)
-            # Assign the opener's ID before inserting the client's question.
-            db.flush()
+        client = _lock_client(db, user)
+        reader = _reader_or_404(db, request.psychic_id)
+        chat, reading_session, opener = find_or_open_conversation(db, client, reader)
+        if reading_session is None:
+            # A returning conversation: revived for this send, as the socket does.
+            reading_session = _prepare_joined_session(db, chat)
 
         question, price = await _store_charged_message(
             db, chat, reading_session, client, request.message
         )
         balance = round(get_spendable_stardust(db, client), 2)
         result = {
-            "chat_id": chat.id,
-            "chat_session_id": reading_session.id,
-            "status": ChatStatus.ACTIVE.value,
-            "billing_mode": "per_message",
-            "client_joined_at": chat.client_joined_at.isoformat(),
-            "opener_message_id": opener.id if opener is not None else None,
+            **_conversation_fields(chat, reading_session, opener, price, balance),
             "message_id": question.id,
-            "price_per_message": price,
-            "client_balance": balance,
         }
         db.commit()
         committed_at = datetime.now(timezone.utc)
@@ -224,4 +259,44 @@ async def start_automatic_conversation(db: Session, user: User, request: ChatSta
     await reading_single.enqueue_reply(
         result["chat_id"], result["message_id"], committed_at=committed_at
     )
+    return result
+
+
+def open_conversation(db: Session, user: User, psychic_id: int) -> dict:
+    """Open the per-message conversation with a reader, or find it, with no message.
+
+    One transaction, the client's row locked as start_automatic_conversation
+    locks it. A new conversation is created ACTIVE with its clockless joined
+    session and the reader's opener, nothing charged, no reply queued, and it
+    is then registered with the session manager as /request registers its own.
+    An existing conversation, whatever its status, is returned untouched:
+    reviving it is the send's business. Nothing here looks at her balance; a
+    client with nothing can open a thread and read the opener.
+    """
+    from app.services.session_manager import get_session_manager
+
+    session_manager = get_session_manager()
+    try:
+        client = _lock_client(db, user)
+        reader = _reader_or_404(db, psychic_id)
+        price = price_of_reader(reader)
+        if price is None:
+            raise _refuse_unavailable()
+        chat, reading_session, opener = find_or_open_conversation(db, client, reader)
+        created = reading_session is not None
+        if not created:
+            reading_session = _latest_session(db, chat)
+        balance = round(get_spendable_stardust(db, client), 2)
+        result = {
+            **_conversation_fields(chat, reading_session, opener, price, balance),
+            "created": created,
+        }
+        db.commit()
+    except BaseException:
+        # Also unwind cancellation: no half-opened conversation.
+        db.rollback()
+        raise
+
+    if created:
+        session_manager.track_joined_per_message_session(chat, reading_session, balance)
     return result

@@ -406,3 +406,274 @@ def test_billing_mode_endpoint_reports_the_setting(monkeypatch):
         resp = http.get("/api/billing-mode")
         assert resp.status_code == 200, resp.text
         assert resp.json() == {"billing_mode": mode}
+
+
+# -- 12. POST /conversation opens a thread with the opener and no charge ----------
+def _quiet_reply_side_effects(monkeypatch):
+    """Record, instead of running, the two things a paid send would set off:
+    the reply queue and the offline queue. /conversation must touch neither."""
+    from app.services import offline_replies
+    from app.services.ai import reading_single
+
+    calls = {"enqueue": [], "stage": []}
+
+    async def enqueue(chat_id, message_id, **kwargs):
+        calls["enqueue"].append((chat_id, message_id))
+
+    def stage(db, chat, message):
+        calls["stage"].append(message.id)
+        return False
+
+    monkeypatch.setattr(reading_single, "enqueue_reply", enqueue)
+    monkeypatch.setattr(offline_replies, "stage_if_offline", stage)
+    return calls
+
+
+def _rows(db):
+    return (
+        db.query(Chat).count(), db.query(ChatSession).count(),
+        db.query(Message).count(), db.query(Transaction).count(),
+    )
+
+
+def test_conversation_opens_with_the_opener_and_charges_nothing(sqlite, monkeypatch):
+    from app.enums.author_type import AuthorType
+    from app.enums.response_mode import ResponseMode
+    from app.services.per_message_start import AUTOMATIC_READER_OPENER
+
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
+    client, psychic = _people(db, balance=0.0)  # nothing to spend: opening never asks
+    manager = SessionManager()
+    http = _client(db, client, manager, monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    chat = db.query(Chat).one()
+    session = db.query(ChatSession).one()
+    opener = db.query(Message).one()
+    assert body == {
+        "chat_id": chat.id,
+        "created": True,
+        "chat_session_id": session.id,
+        "status": "ACTIVE",
+        "billing_mode": "per_message",
+        "client_joined_at": chat.client_joined_at.isoformat(),
+        "opener_message_id": opener.id,
+        "price_per_message": PRICE,
+        "client_balance": 0.0,
+    }
+    assert chat.status == ChatStatus.ACTIVE
+    assert chat.response_mode == ResponseMode.SABRI
+    assert session.status == ChatSessionStatus.ACTIVE
+    assert (opener.sender_id, opener.author_type, opener.is_system) == (
+        psychic.id, AuthorType.SYSTEM, False,
+    )
+    assert opener.content == AUTOMATIC_READER_OPENER
+    assert opener.chat_session_id == session.id
+    assert db.query(Transaction).count() == 0
+    db.refresh(client)
+    assert float(client.balance) == 0.0
+    assert calls == {"enqueue": [], "stage": []}
+    assert manager.active_sessions[chat.id].session_id == session.id
+
+
+def test_conversation_again_answers_200_and_creates_nothing(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
+    client, psychic = _people(db, balance=10.0)
+    manager = SessionManager()
+    http = _client(db, client, manager, monkeypatch)
+    first = http.post("/api/chat/conversation", json={"psychic_id": psychic.id}).json()
+    before = _rows(db)
+    db.expire_all()
+    joined_before = db.get(Chat, first["chat_id"]).client_joined_at
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["created"] is False
+    assert body["chat_id"] == first["chat_id"]
+    assert body["chat_session_id"] == first["chat_session_id"]
+    assert body["opener_message_id"] is None
+    assert body["status"] == "ACTIVE"
+    assert _rows(db) == before
+    db.expire_all()
+    assert db.get(Chat, first["chat_id"]).client_joined_at == joined_before
+    assert calls == {"enqueue": [], "stage": []}
+
+
+def test_conversation_on_an_ended_chat_answers_200_and_revives_nothing(sqlite, monkeypatch):
+    """Any status: an ENDED thread with a COMPLETED session is reported as it is.
+    Reviving it is the send's business, not the opener's."""
+    from app.enums.response_mode import ResponseMode
+
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
+    client, psychic = _people(db, balance=10.0)
+    chat = Chat(
+        user_id=client.id, psychic_id=psychic.id,
+        status=ChatStatus.ENDED, response_mode=ResponseMode.SABRI,
+    )
+    db.add(chat)
+    db.commit()
+    session = ChatSession(chat_id=chat.id, status=ChatSessionStatus.COMPLETED)
+    db.add(session)
+    db.commit()
+    manager = SessionManager()
+    http = _client(db, client, manager, monkeypatch)
+    before = _rows(db)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "chat_id": chat.id,
+        "created": False,
+        "chat_session_id": session.id,
+        "status": "ENDED",
+        "billing_mode": "per_message",
+        "client_joined_at": None,
+        "opener_message_id": None,
+        "price_per_message": PRICE,
+        "client_balance": 10.0,
+    }
+    db.expire_all()
+    assert db.get(Chat, chat.id).status == ChatStatus.ENDED
+    assert db.get(Chat, chat.id).client_joined_at is None
+    assert db.get(ChatSession, session.id).status == ChatSessionStatus.COMPLETED
+    assert _rows(db) == before
+    assert manager.active_sessions == {}
+    assert calls == {"enqueue": [], "stage": []}
+
+
+def test_conversation_with_a_second_reader_opens_beside_an_active_one(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    _quiet_reply_side_effects(monkeypatch)
+    client, first_reader = _people(db, balance=10.0)
+    _, second_reader = _people(db, balance=10.0)
+    manager = SessionManager()
+    http = _client(db, client, manager, monkeypatch)
+    first = http.post("/api/chat/conversation", json={"psychic_id": first_reader.id})
+    assert first.status_code == 201
+    assert db.get(Chat, first.json()["chat_id"]).status == ChatStatus.ACTIVE
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": second_reader.id})
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["created"] is True
+    assert resp.json()["chat_id"] != first.json()["chat_id"]
+    chats = db.query(Chat).filter(Chat.user_id == client.id).all()
+    assert sorted(c.psychic_id for c in chats) == sorted([first_reader.id, second_reader.id])
+    assert all(c.status == ChatStatus.ACTIVE for c in chats)
+    assert db.query(Message).count() == 2  # one opener each
+    assert set(manager.active_sessions) == {c.id for c in chats}
+
+
+def test_request_with_a_second_reader_is_no_longer_refused(sqlite, monkeypatch):
+    """The other-reader refusal is gone from start_automatic_conversation itself:
+    /request with a message also opens beside an ACTIVE thread and charges it."""
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
+    client, first_reader = _people(db, balance=10.0)
+    _, second_reader = _people(db, balance=10.0)
+    http = _client(db, client, SessionManager(), monkeypatch)
+    assert http.post("/api/chat/conversation", json={"psychic_id": first_reader.id}).status_code == 201
+
+    resp = http.post(
+        "/api/chat/request", json={"psychic_id": second_reader.id, "message": "hello"}
+    )
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["opener_message_id"] is not None
+    question = db.get(Message, body["message_id"])
+    assert question.sender_id == client.id
+    assert [m.related_message_id for m in _msg_fee_debits(db)] == [question.id]
+    assert calls["enqueue"] == [(body["chat_id"], question.id)]
+
+
+def test_conversation_under_per_minute_answers_409(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_minute")
+    client, psychic = _people(db, balance=10.0)
+    http = _client(db, client, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json() == {"detail": "PER_MESSAGE_ONLY"}
+    assert _rows(db) == (0, 0, 0, 0)
+
+
+def test_conversation_with_an_unpriced_reader_is_refused(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    client, psychic = _people(db, balance=10.0, price=None)
+    http = _client(db, client, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 402, resp.text
+    assert resp.json() == {
+        "detail": "READER_UNAVAILABLE",
+        "required": None,
+        "balance": None,
+        "psychic_name": psychic.username,
+    }
+    assert _rows(db) == (0, 0, 0, 0)
+
+
+def test_conversation_with_a_non_automatic_chat_is_refused(sqlite, monkeypatch):
+    from app.enums.response_mode import ResponseMode
+
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    client, psychic = _people(db, balance=10.0)
+    chat = Chat(
+        user_id=client.id, psychic_id=psychic.id,
+        status=ChatStatus.ENDED, response_mode=ResponseMode.HUMAN,
+    )
+    db.add(chat)
+    db.commit()
+    http = _client(db, client, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 402, resp.text
+    assert resp.json()["detail"] == "READER_UNAVAILABLE"
+    assert _rows(db) == (1, 0, 0, 0)
+
+
+def test_conversation_by_a_psychic_is_refused(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    _, psychic = _people(db, balance=10.0)
+    _, other_psychic = _people(db, balance=10.0)
+    http = _client(db, psychic, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": other_psychic.id})
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json() == {"detail": "Psychics cannot request chats"}
+    assert _rows(db) == (0, 0, 0, 0)
+
+
+def test_conversation_with_an_unknown_reader_is_404(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    client, _ = _people(db, balance=10.0)
+    http = _client(db, client, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": 999_999})
+
+    assert resp.status_code == 404, resp.text
+    assert _rows(db) == (0, 0, 0, 0)

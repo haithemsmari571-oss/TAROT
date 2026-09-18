@@ -29,6 +29,13 @@ class ChatStart(BaseModel):
         return v.strip()
 
 
+class ConversationOpen(BaseModel):
+    """POST /conversation: the reader she wants to talk to, and nothing else.
+    The opener is the reader's; her first message comes later, from the room."""
+
+    psychic_id: int
+
+
 class ChatUpdate(BaseModel):
     status: ChatStatus
 
