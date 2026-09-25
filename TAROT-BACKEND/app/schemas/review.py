@@ -31,6 +31,26 @@ class ReviewResponse(ReviewBase):
         from_attributes = True
 
 
+class PublicReviewResponse(BaseModel):
+    """A review as a public page shows it, and nothing more. The writer is her
+    first letter only (for example "S."), under the key the old pages already
+    read (PsychicDetails.tsx and MyReviews.tsx show review.username)."""
+
+    id: int
+    psychic_id: int
+    rating: int
+    comment: str | None = None
+    created_at: datetime
+    username: str | None = None
+
+
+class MyReviewResponse(PublicReviewResponse):
+    """Her own review, plus the reader's display name (her username, as the
+    inbox serves it at services/client_inbox.py:139)."""
+
+    psychic_name: str | None = None
+
+
 #  Psychic Review Summary
 
 
