@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import get_app_settings
 from app.database.client import get_db
 from app.dependencies.authorization import (
+    require_admin,
     require_permission,
     require_superadmin,
     verify_admin_target_authority,
@@ -45,9 +46,12 @@ from app.services.users import (
     verify_user,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 settings = get_app_settings()
 logger = get_logger(__name__)
+
+# Both routes that can change a role refuse a caller's own with this 400.
+OWN_ROLE_CHANGE_DETAIL = "Cannot change your own role"
 
 
 def transform_user_profile_picture(user_detail: AdminUserDetail) -> AdminUserDetail:
@@ -98,7 +102,7 @@ def list_users(
     - sort_by: Field to sort by (created_at, username, email, balance)
     - sort_order: Sort order (asc, desc)
     """
-    exclude_roles = [Role.ADMIN, Role.SUPERADMIN] if admin.role == Role.ADMIN else None
+    exclude_roles = [Role.ADMIN, Role.SUPERADMIN, Role.PSYCHIC] if admin.role == Role.ADMIN else None
 
     users, total = get_users_with_filters(
         db=db,
@@ -137,7 +141,7 @@ def get_user_detail(
     """
     Get detailed information about a specific user.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Admin, Superadmin; reader (PSYCHIC) rows are superadmin-only
 
     **Note:** Profile picture URL is transformed to full URL.
     """
@@ -156,12 +160,17 @@ def create_user(
     """
     Create a new user with role assignment.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Admin, Superadmin; reader (PSYCHIC) rows are superadmin-only
     """
     if admin.role == Role.ADMIN and user_data.role in (Role.ADMIN, Role.SUPERADMIN):
         raise HTTPException(
             status_code=403,
             detail="Cannot create users with admin or superadmin role",
+        )
+    if admin.role == Role.ADMIN and user_data.role == Role.PSYCHIC:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot create users with psychic role",
         )
 
     user = create_user_admin(db, user_data)
@@ -179,10 +188,13 @@ def update_user(
     """
     Update user information.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Admin, Superadmin; reader (PSYCHIC) rows are superadmin-only
 
-    **Note:** Can update all user fields except password.
-    To change role, use the dedicated /users/{user_id}/role endpoint.
+    **Note:** Updates the fields AdminUserUpdate carries. Only a superadmin may
+    set a password or change the balance, and a balance change is written to
+    the ledger as an adjustment rather than set on the row.
+    Only a superadmin may change the role here; a role sent by anyone else is
+    refused with 403. Nobody may change their own role (400).
     """
     target_user = get_user_by_id(db, user_id)
     verify_admin_target_authority(admin, target_user)
@@ -193,6 +205,11 @@ def update_user(
             status_code=403,
             detail="Only superadmin can change user roles",
         )
+
+    # Nor their own, as on PATCH /users/{user_id}/role. The current role sent
+    # back unchanged is not a change, as with the balance below.
+    if user_id == admin.id and user_data.role not in (None, target_user.role):
+        raise HTTPException(status_code=400, detail=OWN_ROLE_CHANGE_DETAIL)
 
     # Only superadmin can change password or balance. The edit form echoes the
     # current balance back on every save, so only an ACTUAL change counts —
@@ -274,7 +291,7 @@ def suspend_user_endpoint(
     """
     Suspend a user account.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Admin, Superadmin; reader (PSYCHIC) rows are superadmin-only
 
     **Note:** Suspended users cannot log in or perform actions.
     """
@@ -299,7 +316,7 @@ def activate_user_endpoint(
     """
     Activate a suspended user account.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Admin, Superadmin; reader (PSYCHIC) rows are superadmin-only
     """
     target_user = get_user_by_id(db, user_id)
     verify_admin_target_authority(admin, target_user)
@@ -325,7 +342,7 @@ def change_user_role(
     """
     # Prevent changing your own role
     if user_id == admin.id:
-        raise HTTPException(status_code=400, detail="Cannot change your own role")
+        raise HTTPException(status_code=400, detail=OWN_ROLE_CHANGE_DETAIL)
 
     user = update_user_role(db, user_id, role_data.role)
     user_detail = AdminUserDetail.model_validate(user)
@@ -342,7 +359,8 @@ def adjust_user_balance(
     """
     Adjust user balance (credit or debit).
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Superadmin only (MANAGE_TRANSACTIONS, which only the
+    superadmin role holds)
 
     **Note:** Creates a transaction record for audit trail.
     - Positive amount = Credit (add points)
@@ -369,10 +387,8 @@ def adjust_user_balance(
         "admin_balance_adjustment_requested",
         admin_user_id=admin.id,
         admin_username=admin.username,
-        admin_email=admin.email,
         target_user_id=user_id,
         target_username=user.username,
-        target_email=user.email,
         adjustment_amount=adjustment.amount,
         adjustment_type=adjustment_type,
         current_balance=user.balance,
@@ -574,7 +590,7 @@ def verify_user_endpoint(
     """
     Force verify a user account.
 
-    **Permissions:** Admin, Superadmin
+    **Permissions:** Admin, Superadmin; reader (PSYCHIC) rows are superadmin-only
 
     **Note:** Bypasses normal email verification flow.
     """

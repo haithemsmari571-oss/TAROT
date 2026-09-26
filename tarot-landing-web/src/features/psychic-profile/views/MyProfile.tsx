@@ -9,7 +9,6 @@ import type { Psychic, PsychicCategory, PsychicAvailability, PsychicAvailability
 import type { Category } from "../../browse/types/category.types";
 import { useAuth } from "../../auth/hooks";
 import PrimaryInput from "../../../components/CustomInputs/PrimaryInput";
-import { paymentApi } from "../../payment/api/paymentApi";
 
 const DAYS_OF_WEEK = [
   "Monday",
@@ -33,10 +32,6 @@ const MyProfile = () => {
   
   // Form states
   const [bio, setBio] = useState("");
-  const [pricePerMinute, setPricePerMinute] = useState(0);
-  /* Per-message billing (step 5b): kept as typed, so an empty field stays empty. */
-  const [pricePerMessage, setPricePerMessage] = useState("");
-  const [unitPriceCents, setUnitPriceCents] = useState(100);
   const [isOnline, setIsOnline] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [availabilities, setAvailabilities] = useState<PsychicAvailability[]>([]);
@@ -56,9 +51,6 @@ const MyProfile = () => {
   useEffect(() => {
     fetchProfileData();
     fetchCategories();
-    paymentApi.getUnitPrice()
-      .then((data) => setUnitPriceCents(data.unit_price_cents))
-      .catch(() => {});
   }, []);
 
   const fetchCategories = async () => {
@@ -82,8 +74,6 @@ const MyProfile = () => {
       setProfile(profileData);
       setPsychicData(psychicProfile);
       setBio(profileData.bio || "");
-      setPricePerMinute(Math.round((psychicProfile.price_per_second || 0) * 60));
-      setPricePerMessage(psychicProfile.price_per_message != null ? String(psychicProfile.price_per_message) : "");
       setIsOnline(psychicProfile.is_online || false);
       setPreviewImage(psychicProfile.profile_picture_url || null);
       setSelectedCategoryIds(psychicProfile.categories?.map((c: PsychicCategory) => c.id) || []);
@@ -166,18 +156,7 @@ const MyProfile = () => {
     setAvailabilities(availabilities.filter((_, i) => i !== index));
   };
 
-  /* Per-message billing (step 5b): the field is optional, so empty is allowed
-     and clears the price (null); anything at or below 0 is refused. */
-  const pricePerMessageError =
-    pricePerMessage.trim() !== "" && !(parseFloat(pricePerMessage) > 0) ? "Must be more than 0" : undefined;
-  const pricePerMessageValue = pricePerMessage.trim() === "" ? null : parseFloat(pricePerMessage);
-
   const handleSaveProfile = async () => {
-    if (pricePerMessageError) {
-      setErrorMessage(pricePerMessageError);
-      setTimeout(() => setErrorMessage(null), 3000);
-      return;
-    }
     setIsSaving(true);
     setErrorMessage(null);
     try {
@@ -197,9 +176,6 @@ const MyProfile = () => {
 
         await psychicsApi.updatePsychic(user.id, {
           bio,
-          price_per_second: pricePerMinute / 60,
-          price_per_message: pricePerMessageValue,
-          is_online: isOnline,
           categories_ids: selectedCategoryIds,
           availabilities_create: availabilitiesCreate,
           availabilities_ids_to_remove: availabilitiesToRemove,
@@ -290,31 +266,6 @@ const MyProfile = () => {
           >
             Manage Your Psychic Profile
           </p>
-        </div>
-        
-        {/* Online Status Toggle */}
-        <div className="flex items-center gap-4 px-6 py-4 rounded-2xl border" style={{ borderColor: COLORS.neutralDarkGray, backgroundColor: COLORS.surface }}>
-          <div>
-            <p className="text-white font-bold text-sm">Availability</p>
-            <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: COLORS.neutralGray }}>
-              {isOnline ? "Online & Available" : "Offline"}
-            </p>
-          </div>
-          <button
-            onClick={() => setIsOnline(!isOnline)}
-            className="relative w-16 h-8 rounded-full transition-all duration-300 border"
-            style={{
-              backgroundColor: isOnline ? COLORS.primary : "transparent",
-              borderColor: isOnline ? COLORS.primary : COLORS.neutralDarkGray,
-            }}
-          >
-            <div
-              className="absolute top-1 w-6 h-6 rounded-full bg-white transition-all duration-300"
-              style={{
-                left: isOnline ? "calc(100% - 28px)" : "4px",
-              }}
-            />
-          </button>
         </div>
       </div>
 
@@ -555,89 +506,10 @@ const MyProfile = () => {
                 Pricing
               </h3>
             </div>
-            
-            <div>
-              <label
-                className="text-[10px] font-black uppercase tracking-widest mb-3 block"
-                style={{ color: COLORS.neutralGray }}
-              >
-                Price Per Minute (Points)
-              </label>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setPricePerMinute(Math.max(0, pricePerMinute - 10))}
-                  className="w-12 h-12 rounded-xl border transition-all duration-300 hover:scale-110 flex items-center justify-center"
-                  style={{
-                    borderColor: COLORS.neutralDarkGray,
-                    backgroundColor: COLORS.surfaceAccent,
-                    color: COLORS.primary,
-                  }}
-                >
-                  <Icon icon="solar:minus-circle-bold" className="text-2xl" />
-                </button>
-                
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    value={pricePerMinute}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      setPricePerMinute(value ? parseInt(value) : 0);
-                    }}
-                    className="w-full px-6 py-4 rounded-xl border bg-transparent text-white text-center text-2xl font-black focus:outline-none focus:ring-2 transition-all"
-                    style={{
-                      borderColor: COLORS.neutralDarkGray,
-                      backgroundColor: COLORS.surfaceAccent,
-                    }}
-                  />
-                  <span
-                    className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black uppercase"
-                    style={{ color: COLORS.neutralGray }}
-                  >
-                    pts/min
-                  </span>
-                </div>
-                
-                <button
-                  onClick={() => setPricePerMinute(pricePerMinute + 10)}
-                  className="w-12 h-12 rounded-xl border transition-all duration-300 hover:scale-110 flex items-center justify-center"
-                  style={{
-                    borderColor: COLORS.neutralDarkGray,
-                    backgroundColor: COLORS.surfaceAccent,
-                    color: COLORS.primary,
-                  }}
-                >
-                  <Icon icon="solar:add-circle-bold" className="text-2xl" />
-                </button>
-              </div>
-              <p
-                className="text-[9px] font-black uppercase tracking-widest mt-3 text-center"
-                style={{ color: COLORS.neutralGray }}
-              >
-                Approx. £{((pricePerMinute * unitPriceCents) / 100).toFixed(2)} per minute
-              </p>
-            </div>
 
-            {/* Per-message price (step 5b): optional, shown in both billing modes */}
-            <div className="mt-6">
-              <label
-                className="text-[10px] font-black uppercase tracking-widest mb-3 block"
-                style={{ color: COLORS.neutralGray }}
-              >
-                Price per message (£)
-              </label>
-              <PrimaryInput
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="Leave empty if unset"
-                value={pricePerMessage}
-                onChange={(e) => setPricePerMessage(e.target.value)}
-                error={pricePerMessageError}
-                aria-label="Price per message (£)"
-                fullWidth
-              />
-            </div>
+            <p className="text-sm" style={{ color: COLORS.neutralGray }}>
+              Your rate and hours are set by the Ask Valentina team.
+            </p>
           </div>
 
           {/* Categories Section */}

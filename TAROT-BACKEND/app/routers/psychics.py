@@ -65,10 +65,19 @@ def create_psychic_endpoint(
     return psychic
 
 
-# Fields a psychic may NOT change on their own profile: marketplace ranking
-# and login email stay admin-only. Rate (price_per_second) is intentionally
-# self-service — the My Profile page has a rate control.
-SELF_SERVICE_EXCLUDED_FIELDS = {"order", "email", "is_listed"}
+# Fields a psychic may NOT change on their own profile: marketplace ranking,
+# login email, rate (per second and per message), online hours and the online
+# flag are admin-only. Readers are company personas; the company sets them.
+SELF_SERVICE_EXCLUDED_FIELDS = {
+    "order",
+    "email",
+    "is_listed",
+    "price_per_second",
+    "price_per_message",
+    "online_from",
+    "online_to",
+    "is_online",
+}
 
 
 @router.patch("/{psychic_id}")

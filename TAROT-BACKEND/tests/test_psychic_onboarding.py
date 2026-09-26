@@ -89,9 +89,33 @@ def test_non_admin_cannot_stage(db, make_user):
     assert resp.status_code == 403
 
 
+def test_admin_role_cannot_onboard_psychics(db, make_user):
+    """Readers are superadmin-only: ADMIN no longer holds MANAGE_PSYCHICS, so
+    every onboarding route answers 403 and nothing is staged."""
+    client = build_client(db, make_user(role=Role.ADMIN))
+    denied = "Access denied. Requires permission: manage_psychics"
+    stage = client.post(
+        "/api/admin/onboarding/psychics/stage",
+        files=_files(MANIFEST, {"sarah.jpg": b"x", "mike.png": b"y"}),
+    )
+    assert stage.status_code == 403, stage.text
+    assert stage.json()["detail"] == denied
+    for method, path, kwargs in (
+        ("GET", "/api/admin/onboarding/psychics/batches/nope", {}),
+        ("PATCH", "/api/admin/onboarding/psychics/drafts/1", {"json": {"price_per_minute": 5}}),
+        ("POST", "/api/admin/onboarding/psychics/batches/nope/confirm", {}),
+    ):
+        resp = client.request(method, path, **kwargs)
+        assert resp.status_code == 403, (method, path, resp.text)
+        assert resp.json()["detail"] == denied
+    assert db.query(PsychicOnboardingDraft).count() == 0
+    assert db.query(User).filter(User.role == Role.PSYCHIC).count() == 0
+
+
+# The flow below runs as the SUPERADMIN: readers are superadmin-only.
 def test_stage_review_confirm_creates_offline_psychics(db, make_user):
-    admin = make_user(role=Role.ADMIN)
-    client = build_client(db, admin)
+    superadmin = make_user(role=Role.SUPERADMIN)
+    client = build_client(db, superadmin)
 
     stage = client.post(
         "/api/admin/onboarding/psychics/stage",
@@ -120,7 +144,7 @@ def test_stage_review_confirm_creates_offline_psychics(db, make_user):
 
 
 def test_confirm_is_idempotent(db, make_user):
-    client = build_client(db, make_user(role=Role.ADMIN))
+    client = build_client(db, make_user(role=Role.SUPERADMIN))
     batch_id = client.post(
         "/api/admin/onboarding/psychics/stage",
         files=_files(MANIFEST, {"sarah.jpg": b"i", "mike.png": b"i"}),
@@ -134,7 +158,7 @@ def test_confirm_is_idempotent(db, make_user):
 
 
 def test_error_row_can_be_fixed_then_created(db, make_user):
-    client = build_client(db, make_user(role=Role.ADMIN))
+    client = build_client(db, make_user(role=Role.SUPERADMIN))
     # mike.png image intentionally NOT uploaded → row 2 errors.
     stage = client.post(
         "/api/admin/onboarding/psychics/stage",
@@ -159,7 +183,7 @@ def test_error_row_can_be_fixed_then_created(db, make_user):
 def test_categories_are_linked_when_they_exist(db, make_user):
     db.add(Category(title="Love"))
     db.commit()
-    client = build_client(db, make_user(role=Role.ADMIN))
+    client = build_client(db, make_user(role=Role.SUPERADMIN))
     manifest = "image,name,rate,bio,categories\nc.jpg,Cleo,3,hi,Love\n"
     batch_id = client.post("/api/admin/onboarding/psychics/stage", files=_files(manifest, {"c.jpg": b"i"})).json()["batch_id"]
     client.post(f"/api/admin/onboarding/psychics/batches/{batch_id}/confirm")
@@ -169,6 +193,6 @@ def test_categories_are_linked_when_they_exist(db, make_user):
 
 
 def test_unknown_batch_404(db, make_user):
-    client = build_client(db, make_user(role=Role.ADMIN))
+    client = build_client(db, make_user(role=Role.SUPERADMIN))
     assert client.get("/api/admin/onboarding/psychics/batches/nope").status_code == 404
     assert client.post("/api/admin/onboarding/psychics/batches/nope/confirm").status_code == 404

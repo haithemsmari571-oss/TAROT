@@ -5,51 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_app_settings
 from app.database.client import get_db
-from app.enums.role import Role
 from app.enums.user_status import UserStatus
 from app.logging_config import get_logger
 from app.models.user import User
-from app.utils.security import hash_password
 
 security = HTTPBearer(auto_error=False)
 
 settings = get_app_settings()
 logger = get_logger(__name__)
-
-
-def _get_or_create_dev_user(db: Session) -> User:
-    """
-    Private helper: fetches or creates the dev user with admin role.
-    """
-    DEV_EMAIL = "dev@digmaco.com"
-
-    try:
-        user = db.query(User).filter(User.email == DEV_EMAIL).first()
-        if not user:
-            logger.info("creating_dev_user", email=DEV_EMAIL)
-            password = hash_password("password")
-            user = User(
-                username="dev",
-                email=DEV_EMAIL,
-                role=Role.ADMIN,
-                status=UserStatus.ACTIVE,
-                password_hash=password,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            logger.info("dev_user_created", user_id=user.id, email=DEV_EMAIL)
-
-        return user
-    except Exception as e:
-        logger.error(
-            "dev_user_creation_failed",
-            email=DEV_EMAIL,
-            error=str(e),
-            exc_info=True,
-        )
-        db.rollback()
-        raise
 
 
 def get_current_user(
@@ -58,14 +21,9 @@ def get_current_user(
 ) -> User:
     """
     Extracts and verifies JWT token from Authorization header and returns the user.
-    In development mode, fetches or creates the dev user.
+    A missing, invalid or expired token, an unknown user or a suspended account
+    is refused with 401; there is no development bypass.
     """
-    # IS_DEV = settings.ENVIRONMENT == "dev"
-
-    # if IS_DEV:
-    #     logger.debug("using_dev_mode_authentication")
-    #     return _get_or_create_dev_user(db)
-
     # Handle missing credentials explicitly
     if not credentials:
         logger.warning("auth_failed_missing_credentials")
@@ -140,12 +98,7 @@ def get_current_user(
                 detail="This account has been deactivated",
             )
 
-        logger.debug(
-            "auth_success",
-            user_id=user.id,
-            email=user.email,
-            role=user.role.value,
-        )
+        logger.debug("auth_success", user_id=user.id)
 
         return user
     except HTTPException:

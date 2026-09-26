@@ -241,7 +241,7 @@ def test_presigned_put_is_short_lived_exact_and_first_write_only():
 
 
 def test_admin_create_update_delete_round_trip(db, make_user, fake_storage):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     published = datetime.now(timezone.utc) - timedelta(minutes=5)
 
     created_response = _create(
@@ -297,7 +297,7 @@ def test_admin_create_update_delete_round_trip(db, make_user, fake_storage):
 def test_upload_finalization_requires_the_stored_key_size_type_and_checksum(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     claim = _audio_claim()
     response = client.post("/api/admin/library-items/audio-upload-url", json=claim)
     grant = response.json()
@@ -329,7 +329,7 @@ def test_upload_finalization_requires_the_stored_key_size_type_and_checksum(
 def test_public_routes_exclude_hidden_items_and_build_storage_urls(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     now = datetime.now(timezone.utc)
     visible_later = _create(
         client,
@@ -389,7 +389,7 @@ def test_public_routes_exclude_hidden_items_and_build_storage_urls(
 def test_wrong_type_and_absurdly_large_audio_are_rejected_before_signing(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     wrong = client.post(
         "/api/admin/library-items/audio-upload-url",
         json=_audio_claim(content_type="audio/wav"),
@@ -406,7 +406,7 @@ def test_wrong_type_and_absurdly_large_audio_are_rejected_before_signing(
 def test_wrong_type_and_oversized_cover_are_rejected(
     db, make_user, fake_storage, monkeypatch
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     item = _create(client, fake_storage, title="Cover validation item").json()
 
     rejected_mime = client.patch(
@@ -430,7 +430,7 @@ def test_wrong_type_and_oversized_cover_are_rejected(
 
 
 def test_440_mb_audio_never_enters_the_app_process(db, make_user, fake_storage):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     claim = _audio_claim(size_bytes=440 * 1024 * 1024, original_filename="all-night.mp3")
     direct_fields = _grant_and_complete(client, fake_storage, claim)
     direct_fields.update({"type": "sleep", "title": "All Night Beneath the Moon"})
@@ -444,7 +444,7 @@ def test_440_mb_audio_never_enters_the_app_process(db, make_user, fake_storage):
 
 
 def test_key_is_immutable_after_creation(db, make_user, fake_storage):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     created = _create(client, fake_storage, title="Stable Address").json()
     response = client.patch(
         f"/api/admin/library-items/{created['id']}",
@@ -456,7 +456,8 @@ def test_key_is_immutable_after_creation(db, make_user, fake_storage):
 
 
 def test_admin_routes_use_manage_settings_permission(db, make_user, fake_storage):
-    assert _client(db, make_user(role=Role.ADMIN)).get("/api/admin/library-items").status_code == 200
+    # MANAGE_SETTINGS is superadmin-only: the ADMIN role no longer holds it.
+    assert _client(db, make_user(role=Role.ADMIN)).get("/api/admin/library-items").status_code == 403
     assert _client(db, make_user(role=Role.SUPERADMIN)).get("/api/admin/library-items").status_code == 200
     assert _client(db, make_user(role=Role.USER)).get("/api/admin/library-items").status_code == 403
     assert _client(db, make_user(role=Role.PSYCHIC)).get("/api/admin/library-items").status_code == 403
@@ -465,6 +466,29 @@ def test_admin_routes_use_manage_settings_permission(db, make_user, fake_storage
         json=_audio_claim(),
     )
     assert denied.status_code == 403
+
+
+def test_admin_role_is_refused_on_every_admin_library_route(db, make_user, fake_storage):
+    """ADMIN no longer holds MANAGE_SETTINGS: every admin shelf route answers
+    403 before anything is signed, stored or written."""
+    client = _client(db, make_user(role=Role.ADMIN))
+    denied = "Access denied. Requires permission: manage_settings"
+    for method, path, kwargs in (
+        ("GET", "/api/admin/library-items", {}),
+        ("POST", "/api/admin/library-items/audio-upload-url", {"json": _audio_claim()}),
+        ("POST", "/api/admin/library-items", {"data": {"type": "meditation", "title": "Tone"}}),
+        ("POST", "/api/admin/library-items/video-upload-url", {"json": _video_claim()}),
+        ("POST", "/api/admin/library-items/video", {"data": {"title": "Reel"}}),
+        ("PATCH", "/api/admin/library-items/1", {"data": {"title": "Renamed"}}),
+        ("DELETE", "/api/admin/library-items/1", {}),
+    ):
+        response = client.request(method, path, **kwargs)
+        assert response.status_code == 403, (method, path, response.text)
+        assert response.json()["detail"] == denied
+    assert db.query(LibraryItem).count() == 0
+    assert fake_storage.presigns == []
+    assert fake_storage.cover_puts == []
+    assert fake_storage.deleted == []
 
 
 def test_library_items_migration_upgrades_downgrades_and_reupgrades_cleanly(monkeypatch):
@@ -571,7 +595,7 @@ def _create_video(
 def test_video_upload_url_signs_mp4_and_refuses_other_types_and_oversize(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     granted = client.post("/api/admin/library-items/video-upload-url", json=_video_claim())
     assert granted.status_code == 200, granted.text
     grant = granted.json()
@@ -603,7 +627,7 @@ def test_video_upload_url_signs_mp4_and_refuses_other_types_and_oversize(
 def test_video_create_runs_the_verification_gate_before_writing_a_row(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     claim = _video_claim()
     grant = client.post("/api/admin/library-items/video-upload-url", json=claim).json()
     data = _video_form(grant, claim)
@@ -646,7 +670,7 @@ def test_video_create_runs_the_verification_gate_before_writing_a_row(
 def test_public_reels_list_newest_first_and_audio_list_excludes_video(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     empty = client.get("/api/library-items/reels")
     assert empty.status_code == 200 and empty.json() == []
 
@@ -689,7 +713,7 @@ def test_public_reels_list_newest_first_and_audio_list_excludes_video(
 def test_video_item_update_keeps_video_columns_and_delete_removes_video(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     created = _create_video(client, fake_storage, title="Editable reel").json()
     updated = client.patch(
         f"/api/admin/library-items/{created['id']}",
@@ -869,7 +893,7 @@ def test_storage_client_fails_fast_when_the_endpoint_is_unreachable():
 def test_create_routes_answer_503_and_write_nothing_when_storage_is_unreachable(
     db, make_user, fake_storage
 ):
-    client = _client(db, make_user(role=Role.ADMIN))
+    client = _client(db, make_user(role=Role.SUPERADMIN))
     audio_form = _grant_and_complete(client, fake_storage, _audio_claim())
     audio_form.update({"type": "meditation", "title": "Tone"})
     video_claim = _video_claim()

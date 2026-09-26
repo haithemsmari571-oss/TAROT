@@ -14,11 +14,8 @@ ROLE_PERMISSIONS = {
     Role.SUPERADMIN: list(Permission),
     Role.ADMIN: [
         Permission.MANAGE_USERS,
-        Permission.MANAGE_PSYCHICS,
-        Permission.MANAGE_TRANSACTIONS,
         Permission.MANAGE_ZODIAC,
         Permission.MANAGE_BUY_OPTIONS,
-        Permission.MANAGE_SETTINGS,
         Permission.MANAGE_CATEGORIES,
         Permission.MANAGE_TASKS,
         Permission.VIEW_TRANSACTIONS,

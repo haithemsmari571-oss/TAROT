@@ -10,7 +10,7 @@ const psychicsRoutes: RouteConfig[] = [
     name: "psychics Page",
     component: PractitionersPage,
     layout: "private",
-    allowedRoles: [UserRole.ADMIN, UserRole.SUPERADMIN],
+    allowedRoles: [UserRole.SUPERADMIN],
   },
     
 ];

@@ -8,7 +8,7 @@ const landingEditorRoutes: RouteConfig[] = [
     name: "Landing Editor",
     component: LandingEditorPage,
     layout: "private",
-    allowedRoles: [UserRole.ADMIN, UserRole.SUPERADMIN],
+    allowedRoles: [UserRole.SUPERADMIN],
   },
 ];
 

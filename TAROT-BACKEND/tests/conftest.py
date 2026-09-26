@@ -21,6 +21,13 @@ os.environ.setdefault("MAIL_STARTTLS", "false")
 os.environ.setdefault("MAIL_SSL_TLS", "false")
 os.environ.setdefault("MAIL_USE_CREDENTIALS", "false")
 os.environ.setdefault("JWT_SECRET_KEY", secrets.token_urlsafe(48))
+# The app builds its one engine and SessionLocal from DATABASE_URL at first
+# import (app/database/client.py:8-9), and code that opens its own
+# SessionLocal() escapes the db fixture below. Give it an empty in-memory SQLite
+# database, never the local Postgres that .env or the container names. The
+# opt-in PostgreSQL tests (*_POSTGRES_TEST_DATABASE_URL) bring their own.
+if not any(k.endswith("_POSTGRES_TEST_DATABASE_URL") and v.strip() for k, v in os.environ.items()):
+    os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
 from sqlalchemy import create_engine

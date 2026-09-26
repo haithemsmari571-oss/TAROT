@@ -8,7 +8,7 @@ from app.dependencies.authorization import require_admin
 from app.models.user import User
 from app.services.dashboard import get_admin_dashboard_stats
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/dashboard/stats")

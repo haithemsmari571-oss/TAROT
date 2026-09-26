@@ -9,7 +9,7 @@ from app.models.user import User
 from app.schemas.transaction import RefundRequest, RefundResponse
 from app.services.transactions import create_refund_transaction
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_permission(Permission.MANAGE_TRANSACTIONS))])
 logger = get_logger(__name__)
 
 
@@ -22,7 +22,7 @@ def issue_refund(
     """
     Admin endpoint: Issue a refund for a transaction.
 
-    Requires ADMIN or SUPERADMIN role.
+    Requires MANAGE_TRANSACTIONS, which only the SUPERADMIN role holds.
 
     Args:
         refund_request: Refund details (transaction_id, amount, reason)
@@ -35,7 +35,7 @@ def issue_refund(
     Raises:
         HTTPException 400: If refund fails validation
         HTTPException 404: If transaction not found
-        HTTPException 403: If not admin
+        HTTPException 403: If not superadmin
     """
     # Bind admin user to context
     bind_user_to_context(admin.id)

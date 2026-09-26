@@ -110,7 +110,8 @@ def verify_admin_target_authority(admin: User, target_user: User):
     """
     Verify that an admin has authority over the target user.
 
-    SUPERADMIN can manage anyone. ADMIN can only manage USER and PSYCHIC roles.
+    SUPERADMIN can manage anyone. ADMIN can only manage the USER role:
+    readers (PSYCHIC) are superadmin-only.
     Raises HTTPException 403 if the admin lacks authority.
     """
     if admin.role == Role.SUPERADMIN:
@@ -119,4 +120,9 @@ def verify_admin_target_authority(admin: User, target_user: User):
         raise HTTPException(
             status_code=403,
             detail="Cannot manage other admins or superadmins",
+        )
+    if target_user.role == Role.PSYCHIC:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot manage psychics",
         )

@@ -8,7 +8,7 @@ const onboardingRoutes: RouteConfig[] = [
     name: "Psychic Onboarding",
     component: PsychicOnboardingPage,
     layout: "private",
-    allowedRoles: [UserRole.ADMIN, UserRole.SUPERADMIN],
+    allowedRoles: [UserRole.SUPERADMIN],
   },
 ];
 

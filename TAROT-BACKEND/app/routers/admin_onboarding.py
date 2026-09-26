@@ -23,7 +23,7 @@ from app.schemas.onboarding import (
 )
 from app.services import psychic_onboarding as svc
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_permission(Permission.MANAGE_PSYCHICS))])
 settings = get_app_settings()
 
 

@@ -14,7 +14,7 @@ from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.chat import Chat
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_superadmin)])
 logger = get_logger(__name__)
 
 

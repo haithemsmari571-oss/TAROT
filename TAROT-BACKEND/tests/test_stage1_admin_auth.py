@@ -7,6 +7,9 @@ Covers the two fixes:
 2. PATCH /api/admin/users/{id} no longer 403s an ADMIN whose payload merely
    echoes the current balance back (the edit form always does); only a real
    balance/password CHANGE stays superadmin-only.
+3. Readers are superadmin-only: an ADMIN may not write psychics, create a
+   PSYCHIC user, or list or act on a PSYCHIC row through /api/admin/users.
+4. Nobody changes their own role through PATCH /api/admin/users/{id}.
 
 Same harness as the other router tests: a minimal FastAPI app with the router
 mounted and the DB / current-user dependencies overridden.
@@ -54,12 +57,14 @@ def _stub_services(monkeypatch):
     """Auth is the unit under test — stub the service layer so happy paths do
     not touch disk (profile-picture upload) or need seeded psychic rows."""
     monkeypatch.setattr(
-        psychic_service_module, "create_psychic", lambda db, data, pic: {"id": 999}
+        psychic_service_module,
+        "create_psychic",
+        lambda db, data, pic, viewer=None: {"id": 999},
     )
     monkeypatch.setattr(
         psychic_service_module,
         "update_psychic",
-        lambda db, pid, data=None, pic=None: {"id": pid},
+        lambda db, pid, data=None, pic=None, viewer=None: {"id": pid},
     )
     monkeypatch.setattr(
         psychic_service_module, "delete_psychic", lambda db, pid: None
@@ -125,12 +130,14 @@ def test_psychic_can_update_only_their_own_profile(db, make_user, monkeypatch):
 
 def test_psychic_self_update_strips_order_and_email(db, make_user, monkeypatch):
     """Stage-1.1 rider: a psychic editing their own profile cannot change
-    marketplace ranking or login email; rate stays self-service by design."""
+    marketplace ranking or login email. Rate, online hours and the online
+    flag are admin-only too: readers are company personas."""
     captured = {}
     monkeypatch.setattr(
         psychic_service_module,
         "update_psychic",
-        lambda db, pid, data=None, pic=None: captured.update(data=data) or {"id": pid},
+        lambda db, pid, data=None, pic=None, viewer=None: captured.update(data=data)
+        or {"id": pid},
     )
     psychic = make_user(role=Role.PSYCHIC)
     client = build_client(db, psychic)
@@ -141,6 +148,10 @@ def test_psychic_self_update_strips_order_and_email(db, make_user, monkeypatch):
                 {
                     "bio": "my new bio",
                     "price_per_second": 0.09,
+                    "price_per_message": 9.99,
+                    "online_from": "08:00:00",
+                    "online_to": "20:00:00",
+                    "is_online": False,
                     "order": 1,
                     "email": "hijack@test.co",
                 }
@@ -151,18 +162,27 @@ def test_psychic_self_update_strips_order_and_email(db, make_user, monkeypatch):
     sent = captured["data"]
     assert "order" not in sent.model_fields_set
     assert "email" not in sent.model_fields_set
+    for field in (
+        "price_per_second",
+        "price_per_message",
+        "online_from",
+        "online_to",
+        "is_online",
+    ):
+        assert field not in sent.model_fields_set, field
     assert sent.bio == "my new bio"
-    assert sent.price_per_second == 0.09  # rate self-service is intended
 
 
-def test_admin_update_keeps_order_and_email(db, make_user, monkeypatch):
+def test_superadmin_update_keeps_order_and_email(db, make_user, monkeypatch):
+    # Readers are superadmin-only: the operator here is the SUPERADMIN.
     captured = {}
     monkeypatch.setattr(
         psychic_service_module,
         "update_psychic",
-        lambda db, pid, data=None, pic=None: captured.update(data=data) or {"id": pid},
+        lambda db, pid, data=None, pic=None, viewer=None: captured.update(data=data)
+        or {"id": pid},
     )
-    client = build_client(db, make_user(role=Role.ADMIN))
+    client = build_client(db, make_user(role=Role.SUPERADMIN))
     resp = client.patch(
         "/api/psychic/1",
         data={"psychic_data": json.dumps({"order": 3, "email": "moved@test.co"})},
@@ -173,17 +193,33 @@ def test_admin_update_keeps_order_and_email(db, make_user, monkeypatch):
     assert sent.email == "moved@test.co"
 
 
-def test_admin_can_write_psychics(db, make_user, monkeypatch):
-    _stub_services(monkeypatch)
+def test_admin_role_cannot_write_psychics(db, make_user, monkeypatch):
+    """ADMIN no longer holds MANAGE_PSYCHICS: every write verb on the psychic
+    router answers 403 and the service layer is never reached."""
+    called = []
+    for name in ("create_psychic", "update_psychic", "delete_psychic"):
+        monkeypatch.setattr(
+            psychic_service_module,
+            name,
+            lambda *args, _name=name, **kwargs: called.append(_name),
+        )
     client = build_client(db, make_user(role=Role.ADMIN))
     create = client.post(
         "/api/psychic/",
         data={"psychic_data": VALID_PSYCHIC_CREATE},
         files={"profile_picture": ("p.png", b"png-bytes", "image/png")},
     )
-    assert create.status_code == 200, create.text
-    assert client.patch("/api/psychic/1").status_code == 200
-    assert client.delete("/api/psychic/1").status_code == 204
+    assert create.status_code == 403, create.text
+    assert create.json()["detail"] == "Access denied. Requires permission: manage_psychics"
+    update = client.patch(
+        "/api/psychic/1", data={"psychic_data": json.dumps({"order": 3})}
+    )
+    assert update.status_code == 403, update.text
+    assert update.json()["detail"] == "Not authorized to modify psychic profiles"
+    delete = client.delete("/api/psychic/1")
+    assert delete.status_code == 403, delete.text
+    assert delete.json()["detail"] == "Access denied. Requires permission: manage_psychics"
+    assert called == []
 
 
 # ── Admin user edit: unchanged balance no longer 403s an ADMIN ──────────────
@@ -205,6 +241,9 @@ def test_superadmin_can_write_psychics(db, make_user, monkeypatch):
     assert create.status_code == 200, create.text
     assert client.patch(f"/api/psychic/{target.id}").status_code == 200
     assert client.delete(f"/api/psychic/{target.id}").status_code == 204
+    # The bare id the former test_admin_can_write_psychics wrote to.
+    assert client.patch("/api/psychic/1").status_code == 200
+    assert client.delete("/api/psychic/1").status_code == 204
 
 
 def test_psychic_write_gate_is_mounted_on_every_write_verb(db, make_user, monkeypatch):
@@ -308,6 +347,180 @@ def test_admin_still_cannot_manage_other_admins(db, make_user):
         json={"username": "x", "email": other_admin.email},
     )
     assert resp.status_code == 403
+
+
+# ── Readers are superadmin-only on the user-admin routes too ────────────────
+def test_admin_cannot_manage_a_psychic_row(db, make_user):
+    """ADMIN keeps MANAGE_USERS, but the target check refuses a reader's row
+    the way it refuses an admin's, before anything is written."""
+    admin = make_user(role=Role.ADMIN)
+    psychic = make_user(role=Role.PSYCHIC)
+    fields = ("username", "bio", "price_per_message", "is_online", "status", "is_verified")
+    before = {f: getattr(psychic, f) for f in fields}
+    client = build_client(db, admin)
+
+    resp = client.patch(
+        f"/api/admin/users/{psychic.id}",
+        json={
+            "username": "renamed",
+            "bio": "admin edit",
+            "price_per_message": 9.99,
+            "is_online": False,
+        },
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"] == "Cannot manage psychics"
+    for method, path in (
+        ("GET", f"/api/admin/users/{psychic.id}"),
+        ("PATCH", f"/api/admin/users/{psychic.id}/suspend"),
+        ("PATCH", f"/api/admin/users/{psychic.id}/activate"),
+        ("POST", f"/api/admin/users/{psychic.id}/verify"),
+    ):
+        refused = client.request(method, path)
+        assert refused.status_code == 403, (method, path, refused.text)
+        assert refused.json()["detail"] == "Cannot manage psychics"
+
+    db.refresh(psychic)
+    assert {f: getattr(psychic, f) for f in fields} == before
+
+
+def test_admin_cannot_create_a_psychic(db, make_user):
+    from app.models.user import User
+
+    client = build_client(db, make_user(role=Role.ADMIN))
+    resp = client.post(
+        "/api/admin/users",
+        json={
+            "username": "newreader",
+            "email": "newreader@test.co",
+            "password": "Secret123!",
+            "role": "PSYCHIC",
+            "price_per_message": 2.5,
+        },
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"] == "Cannot create users with psychic role"
+    assert db.query(User).filter(User.email == "newreader@test.co").count() == 0
+
+
+def test_admin_still_manages_a_user_row(db, make_user):
+    admin = make_user(role=Role.ADMIN)
+    target = make_user(role=Role.USER)
+    client = build_client(db, admin)
+
+    assert client.get(f"/api/admin/users/{target.id}").status_code == 200
+    resp = client.patch(f"/api/admin/users/{target.id}", json={"bio": "admin edit"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["bio"] == "admin edit"
+    assert client.post(f"/api/admin/users/{target.id}/verify").json()["is_verified"] is True
+    assert client.patch(f"/api/admin/users/{target.id}/suspend").json()["status"] == "SUSPENDED"
+    assert client.patch(f"/api/admin/users/{target.id}/activate").json()["status"] == "ACTIVE"
+    created = client.post(
+        "/api/admin/users",
+        json={
+            "username": "newclient",
+            "email": "newclient@test.co",
+            "password": "Secret123!",
+            "role": "USER",
+        },
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["role"] == "USER"
+
+
+def test_superadmin_still_manages_a_psychic_row(db, make_user):
+    superadmin = make_user(role=Role.SUPERADMIN)
+    psychic = make_user(role=Role.PSYCHIC)
+    client = build_client(db, superadmin)
+
+    assert client.get(f"/api/admin/users/{psychic.id}").status_code == 200
+    resp = client.patch(
+        f"/api/admin/users/{psychic.id}",
+        json={"bio": "superadmin edit", "price_per_message": 3.5},
+    )
+    assert resp.status_code == 200, resp.text
+    db.refresh(psychic)
+    assert psychic.bio == "superadmin edit"
+    assert float(psychic.price_per_message) == 3.5
+    created = client.post(
+        "/api/admin/users",
+        json={
+            "username": "newreader",
+            "email": "newreader@test.co",
+            "password": "Secret123!",
+            "role": "PSYCHIC",
+            "price_per_message": 2.5,
+        },
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["role"] == "PSYCHIC"
+
+
+def test_admin_user_list_leaves_out_psychic_rows(db, make_user):
+    """The list agrees with the detail route: an ADMIN is shown no reader row,
+    as no admin or superadmin row. The SUPERADMIN still sees every row."""
+    admin = make_user(role=Role.ADMIN)
+    superadmin = make_user(role=Role.SUPERADMIN)
+    psychic = make_user(role=Role.PSYCHIC)
+    client_user = make_user(role=Role.USER)
+
+    listed = build_client(db, admin).get("/api/admin/users")
+    assert listed.status_code == 200, listed.text
+    assert [u["id"] for u in listed.json()["users"]] == [client_user.id]
+    assert listed.json()["total"] == 1
+    filtered = build_client(db, admin).get("/api/admin/users?role=PSYCHIC")
+    assert filtered.status_code == 200, filtered.text
+    assert filtered.json()["users"] == []
+    assert filtered.json()["total"] == 0
+
+    everyone = build_client(db, superadmin).get("/api/admin/users")
+    assert everyone.status_code == 200, everyone.text
+    assert {u["id"] for u in everyone.json()["users"]} == {
+        admin.id,
+        superadmin.id,
+        psychic.id,
+        client_user.id,
+    }
+
+
+# ── Nobody changes their own role through the general update ────────────────
+def test_superadmin_cannot_change_own_role_through_update(db, make_user):
+    """PATCH /users/{id} refuses a caller's own role change with the 400 that
+    PATCH /users/{id}/role gives, before anything is written. Every other
+    self-edit still goes through."""
+    superadmin = make_user(role=Role.SUPERADMIN)
+    client = build_client(db, superadmin)
+
+    refused = client.patch(
+        f"/api/admin/users/{superadmin.id}", json={"role": "USER", "bio": "self edit"}
+    )
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["detail"] == "Cannot change your own role"
+    role_route = client.patch(f"/api/admin/users/{superadmin.id}/role", json={"role": "USER"})
+    assert role_route.status_code == 400, role_route.text
+    assert role_route.json()["detail"] == refused.json()["detail"]
+    db.refresh(superadmin)
+    assert superadmin.role == Role.SUPERADMIN
+    assert superadmin.bio is None
+
+    renamed = client.patch(
+        f"/api/admin/users/{superadmin.id}", json={"username": "owner", "bio": "self edit"}
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["username"] == "owner"
+    assert renamed.json()["bio"] == "self edit"
+    # The current role sent back unchanged is not a change.
+    echoed = client.patch(
+        f"/api/admin/users/{superadmin.id}", json={"role": "SUPERADMIN", "bio": "echo"}
+    )
+    assert echoed.status_code == 200, echoed.text
+    assert echoed.json()["role"] == "SUPERADMIN"
+
+    # Another user's role is still the superadmin's to change here.
+    target = make_user(role=Role.USER)
+    changed = client.patch(f"/api/admin/users/{target.id}", json={"role": "PSYCHIC"})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["role"] == "PSYCHIC"
 
 
 def test_admin_user_contract_exposes_paid_credit_and_total(db, make_user):

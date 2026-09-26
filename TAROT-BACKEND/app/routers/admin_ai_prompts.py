@@ -1,6 +1,6 @@
 """Admin — AI Prompts. The control room for every AI prompt on the platform:
 view, edit (with version history + restore), restore default, and run a live
-test against the real model. All behind MANAGE_SETTINGS (superadmin)."""
+test against the real model. All behind require_superadmin (superadmin only)."""
 
 from typing import Optional
 

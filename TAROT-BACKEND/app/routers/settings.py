@@ -16,10 +16,10 @@ from app.schemas.settings import (
     SettingsListResponse,
 )
 from app.database.client import get_db
-from app.dependencies.authorization import require_permission
+from app.dependencies.authorization import require_admin, require_permission
 from app.enums.permissions import Permission
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/settings", response_model=SettingsListResponse)

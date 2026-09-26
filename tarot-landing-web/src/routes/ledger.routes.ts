@@ -8,7 +8,7 @@ const ledgerRoutes: RouteConfig[] = [
     name: "Ledger Page",
     component: LedgerPage,
     layout: "private",
-    allowedRoles: [UserRole.ADMIN, UserRole.SUPERADMIN],
+    allowedRoles: [UserRole.SUPERADMIN],
   },
 ];
 
