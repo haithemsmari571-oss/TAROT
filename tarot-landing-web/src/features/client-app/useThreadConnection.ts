@@ -133,13 +133,14 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
         if (disposed) return;
         const event = frame.event ?? frame.type;
         const data = frame.data ?? frame;
-        if (event === "message" && frame.id && frame.content !== undefined && frame.created_at) {
+        // "system" is a line the server writes into the thread, such as a refund's.
+        if ((event === "message" || event === "system") && frame.id && frame.content !== undefined && frame.created_at) {
           const message: ThreadMessage = { id: frame.id, content: frame.content, sender_id: frame.sender_id ?? null, created_at: frame.created_at, status: frame.status ?? "SENT", is_system: frame.is_system };
           setMessages(current => mergeMessages(current, [message], receipts.current));
           if (message.sender_id === userId && message.content === pendingRef.current?.content) {
             pendingRef.current = null;
             setPending(null);
-          } else if (message.sender_id !== userId) {
+          } else if (message.sender_id !== userId && !message.is_system) {
             setThinking(false);
             markOpen();
             void invalidateBadge();

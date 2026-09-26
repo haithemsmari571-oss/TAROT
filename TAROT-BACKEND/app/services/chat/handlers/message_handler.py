@@ -310,33 +310,36 @@ class MessageHandler(BaseEventHandler):
 
         answered_client_turn = None
         automatic_turn_already_recorded = False
-        if chat.status == ChatStatus.ACTIVE:
+        if chat.status == ChatStatus.ACTIVE and sender_is_paying_client and per_message_mode:
+            # Per-message billing: the charge above succeeded, and the reply is
+            # the one-call reader's, never the burst pipeline's (no burst window,
+            # no First Word, no Valentina/Sabri turn). An automatic reader
+            # answers through reading_single; any other mode is a person at the
+            # keyboard, so nothing is queued and the message simply waits for
+            # them. Outside the coordination guard below: she has paid, so a
+            # failure to queue her reply is raised, not noted. Her message's
+            # queue entry, committed with the charge, leaves it to the offline
+            # sweep, which answers it or refunds it.
+            from app.enums.response_mode import ResponseMode
+
+            if chat.response_mode == ResponseMode.SABRI:
+                from app.services.ai import reading_single
+
+                await reading_single.enqueue_reply(
+                    self.chat_id, db_message.id, committed_at=message_committed_at
+                )
+            else:
+                logger.info(
+                    "per_message_manual_reader",
+                    chat_id=self.chat_id,
+                    message_id=db_message.id,
+                    response_mode=chat.response_mode.value,
+                )
+        elif chat.status == ChatStatus.ACTIVE:
             try:
                 from app.services.ai import reading_burst
 
-                if sender_is_paying_client and per_message_mode:
-                    # Per-message billing: the charge above succeeded, and the
-                    # reply is the one-call reader's, never the burst pipeline's
-                    # (no burst window, no First Word, no Valentina/Sabri turn).
-                    # An automatic reader answers through reading_single; any
-                    # other mode is a person at the keyboard, so nothing is
-                    # queued and the message simply waits for them.
-                    from app.enums.response_mode import ResponseMode
-
-                    if chat.response_mode == ResponseMode.SABRI:
-                        from app.services.ai import reading_single
-
-                        await reading_single.enqueue_reply(
-                            self.chat_id, db_message.id, committed_at=message_committed_at
-                        )
-                    else:
-                        logger.info(
-                            "per_message_manual_reader",
-                            chat_id=self.chat_id,
-                            message_id=db_message.id,
-                            response_mode=chat.response_mode.value,
-                        )
-                elif sender_is_paying_client:
+                if sender_is_paying_client:
                     await reading_burst.note_client_message(
                         self.chat_id,
                         db_message.chat_session_id,

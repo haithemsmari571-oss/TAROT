@@ -83,6 +83,9 @@ _workers: Dict[int, asyncio.Task] = {}
 _in_flight: Dict[int, int] = {}
 _presence: Dict[Tuple[int, int], "_Presence"] = {}
 _queue_tokens: Dict[Tuple[int, int], str] = {}
+# Per held message: the task renewing its lease from enqueue to the end of its
+# turn, so a message waiting its turn behind others is never taken by the sweep.
+_leases: Dict[Tuple[int, int], asyncio.Task] = {}
 
 # Test seams for all presence deadlines. Use monotonic time for waiting and UTC
 # for the commit anchor and delivery logs.
@@ -247,9 +250,14 @@ async def enqueue_reply(
             )
             return
         if queue_token is None and get_app_settings().BILLING_MODE == "per_message":
-            from app.services.offline_replies import stage_if_offline, is_queued
+            from app.services.offline_replies import (
+                claim_live, has_entry, is_queued, stage_if_offline,
+            )
 
-            deferred = stage_if_offline(db, chat, message) or is_queued(db, message_id)
+            deferred = (
+                stage_if_offline(db, chat, message, stage_live=False)
+                or is_queued(db, message_id)
+            )
             if deferred:
                 db.commit()
                 from app.manager import manager
@@ -259,7 +267,14 @@ async def enqueue_reply(
                     str(chat_id), chat.user_id,
                 )
                 return
-        if queue_token is not None:
+            if has_entry(db, message_id):
+                # Its entry was committed with the charge. Held under its token,
+                # the reply is the sweep's to answer or refund if it is lost here.
+                queue_token = claim_live(message_id)
+                if queue_token is None:
+                    return  # The sweep holds it, or it is answered or refunded.
+                _queue_tokens[(chat_id, message_id)] = queue_token
+        elif queue_token is not None:
             from app.services.offline_replies import renew
 
             if not renew(message_id, queue_token):
@@ -278,6 +293,10 @@ async def enqueue_reply(
         _receipts(chat_id, message_id, client_id, presence, queue_token)
     )
     _presence[(chat_id, message_id)] = presence
+    if queue_token is not None:
+        _leases[(chat_id, message_id)] = asyncio.create_task(
+            _renew_lease(message_id, queue_token)
+        )
     queue.append(message_id)
     queue.sort()
     worker = _workers.get(chat_id)
@@ -513,6 +532,7 @@ async def _worker(chat_id: int) -> None:
                 error=str(error),
             )
         finally:
+            await _cancel_task(_leases.pop((chat_id, message_id), None))
             token = _queue_tokens.pop((chat_id, message_id), None)
             if token is not None:
                 from app.services.offline_replies import release
@@ -534,13 +554,9 @@ async def _reply(chat_id: int, message_id: int) -> None:
     presence = _presence[(chat_id, message_id)]
     token = _queue_tokens.get((chat_id, message_id))
     ready = asyncio.create_task(_start_typing(presence, typing, message_id, token))
-    lease = None
-    if token is not None:
-        lease = asyncio.create_task(_renew_lease(message_id, token))
     try:
         await _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=token)
     finally:
-        await _cancel_task(lease)
         await _cancel_task(ready)
         await typing.set(False)
 
@@ -550,8 +566,16 @@ async def _renew_lease(message_id, token):
 
     while True:
         await asyncio.sleep(30)
-        if not renew(message_id, token):
-            return
+        try:
+            if not renew(message_id, token):
+                return
+        except Exception as error:  # noqa: BLE001 - one failed beat must not drop the lease
+            logger.warning(
+                "reading_single_lease_renew_failed",
+                message_id=message_id,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
 
 
 async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=None) -> None:
@@ -676,7 +700,8 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=
 
 async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error, queue_token=None, **pacing) -> None:
     """Both attempts failed: reverse the message's debit, then one bubble in the
-    reader's voice saying so, persisted like any reader message."""
+    reader's voice saying so, persisted like any reader message. The bubble says
+    "refunded", so it goes out only when the refund is done."""
     from app.database.client import SessionLocal
 
     reversal_id = None
@@ -691,7 +716,7 @@ async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error,
             with SessionLocal() as db:
                 reversal = refund_message(db, message_id)
                 reversal_id = reversal.id if reversal is not None else None
-    except Exception as error:  # noqa: BLE001 - the notice still goes out
+    except Exception as error:  # noqa: BLE001 - nothing refunded, so no bubble
         logger.error(
             "reading_single_refund_failed",
             chat_id=chat_id,
@@ -699,18 +724,31 @@ async def _refund_and_notify(chat_id, psychic_id, message_id, state, last_error,
             error_type=type(error).__name__,
             error=str(error),
         )
-        if queue_token is not None:
-            return  # Keep the durable item retryable until its refund succeeds.
-    try:
-        await _deliver(chat_id, psychic_id, [UNREACHABLE_NOTICE], state, **pacing)
-    except Exception as error:  # noqa: BLE001 - never raise out of the worker
-        logger.error(
-            "reading_single_notice_failed",
-            chat_id=chat_id,
-            message_id=message_id,
-            error_type=type(error).__name__,
-            error=str(error),
-        )
+        return  # A durable item stays retryable until its refund succeeds.
+    if queue_token is not None:
+        from app.services.offline_replies import announce_refund
+
+        try:
+            await announce_refund(message_id)
+        except Exception as error:  # noqa: BLE001 - the refund stands either way
+            logger.error(
+                "reading_single_refund_announce_failed",
+                chat_id=chat_id,
+                message_id=message_id,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
+    if reversal_id is not None:
+        try:
+            await _deliver(chat_id, psychic_id, [UNREACHABLE_NOTICE], state, **pacing)
+        except Exception as error:  # noqa: BLE001 - never raise out of the worker
+            logger.error(
+                "reading_single_notice_failed",
+                chat_id=chat_id,
+                message_id=message_id,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
     logger.warning(
         "reading_single_failed",
         chat_id=chat_id,

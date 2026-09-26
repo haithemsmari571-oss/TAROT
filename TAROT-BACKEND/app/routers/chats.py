@@ -674,11 +674,14 @@ def get_chat_messages_endpoint(
 
 
 def _billing_fields(db, chat) -> dict:
-    """The three per-message figures every session payload carries from step 1 of
+    """The per-message figures every session payload carries from step 1 of
     per-message billing on: the billing mode in force, the reader's per-message price
-    (None until the reader sets one), and the client's spendable balance as the
-    affordability gate computes it (earned + credit + paid). Purely additive; nothing
-    reads them yet."""
+    (None until the reader sets one), the client's spendable balance as the
+    affordability gate computes it (earned + credit + paid), and the hours after
+    which an unanswered message is refunded (offline_replies.OFFLINE_REPLY_TIMEOUT),
+    which the room promises under the composer."""
+    from app.services.offline_replies import refund_after_hours
+
     price = None
     balance = None
     if chat is not None:
@@ -694,6 +697,7 @@ def _billing_fields(db, chat) -> dict:
         "billing_mode": settings.BILLING_MODE,
         "price_per_message": price,
         "balance": balance,
+        "refund_after_hours": refund_after_hours(),
     }
 
 
@@ -2302,11 +2306,7 @@ async def authenticate_websocket_user(token, db):
             )
             raise ValueError("User not found")
 
-        logger.debug(
-            "websocket_auth_success",
-            user_id=user.id,
-            email=user.email,
-        )
+        logger.debug("websocket_auth_success", user_id=user.id)
 
         return user
 

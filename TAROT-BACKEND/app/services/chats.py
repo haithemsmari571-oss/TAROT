@@ -406,7 +406,9 @@ async def save_message(
     return message
 
 
-def save_system_message(db: Session, chat_id: int, content: str) -> Message:
+def save_system_message(
+    db: Session, chat_id: int, content: str, *, commit: bool = True
+) -> Message:
     """Save a system message to the database (no sender, is_system=True)."""
     from app.enums.author_type import AuthorType
 
@@ -418,6 +420,11 @@ def save_system_message(db: Session, chat_id: int, content: str) -> Message:
         author_type=AuthorType.SYSTEM,
     )
     db.add(message)
+    if not commit:
+        # The caller owns the transaction (a refund commits its line with the
+        # reversal, offline_replies.refund_queued), as save_message allows.
+        db.flush()
+        return message
     db.commit()
     db.refresh(message)
     return message

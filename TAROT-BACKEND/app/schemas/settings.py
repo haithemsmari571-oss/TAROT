@@ -24,3 +24,9 @@ class SettingsListResponse(BaseModel):
 class PublicSettingsResponse(BaseModel):
     privacy_policy: str
     terms_of_service: str
+    # The welcome credit a new account is given, whole pounds; 0 when the
+    # setting is missing or invalid (services/auth.py parse_signup_bonus).
+    signup_bonus_gbp: int
+    # The hours after which an unanswered message is refunded
+    # (offline_replies.refund_after_hours), for the reader profile's promise.
+    refund_after_hours: int

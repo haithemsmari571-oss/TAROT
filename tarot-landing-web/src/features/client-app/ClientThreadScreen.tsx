@@ -11,12 +11,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/components/Toast/useToast";
 import { useAuth } from "@/features/auth/hooks";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
-import { PER_MESSAGE_COPY, PER_MESSAGE_MAX_CHARS } from "@/features/chat/perMessage";
+import { PER_MESSAGE_COPY, PER_MESSAGE_MAX_CHARS, REFUND_NOTE } from "@/features/chat/perMessage";
 import HallRoom, { type HallRoomMessage } from "@/features/hall/HallRoom";
 import { HallOrb } from "@/features/hall/HallStage";
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import axiosClient from "@/lib/axiosClient";
 import { formatGbp } from "@/lib/currency";
+import { readerName } from "./appReaders";
 import { CHATS_PATH } from "./clientAppPaths";
 import { receiptOf, useThreadConnection } from "./useThreadConnection";
 import { clockAt, dayOf } from "./ukTime";
@@ -30,6 +31,8 @@ interface ThreadDetails {
   billing_mode: string;
   price_per_message: number | null;
   balance: number;
+  /** hours before an unanswered message is refunded (chats.py _billing_fields) */
+  refund_after_hours: number;
 }
 interface ThreadReader {
   id: number;
@@ -163,7 +166,8 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
   const rows = useMemo(() => {
     // SYSTEM authorship labels the fixed opener, which still has the reader's
     // sender_id and is_system=false. It belongs in the thread as a reader bubble.
-    const messages = chat.messages.filter(message => !message.is_system);
+    // Of the system rows, only a refund's is hers to see: the room's quiet line.
+    const messages = chat.messages.filter(message => !message.is_system || message.content === REFUND_NOTE);
     if (chat.pending) messages.push(chat.pending);
     const drawn: HallRoomMessage[] = [];
     let lastDay: string | null = null;
@@ -172,10 +176,12 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
       // one separator before the first message of each UK calendar day
       if (date !== lastDay) drawn.push({ id: `day-${date}`, mine: false, text: date, system: true });
       lastDay = date;
-      drawn.push({ id: message.id, mine: message.sender_id === user?.id, text: message.content, receipt: receiptOf(message.status) });
+      drawn.push(message.is_system
+        ? { id: message.id, mine: false, text: PER_MESSAGE_COPY.refund(readerName(reader)), system: true }
+        : { id: message.id, mine: message.sender_id === user?.id, text: message.content, receipt: receiptOf(message.status) });
     }
     return drawn;
-  }, [chat.messages, chat.pending, user?.id]);
+  }, [chat.messages, chat.pending, user?.id, reader]);
 
   const short = chat.price != null && chat.balance < chat.price;
   // the same glider /billing uses, in place, back to this room afterwards
@@ -211,7 +217,15 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
   const refusal = short && (askedForStardust || chat.rejection === INSUFFICIENT_BALANCE)
     ? PER_MESSAGE_COPY.addStardust
     : chat.rejection && chat.rejection !== INSUFFICIENT_BALANCE ? REJECTION_COPY[chat.rejection] ?? chat.rejection : null;
-  const notice = refusal ?? chat.error ?? (olderError ? "Could not load older messages. Try again." : null);
+  /* Until her first paid message in this conversation: the whole thread is
+     loaded, nothing of hers is in it and nothing is on its way. Any refusal or
+     error takes the line's place. */
+  const beforeFirstMessage = !chat.loading && !chat.hasOlder && !chat.pending
+    && !chat.messages.some(message => message.sender_id === user?.id);
+  const promise = beforeFirstMessage && chat.price != null && typeof details.refund_after_hours === "number"
+    ? PER_MESSAGE_COPY.refundPromise(chat.price, details.refund_after_hours)
+    : null;
+  const notice = refusal ?? chat.error ?? (olderError ? "Could not load older messages. Try again." : null) ?? promise;
 
   return (
     <div className="client-room" ref={seat}>

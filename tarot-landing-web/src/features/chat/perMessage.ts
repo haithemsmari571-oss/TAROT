@@ -1,12 +1,25 @@
 /* Per-message billing, the room's constants. One place for the cap, the lines
-   the composer shows when the server refuses a message, and the URL Stripe
-   returns to so she lands back in this room. */
+   the composer shows when the server refuses a message, the refund promise and
+   the refund line, and the URL Stripe returns to so she lands back in this room. */
+import { formatGbp } from "@/lib/currency";
 
 /** The composer's character cap under per-message billing. The room's counter
     reads "{n}/300" from this same number. */
 export const PER_MESSAGE_MAX_CHARS = 300;
 
+/** A refunded message, in the owner's words when the reader's name is not
+    known. The backend writes exactly these words as the system row a refund
+    leaves in her thread (offline_replies.REFUND_NOTE); the room finds the row
+    by them and draws PER_MESSAGE_COPY.refund with the reader's name. */
+export const REFUND_NOTE = "Refund · no reply";
+
 export const PER_MESSAGE_COPY = {
+  /** under the composer until her first paid message, and on the reader's
+      profile under the price; the hours are the backend's refund window */
+  refundPromise: (price: number, hours: number) =>
+    `Her hello is free. Each message you send is ${formatGbp(price)}, refunded automatically if she has not replied within ${hours} hours.`,
+  /** a refunded message: the quiet line in the room, the row in the You tab */
+  refund: (reader?: string) => (reader ? `${REFUND_NOTE} from ${reader}` : REFUND_NOTE),
   /** under the composer when her balance no longer covers one message */
   addStardust: "Add Stardust to keep going",
   /** message_rejected READER_UNAVAILABLE */

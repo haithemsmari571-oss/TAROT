@@ -97,6 +97,9 @@ def sqlite(monkeypatch):
     from app.database import client as database_client
 
     monkeypatch.setattr(database_client, "SessionLocal", Local)
+    # A live send's reply takes the queue entry its charge wrote, through the
+    # queue's own sessions (offline_replies.claim_live).
+    monkeypatch.setattr(offline_replies, "SessionLocal", Local)
     db = Local()
     try:
         yield db, Local
