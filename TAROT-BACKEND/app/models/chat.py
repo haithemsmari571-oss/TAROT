@@ -30,6 +30,11 @@ class Chat(Base):
     client_last_opened_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None, nullable=True
     )
+    # When the reply sweep last emailed her about this conversation
+    # (services/reply_emails.py); once after that open, no more until the next.
+    client_reply_emailed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
+    )
 
     psychic: Mapped["User"] = relationship(
         "User", foreign_keys=[psychic_id], back_populates="psychic_chats"

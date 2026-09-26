@@ -1,7 +1,7 @@
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import List, Optional
 
-from sqlalchemy import CheckConstraint, Date, Enum, Integer, Numeric, String, Time, true
+from sqlalchemy import CheckConstraint, Date, DateTime, Enum, Integer, Numeric, String, Time, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.gender import Gender
@@ -75,7 +75,17 @@ class User(Base):
         server_default=Gender.NOT_STATED.value,
         nullable=False,
     )
-    
+    # When she ticked "I agree to the Terms and the Privacy Policy" at sign-up.
+    # NULL for every account made before the tick box existed.
+    terms_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Emails about her conversations: a reader replied, a message was refunded
+    # (services/reply_emails.py). On for everyone; she turns it off in the You tab.
+    reply_emails: Mapped[bool] = mapped_column(
+        default=True, server_default=true(), nullable=False
+    )
+
     # 💡 Added: Dynamic display order field
     # Default is 9999 so un-ordered psychics go to the end
     order: Mapped[int] = mapped_column(Integer, default=9999, nullable=False)
