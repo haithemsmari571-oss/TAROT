@@ -12,6 +12,8 @@ import { NumericPagination } from "../components/NumericPagination";
 import { PriceRangeFilter } from "../components/PriceRangeFilter";
 import PsychicCard from "../components/PsychicCard";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
+import { hasWelcomeCredit, useWelcomeCredit } from "@/features/client-app/useWelcomeCredit";
+import { formatGbp } from "@/lib/currency";
 import "../../../styles/glass.css";
 
 const ITEMS_PER_PAGE = 12;
@@ -24,6 +26,7 @@ const PsychicsBrowse = () => {
   const navigate = useNavigate();
   const { billingMode } = useBillingMode();
   const perMessage = billingMode === "per_message";
+  const welcomeCreditGbp = useWelcomeCredit();
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -182,8 +185,15 @@ const PsychicsBrowse = () => {
             </h1>
             <p className="gl-sub">
               {totalCount > 0 ? `${totalCount} intuitive readers` : "Intuitive readers"}, live
-              now. Private, judgment-free readings on love, timing and the unsaid —{" "}
-              <b>your first reading is free with £15 credit.</b>
+              now. Private, judgment-free readings on love, timing and the unsaid
+              {hasWelcomeCredit(welcomeCreditGbp) ? (
+                <>
+                  {" "}—{" "}
+                  <b>your first reading is free with {formatGbp(welcomeCreditGbp)} credit.</b>
+                </>
+              ) : (
+                "."
+              )}
             </p>
 
             {/* SEARCH PILL */}
@@ -288,6 +298,7 @@ const PsychicsBrowse = () => {
                 <PsychicCard
                   key={psychic.id}
                   psychic={psychic}
+                  welcomeCreditGbp={welcomeCreditGbp}
                   onClick={() => navigate(`/psychics/${psychic.id}/details`)}
                 />
               ))}

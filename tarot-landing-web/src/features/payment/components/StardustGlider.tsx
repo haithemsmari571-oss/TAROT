@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
+import { formatGbp } from "../../../lib/currency";
 import {
+  LIFETIME_COPY,
   STARDUST_MIN_USD,
   STARDUST_MAX_USD,
   STARDUST_TIERS,
@@ -307,7 +309,7 @@ const StardustGlider = ({
           Name your <i style={{ color: "#d9c49a" }}>offering</i>
         </h2>
         <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-          Slide to choose any amount from £{STARDUST_MIN_USD} to £{STARDUST_MAX_USD}. Larger
+          Slide to choose any amount from {formatGbp(STARDUST_MIN_USD)} to {formatGbp(STARDUST_MAX_USD)}. Larger
           offerings unlock bigger bonus Stardust.
         </p>
 
@@ -324,10 +326,7 @@ const StardustGlider = ({
                   color: isLifetime ? GOLD : "#ffffff",
                 }}
               >
-                £{amount}
-              </span>
-              <span className="pb-2 text-xs font-black uppercase tracking-[0.22em] text-white/40">
-                GBP
+                {formatGbp(amount)}
               </span>
             </div>
 
@@ -378,8 +377,7 @@ const StardustGlider = ({
                     backgroundClip: "text",
                   }}
                 >
-                  Lifetime Access Unlocked — 1 hour of reading time, daily, for
-                  life.
+                  {LIFETIME_COPY}
                 </p>
               </div>
             ) : (
@@ -453,7 +451,7 @@ const StardustGlider = ({
               }}
             >
               <Icon icon={TIER_ICONS.lifetime} className="text-sm" />
-              Lifetime £{STARDUST_MAX_USD}
+              Lifetime {formatGbp(STARDUST_MAX_USD)}
             </div>
           </div>
         </div>
@@ -478,10 +476,10 @@ const StardustGlider = ({
             ) : isLifetime ? (
               <>
                 <Icon icon="solar:crown-star-bold" className="text-base" />
-                Unlock Lifetime Access · £{amount}
+                Unlock Lifetime Access · {formatGbp(amount)}
               </>
             ) : (
-              <>Buy {quote.totalPoints.toLocaleString()} Stardust · £{amount}</>
+              <>Buy {quote.totalPoints.toLocaleString()} Stardust · {formatGbp(amount)}</>
             )}
           </span>
         </button>

@@ -6,7 +6,7 @@ export const STARDUST_MIN_USD = 15;
 export const STARDUST_MAX_USD = 1000; // top of the slider == Lifetime Access
 
 export const LIFETIME_COPY =
-  "Lifetime Access Unlocked — 1 hour of reading time, daily, for life.";
+  "Lifetime Access — 10 messages a day, for life.";
 
 export type StardustTierKey =
   | "base"

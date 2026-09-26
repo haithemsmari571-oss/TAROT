@@ -1,10 +1,15 @@
 // Reusable template for long-form SEO content pages (e.g. /does-he-miss-me).
 // Pure + SSR-safe: no window access, no data fetching, no animation libs, so it
-// prerenders to real HTML. Add a new page by creating a thin wrapper that passes
-// SeoArticleContent into this template (see DoesHeMissMe.tsx).
+// prerenders to real HTML. The one exception, the welcome-credit line, is drawn
+// only in the browser (WelcomeCreditNote below). Add a new page by
+// creating a thin wrapper that passes SeoArticleContent into this template (see
+// DoesHeMissMe.tsx).
+import { useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "@iconify/react";
 import Seo from "../../../components/Seo";
+import { formatGbp } from "../../../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit } from "../../client-app/useWelcomeCredit";
 import "../../../styles/glass.css";
 
 export interface FaqItem {
@@ -61,6 +66,29 @@ function Section({
         {children}
       </div>
     </section>
+  );
+}
+
+// The welcome-credit line under the CTA. The figure is the server's
+// (useWelcomeCredit), so it waits for the browser: the prerender
+// (entry-server.tsx) has no data to draw it from, and draws nothing here
+// (useSyncExternalStore's server snapshot answers false there).
+const noSubscription = () => () => {};
+function WelcomeCreditNote() {
+  const inBrowser = useSyncExternalStore(noSubscription, () => true, () => false);
+  return inBrowser ? <WelcomeCreditNoteLine /> : null;
+}
+
+function WelcomeCreditNoteLine() {
+  const welcomeCreditGbp = useWelcomeCredit();
+  if (!hasWelcomeCredit(welcomeCreditGbp)) return null;
+  return (
+    <p
+      className="gl-acc mb-6 flex items-center justify-center gap-1.5 text-sm font-semibold"
+    >
+      <Icon icon="ph:gift-fill" width={16} height={16} />
+      New here? Your first {formatGbp(welcomeCreditGbp)} is free.
+    </p>
   );
 }
 
@@ -139,12 +167,7 @@ export default function SeoArticlePage({ content }: { content: SeoArticleContent
         >
           {content.ctaBody}
         </p>
-        <p
-          className="gl-acc mb-6 flex items-center justify-center gap-1.5 text-sm font-semibold"
-        >
-          <Icon icon="ph:gift-fill" width={16} height={16} />
-          New here? Your first £15 is free.
-        </p>
+        <WelcomeCreditNote />
         {/* TODO: point ctaHref at /love-compatibility-calculator once that page
             ships (Phase 2). For now it routes to the readers page. */}
         <Link

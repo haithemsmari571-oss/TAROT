@@ -2,16 +2,20 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../theme";
+import { formatGbp } from "../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWelcomeCredit";
 
 const STORAGE_KEY = "av_welcome_credit_dismissed";
 
 // One-time welcome-offer modal for NEW, logged-out visitors. Appears 4s after
 // landing, once ever (persisted in localStorage), never again after dismiss, and
 // never for logged-in users (the caller gates on !isAuthenticated). Matches the
-// site's dark/gold style.
+// site's dark/gold style. The offer is the server's credit (useWelcomeCredit):
+// no popup while it is unknown or 0.
 export default function WelcomePopup() {
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
+  const welcomeCreditGbp = useWelcomeCredit();
 
   useEffect(() => {
     let dismissed = false;
@@ -39,7 +43,7 @@ export default function WelcomePopup() {
     navigate("/register");
   };
 
-  if (!visible) return null;
+  if (!visible || !hasWelcomeCredit(welcomeCreditGbp)) return null;
 
   return (
     <div
@@ -77,7 +81,7 @@ export default function WelcomePopup() {
           className="text-sm mb-6 font-bold"
           style={{ color: COLORS.starGold, fontFamily: TYPOGRAPHY.fontFamily.body }}
         >
-          £15 free credit for new members
+          {formatGbp(welcomeCreditGbp)} free credit for new members
         </p>
 
         <button
@@ -89,7 +93,7 @@ export default function WelcomePopup() {
             fontFamily: TYPOGRAPHY.fontFamily.heading,
           }}
         >
-          Claim My £15
+          Claim My {formatGbp(welcomeCreditGbp)}
         </button>
         <button
           onClick={dismiss}

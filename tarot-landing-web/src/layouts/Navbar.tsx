@@ -4,10 +4,11 @@ import { Icon } from "@iconify/react";
 import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
 import { NotificationBell } from "../features/notifications/components/NotificationBell";
-import { formatStardust } from "../lib/currency";
+import { formatGbp, formatStardust } from "../lib/currency";
 import { useGlassTheme } from "../lib/glassTheme";
 import { UserRole } from "../features/auth/types/auth.types";
 import { HOME_PATH } from "../features/client-app/clientAppPaths";
+import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWelcomeCredit";
 import "../styles/glass.css";
 
 export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
@@ -15,6 +16,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
   const { theme, toggleTheme } = useGlassTheme();
+  const welcomeCreditGbp = useWelcomeCredit();
 
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -180,9 +182,11 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   Login
                 </button>
 
-                <button onClick={() => navigate("/register")} className="gl-btn-solid">
-                  Get £15 Free
-                </button>
+                {hasWelcomeCredit(welcomeCreditGbp) && (
+                  <button onClick={() => navigate("/register")} className="gl-btn-solid">
+                    Get {formatGbp(welcomeCreditGbp)} Free
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -360,12 +364,14 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
               ) : (
                 <>
                   {/* Guests must be able to sign up / log in from the drawer, not see "Sign Out". */}
-                  <button
-                    onClick={() => { navigate("/register"); setMobileNavOpen(false); }}
-                    className="gl-btn-solid w-full"
-                  >
-                    ✦ Get £15 Free
-                  </button>
+                  {hasWelcomeCredit(welcomeCreditGbp) && (
+                    <button
+                      onClick={() => { navigate("/register"); setMobileNavOpen(false); }}
+                      className="gl-btn-solid w-full"
+                    >
+                      ✦ Get {formatGbp(welcomeCreditGbp)} Free
+                    </button>
+                  )}
 
                   <button
                     onClick={() => { navigate("/login"); setMobileNavOpen(false); }}

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../../../lib/axiosClient";
 import { sanitizeClaims } from "../../../lib/copy";
+import { formatGbp } from "../../../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit } from "../../client-app/useWelcomeCredit";
 import "../../../styles/glass.css";
 
 const DEFAULT_HERO = {
@@ -30,6 +32,7 @@ const HeroSection = () => {
     return !!localStorage.getItem("landing_hero_content");
   });
   const navigate = useNavigate();
+  const welcomeCreditGbp = useWelcomeCredit();
 
   useEffect(() => {
     axiosClient
@@ -116,17 +119,19 @@ const HeroSection = () => {
             </motion.button>
 
             {/* New-member welcome credit chip */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="gl-fchip mt-6"
-              style={{ cursor: "default" }}
-            >
-              <Icon icon="ph:gift-fill" className="text-xs gl-acc" />
-              <span className="gl-acc" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase" }}>
-                New here? £15 free credit
-              </span>
-            </motion.div>
+            {hasWelcomeCredit(welcomeCreditGbp) && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="gl-fchip mt-6"
+                style={{ cursor: "default" }}
+              >
+                <Icon icon="ph:gift-fill" className="text-xs gl-acc" />
+                <span className="gl-acc" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase" }}>
+                  New here? {formatGbp(welcomeCreditGbp)} free credit
+                </span>
+              </motion.div>
+            )}
           </motion.div>
         )}
       </div>

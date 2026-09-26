@@ -8,12 +8,15 @@ import PageBackground from "../../../components/PageBackground";
 import StardustGlider from "../../payment/components/StardustGlider";
 import Seo from "../../../components/Seo";
 import { useAuth } from "../../auth/hooks";
+import { formatGbp } from "../../../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit } from "../../client-app/useWelcomeCredit";
 import celestialPortal from "../../../assets/backgrounds/celestial-portal.webp";
 import "../../../styles/glass.css";
 
 export default function home() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const welcomeCreditGbp = useWelcomeCredit();
 
   // The live Glider is the single source of truth for pricing/tiers. On the
   // homepage the purchase action hands off to the real checkout on /billing
@@ -46,30 +49,34 @@ export default function home() {
       </section>
 
       {/* Thin accent divider band — welcome credit, between two mid-page sections */}
-      <div className="relative px-6 py-8">
-        <div className="mx-auto max-w-4xl flex items-center gap-4">
-          <div className="gl-divider flex-1" />
-          <span className="gl-acc flex items-center gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] whitespace-nowrap">
-            <Icon icon="ph:gift-fill" className="text-sm" />
-            New members get £15 free credit
-          </span>
-          <div className="gl-divider flex-1" />
+      {hasWelcomeCredit(welcomeCreditGbp) && (
+        <div className="relative px-6 py-8">
+          <div className="mx-auto max-w-4xl flex items-center gap-4">
+            <div className="gl-divider flex-1" />
+            <span className="gl-acc flex items-center gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] whitespace-nowrap">
+              <Icon icon="ph:gift-fill" className="text-sm" />
+              New members get {formatGbp(welcomeCreditGbp)} free credit
+            </span>
+            <div className="gl-divider flex-1" />
+          </div>
         </div>
-      </div>
+      )}
 
       <TestimonialCarousel />
 
       {/* Above-footer welcome-credit CTA */}
-      <section className="relative px-6 pb-24 pt-8">
-        <div className="gl-panel mx-auto max-w-2xl text-center flex flex-col items-center gap-5 px-8 py-10">
-          <span className="gl-italic-note text-lg sm:text-xl">
-            Your first reading is on us — £15 free credit for new members.
-          </span>
-          <button onClick={() => navigate("/register")} className="gl-btn-solid">
-            Claim Your £15
-          </button>
-        </div>
-      </section>
+      {hasWelcomeCredit(welcomeCreditGbp) && (
+        <section className="relative px-6 pb-24 pt-8">
+          <div className="gl-panel mx-auto max-w-2xl text-center flex flex-col items-center gap-5 px-8 py-10">
+            <span className="gl-italic-note text-lg sm:text-xl">
+              Your first reading is on us — {formatGbp(welcomeCreditGbp)} free credit for new members.
+            </span>
+            <button onClick={() => navigate("/register")} className="gl-btn-solid">
+              Claim Your {formatGbp(welcomeCreditGbp)}
+            </button>
+          </div>
+        </section>
+      )}
     </>
   );
 }

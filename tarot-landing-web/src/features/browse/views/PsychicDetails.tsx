@@ -1,7 +1,8 @@
 import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes, WELCOME_CREDIT_GBP } from "../../../lib/currency";
+import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit, welcomeCreditLine } from "@/features/client-app/useWelcomeCredit";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { sanitizeClaims } from "../../../lib/copy";
 import { reviewsApi } from "../api/reviewsApi";
@@ -25,6 +26,7 @@ const PsychicDetails = () => {
   /* Per-message billing (step 5b): price a message, not a minute. */
   const { billingMode } = useBillingMode();
   const perMessage = billingMode === "per_message";
+  const welcomeCreditGbp = useWelcomeCredit();
   
   const psychicId = id ? parseInt(id) : undefined;
   
@@ -430,7 +432,7 @@ const PsychicDetails = () => {
               )}
 
               {/* The same welcome credit, counted in this reader's billing unit. */}
-              {(perMessage ? perMessagePrice != null : welcomeCreditMinutes(psychic.price_per_second) > 0) && (
+              {hasWelcomeCredit(welcomeCreditGbp) && (perMessage ? perMessagePrice != null : billingMode === "per_minute" && welcomeCreditMinutes(welcomeCreditGbp, psychic.price_per_second) > 0) && (
                 <div
                   className="mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
                   style={{
@@ -441,8 +443,8 @@ const PsychicDetails = () => {
                 >
                   <Icon icon="ph:gift-fill" className="text-sm" />
                   {perMessage && perMessagePrice != null
-                    ? `${formatGbp(WELCOME_CREDIT_GBP)} free · ${Math.floor(WELCOME_CREDIT_GBP / perMessagePrice)} messages`
-                    : <>First £15 free = {welcomeCreditMinutes(psychic.price_per_second)} min with {psychic.username}</>}
+                    ? welcomeCreditLine(welcomeCreditGbp, perMessagePrice)
+                    : <>First {formatGbp(welcomeCreditGbp)} free = {welcomeCreditMinutes(welcomeCreditGbp, psychic.price_per_second)} min with {psychic.username}</>}
                 </div>
               )}
 

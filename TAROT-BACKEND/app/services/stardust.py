@@ -25,7 +25,7 @@ TIER_DEVOTION = "devotion"
 TIER_LIFETIME = "lifetime"
 
 LIFETIME_COPY = (
-    "Lifetime Access Unlocked — 1 hour of reading time, daily, for life."
+    "Lifetime Access — 10 messages a day, for life."
 )
 
 # The bonus-tier bands, in one place. These MUST mirror the thresholds used in

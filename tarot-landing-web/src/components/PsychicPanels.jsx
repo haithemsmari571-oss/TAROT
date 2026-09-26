@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { formatGbp } from "../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWelcomeCredit";
 
 // Immersive image-backed panels for the homepage — replaces the old ARCANA
 // "What you'll Receive" cards. Uses inline styles + a small <style> block for
@@ -282,6 +284,7 @@ const PsychicPanels = () => {
   const [hovered, setHovered] = useState(null);
   const [inView, setInView] = useState(() => new Set());
   const panelRefs = useRef([]);
+  const welcomeCreditGbp = useWelcomeCredit();
 
   // Mobile: trigger the glow / expanded copy when a panel scrolls into view.
   useEffect(() => {
@@ -323,19 +326,21 @@ const PsychicPanels = () => {
         >
           Five doorways. One reading.
         </p>
-        <p
-          className="gl-acc"
-          style={{
-            fontFamily: BODY_FONT,
-            fontSize: 12,
-            fontWeight: 600,
-            marginTop: 12,
-            letterSpacing: "1.4px",
-            textTransform: "uppercase",
-          }}
-        >
-          Your first reading is on us — £15 free credit for new members
-        </p>
+        {hasWelcomeCredit(welcomeCreditGbp) && (
+          <p
+            className="gl-acc"
+            style={{
+              fontFamily: BODY_FONT,
+              fontSize: 12,
+              fontWeight: 600,
+              marginTop: 12,
+              letterSpacing: "1.4px",
+              textTransform: "uppercase",
+            }}
+          >
+            Your first reading is on us — {formatGbp(welcomeCreditGbp)} free credit for new members
+          </p>
+        )}
       </div>
 
       {/* Panels */}

@@ -16,18 +16,16 @@ export function formatPerMinuteGbp(gbpPerMinute: number): string {
   return `${GBP}${gbpPerMinute.toFixed(2)}`;
 }
 
-/** Free credit granted to a new member on their first reading (in GBP). */
-export const WELCOME_CREDIT_GBP = 15;
-
 /**
- * Whole minutes of reading time the £15 welcome credit buys with a given reader,
- * rounded DOWN so the offer never over-promises. Uses the same GBP per-minute
- * rate the card shows, so "£X/min" and "£15 = Y min" always agree.
+ * Whole minutes of reading time the welcome credit buys with a given reader,
+ * rounded DOWN so the offer never over-promises. The credit is the server's
+ * figure (features/client-app/useWelcomeCredit.ts). Uses the same GBP
+ * per-minute rate the card shows, so "£X/min" and "£Y = Z min" always agree.
  */
-export function welcomeCreditMinutes(pricePerSecond: number): number {
+export function welcomeCreditMinutes(creditGbp: number, pricePerSecond: number): number {
   const perMin = (pricePerSecond || 0) * 60;
   if (perMin <= 0) return 0;
-  return Math.floor(WELCOME_CREDIT_GBP / perMin);
+  return Math.floor(creditGbp / perMin);
 }
 
 /**
@@ -52,13 +50,14 @@ export function formatStardust(amount: number | null | undefined): string {
  * THE pounds formatter: every amount shown with the £ symbol (prices, wallet
  * top-ups, session cost, balances) goes through here. One rule: a thousands
  * separator always, two decimals when there are pence, none when the amount is
- * whole. "£2.50", "£15", "£9,997.50", "£10,000".
+ * whole. "£2.50", "£15", "£9,997.50", "£10,000". A column that wants one
+ * precision asks for the pence always: "£15.00", "£10,000.00".
  */
-export function formatGbp(amount: number): string {
+export function formatGbp(amount: number, options: { pence?: "auto" | "always" } = {}): string {
   const n = Number(amount);
   // Snap to whole pence first, as formatStardust does, so float noise never shows.
   const pence = isFinite(n) ? Math.round((n + Number.EPSILON) * 100) : 0;
-  const decimals = pence % 100 === 0 ? 0 : 2;
+  const decimals = options.pence === "always" || pence % 100 !== 0 ? 2 : 0;
   const pounds = (pence / 100 || 0).toLocaleString("en-GB", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

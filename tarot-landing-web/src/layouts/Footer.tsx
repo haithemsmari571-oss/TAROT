@@ -3,6 +3,8 @@ import { Icon } from "@iconify/react";
 import { useRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../lib/axiosClient";
+import { formatGbp } from "../lib/currency";
+import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWelcomeCredit";
 import "../styles/glass.css";
 
 const DEFAULT_FOOTER = {
@@ -26,6 +28,7 @@ const Footer = () => {
   const footerRef = useRef(null);
   const [content, setContent] = useState(DEFAULT_FOOTER);
   const [alchemicalTime, setAlchemicalTime] = useState("");
+  const welcomeCreditGbp = useWelcomeCredit();
 
   useEffect(() => {
     axiosClient.get("/landing/footer").then((res) => {
@@ -109,12 +112,14 @@ const Footer = () => {
         </div>
 
         {/* WELCOME-CREDIT TERMS — site-wide fine print */}
-        <div className="gl-acc flex items-center justify-center gap-1.5 mb-6" style={{ opacity: 0.8 }}>
-          <Icon icon="ph:gift-fill" className="text-[11px]" />
-          <span className="text-[10px] uppercase tracking-[0.2em] font-semibold">
-            £15 welcome credit — new members only, one per person.
-          </span>
-        </div>
+        {hasWelcomeCredit(welcomeCreditGbp) && (
+          <div className="gl-acc flex items-center justify-center gap-1.5 mb-6" style={{ opacity: 0.8 }}>
+            <Icon icon="ph:gift-fill" className="text-[11px]" />
+            <span className="text-[10px] uppercase tracking-[0.2em] font-semibold">
+              {formatGbp(welcomeCreditGbp)} welcome credit — new members only, one per person.
+            </span>
+          </div>
+        )}
 
         {/* GUIDANCE LINE — must stay on every version of this footer */}
         <div className="gl-foot-line mb-10">
