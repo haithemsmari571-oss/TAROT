@@ -5,6 +5,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.logging_config import log_safe_path
 from app.context import (
     RequestContext,
     clear_request_context,
@@ -30,12 +31,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # Extract user agent
         user_agent = request.headers.get("user-agent")
 
+        # The path every log line of this request carries, without a secret in it
+        endpoint = log_safe_path(request.url.path)
+
         # Create request context
         context = RequestContext(
             request_id=request_id,
             client_ip=client_ip,
             user_agent=user_agent,
-            endpoint=request.url.path,
+            endpoint=endpoint,
             method=request.method,
         )
 
@@ -48,7 +52,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             request_id=request_id,
             client_ip=client_ip,
             user_agent=user_agent,
-            endpoint=request.url.path,
+            endpoint=endpoint,
             method=request.method,
         )
 

@@ -3,7 +3,10 @@ import { Icon } from "@iconify/react";
 import { Link, useNavigate } from "react-router-dom";
 import backgroundImage from "../../../assets/Cover.png";
 import PageBackground from "../../../components/PageBackground";
+import { GUIDANCE_LINE } from "../../../lib/copy";
+import { formatGbp } from "../../../lib/currency";
 import { useGlassTheme } from "../../../lib/glassTheme";
+import { hasWelcomeCredit, useWelcomeCredit } from "../../client-app/useWelcomeCredit";
 import { useRegister } from "../hooks";
 import "../../../styles/glass.css";
 
@@ -41,6 +44,39 @@ const errorTextStyle: React.CSSProperties = {
   margin: 0,
 };
 
+const agreeStyle: React.CSSProperties = {
+  fontFamily: "var(--gl-sans)",
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: "var(--gl-text-dim)",
+  margin: "4px 2px 0",
+};
+
+const agreeLinkStyle: React.CSSProperties = {
+  color: "var(--gl-accent)",
+  textDecoration: "underline",
+  textUnderlineOffset: 2,
+};
+
+const guidanceStyle: React.CSSProperties = {
+  fontFamily: "var(--gl-sans)",
+  fontSize: 11.5,
+  letterSpacing: "0.4px",
+  margin: "14px 0 0",
+};
+
+// Ask Valentina is for adults. The server refuses the same date in the same
+// words (TAROT-BACKEND app/schemas/user.py MINIMUM_AGE, UNDER_MINIMUM_AGE).
+const MINIMUM_AGE = 18;
+const UNDER_MINIMUM_AGE = `You must be ${MINIMUM_AGE} or over`;
+
+/** True until her 18th birthday, counted in whole birthdays from "YYYY-MM-DD". */
+function isUnderMinimumAge(dateOfBirth: string, now = new Date()): boolean {
+  const [year, month, day] = dateOfBirth.split("-").map(Number);
+  const beforeBirthday = now.getMonth() + 1 < month || (now.getMonth() + 1 === month && now.getDate() < day);
+  return now.getFullYear() - year - (beforeBirthday ? 1 : 0) < MINIMUM_AGE;
+}
+
 const RegisterPage = () => {
   const { theme } = useGlassTheme(); // stored mood on hard loads + date-picker scheme
   const [username, setUsername] = useState("");
@@ -52,10 +88,13 @@ const RegisterPage = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  // Her own tick, never pre-ticked; the form cannot be sent without it.
+  const [acceptTerms, setAcceptTerms] = useState(false);
   // Today, "YYYY-MM-DD" — caps the date picker so a future DOB can't be picked.
   const today = new Date().toISOString().split("T")[0];
   const { mutate: register, isPending, error } = useRegister();
   const navigate = useNavigate();
+  const welcomeCreditGbp = useWelcomeCredit();
 
   const handleRegister = (e) => {
     e.preventDefault();
@@ -76,13 +115,18 @@ const RegisterPage = () => {
       return;
     }
 
+    if (dateOfBirth && isUnderMinimumAge(dateOfBirth)) {
+      setPasswordError(UNDER_MINIMUM_AGE);
+      return;
+    }
+
     if (!gender) {
       setPasswordError("Please choose an option for gender");
       return;
     }
 
     register(
-      { username, email, password, date_of_birth: dateOfBirth, gender },
+      { username, email, password, date_of_birth: dateOfBirth, gender, accept_terms: acceptTerms },
       {
         // Send new signups to the redesigned "Check your email" page instead of
         // an inline panel; pass the email so it can be shown there.
@@ -113,13 +157,15 @@ const RegisterPage = () => {
             <p className="gl-sub" style={{ marginBottom: 10, fontSize: 14 }}>
               Join Ask Valentina to connect with a gifted reader.
             </p>
-            <p
-              className="flex items-center justify-center gap-1.5"
-              style={{ fontFamily: "var(--gl-sans)", fontSize: 13, fontWeight: 600, color: "var(--gl-accent)", margin: 0 }}
-            >
-              <Icon icon="ph:sparkle-fill" />
-              Your first reading is on us — £15 free credit.
-            </p>
+            {hasWelcomeCredit(welcomeCreditGbp) && (
+              <p
+                className="flex items-center justify-center gap-1.5"
+                style={{ fontFamily: "var(--gl-sans)", fontSize: 13, fontWeight: 600, color: "var(--gl-accent)", margin: 0 }}
+              >
+                <Icon icon="ph:sparkle-fill" />
+                Your first reading is on us — {formatGbp(welcomeCreditGbp)} free credit.
+              </p>
+            )}
           </header>
 
           <form className="space-y-4" onSubmit={handleRegister}>
@@ -263,6 +309,24 @@ const RegisterPage = () => {
               </div>
             )}
 
+            {/* Required: the browser will not send the form until she ticks it.
+                The pages open in a new tab so nothing she typed is lost. */}
+            <label className="flex items-start gap-2.5" style={{ ...agreeStyle, cursor: "pointer" }}>
+              <input
+                required
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0, accentColor: "var(--gl-accent)" }}
+              />
+              <span>
+                I agree to the{" "}
+                <Link to="/terms" target="_blank" rel="noreferrer" style={agreeLinkStyle}>Terms</Link>
+                {" "}and the{" "}
+                <Link to="/privacy" target="_blank" rel="noreferrer" style={agreeLinkStyle}>Privacy Policy</Link>
+              </span>
+            </label>
+
             <button
               type="submit"
               disabled={isPending}
@@ -275,6 +339,7 @@ const RegisterPage = () => {
                 <>Create account <Icon icon="ph:user-plus-bold" /></>
               )}
             </button>
+            <p className="gl-tf text-center" style={guidanceStyle}>{GUIDANCE_LINE}</p>
           </form>
 
           <div className="gl-divider" style={{ margin: "28px 0 22px" }} />

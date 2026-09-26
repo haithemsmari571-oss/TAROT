@@ -24,37 +24,27 @@ class Cache:
     def get(self, key: str) -> Optional[bytes]:
         val = self._store.get(key)
         if not val:
-            logger.debug("cache_miss", key_prefix=key[:8] if len(key) >= 8 else key)
+            # No key in any line here: every key is a verification or reset token.
+            logger.debug("cache_miss")
             return None
 
         if val.exp_at < datetime.now():
-            logger.debug(
-                "cache_entry_expired",
-                key_prefix=key[:8] if len(key) >= 8 else key,
-                expired_at=val.exp_at.isoformat(),
-            )
+            logger.debug("cache_entry_expired", expired_at=val.exp_at.isoformat())
             self.remove(key)
             return None
 
-        logger.debug("cache_hit", key_prefix=key[:8] if len(key) >= 8 else key)
+        logger.debug("cache_hit")
         return val.value
 
     def set_value(self, key: str, value: Value) -> bytes:
         val = self._store[key] = value
-        logger.debug(
-            "cache_set",
-            key_prefix=key[:8] if len(key) >= 8 else key,
-            expires_at=value.exp_at.isoformat(),
-        )
+        logger.debug("cache_set", expires_at=value.exp_at.isoformat())
         return val.value
 
     def remove(self, key: str) -> None:
         """Remove a key from cache. Handles KeyError gracefully."""
         try:
             del self._store[key]
-            logger.debug("cache_removed", key_prefix=key[:8] if len(key) >= 8 else key)
+            logger.debug("cache_removed")
         except KeyError:
-            logger.warning(
-                "cache_remove_key_not_found",
-                key_prefix=key[:8] if len(key) >= 8 else key,
-            )
+            logger.warning("cache_remove_key_not_found")

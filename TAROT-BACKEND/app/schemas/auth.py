@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -30,6 +31,10 @@ class UserSignup(AuthBase):
     # 422, so an account cannot be created without an answer. "Prefer not to say" is one of
     # the answers she can give, and it is recorded as NOT_STATED rather than as a blank.
     gender: Gender
+    # The sign-up page's "I agree to the Terms and the Privacy Policy" box.
+    # Only a ticked box is an answer: false or missing is a 422, and sign_up
+    # stores the moment as users.terms_accepted_at.
+    accept_terms: Literal[True]
 
     @field_validator("gender")
     @classmethod
@@ -44,7 +49,8 @@ class UserSignup(AuthBase):
         today = date.today()
         if v > today:
             raise ValueError("Date of birth cannot be in the future")
-        # Sane upper bound on age (no hard minimum-age gate).
+        # Sane upper bound on age. The minimum age is sign_up's refusal
+        # (UnderMinimumAgeError), so the page gets its words as {message}.
         if v.year < today.year - 120:
             raise ValueError("Please enter a valid date of birth")
         return v

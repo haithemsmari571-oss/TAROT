@@ -24,6 +24,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   date_of_birth: string; // ISO date, "YYYY-MM-DD"
+  gender: string; // "WOMAN" | "MAN" | "OTHER" | "NOT_STATED"
+  accept_terms: boolean; // the Terms and Privacy Policy box; the server takes only true
 }
 
 export interface RegisterResponse {
@@ -40,6 +42,8 @@ export interface User {
   date_of_birth?: string | null; // ISO date, "YYYY-MM-DD"
   profile_picture?: string;
   balance: number;
+  /** The /profile/me answer's email switch (profile.types.ts UserProfile). */
+  reply_emails?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -67,11 +71,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.SUPERADMIN]: Object.values(Permission),
   [UserRole.ADMIN]: [
     Permission.MANAGE_USERS,
-    Permission.MANAGE_PSYCHICS,
-    Permission.MANAGE_TRANSACTIONS,
     Permission.MANAGE_ZODIAC,
     Permission.MANAGE_BUY_OPTIONS,
-    Permission.MANAGE_SETTINGS,
     Permission.MANAGE_CATEGORIES,
     Permission.VIEW_TRANSACTIONS,
   ],

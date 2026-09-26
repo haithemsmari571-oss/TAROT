@@ -19,6 +19,10 @@ const REPLACEMENTS: [RegExp, string][] = [
   [/\baccurate\b/gi, "clear"],
 ];
 
+/** The guidance line: each reader's profile under Message, the foot of the You
+    tab, and under the sign-up button. */
+export const GUIDANCE_LINE = "Readings are for guidance and entertainment.";
+
 /** Replace accuracy/certainty claims in display copy with clarity/comfort wording. */
 export function sanitizeClaims(text: string | undefined | null): string {
   if (!text) return "";

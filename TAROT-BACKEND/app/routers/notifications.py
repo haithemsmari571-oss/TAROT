@@ -172,11 +172,7 @@ async def notification_websocket(
         await websocket.send_json({"type": "auth_success"})
         await notification_manager.connect(websocket, user.id)
 
-        logger.info(
-            "notification_websocket_connected",
-            user_id=user.id,
-            email=user.email,
-        )
+        logger.info("notification_websocket_connected", user_id=user.id)
 
         # Keep connection alive and listen for ping/pong
         while True:
@@ -252,11 +248,7 @@ async def authenticate_websocket_user(token, db):
             )
             raise ValueError("User not found")
 
-        logger.debug(
-            "websocket_auth_success",
-            user_id=user.id,
-            email=user.email,
-        )
+        logger.debug("websocket_auth_success", user_id=user.id)
 
         return user
 

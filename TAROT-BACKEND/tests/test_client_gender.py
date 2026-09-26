@@ -34,7 +34,7 @@ def test_an_account_cannot_be_created_without_it():
 def test_prefer_not_to_say_is_an_answer_not_a_blank():
     signup = UserSignup(
         username="nadia", email="n@test.co", password="x",
-        date_of_birth="1990-03-03", gender="NOT_STATED",
+        date_of_birth="1990-03-03", gender="NOT_STATED", accept_terms=True,
     )
     assert signup.gender is Gender.NOT_STATED
 
@@ -43,7 +43,7 @@ def test_a_made_up_value_is_rejected():
     with pytest.raises(ValidationError):
         UserSignup(
             username="n", email="n@test.co", password="x",
-            date_of_birth="1990-03-03", gender="FEMALE",
+            date_of_birth="1990-03-03", gender="FEMALE", accept_terms=True,
         )
 
 

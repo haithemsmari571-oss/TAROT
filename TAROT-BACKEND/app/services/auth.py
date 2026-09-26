@@ -1,9 +1,10 @@
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from pydantic import EmailStr, NameEmail
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.cache import Cache, Value
@@ -13,15 +14,17 @@ from app.enums.transaction_type import TransactionType
 from app.exceptions.auth import AccountNotVerified, BadCredentials, InvalidResetLink
 from app.exceptions.email import EmailServiceUnavailable
 from app.exceptions.users import (
+    SignupIdTakenError,
+    UnderMinimumAgeError,
     UserAlreadyExistsError,
     UserAlreadyVerified,
     UserNotFoundError,
 )
-from app.logging_config import bind_user_to_context, get_logger
+from app.logging_config import bind_user_to_context, error_fields, get_logger, mask_email
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.auth import ResetPasswordReq, SignupResponse, UserLogin, UserSignup
-from app.schemas.user import UserRead
+from app.schemas.user import UserRead, is_under_minimum_age
 from app.services.email import send_email
 from app.services.settings import get_setting_value
 from app.utils.security import (
@@ -35,6 +38,39 @@ from app.utils.security import (
 settings = get_app_settings()
 cache = Cache()
 logger = get_logger(__name__)
+
+# The settings row that holds the welcome credit, whole pounds (1 Stardust is £1).
+SIGNUP_BONUS_SETTING = "signup_bonus"
+
+# A sign-up whose new id is already taken is tried this many times in all.
+SIGNUP_INSERT_ATTEMPTS = 2
+# The users primary key as Postgres names it and as SQLite (the tests'
+# database) words it, in the text of an IntegrityError.
+USERS_ID_TAKEN = ("users_pkey", "UNIQUE constraint failed: users.id")
+# The users email and username unique keys, named and worded the same two ways.
+USERS_EMAIL_OR_USERNAME_TAKEN = (
+    "users_email_key",
+    "users_username_key",
+    "UNIQUE constraint failed: users.email",
+    "UNIQUE constraint failed: users.username",
+)
+# Sign-up's answer when the username or email already belongs to an account.
+USER_ALREADY_EXISTS = "User with that username or email already exist"
+# What a sign-up insert that failed on any other key raises (still a 500).
+SIGNUP_INSERT_FAILED = "The new account could not be saved"
+
+
+def parse_signup_bonus(raw_value: str | None) -> int:
+    """The welcome credit a new account is given, from the "signup_bonus"
+    setting's text: its whole-number value when that is above 0, else 0, and 0
+    when the setting is missing (None). Raises ValueError or TypeError, as
+    int() does, when the text is not a whole number, so each caller decides
+    what a bad value means. The one parse for sign_up below and for
+    GET /settings/public (routers/public_settings.py)."""
+    if raw_value is None:
+        return 0
+    amount = int(raw_value)
+    return amount if amount > 0 else 0
 
 
 def _validate_user(db: Session, user_data: UserSignup):
@@ -51,14 +87,61 @@ def _validate_user(db: Session, user_data: UserSignup):
     if user:
         logger.warning(
             "user_already_exists",
-            username=user_data.username,
-            email=user_data.email,
+            email=mask_email(user_data.email),
             existing_user_id=user.id,
         )
-        raise UserAlreadyExistsError("User with that username or email already exist")
+        raise UserAlreadyExistsError(USER_ALREADY_EXISTS)
+
+
+def _user_id_taken(error: IntegrityError) -> bool:
+    """True when an insert into users failed only because its id was already
+    taken: the id sequence was behind a row inserted with its own id."""
+    return any(marker in str(error.orig) for marker in USERS_ID_TAKEN)
+
+
+def _email_or_username_taken(error: IntegrityError) -> bool:
+    """True when an insert into users failed on the email or username unique
+    key: another sign-up with the same email or username was saved after this
+    one passed _validate_user (two sign-ups at the same moment)."""
+    return any(marker in str(error.orig) for marker in USERS_EMAIL_OR_USERNAME_TAKEN)
+
+
+def _insert_user(db: Session, fields: dict, password_hash: str, terms_accepted_at: datetime) -> User:
+    """Adds the new account and flushes it for its id. When the id the sequence
+    hands out is already taken, nothing has been written yet: the insert is
+    rolled back and tried once more with the next number. A second taken id is
+    refused as SignupIdTakenError (409), never a bare 500. A taken email or
+    username is not tried again: it gets _validate_user's own answer,
+    UserAlreadyExistsError (400). Any other failed key raises a RuntimeError
+    (500) that does not carry the IntegrityError: its text holds the insert's
+    parameters and Postgres's failing row, the password hash among them."""
+    for attempt in range(1, SIGNUP_INSERT_ATTEMPTS + 1):
+        user = User(**fields, password_hash=password_hash, terms_accepted_at=terms_accepted_at)
+        db.add(user)
+        try:
+            db.flush()
+            return user
+        except IntegrityError as error:
+            db.rollback()
+            if _email_or_username_taken(error):
+                logger.warning("user_already_exists_at_insert", email=mask_email(fields["email"]))
+                # from None: the IntegrityError's text carries the insert's parameters.
+                raise UserAlreadyExistsError(USER_ALREADY_EXISTS) from None
+            if not _user_id_taken(error):
+                logger.error("signup_insert_failed", **error_fields(error))
+                break
+            logger.warning("signup_user_id_taken", attempt=attempt, email=mask_email(fields["email"]))
+    else:
+        raise SignupIdTakenError()
+    # Raised here, outside the except block, so the IntegrityError is not even its
+    # context: Starlette's BaseHTTPMiddleware re-raises an app error "from" its
+    # context, which would print the insert's parameters with the 500.
+    raise RuntimeError(SIGNUP_INSERT_FAILED)
 
 
 async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
+    if is_under_minimum_age(user_data.date_of_birth):
+        raise UnderMinimumAgeError()
     _validate_user(db, user_data)
 
     user_dict = user_data.model_dump()
@@ -67,18 +150,12 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
     password_hash = hash_password(user_dict["password"])
 
     user_dict.pop("password")
+    # UserSignup only takes a ticked box; the account keeps the moment instead.
+    user_dict.pop("accept_terms")
 
-    user = User(**user_dict, password_hash=password_hash)
+    user = _insert_user(db, user_dict, password_hash, terms_accepted_at=datetime.now(timezone.utc))
 
-    db.add(user)
-    db.flush()
-
-    logger.info(
-        "user_created",
-        user_id=user.id,
-        username=user.username,
-        email=user.email,
-    )
+    logger.info("user_created", user_id=user.id)
 
     # Commit user first - don't let email failures block user creation
     db.commit()
@@ -90,9 +167,9 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
 
     # Apply signup bonus if configured
     try:
-        signup_bonus_str = get_setting_value(db, "signup_bonus")
+        signup_bonus_str = get_setting_value(db, SIGNUP_BONUS_SETTING)
         if signup_bonus_str is not None:
-            bonus_amount = int(signup_bonus_str)
+            bonus_amount = parse_signup_bonus(signup_bonus_str)
             if bonus_amount > 0:
                 # Welcome credit goes to the FREE credit_balance (spent before
                 # paid balance), not the paid balance.
@@ -127,17 +204,13 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
         logger.critical(
             "verification_email_send_failed",
             user_id=user.id,
-            email=user.email,
-            error=str(e),
-            error_type=e.__class__.__name__,
-            exc_info=True,
+            **error_fields(e),
         )
         # Don't re-raise - user is already created
         # They can use /resend-verify-email endpoint later
         logger.warning(
             "user_created_without_verification_email",
             user_id=user.id,
-            email=user.email,
             message="User can resend verification email later",
         )
 
@@ -147,11 +220,7 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
 async def send_verify_mail(user: User):
     verify_link = _generate_verify_account_link(str(user.id))
 
-    logger.debug(
-        "sending_verification_email",
-        user_id=user.id,
-        email=user.email,
-    )
+    logger.debug("sending_verification_email", user_id=user.id)
 
     await send_email(
         recepientEmail=[NameEmail(email=user.email, name=user.username)],
@@ -159,11 +228,7 @@ async def send_verify_mail(user: User):
         vars={"username": user.username, "verify_link": verify_link},
     )
 
-    logger.info(
-        "verification_email_sent",
-        user_id=user.id,
-        email=user.email,
-    )
+    logger.info("verification_email_sent", user_id=user.id)
 
 
 def _generate_verify_account_link(user_id: str):
@@ -175,7 +240,6 @@ def _generate_verify_account_link(user_id: str):
     logger.debug(
         "verification_token_generated",
         user_id=user_id,
-        token_prefix=token[:8],
         expires_in_minutes=30,
     )
 
@@ -185,20 +249,13 @@ def _generate_verify_account_link(user_id: str):
 def _verify_verify_token(token: str):
     user_id_encoded = cache.get(token)
     if not user_id_encoded:
-        logger.warning(
-            "verification_token_invalid_or_expired",
-            token_prefix=token[:8],
-        )
+        logger.warning("verification_token_invalid_or_expired")
         raise InvalidResetLink()
 
     cache.remove(token)
     user_id = user_id_encoded.decode()
 
-    logger.debug(
-        "verification_token_validated",
-        user_id=user_id,
-        token_prefix=token[:8],
-    )
+    logger.debug("verification_token_validated", user_id=user_id)
 
     return user_id
 
@@ -220,12 +277,7 @@ def verify_account(db: Session, token: str):
 
     db.commit()
 
-    logger.info(
-        "account_verified",
-        user_id=user.id,
-        username=user.username,
-        email=user.email,
-    )
+    logger.info("account_verified", user_id=user.id)
 
     return _user_to_out(user)
 
@@ -235,25 +287,17 @@ def sign_in(db: Session, user_data: UserLogin) -> dict:
     if not user:
         logger.warning(
             "signin_failed_user_not_found",
-            email=user_data.email,
+            email=mask_email(user_data.email),
         )
         raise BadCredentials()
 
     correct_password = verify_password(user_data.password, user.password_hash)
     if not correct_password:
-        logger.warning(
-            "signin_failed_incorrect_password",
-            user_id=user.id,
-            email=user_data.email,
-        )
+        logger.warning("signin_failed_incorrect_password", user_id=user.id)
         raise BadCredentials()
 
     if not user.is_verified:
-        logger.warning(
-            "signin_failed_account_not_verified",
-            user_id=user.id,
-            email=user_data.email,
-        )
+        logger.warning("signin_failed_account_not_verified", user_id=user.id)
         raise AccountNotVerified()
 
     # Bind user to request context for tracking
@@ -266,7 +310,6 @@ def sign_in(db: Session, user_data: UserLogin) -> dict:
     logger.info(
         "tokens_generated",
         user_id=user.id,
-        email=user_data.email,
         role=user.role.value,
     )
 
@@ -282,16 +325,12 @@ async def resend_verify_link(db: Session, email: str):
     if not user:
         logger.warning(
             "resend_verify_failed_user_not_found",
-            email=email,
+            email=mask_email(email),
         )
         raise UserNotFoundError()
 
     if user.is_verified:
-        logger.warning(
-            "resend_verify_failed_already_verified",
-            user_id=user.id,
-            email=email,
-        )
+        logger.warning("resend_verify_failed_already_verified", user_id=user.id)
         raise UserAlreadyVerified()
 
     # Bind user to context for tracking
@@ -299,19 +338,12 @@ async def resend_verify_link(db: Session, email: str):
 
     try:
         await send_verify_mail(user)
-        logger.info(
-            "verification_email_resent",
-            user_id=user.id,
-            email=email,
-        )
+        logger.info("verification_email_resent", user_id=user.id)
     except Exception as e:
         logger.critical(
             "resend_verification_email_failed",
             user_id=user.id,
-            email=email,
-            error=str(e),
-            error_type=e.__class__.__name__,
-            exc_info=True,
+            **error_fields(e),
         )
         # Raise user-friendly exception
         raise EmailServiceUnavailable()
@@ -327,7 +359,7 @@ async def forgot_password(db: Session, email: EmailStr) -> str:
     if not user:
         logger.info(
             "forgot_password_user_not_found",
-            email=email,
+            email=mask_email(email),
             message="Returning generic message for security",
         )
         return message
@@ -345,19 +377,12 @@ async def forgot_password(db: Session, email: EmailStr) -> str:
             vars=mail_vars,
         )
 
-        logger.info(
-            "password_reset_email_sent",
-            user_id=user.id,
-            email=email,
-        )
+        logger.info("password_reset_email_sent", user_id=user.id)
     except Exception as e:
         logger.critical(
             "password_reset_email_failed",
             user_id=user.id,
-            email=email,
-            error=str(e),
-            error_type=e.__class__.__name__,
-            exc_info=True,
+            **error_fields(e),
         )
         # Still return success message for security reasons
         # Don't let user know if email failed
@@ -375,7 +400,6 @@ def _generate_reset_link(user_id: str):
     logger.debug(
         "password_reset_token_generated",
         user_id=user_id,
-        token_prefix=token[:8],
         expires_in_minutes=5,
     )
 
@@ -386,20 +410,13 @@ def _verify_reset_token(token: str):
     user_id_encoded = cache.get(token)
 
     if not user_id_encoded:
-        logger.warning(
-            "reset_token_invalid_or_expired",
-            token_prefix=token[:8],
-        )
+        logger.warning("reset_token_invalid_or_expired")
         raise InvalidResetLink()
 
     cache.remove(token)
     user_id = user_id_encoded.decode()
 
-    logger.debug(
-        "reset_token_validated",
-        user_id=user_id,
-        token_prefix=token[:8],
-    )
+    logger.debug("reset_token_validated", user_id=user_id)
 
     return user_id
 
@@ -422,11 +439,7 @@ def reset_password(db: Session, reset_data: ResetPasswordReq):
     user.password_hash = password_hash
     db.commit()
 
-    logger.info(
-        "password_reset_completed",
-        user_id=user.id,
-        email=user.email,
-    )
+    logger.info("password_reset_completed", user_id=user.id)
 
     return _user_to_out(user)
 
@@ -476,7 +489,6 @@ def refresh_access_token(db: Session, refresh_token: str) -> dict:
         logger.info(
             "access_token_refreshed",
             user_id=user.id,
-            email=user.email,
             role=user.role.value,
         )
 
@@ -490,15 +502,14 @@ def refresh_access_token(db: Session, refresh_token: str) -> dict:
         logger.warning("refresh_token_expired")
         raise BadCredentials("Refresh token has expired. Please sign in again.")
     except jwt.InvalidTokenError as e:
-        logger.warning("refresh_token_invalid", error=str(e))
+        logger.warning("refresh_token_invalid", **error_fields(e))
         raise BadCredentials("Invalid refresh token")
     except (BadCredentials, UserNotFoundError):
         raise
     except Exception as e:
         logger.error(
             "refresh_token_unexpected_error",
-            error=str(e),
-            error_type=e.__class__.__name__,
+            **error_fields(e),
             exc_info=True,
         )
         raise BadCredentials("Token refresh failed")
