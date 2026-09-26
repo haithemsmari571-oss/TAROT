@@ -5,14 +5,12 @@ import { COLORS, TYPOGRAPHY } from "../../../theme";
 import { landingEditorApi } from "../api/landingEditorApi";
 import { useToast } from "../../../components/Toast";
 import { HeroForm } from "../components/HeroForm";
-import { TestimonialsForm } from "../components/TestimonialsForm";
 import { FooterForm } from "../components/FooterForm";
 import { AboutForm } from "../components/AboutForm";
 import { PsychicsForm } from "../components/PsychicsForm";
 import type {
   LandingContentSection,
   HeroContent,
-  TestimonialContent,
   FooterContent,
   AboutContent,
   PsychicsContent,
@@ -26,7 +24,6 @@ interface Tab {
 
 const TABS: Tab[] = [
   { key: "hero", label: "Hero", icon: "solar:gallery-wide-bold-duotone" },
-  { key: "testimonials", label: "Testimonials", icon: "solar:chat-square-like-bold-duotone" },
   { key: "psychics", label: "Psychics", icon: "solar:users-group-rounded-bold-duotone" },
   { key: "footer", label: "Footer", icon: "solar:text-cross-broken-bold-duotone" },
   { key: "about", label: "About", icon: "solar:info-circle-bold-duotone" },
@@ -168,12 +165,6 @@ const LandingEditor = () => {
         {activeTab === "hero" && (
           <HeroForm
             content={(currentContent as HeroContent) || ({} as HeroContent)}
-            onChange={handleChange}
-          />
-        )}
-        {activeTab === "testimonials" && (
-          <TestimonialsForm
-            content={(currentContent as TestimonialContent) || ({} as TestimonialContent)}
             onChange={handleChange}
           />
         )}

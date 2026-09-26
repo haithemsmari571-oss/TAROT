@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.enums.role import Role
-from app.models.review import Review
+from app.models.review import Review, REVIEW_APPROVED
 from app.routers import reviews as reviews_router
 
 FORBIDDEN_KEYS = {"email", "password", "password_hash", "hashed_password", "token", "date_of_birth"}
@@ -47,7 +47,9 @@ def _review(db, make_user):
     reader = make_user(role=Role.PSYCHIC)
     reader.username = "Amrit"
     reader.date_of_birth = date(1980, 1, 1)
-    review = Review(user_id=writer.id, psychic_id=reader.id, rating=5, comment="Kind and clear.")
+    # Approved: only an approved review reaches the public routes.
+    review = Review(user_id=writer.id, psychic_id=reader.id, rating=5, comment="Kind and clear.",
+                    status=REVIEW_APPROVED)
     db.add(review)
     db.commit()
     return writer, reader, review
@@ -77,7 +79,7 @@ def test_my_reviews_carries_no_personal_key(db, make_user):
     assert response.status_code == 200, response.text
     body = response.json()
     assert not _keys(body) & FORBIDDEN_KEYS
-    assert [set(item) for item in body] == [PUBLIC_KEYS | {"psychic_name"}]
+    assert [set(item) for item in body] == [PUBLIC_KEYS | {"psychic_name", "status"}]
     assert body[0]["id"] == review.id
     assert body[0]["username"] == "S."
     assert body[0]["psychic_name"] == "Amrit"

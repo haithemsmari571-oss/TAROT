@@ -1,3 +1,6 @@
+/** Where the owner's approval stands (TAROT-BACKEND app/models/review.py). */
+export type ReviewStatus = "pending" | "approved" | "hidden";
+
 export interface Review {
   id: number;
   user_id: number;
@@ -7,6 +10,8 @@ export interface Review {
   comment: string | null;
   created_at: string;
   updated_at: string;
+  /** her own reviews only (GET /reviews/my-reviews); a public review is always approved */
+  status?: ReviewStatus;
 }
 
 export interface ReviewCreate {

@@ -21,6 +21,7 @@ from app.schemas.psychic import (
 from app.services.medias import delete_media, save_media, update_media
 from app.services.psychics_availabilities import sync_availability
 from app.services.reader_hours import reader_availability
+from app.services.reviews import may_review
 from app.utils.security import hash_password
 
 settings = get_app_settings()
@@ -264,7 +265,10 @@ def read_psychic(db: Session, psychic_id: int, viewer: User | None = None):
     if not psychic:
         raise UserNotFoundError()
 
-    return _psychic_to_out(psychic, viewer)
+    out = _psychic_to_out(psychic, viewer)
+    # Here and not in _psychic_to_out, which also draws the whole roster.
+    out.can_review = may_review(db, viewer, psychic.id)
+    return out
 
 
 

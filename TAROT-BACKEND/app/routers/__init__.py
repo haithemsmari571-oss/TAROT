@@ -10,7 +10,7 @@ from .users import router as user_router
 from .profile import router as profile_router
 from .zodiac import router as zodiac_router
 from .admin_zodiac import router as admin_zodiac_router
-from .reviews import router as review_router
+from .reviews import router as review_router, admin_router as admin_review_router
 from .settings import router as settings_router
 from .notifications import router as notification_router
 from .admin_transactions import router as admin_transaction_router
@@ -48,6 +48,7 @@ __all__ = [
     "zodiac_router",
     "admin_zodiac_router",
     "review_router",
+    "admin_review_router",
     "settings_router",
     "notification_router",
     "admin_transaction_router",

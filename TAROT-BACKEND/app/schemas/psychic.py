@@ -46,7 +46,10 @@ class PsychicAvailabilityRead(BaseModel):
 
 
 class PsychicRead(PsychicBase):
-    email: EmailStr | None = None
+    # Plain text on the way out: a stored address the write check would refuse
+    # today (reader 79's @example.invalid) must not turn the admin list into a
+    # 500. Create and update still take an EmailStr.
+    email: str | None = None
     id: int
     is_verified: bool
     categories: List[PsychicCategoryRead]
@@ -54,6 +57,9 @@ class PsychicRead(PsychicBase):
     profile_picture_url: str | None = None
     is_online: bool
     next_online_at: datetime | None = None
+    # One reader's page only (services/psychics.py, read_psychic): whether the
+    # viewer may write a new review of her now. None on the roster.
+    can_review: bool | None = None
 
     class Config:
         from_attributes = True

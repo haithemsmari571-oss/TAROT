@@ -32,6 +32,8 @@ export interface Psychic {
   /** when offline: the ISO instant the reader's UK hours next open; null while online or with no hours */
   next_online_at?: string | null;
   order?: number;
+  /** one reader's page only (GET /psychic/{id}): whether the viewer may write a new review of her now; null on the roster */
+  can_review?: boolean | null;
 }
 
 export interface PsychicCreate {

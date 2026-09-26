@@ -25,6 +25,7 @@ from app.routers import (
     admin_articles_router,
     public_seo_router,
     review_router,
+    admin_review_router,
     settings_router,
     notification_router,
     admin_transaction_router,
@@ -248,6 +249,12 @@ app.include_router(
     review_router,
     prefix="/api/reviews",
     tags=["Reviews"],
+)
+
+app.include_router(
+    admin_review_router,
+    prefix="/api/admin",
+    tags=["Admin - Reviews"],
 )
 
 app.include_router(

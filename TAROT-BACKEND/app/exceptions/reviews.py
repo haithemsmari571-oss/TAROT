@@ -32,3 +32,12 @@ class DuplicateReviewError(DomainError):
     def __init__(self):
         message = "You have already reviewed this psychic"
         super().__init__(message, status_code=400)
+
+
+class ReviewNotEarnedError(DomainError):
+    """Only a client can review a reader, and only once the reader has
+    answered one of her paid messages (services/reviews.py, review_refusal)."""
+
+    def __init__(self):
+        message = "You can review a reader once she has answered one of your paid messages"
+        super().__init__(message, status_code=403)

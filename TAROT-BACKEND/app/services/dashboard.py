@@ -9,7 +9,7 @@ from app.enums.role import Role
 from app.enums.transaction_status import TransactionStatus
 from app.enums.transaction_type import TransactionType
 from app.models.chat import Chat
-from app.models.review import Review
+from app.models.review import Review, REVIEW_APPROVED
 from app.models.settings import Settings
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -105,7 +105,8 @@ def get_admin_dashboard_stats(
                 Review.psychic_id,
                 func.avg(Review.rating).label("averageRating"),
             )
-            .filter(Review.psychic_id.in_(psychic_ids))
+            # The public average's reviews: approved ones only (services/reviews.py).
+            .filter(Review.psychic_id.in_(psychic_ids), Review.status == REVIEW_APPROVED)
             .group_by(Review.psychic_id)
             .all()
         )
