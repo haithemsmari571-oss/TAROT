@@ -213,28 +213,38 @@ def update_user_admin(db: Session, user_id: int, user_data: AdminUserUpdate) -> 
 def soft_delete_own_account(db: Session, user: User) -> None:
     """Self-service account deletion: soft delete + anonymize.
 
-    Personal data is stripped (email, username, DOB, bio, photo path, push
-    tokens) and login is made impossible (random password, SUSPENDED status —
+    Personal data is stripped (email, username, DOB, gender, bio, photo path,
+    push tokens) and login is made impossible (random password, SUSPENDED status —
     which get_current_user rejects, killing existing tokens everywhere). Chats,
     messages and the transaction ledger are kept intact under the anonymized
     identity: psychics keep their history and financial records stay auditable.
+    client_code stays, linking that history for support and accounting.
     Renaming the email frees the real address for a future fresh signup.
-    Remaining Stardust is forfeited (the app warns before calling this).
+    Remaining Stardust is forfeited (the app warns before calling this): paid
+    and free balance, earned lots, and messages still waiting for a reply.
     """
     import secrets
 
     from app.enums.chat_status import ChatStatus
+    from app.enums.gender import Gender
     from app.logging_config import get_logger
     from app.models.chat import Chat
     from app.models.push_token import PushToken
+    from app.services.offline_replies import forfeit_pending
+    from app.services.stardust_rewards import forfeit_earned_stardust
 
     logger = get_logger(__name__)
 
     forfeited = float(user.credit_balance or 0) + float(user.balance or 0)
+    # The sweep would refund these onto the closed account, or spend a model
+    # call on a reply nobody can read. Their debits stand.
+    queued, queued_messages = forfeit_pending(db, user.id)
+    earned = forfeit_earned_stardust(db, user.id)
 
     # Pending (never-accepted) requests would sit as ghost rows in psychic
-    # queues forever — close them. ACTIVE/PAUSED chats are blocked by the
-    # router before we get here.
+    # queues forever — close them. ACTIVE/PAUSED per-minute chats are blocked
+    # by the router before we get here; per-message threads are left as they
+    # are, kept under the anonymized identity.
     db.query(Chat).filter(
         Chat.user_id == user.id, Chat.status == ChatStatus.REQUESTED
     ).update({Chat.status: ChatStatus.ENDED})
@@ -243,6 +253,7 @@ def soft_delete_own_account(db: Session, user: User) -> None:
     user.username = f"deleted-user-{user.id}"
     user.password_hash = hash_password(secrets.token_urlsafe(32))
     user.date_of_birth = None
+    user.gender = Gender.NOT_STATED
     user.bio = None
     user.profile_picture_path = None
     user.is_verified = False
@@ -257,7 +268,10 @@ def soft_delete_own_account(db: Session, user: User) -> None:
     logger.info(
         "account_self_deleted",
         user_id=user.id,
-        forfeited_balance=round(forfeited, 2),
+        forfeited_balance=round(forfeited + earned + queued, 2),
+        forfeited_earned=earned,
+        forfeited_queued=queued,
+        forfeited_queued_messages=queued_messages,
     )
 
 

@@ -44,4 +44,11 @@ export const profileApi = {
   changePassword: async (data: ChangePasswordRequest): Promise<void> => {
     await axiosClient.post("/profile/me/change-password", data);
   },
+
+  /**
+   * Delete the signed-in client's own account (soft delete + anonymise)
+   */
+  deleteMyAccount: async (): Promise<void> => {
+    await axiosClient.delete("/profile/me");
+  },
 };

@@ -299,7 +299,9 @@ def delete_my_account(
     accounts must go through support (deleting a reader would strand their
     live marketplace presence).
 
-    **Blocked** while a reading is in progress (ACTIVE or PAUSED chat).
+    **Blocked** while a reading is in progress (ACTIVE or PAUSED per-minute
+    chat). A per-message thread never blocks: it is created ACTIVE and never
+    closes, and it is kept as it is under the anonymized identity.
 
     Anonymizes the user row (frees the email for reuse), removes push tokens,
     forfeits any remaining Stardust, and suspends the account — which also
@@ -307,6 +309,7 @@ def delete_my_account(
     Chat and transaction history are preserved under the anonymized identity.
     """
     from app.enums.chat_status import ChatStatus
+    from app.enums.response_mode import ResponseMode
     from app.enums.role import Role
     from app.models.chat import Chat
     from app.services.users import soft_delete_own_account
@@ -317,21 +320,24 @@ def delete_my_account(
             detail="This account type can't be deleted from the app — please contact support.",
         )
 
-    in_progress = (
-        db.query(Chat.id)
-        .filter(
-            Chat.user_id == user.id,
-            Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
-        )
-        .first()
-    )
+    reading_filters = [
+        Chat.user_id == user.id,
+        Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
+    ]
+    if settings.BILLING_MODE == "per_message":
+        # Per-message threads are the SABRI chats (per_message_start.py opens
+        # each one SABRI and refuses any other mode) and never close, so they
+        # are not a reading in progress. In per_minute billing every chat is a
+        # per-minute reading, SABRI included, so all of them still count.
+        reading_filters.append(Chat.response_mode != ResponseMode.SABRI)
+    in_progress = db.query(Chat.id).filter(*reading_filters).first()
     if in_progress:
         raise HTTPException(
             status_code=409,
             detail="You have a reading in progress. End it (or let it finish) before deleting your account.",
         )
 
-    logger.info("account_delete_requested", user_id=user.id, email=user.email)
+    logger.info("account_delete_requested", user_id=user.id)
     soft_delete_own_account(db, user)
     return JSONResponse(content={"message": "Account deleted"}, status_code=200)
 

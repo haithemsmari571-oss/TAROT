@@ -421,9 +421,35 @@ def expire_earned_stardust(db: Session, now: Optional[datetime] = None) -> dict:
         .all()
     )
 
+    lots_expired, total_forfeited = _write_off_lots(
+        db, expired_lots, "Earned Stardust expired (30-day limit)"
+    )
+    db.commit()
+
+    if lots_expired:
+        logger.info(
+            "earned_stardust_expired",
+            lots_expired=lots_expired,
+            total_forfeited=total_forfeited,
+        )
+    return {"lots_expired": lots_expired, "total_forfeited": total_forfeited}
+
+
+def forfeit_earned_stardust(db: Session, user_id: int) -> float:
+    """Write off one user's live earned lots at account deletion, the way the
+    expiry does, with the deletion as the ledger's reason. No commit; the
+    caller commits. Returns the Stardust written off."""
+    live_lots = _active_lots_query(db, user_id, _utcnow()).with_for_update().all()
+    return _write_off_lots(
+        db, live_lots, "Earned Stardust forfeited (account deleted)"
+    )[1]
+
+
+def _write_off_lots(db: Session, lots, description: str) -> tuple[int, float]:
+    """One EXPIRE ledger row per lot for its remainder; zeroes and flags the lot."""
     lots_expired = 0
     total_forfeited = 0.0
-    for lot in expired_lots:
+    for lot in lots:
         forfeited = _round2(lot.remaining)
         if forfeited <= 0:
             lot.is_expired = True
@@ -436,7 +462,7 @@ def expire_earned_stardust(db: Session, now: Optional[datetime] = None) -> dict:
             balance_before=forfeited,
             balance_after=0,
             status=TransactionStatus.COMPLETED,
-            description="Earned Stardust expired (30-day limit)",
+            description=description,
             transaction_metadata=json.dumps(
                 {
                     "bucket": "earned",
@@ -455,13 +481,4 @@ def expire_earned_stardust(db: Session, now: Optional[datetime] = None) -> dict:
         lot.is_expired = True
         lots_expired += 1
         total_forfeited = _round2(total_forfeited + forfeited)
-
-    db.commit()
-
-    if lots_expired:
-        logger.info(
-            "earned_stardust_expired",
-            lots_expired=lots_expired,
-            total_forfeited=total_forfeited,
-        )
-    return {"lots_expired": lots_expired, "total_forfeited": total_forfeited}
+    return lots_expired, total_forfeited
