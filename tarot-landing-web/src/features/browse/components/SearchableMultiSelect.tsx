@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type KeyboardEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { COLORS, TYPOGRAPHY } from "../../../theme";
@@ -64,9 +64,17 @@ export const SearchableMultiSelect = ({
     setSearchQuery("");
   };
 
+  // Escape closes the popover and hands focus back to its chip.
+  const closeOnEscape = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape" || !isOpen) return;
+    event.stopPropagation();
+    setIsOpen(false);
+    dropdownRef.current?.querySelector<HTMLButtonElement>(":scope > button")?.focus();
+  };
+
   if (variant === "chip") {
     return (
-      <div ref={dropdownRef} className="relative">
+      <div ref={dropdownRef} className="relative" onKeyDown={closeOnEscape}>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}

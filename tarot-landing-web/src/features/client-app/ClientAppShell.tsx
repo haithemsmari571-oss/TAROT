@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useMatch } from "react-router-dom";
 import HallStage from "../hall/HallStage";
 import { useInboxUnreadCount } from "./useInboxUnreadCount";
+import { badgeText } from "./unreadBadge";
+import "../../styles/glass.css";
 import "./client-app.css";
 
 const tabs = [
@@ -28,26 +30,33 @@ export default function ClientAppShell() {
   const isThread = useMatch("/app/chats/:chatId");
   const isInbox = useMatch("/app/chats");
   const isReaders = useMatch("/app/readers/*");
-  const isYou = useMatch("/app/you");
+  const isYou = useMatch("/app/you/*");
   const isHome = useMatch("/app/home/*");
   const isShorts = useMatch("/app/shorts");
 
+  /* The hall's sky and runtime live only while the conversation screen is
+     showing. Mounted behind every tab, HallStage's frame loop kept drawing the
+     hidden sky at the panel's full rate (relay/PERF_RESULT.md, cause 1). The
+     room reads the running hall from HallStage's context (HallRoom.tsx:168),
+     so the stage wraps the content on /app/chats/:chatId alone; leaving the
+     room unmounts it, which stops the loop and drops its canvases. The nav
+     stays outside, so a tab press does not remount the control it sits on. */
+  const content = <main className="client-app-content"><Outlet /></main>;
+
   return (
     <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}${isReaders ? " client-app-shell-readers" : ""}${isYou ? " client-app-shell-you" : ""}${isHome ? " client-app-shell-home" : ""}${isShorts ? " client-app-shell-shorts" : ""}`}>
-      <HallStage backdrop>
-        <main className="client-app-content"><Outlet /></main>
-        <nav className="client-app-nav" aria-label="App navigation">
-          {tabs.map(({ path, label }) => (
-            <NavLink key={path} to={`/app/${path}`} className={({ isActive }) => `client-app-tab${isActive ? " client-app-tab-active" : ""}`} aria-label={path === "chats" && unreadCount > 0 ? `Chats, ${unreadCount} unread conversations` : label}>
-              <span className="client-app-icon">
-                <TabIcon tab={path} />
-                {path === "chats" && unreadCount > 0 && <span className="client-app-badge" aria-hidden="true">{unreadCount > 99 ? "99+" : unreadCount}</span>}
-              </span>
-              <span className="client-app-label">{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-      </HallStage>
+      {isThread ? <HallStage backdrop>{content}</HallStage> : content}
+      <nav className="client-app-nav" aria-label="App navigation">
+        {tabs.map(({ path, label }) => (
+          <NavLink key={path} to={`/app/${path}`} className={({ isActive }) => `client-app-tab${isActive ? " client-app-tab-active" : ""}`} aria-label={path === "chats" && unreadCount > 0 ? `Chats, ${unreadCount} unread conversations` : label}>
+            <span className="client-app-icon">
+              <TabIcon tab={path} />
+              {path === "chats" && unreadCount > 0 && <span className="client-app-badge" aria-hidden="true">{badgeText(unreadCount)}</span>}
+            </span>
+            <span className="client-app-label">{label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

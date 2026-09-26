@@ -9,6 +9,13 @@
          No maximum-scale and no user-scalable=no: pinch-zoom stays available. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
+    <!-- Add to home screen for the app at /app: the manifest, the iPhone's icon,
+         and the browser bar in the app's base colour (--gl-base, styles/glass.css:37,
+         the manifest's theme_color). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <meta name="theme-color" content="#120c18" />
+
     <!-- Glass design system faces: Fraunces (display serif) + Inter (UI) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,7 +26,7 @@
 
     <title>Private Love Readings & Tarot Clarity | Ask Valentina</title>
 
-    <meta name="description" content="Private, judgment-free love and tarot readings with intuitive readers — £15 free credit for your first reading. Get clarity on him, your relationship and what happens next." />
+    <meta name="description" content="Private, judgment-free love and tarot readings with intuitive readers — your first reading is on us. Get clarity on him, your relationship and what happens next." />
 
     <script type="application/ld+json">
       {

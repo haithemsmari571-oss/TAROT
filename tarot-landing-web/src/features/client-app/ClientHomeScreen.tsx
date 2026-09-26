@@ -6,7 +6,7 @@
    loaded posts in memory; both live in the URL (q and kind), so a reload and
    the way back from a reading screen keep them. */
 import { useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { ARTICLE_KEY_PREFIX, type SanctuaryBrowseItem } from "@/features/sanctuary/api/libraryItemsApi";
 import { Cover, formatDuration } from "@/features/sanctuary/cover";
 import { useLibraryItems } from "@/features/sanctuary/hooks/useLibraryItems";
@@ -73,12 +73,14 @@ export default function ClientHomeScreen() {
      copy of the text and writes it through. The copy follows the URL only when
      something other than the field moved it (the Home tab, a history move). */
   const location = useLocation();
+  const navigationType = useNavigationType();
   const [draft, setDraft] = useState(query);
   const field = useRef<HTMLInputElement>(null);
   const [seenKey, setSeenKey] = useState(location.key);
   if (location.key !== seenKey) {
     setSeenKey(location.key);
-    if (!isFromSearch(location.state) && draft !== query) setDraft(query);
+    const ownWrite = navigationType === "REPLACE" && isFromSearch(location.state);
+    if (!ownWrite && draft !== query) setDraft(query);
   }
 
   // An empty value drops its param. replace keeps typing out of the history.

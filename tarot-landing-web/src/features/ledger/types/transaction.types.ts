@@ -7,6 +7,10 @@ export enum TransactionType {
   REVERSAL = "REVERSAL",
   BONUS = "BONUS",
   GIFT = "GIFT",
+  // Earned Stardust (the daily card pull and its streaks) and its fading
+  // after 30 days, as the backend writes them.
+  EARN = "EARN",
+  EXPIRE = "EXPIRE",
 }
 
 export enum TransactionStatus {
@@ -71,6 +75,7 @@ export interface TransactionFilters {
 export interface UserBalance {
   user_id: number;
   balance: number;
+  credit_balance?: number; // free welcome/gift credit remaining
   earned_balance?: number;
   stardust_total?: number; // spendable + earned — the number to display
   username?: string;

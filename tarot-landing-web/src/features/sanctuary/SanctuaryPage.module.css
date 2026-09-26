@@ -872,6 +872,12 @@
 
 .playerLayer button { color: inherit; font: inherit; }
 
+/* Close (SanctuaryPlayerProvider.tsx, data-sanctuary-player="close"): the 20px
+   glyph stays where it is and a 44px square centred on it takes the touch. In
+   the app the control is itself 44px (client-app.css) and the square matches it. */
+.playerBar [data-sanctuary-player="close"] { position: relative; }
+.playerBar [data-sanctuary-player="close"]::before { content: ""; position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; translate: -50% -50%; }
+
 .playerAudioHost { display: none; }
 
 .playerBar {

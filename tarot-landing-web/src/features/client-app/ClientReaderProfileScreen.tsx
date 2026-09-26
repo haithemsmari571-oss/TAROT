@@ -1,20 +1,26 @@
 /* The reader's profile: the hall's request panel with one button, Message.
    It opens the per-message conversation with this reader, or finds the one
    she already has, and lands her in the room with the reader's opener already
-   there and nothing charged. Her first paid message is the room's send. */
+   there and nothing charged. Her first paid message is the room's send. The
+   heart in the panel's corner marks the reader as a favourite. Under the
+   panel, her approved reviews (ClientReaderReviews.tsx). */
 import { useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { usePsychicDetails } from "@/features/browse/hooks/usePsychicDetails";
 import type { Psychic } from "@/features/browse/types/psychic.types";
 import { PER_MESSAGE_COPY } from "@/features/chat/perMessage";
 import axiosClient from "@/lib/axiosClient";
-import { sanitizeClaims } from "@/lib/copy";
-import { formatGbp, WELCOME_CREDIT_GBP } from "@/lib/currency";
+import { GUIDANCE_LINE, sanitizeClaims } from "@/lib/copy";
+import { formatGbp } from "@/lib/currency";
+import { presenceLine, readerName } from "./appReaders";
 import { READERS_PATH } from "./clientAppPaths";
-import { clockAt } from "./ukTime";
+import ClientReaderReviews from "./ClientReaderReviews";
+import FavouriteHeart from "./FavouriteHeart";
+import { hasWelcomeCredit, useGiftCredit, useRefundAfterHours, welcomeCreditLine } from "./useWelcomeCredit";
 import "./client-chats.css";
 import "./client-readers.css";
+import "./client-favourites.css";
 
 /** POST /chat/conversation: the fields the profile reads from its answer. */
 interface ConversationOpened { chat_id: number; created: boolean }
@@ -33,17 +39,23 @@ export default function ClientReaderProfileScreen() {
     </Column>
   );
   if (!reader.data) return <Column><p className="client-chats-notice" role="status">Loading…</p></Column>;
-  return <Column><Profile reader={reader.data} /></Column>;
+  return <Column><Profile reader={reader.data} /><ClientReaderReviews reader={reader.data} /></Column>;
 }
 
 /* The screen's own column: the way back at the top left, then whatever the
-   profile has to show, centred. */
+   profile has to show, centred. Back steps back through history, so the
+   Readers tab returns with its search, filters and page still in the URL
+   (the reading screen's rule, ClientArticleScreen.tsx); a profile opened
+   straight from a link has nothing behind it in the app and goes to the
+   roster. */
 function Column({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const { key } = useLocation();
+  const back = () => (key === "default" ? navigate(READERS_PATH) : navigate(-1));
   return (
     <section className="client-reader-profile" aria-label="Reader profile">
       <div className="client-reader-profile-top">
-        <button type="button" className="client-reader-back" aria-label="Back to readers" onClick={() => navigate(READERS_PATH)}>‹</button>
+        <button type="button" className="client-reader-back" aria-label="Back to readers" onClick={back}>‹</button>
       </div>
       {children}
     </section>
@@ -54,13 +66,13 @@ function Profile({ reader }: { reader: Psychic }) {
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const welcomeCreditGbp = useGiftCredit();
+  const refundAfterHours = useRefundAfterHours();
 
-  // Serif names read as names, not labels: Title case whatever the DB holds,
-  // exactly as the card does (PsychicCard.tsx:33).
-  const name = reader.username ? reader.username.charAt(0).toUpperCase() + reader.username.slice(1).toLowerCase() : "";
+  const name = readerName(reader);
   // The card's own rule (PsychicCard.tsx:23): no price, no price line.
   const price = reader.price_per_message != null && reader.price_per_message > 0 ? reader.price_per_message : null;
-  const status = reader.is_online ? "Online now" : reader.next_online_at ? `Back at ${clockAt(reader.next_online_at)}` : "Offline";
+  const status = presenceLine(reader);
   const categories = reader.categories ?? [];
 
   const message = async () => {
@@ -85,16 +97,19 @@ function Profile({ reader }: { reader: Psychic }) {
         </span>
         <span className={`client-chats-online-dot${reader.is_online ? " is-online" : ""}`} aria-label={reader.is_online ? "Online" : "Offline"} />
       </span>
+      <FavouriteHeart readerId={reader.id} name={name} className="client-reader-heart" />
       <p className="eyebrow">{status}</p>
       <h1 className="ptitle">{name}</h1>
       <p className="psub">{sanitizeClaims(reader.bio)}</p>
       {categories.length > 0 && <div className="pills">{categories.map(category => <span key={category.id} className="pill">{category.title}</span>)}</div>}
       {price != null && <>
         <p className="client-reader-price">{formatGbp(price)} <span>per message</span></p>
-        <p className="client-reader-gift">{formatGbp(WELCOME_CREDIT_GBP)} free · {Math.floor(WELCOME_CREDIT_GBP / price)} messages</p>
+        {refundAfterHours !== undefined && <p className="client-reader-promise">{PER_MESSAGE_COPY.refundPromise(price, refundAfterHours)}</p>}
+        {hasWelcomeCredit(welcomeCreditGbp) && <p className="client-reader-gift">{welcomeCreditLine(welcomeCreditGbp, price)}</p>}
       </>}
       <button type="button" className="begin" onClick={message} disabled={opening} aria-busy={opening}>Message</button>
       {refusal && <p className="client-reader-refusal" role="alert">{refusal}</p>}
+      <p className="legal">{GUIDANCE_LINE}</p>
     </article>
   );
 }

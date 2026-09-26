@@ -1,0 +1,160 @@
+/* Favourites (YOU3B): the heart, the favourites shelf and the heart over each
+   card on the Readers tab, the heart on the reader profile, and the Favourites
+   screen under You. Glass tokens only (styles/glass.css); Fraunces and Inter
+   through --gl-serif and --gl-sans, --ease from hall.css:5 on :root. */
+
+/* ── the heart ── */
+/* The reader profile's Back control (client-readers.css, .client-reader-back):
+   44px round glass, with the 10px blur of the card's Online badge (glass.css
+   .gl-online). Lit, it takes the accent and the accent-dim edge of the chosen
+   chip (glass.css .gl-fchip--on). */
+.client-app-shell .client-fav-heart {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--gl-text-dim);
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: background .4s var(--ease), color .4s var(--ease), border-color .4s var(--ease), transform .2s var(--ease);
+}
+.client-app-shell .client-fav-heart svg { display: block; }
+.client-app-shell .client-fav-heart:hover { background: var(--gl-glass-2); color: var(--gl-text); }
+.client-app-shell .client-fav-heart:active { transform: scale(.92); }
+.client-app-shell .client-fav-heart.is-on {
+  color: var(--gl-accent);
+  border-color: var(--gl-accent-dim);
+  background: var(--gl-glass-2);
+}
+.client-app-shell .client-fav-heart:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
+/* What the heart announces, for the screen reader alone. */
+.client-app-shell .client-fav-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── the Readers tab ── */
+/* Each card sits in a wrapper that carries the heart over the photo's lower
+   right corner, opposite the gift line (glass.css .gl-gift: bottom 12px, left
+   14px) and inside the badges' 14px inset; the photo is 250px tall (glass.css
+   .gl-ph), so the heart's top is 250 - 14 - 44. PsychicCard.tsx itself is not
+   touched. The wrapper is a grid so the card fills the cell as it did, and the
+   card's hover lift (glass.css .gl-pc:hover, its curve and travel) moves to
+   the wrapper so the heart rises with the card. */
+.client-app-shell .client-readers-card {
+  position: relative;
+  display: grid;
+  transition: transform .3s cubic-bezier(.22, .9, .24, 1);
+}
+.client-app-shell .client-readers-card:hover { transform: translateY(-8px) scale(1.015); }
+.client-app-shell .client-readers-card .gl-pc:hover { transform: none; }
+.client-app-shell .client-readers-card .client-fav-heart {
+  position: absolute;
+  top: 192px;
+  right: 14px;
+  z-index: 3;
+}
+
+/* Your favourites: a shelf of discs above the roster, one line that scrolls
+   on a phone (client-home.css .client-home-kinds). Each disc is the chats
+   list's (client-chats.css .client-chats-avatar) at 56px, the name under it
+   in the chats row's serif. */
+.client-app-shell .client-favs-shelf { margin: 0 0 6px; }
+.client-app-shell .client-favs-shelf-list {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.client-app-shell .client-favs-shelf-list::-webkit-scrollbar { display: none; }
+.client-app-shell .client-favs-shelf-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 76px;
+  min-height: 44px;
+  padding: 4px 2px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--gl-text);
+}
+.client-app-shell .client-favs-shelf-item .client-chats-avatar { width: 56px; height: 56px; }
+.client-app-shell .client-favs-shelf-item .client-chats-initial { font-size: 22px; }
+.client-app-shell .client-favs-shelf-name {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 400 13px/1.3 var(--gl-serif);
+  color: var(--gl-text);
+  transition: color .4s var(--ease);
+}
+.client-app-shell .client-favs-shelf-item:hover .client-favs-shelf-name { color: var(--gl-accent); }
+.client-app-shell .client-favs-shelf-item:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+
+/* ── the reader profile ── */
+/* The heart in the panel's top right corner, inside the badges' 14px inset;
+   the photo disc is centred on the panel's top edge and never reaches it. */
+.client-app-shell .client-reader-profile .client-reader-heart {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+/* ── the Favourites screen under You ── */
+/* Each favourite is the chats list's row (client-chats.css .client-chats-row,
+   its glass copied): the disc and name lead to the profile, the heart at the
+   end removes. */
+.client-app-shell .client-favs-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.client-app-shell .client-favs-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--gl-text);
+}
+.client-app-shell .client-favs-row-link {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  min-height: 44px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--gl-text);
+}
+.client-app-shell .client-favs-row-link .client-chats-name { transition: color .4s var(--ease); }
+.client-app-shell .client-favs-row-link:hover .client-chats-name { color: var(--gl-accent); }
+.client-app-shell .client-favs-row-link:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }

@@ -1,9 +1,11 @@
 /* The Readers tab and the reader profile inside the app shell.
 
-   The roster draws the site's reader card (glass.css) and the profile draws
-   the hall's request panel (hall.css), each exactly as written there. Only
-   what these two screens add is here. Fraunces and Inter come through the
-   hall's --display and --ui, gold through --gold. */
+   The roster draws the site's reader card (glass.css) exactly as written
+   there. The profile draws the hall's request panel (hall.css) in its shape,
+   with its colours and faces restated below in the glass tokens. Only what
+   these two screens add is here. Fraunces and Inter come through the glass
+   tokens --gl-serif and --gl-sans, gold through --gl-accent
+   (styles/glass.css). */
 
 /* Both screens scroll as one page inside the content area, the way
    client-chats.css:1-8 lays out the inbox (which scrolls its own list). */
@@ -23,11 +25,60 @@
 }
 /* The grid keeps its own column rule; the wrapper already holds the side padding. */
 .client-app-shell .client-readers .gl-grid { padding: 0; }
-/* client-app.css hands every element in the shell Inter, and its rule sits
-   after glass.css in the cascade. The card's two serif lines take theirs back
-   so the card reads as it does on the site. */
-.client-app-shell .client-readers .gl-pname,
-.client-app-shell .client-readers .gl-price { font-family: var(--gl-serif); }
+
+/* ── the tools (ROUND2) ── */
+/* The browse page's search pill, filter chips, count line and pages
+   (PsychicsBrowse.tsx, their look in glass.css .gl-search, .gl-fchip,
+   .gl-pop, .gl-count, .gl-page-btn) in the app's column. Their look is theirs;
+   only their seat changes: under the header and the shelf, against the left
+   edge like the header, and every control they hold is 44px tall. */
+.client-app-shell .client-readers-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0 0;
+}
+/* The pill: the glass.css recipe with its side seat and its vertical padding
+   only, so the 44px Search and clear controls make it 52px tall. */
+.client-app-shell .client-readers-tools .gl-search { margin: 0; padding: 4px 6px 4px 20px; }
+.client-app-shell .client-readers-tools .gl-search input { min-height: 44px; }
+.client-app-shell .client-readers-tools .gl-search-btn { min-height: 44px; padding: 0 22px; }
+.client-app-shell .client-readers-tools .gl-search-clear {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 15px;
+}
+/* The chips: glass.css centres them under the hero with its own padding; here
+   they sit against the left edge under the pill. */
+.client-app-shell .client-readers-filters {
+  position: relative;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0;
+}
+.client-app-shell .client-readers-tools .gl-fchip { min-height: 44px; }
+/* A chip's popover (glass.css .gl-pop) means to sit centred under its chip,
+   but its entrance animation (framer-motion, SearchableMultiSelect.tsx:83-89
+   and PriceRangeFilter.tsx:81-87) ends by writing transform: none inline,
+   which wipes the stylesheet's translateX(-50%): the popover in fact opens
+   at the chip's centre and runs 300px to the right, off a phone's screen,
+   and the overflow lets the page scroll sideways. Below the rail's width the
+   chip's own box is not the anchor: the popover sits at the left edge of
+   the chips' row, which is always inside the column. */
+@media (max-width: 899.98px) {
+  .client-app-shell .client-readers-filters > div { position: static; }
+  .client-app-shell .client-readers-filters .gl-pop { left: 0; max-width: 100%; }
+}
+/* The count line, left under the chips, without glass.css's hero spacing. */
+.client-app-shell .client-readers-tools .gl-count { padding: 0; text-align: left; }
+/* The pages under the grid, its buttons at 44px. */
+.client-app-shell .client-readers-pages { padding: 0 0 24px; }
+.client-app-shell .client-readers-pages .gl-page-btn { min-width: 44px; min-height: 44px; }
+/* The no-results state (glass.css .gl-state) inside the column's own spacing. */
+.client-app-shell .client-readers .gl-state { padding: 40px 0; }
 
 /* ── the profile ── */
 .client-app-shell .client-reader-profile {
@@ -36,8 +87,7 @@
   align-items: center;
   width: 100%;
   padding: 0 16px 24px;
-  /* what the hall's document rule hands the panel by inheritance */
-  color: var(--text);
+  color: var(--gl-text);
   font-weight: 300;
 }
 .client-app-shell .client-reader-profile-top {
@@ -46,8 +96,9 @@
   width: 100%;
   padding: 12px 0 0;
 }
-/* The room's back button, hall-room.css:47-52. That rule is scoped to
-   html[data-hall="room"], and the profile never sets the flag. */
+/* The room's back button (hall-room.css:47-52), its size and shape, in the
+   glass tokens. That rule is scoped to html[data-hall="room"], and the
+   profile never sets the flag. */
 .client-app-shell .client-reader-back {
   width: 44px;
   height: 44px;
@@ -59,32 +110,43 @@
   border-radius: 50%;
   font: inherit;
   font-size: 19px;
-  color: rgba(224, 210, 190, .9);
-  background: rgba(255, 240, 214, .05);
-  border: 1px solid rgba(255, 214, 150, .22);
+  color: var(--gl-text-dim);
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
   transition: background .4s var(--ease), color .4s var(--ease);
 }
-.client-app-shell .client-reader-back:hover { background: rgba(255, 214, 150, .16); color: #fff; }
-.client-app-shell .client-reader-back:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.client-app-shell .client-reader-back:hover { background: var(--gl-glass-2); color: var(--gl-text); }
+.client-app-shell .client-reader-back:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
 .client-app-shell .client-reader-profile .client-chats-notice { text-align: center; }
 
-/* The panel keeps the hall's recipe. hall.css:336-353 shrink it and hide
-   .psub on short windows, right for the request form and wrong here: the
-   photo's seat and the bio hold at every height. The margin makes room for
-   the half of the photo that rises above the panel. */
+/* The panel keeps the hall's shape (hall.css:154-161). hall.css:336-353
+   shrink it and hide .psub on short windows, right for the request form and
+   wrong here: the photo's seat and the bio hold at every height. The margin
+   makes room for the half of the photo that rises above the panel. Its
+   surface is .gl-panel's (glass.css:675-682): glass fill, glass edge, inset
+   highlight and card shadow. */
 .client-app-shell .client-reader-profile .panel {
   position: relative;
   margin-top: 60px;
   padding-top: 84px;
+  background: var(--gl-glass);
+  border-color: var(--gl-glass-edge);
+  box-shadow: var(--gl-inset), var(--gl-card-shadow);
 }
-.client-app-shell .client-reader-profile .psub { display: block; }
-.client-app-shell .client-reader-profile .pill { cursor: default; }
+.client-app-shell .client-reader-profile .psub { display: block; color: var(--gl-text-dim); }
+/* The category pills in .gl-fchip's colours (glass.css:360-376). */
+.client-app-shell .client-reader-profile .pill {
+  cursor: default;
+  background: var(--gl-glass);
+  border-color: var(--gl-glass-edge);
+  color: var(--gl-text-dim);
+}
 /* The hall's reset (hall.css:17) zeroes these under html[data-hall]; the
    profile carries no flag, so the browser's own paragraph and heading
-   margins are taken away here. The title is the hall's serif, which the
-   shell's Inter rule would otherwise cover. */
-.client-app-shell .client-reader-profile .eyebrow { margin: 0; }
-.client-app-shell .client-reader-profile .ptitle { margin-bottom: 0; font-family: var(--display); }
+   margins are taken away here. The eyebrow takes the glass accent and the
+   title the glass text and serif in place of the hall's. */
+.client-app-shell .client-reader-profile .eyebrow { margin: 0; color: var(--gl-accent); }
+.client-app-shell .client-reader-profile .ptitle { margin-bottom: 0; font-family: var(--gl-serif); color: var(--gl-text); }
 
 /* The photo: a circle centred on the panel's top edge, half above, half below.
    The disc clips the picture round; the dot sits on the disc's lower right,
@@ -105,36 +167,154 @@
   height: 100%;
   border-radius: 50%;
   overflow: hidden;
-  border: 1px solid rgba(232, 200, 139, .4);
-  background: rgba(232, 200, 139, .12);
+  border: 1px solid var(--gl-accent-dim);
+  background: var(--gl-glass-2);
 }
 .client-app-shell .client-reader-photo-disc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.client-app-shell .client-reader-initial { font: 400 44px/1 var(--display); color: var(--gold); }
+.client-app-shell .client-reader-initial { font: 400 44px/1 var(--gl-serif); color: var(--gl-accent); }
 .client-app-shell .client-reader-photo .client-chats-online-dot { width: 14px; height: 14px; right: 9px; bottom: 9px; }
 
 /* The price row and, under it, the card's gift line in the chats "Back at"
-   recipe (client-chats.css:90), in gold. */
+   recipe (client-chats.css:90), in the accent. */
 .client-app-shell .client-reader-price {
   margin: 22px 0 0;
   text-align: center;
-  font: 300 26px/1.2 var(--display);
-  color: #FFFCF4;
+  font: 300 26px/1.2 var(--gl-serif);
+  color: var(--gl-text);
 }
-.client-app-shell .client-reader-price span { font: 300 13px/1.4 var(--ui); color: rgba(220, 205, 184, .9); }
+.client-app-shell .client-reader-price span { font: 300 13px/1.4 var(--gl-sans); color: var(--gl-text-dim); }
+/* The refund promise under the price, in the refusal line's quiet face. */
+.client-app-shell .client-reader-promise {
+  margin: 6px 0 0;
+  text-align: center;
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
 .client-app-shell .client-reader-gift {
   margin: 3px 0 0;
   text-align: center;
-  font: 500 10px/1.4 var(--ui);
+  font: 500 10px/1.4 var(--gl-sans);
   letter-spacing: .18em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--gl-accent);
 }
 
-/* Message, while the conversation opens; and the one line under it. */
+/* Message: the hall's .begin in its shape, in .gl-btn-solid's colours and
+   face (glass.css:234-247), which has no shadow at rest. Then the button
+   while the conversation opens, and the one line under it. */
+.client-app-shell .client-reader-profile .begin {
+  background: var(--gl-btn-bg);
+  color: var(--gl-btn-fg);
+  font-family: var(--gl-sans);
+  box-shadow: none;
+}
 .client-app-shell .client-reader-profile .begin:disabled { opacity: .6; }
 .client-app-shell .client-reader-refusal {
   margin: 12px 0 0;
   text-align: center;
-  font: 300 13px/1.5 var(--ui);
-  color: rgba(220, 205, 184, .9);
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
+
+/* ── the reviews under the panel (ClientReaderReviews.tsx) ── */
+/* In the panel's width. The cards, labels, field, buttons and error line are
+   the You tab's frosted card recipe and form (client-you.css: .client-you-card,
+   .client-you-label, .client-you-input, .client-you-solid, .client-you-pill,
+   .client-you-error); only what the reviews add is here. */
+.client-app-shell .client-reader-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(520px, 100%);
+  margin-top: 18px;
+}
+/* The heading and the average on the sky, the chats header's serif. */
+.client-app-shell .client-reader-reviews-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 0 4px;
+}
+.client-app-shell .client-reader-reviews-title { margin: 0; font: 400 22px/1.2 var(--gl-serif); color: var(--gl-text); }
+.client-app-shell .client-reader-reviews-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font: 300 13px/1.4 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
+.client-app-shell .client-reader-reviews-average { font: 400 17px/1 var(--gl-serif); color: var(--gl-text); }
+/* Stars: lit in the accent, the rest faint. */
+.client-app-shell .client-reader-review-stars {
+  font-family: var(--gl-sans);
+  font-size: 14px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  color: var(--gl-accent);
+}
+.client-app-shell .client-reader-review-stars .is-off { color: var(--gl-text-faint); }
+/* Her own review, its words and where it stands. */
+.client-app-shell .client-reader-review-own { margin-top: 10px; }
+.client-app-shell .client-reader-review-words {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  font: 300 14px/1.55 var(--gl-sans);
+  color: var(--gl-text);
+}
+.client-app-shell .client-reader-review-standing { margin: 10px 0 0; font: 300 13px/1.5 var(--gl-sans); color: var(--gl-accent); }
+/* client-you.css loads after this sheet (ClientAccountForm.tsx imports both),
+   so each change to one of its rules is stated at (0,3,0). */
+.client-app-shell .client-you-error.client-reader-review-error { margin-top: 12px; }
+.client-app-shell .client-reader-review-actions { display: flex; gap: 8px; }
+.client-app-shell .client-reader-review-actions .client-you-pill,
+.client-app-shell .client-you-pill.client-reader-review-invite,
+.client-app-shell .client-you-pill.client-reader-review-cancel { height: 44px; }
+.client-app-shell .client-you-pill.client-reader-review-invite,
+.client-app-shell .client-you-pill.client-reader-review-cancel { margin-top: 0; }
+.client-app-shell .client-reader-review-form { margin-top: 12px; }
+/* The five stars to choose from: the radio kept for the keyboard and the
+   reader, the star drawn by its label, each a 44px target. */
+.client-app-shell .client-reader-review-pick { display: flex; gap: 2px; }
+.client-app-shell .client-reader-review-star {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  font: 400 26px/1 var(--gl-sans);
+  color: var(--gl-text-faint);
+  transition: color .3s var(--ease);
+}
+.client-app-shell .client-reader-review-star.is-lit { color: var(--gl-accent); }
+.client-app-shell .client-reader-review-star input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.client-app-shell .client-reader-review-star:has(input:focus-visible) { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+.client-app-shell .client-reader-review-counter { align-self: flex-end; font: 300 12px/1 var(--gl-sans); color: var(--gl-text-faint); }
+/* The approved reviews: one card, the activity rows' hairlines between them. */
+.client-app-shell .client-reader-review-list { list-style: none; margin: 0; padding: 0; }
+.client-app-shell .client-reader-review { padding: 14px 0; }
+.client-app-shell .client-reader-review:first-child { padding-top: 0; }
+.client-app-shell .client-reader-review:last-child { padding-bottom: 0; }
+.client-app-shell .client-reader-review + .client-reader-review { border-top: 1px solid var(--gl-hair-soft); }
+.client-app-shell .client-reader-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font: 500 10px/1.4 var(--gl-sans);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--gl-text-faint);
 }

@@ -1,0 +1,54 @@
+/* The four screens the You tab's More card opens (ClientMoreScreen.tsx): an
+   existing page of the site hosted inside the app shell. Each page is left
+   as it is; the rules here, keyed on the wrapper's class, take away only
+   what the shell already draws around it. No colour is set here but the one
+   transparent; layout only. */
+
+.client-app-shell .client-more-view { width: 100%; min-width: 0; }
+
+/* ── The Constellation (features/profile/views/ClientProfile.tsx) ── */
+/* Its page shell (:185-198) is a full-height page with the site's 96px top
+   pad and a solid base colour, both set inline, and a fixed glow layer over
+   the whole window (:190-195). In the app the column starts under the Back
+   control and sits on the shell's own sky. */
+.client-app-shell .client-more-constellation > div {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  background-color: transparent !important; /* over the inline colour, :188 */
+}
+.client-app-shell .client-more-constellation > div > .fixed { display: none; }
+/* the column's own 16px sides (:196): the You column already has them */
+.client-app-shell .client-more-constellation > div > .max-w-md { padding-left: 0; padding-right: 0; }
+/* Sign out (:216-227): the You tab's Log out is the one control. */
+.client-app-shell .client-more-constellation .pt-4.justify-center { display: none; }
+/* The balance card (components/StardustBalance.tsx:34-57, the section whose
+   first child is the Details toggle): the You tab's Stardust card is the one
+   figure. */
+.client-app-shell .client-more-constellation section:has(> button[aria-expanded]) { display: none; }
+/* The ritual claim sheet (components/RitualClaimSheet.tsx:90) is fixed at
+   z-index 120 inside the content area, which client-app.css:61-63 makes a
+   stacking context at z-index 1, under the tab bar's 20. While this screen
+   is showing, the content area steps out of that context, so the sheet and
+   its backdrop cover the tab bar as a modal should. The area still paints
+   above the shell's sky, which sits at z-index -1 (client-app.css:32-44). */
+.client-app-shell:has(.client-more-constellation) .client-app-content { z-index: auto; }
+
+/* ── Notifications (features/notifications/views/NotificationsPage.tsx) ── */
+/* Its root (:114-120) is a full-height page with an 80px top pad and a
+   solid base colour, set inline, and its own dimmed scene (:122, through
+   components/PageBackground.tsx, fixed over the whole window). The shell's
+   sky stands behind it instead. */
+.client-app-shell .client-more-notifications > div {
+  min-height: 0;
+  padding: 0 0 8px;
+  background-color: transparent !important; /* over the inline colour, :119 */
+}
+.client-app-shell .client-more-notifications > div > .fixed { display: none; }
+
+/* ── Terms and Privacy (features/terms and features/privacy, views) ── */
+/* Each is a full-height page whose column carries the site's 80px (96px
+   from 768px) top and bottom pad and 24px sides (TermsPage.tsx:17-18,
+   PrivacyPage.tsx:17-18). */
+.client-app-shell .client-more-legal > div { min-height: 0; }
+.client-app-shell .client-more-legal > div > div { padding: 4px 0 8px; }

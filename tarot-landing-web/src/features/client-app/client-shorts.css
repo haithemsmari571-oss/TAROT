@@ -1,11 +1,10 @@
 /* The Shorts tab inside the app shell: one reel at a time, full height of the
-   content area, on the living sky.
+   content area, on the glass page.
 
    The notices and the empty block are the chats list's own (client-chats.css).
    Only what this screen adds is here. Fraunces and Inter come through the
-   hall's --display and --ui, gold through --gold. client-app.css:1-5 hands
-   every element in the shell Inter, so the serif line below restates its
-   family at (0,2,0). */
+   glass tokens --gl-serif and --gl-sans, gold through --gl-accent
+   (styles/glass.css). */
 
 /* The screen itself is the scroller, so the content area only holds it. */
 .client-app-shell-shorts .client-app-content {
@@ -20,7 +19,7 @@
    stage's own width, so the screen claims the full width. */
 .client-app-shell .client-shorts-screen { width: 100%; height: 100%; }
 
-/* Loading, failure and the empty block, centred on the sky. */
+/* Loading, failure and the empty block, centred on the page. */
 .client-app-shell .client-shorts-state {
   display: grid;
   place-items: center;
@@ -39,7 +38,7 @@
 }
 .client-app-shell .client-shorts::-webkit-scrollbar { display: none; }
 .client-app-shell .client-shorts:focus { outline: none; }
-.client-app-shell .client-shorts:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.client-app-shell .client-shorts:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: -2px; }
 
 .client-app-shell .client-shorts-slide {
   height: 100%;
@@ -59,7 +58,7 @@
   max-width: 100%;
   overflow: hidden;
   border-radius: 0;
-  background: #0A0616;
+  background: var(--gl-base);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -81,12 +80,12 @@
   bottom: 0;
   padding: 16px;
   pointer-events: none;
-  background: linear-gradient(180deg, transparent, rgba(10, 6, 22, .72));
+  background: var(--gl-photo-fade);
 }
 .client-app-shell .client-shorts-title {
   margin: 0;
-  font: 400 20px/1.25 var(--display);
-  color: #F8F1E4;
+  font: 400 20px/1.25 var(--gl-serif);
+  color: var(--gl-text);
 }
 .client-app-shell .client-shorts-description {
   display: -webkit-box;
@@ -94,12 +93,12 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
   margin: 6px 0 0;
-  font: 300 14px/1.55 var(--ui);
-  color: rgba(220, 205, 184, .9);
+  font: 300 14px/1.55 var(--gl-sans);
+  color: var(--gl-text-dim);
 }
 
 /* The sound switch: the room's back control (hall-room.css:47-52), its
-   size, colours and border, copied. That rule is scoped to
+   size and border, in the glass tokens. That rule is scoped to
    html[data-hall="room"], and this screen never sets the flag. */
 .client-app-shell .client-shorts-sound {
   position: absolute;
@@ -112,13 +111,13 @@
   padding: 0;
   border-radius: 50%;
   cursor: pointer;
-  color: rgba(224, 210, 190, .9);
-  background: rgba(255, 240, 214, .05);
-  border: 1px solid rgba(255, 214, 150, .22);
+  color: var(--gl-text-dim);
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
   transition: background .4s var(--ease), color .4s var(--ease);
 }
-.client-app-shell .client-shorts-sound:hover { background: rgba(255, 214, 150, .16); color: #fff; }
-.client-app-shell .client-shorts-sound:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.client-app-shell .client-shorts-sound:hover { background: var(--gl-glass-2); color: var(--gl-text); }
+.client-app-shell .client-shorts-sound:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
 
 /* Shown only while the client has paused the reel in view. */
 .client-app-shell .client-shorts-play {
@@ -132,9 +131,9 @@
   translate: -50% -50%;
   border-radius: 50%;
   pointer-events: none;
-  color: #F8F1E4;
-  background: rgba(10, 6, 22, .45);
-  border: 1px solid rgba(255, 214, 150, .22);
+  color: var(--gl-text);
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
@@ -148,18 +147,18 @@
   bottom: 0;
   height: 2px;
   pointer-events: none;
-  background: rgba(255, 255, 255, .18);
+  background: var(--gl-hair);
 }
 .client-app-shell .client-shorts-progress {
   display: block;
   width: 0;
   height: 100%;
-  background: var(--gold);
+  background: var(--gl-accent);
 }
 
 @media (min-width: 900px) {
   .client-app-shell .client-shorts-stage {
     border-radius: 18px;
-    border: 1px solid rgba(255, 214, 150, .18);
+    border: 1px solid var(--gl-glass-edge);
   }
 }

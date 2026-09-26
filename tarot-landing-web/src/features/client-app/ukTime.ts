@@ -14,3 +14,12 @@ const ukLongDay = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", 
 export const clockAt = (value: string) => ukClock.format(messageDate(value));
 /** "18 September 2026" in UK time, for a server timestamp. */
 export const dayOf = (value: string) => ukLongDay.format(messageDate(value));
+
+// en-GB abbreviates September as "Sept", so the short day is assembled from
+// the parts of the plain English locale, whose months are three letters.
+const ukShortDayParts = new Intl.DateTimeFormat("en", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
+/** "18 Sep 2026" in UK time, for a server timestamp. */
+export const shortDayOf = (value: string) => {
+  const part = Object.fromEntries(ukShortDayParts.formatToParts(messageDate(value)).map(({ type, value }) => [type, value]));
+  return `${part.day} ${part.month} ${part.year}`;
+};

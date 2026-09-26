@@ -1,8 +1,13 @@
 .client-app-shell,
 .client-app-shell * {
   box-sizing: border-box;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Every element in the shell inherits the shell's face (font-family below).
+   Zero specificity, so each component's own face wins over it. It still beats
+   App.css:7-9 and :19-21, which hand every element Poppins at the same zero
+   specificity, because the app's stylesheets load after the site's. */
+:where(.client-app-shell *) { font-family: inherit; }
 
 .client-app-shell {
   --client-app-nav-space: calc(var(--client-app-tabbar-h) + env(safe-area-inset-bottom, 0px));
@@ -12,14 +17,39 @@
   height: 100dvh;
   isolation: isolate;
   overflow: hidden;
-  background: #0A0616;
-  color: #E6EDF3;
+  background: var(--gl-base);
+  color: var(--gl-text);
+  font-family: var(--gl-sans);
   font-size: 14px;
   font-weight: 400;
   padding-bottom: var(--client-app-nav-space);
 }
 
-.client-app-shell .hall-stage-backdrop {
+/* The glass page surface, drawn the way the signed-out site draws it: the
+   moonlit artwork full-bleed and vivid, the mood tint over it, on --gl-base
+   (PsychicsBrowse.tsx:168 through PageBackground.tsx's glass preset, and
+   PublicLayout.tsx:16). Both layers sit under everything the shell holds. */
+.client-app-shell::before,
+.client-app-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.client-app-shell::before {
+  background: url("../../assets/backgrounds/moonlit-balcony.webp") center / cover no-repeat;
+  filter: saturate(1.05);
+}
+.client-app-shell::after { background: var(--gl-tint); }
+
+/* The hall's sky belongs to the reading room alone. ClientAppShell mounts the
+   stage only while the conversation screen is showing, so its frame loop never
+   runs behind the tabs. This rule keeps a stage hidden should one ever be
+   mounted on another screen; the thread rule below is what the room shows. */
+.client-app-shell .hall-stage-backdrop { display: none; }
+.client-app-shell-thread .hall-stage-backdrop {
+  display: block;
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -42,14 +72,10 @@
 
 .client-app-shell .client-app-title {
   margin: 0;
-  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-family: var(--gl-serif);
   font-size: 32px;
   font-weight: 700;
   line-height: 1.2;
-}
-
-.client-app-shell .client-chats-name {
-  font-family: "Fraunces", Georgia, "Times New Roman", serif;
 }
 
 .client-app-nav {
@@ -62,8 +88,8 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  background: linear-gradient(165deg, rgba(30,18,48,.60), rgba(12,6,24,.50));
-  border-top: 1px solid rgba(255,214,150,.22);
+  background: var(--gl-bar);
+  border-top: 1px solid var(--gl-hair);
   -webkit-backdrop-filter: blur(26px) saturate(1.2);
   backdrop-filter: blur(26px) saturate(1.2);
 }
@@ -76,16 +102,16 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  color: #A8917B;
+  color: var(--gl-text-faint);
   text-decoration: none;
 }
 
 .client-app-tab-active {
-  color: var(--gold);
+  color: var(--gl-accent);
 }
 
 .client-app-tab:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--gl-accent);
   outline-offset: -4px;
   border-radius: 4px;
 }
@@ -113,8 +139,8 @@
   height: 17px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--gold);
-  color: #2A1A10;
+  background: var(--gl-accent);
+  color: var(--gl-base);
   font-size: 10px;
   font-weight: 700;
   line-height: 17px;
@@ -140,19 +166,31 @@
     grid-auto-rows: 72px;
     align-content: start;
     border-top: 0;
-    border-right: 1px solid rgba(255,214,150,.22);
+    border-right: 1px solid var(--gl-hair);
   }
 }
 
 /* The Sanctuary's mini player bar (SanctuaryPlayerProvider.tsx) is mounted beside
    the app, not inside it, and is fixed near the bottom of the window. While the
-   shell is mounted it rises above the tab bar by the bar's height, keeping its
-   own gap and safe-area inset (SanctuaryPage.module.css, .playerBar), and beside
-   the rail it starts where the rail ends. The two sizes live on :root so the
-   shell above and the bar, which sits outside the shell, read the same numbers. */
+   shell is mounted it rises above the tab bar by the bar's height, keeping the
+   safe-area inset (SanctuaryPage.module.css, .playerBar), and beside the rail
+   it starts where the rail ends. The sizes live on :root so the shell above
+   and the bar, which sits outside the shell, read the same numbers. The bar's
+   height and its gap from the content's foot are one source for the bar's own
+   rules and for the content padding below; the page's grid folds to two rows
+   at 760 (SanctuaryPage.module.css), where the bar is taller. */
 :root {
   --client-app-tabbar-h: 66px;
   --client-app-rail-w: 88px;
+  --client-app-player-h: 64px;
+  --client-app-player-gap: 18px;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --client-app-player-h: 104px;
+    --client-app-player-gap: 8px;
+  }
 }
 
 @media (max-width: 899.98px) {
@@ -165,4 +203,175 @@
   html:has(.client-app-shell) [data-sanctuary-player="bar"] {
     margin-left: var(--client-app-rail-w);
   }
+}
+
+/* While a track is loaded the bar stands over the foot of every screen, so the
+   content keeps that much room under its last row, as SanctuaryPage's
+   .hasPlayer does for its own page. A screen whose content area is a fixed box
+   with overflow hidden (the inbox, the room, Shorts) shrinks by the same amount
+   instead. When the bar is closed the padding goes with it. */
+html:has(.client-app-shell):has([data-sanctuary-player="bar"]) .client-app-content {
+  padding-bottom: calc(var(--client-app-player-h) + var(--client-app-player-gap));
+}
+
+/* Inside the app the bar is drawn in the glass tokens (styles/glass.css): the
+   raised glass and its edge, the tab bar's blur, Inter for labels and Fraunces
+   for the title, gold for the play button and the played part of the line.
+   The page's classes are hashed, so the parts are reached by structure: the
+   inner grid, its first button (cover and copy), its second (play or pause),
+   its div (the timeline) and Close by its attribute. App.css hands every
+   element Poppins by name, so each span restates its face. The Sanctuary page
+   never mounts the shell and keeps its own look. */
+html:has(.client-app-shell) [data-sanctuary-player="bar"] {
+  bottom: calc(var(--client-app-player-gap) + env(safe-area-inset-bottom, 0px));
+  height: var(--client-app-player-h);
+  border: 1px solid var(--gl-glass-edge);
+  border-radius: 14px;
+  background: var(--gl-glass-2);
+  box-shadow: var(--gl-card-shadow);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
+  color: var(--gl-text);
+  font-family: var(--gl-sans);
+}
+/* The inner grid: cover and copy, play, Close on one row, the timeline in its
+   own row below 760 and in the third column above it. Dense packing lets
+   Close, which asks for the column after the last one, take the first row. */
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div {
+  height: 100%;
+  min-height: 0;
+  align-content: center;
+  grid-auto-flow: row dense;
+  grid-template-columns: minmax(0, 1fr) 44px;
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > div {
+  grid-column: 1 / 4;
+}
+@media (min-width: 761px) {
+  html:has(.client-app-shell) [data-sanctuary-player="bar"] > div {
+    grid-template-columns: minmax(218px, 398px) 44px minmax(200px, 1fr);
+  }
+  html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > div {
+    grid-column: auto;
+  }
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > button:first-child {
+  min-height: 0;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > button:first-child > span:first-child {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--gl-glass-edge);
+  border-radius: 10px;
+  background: var(--gl-glass);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > button:first-child > span:first-child > span {
+  background: var(--gl-glass-2);
+  color: var(--gl-text);
+  font-family: var(--gl-serif);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > button:first-child > span:nth-child(2) > span {
+  font: 500 10px/1.4 var(--gl-sans);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--gl-text-dim);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > button:first-child > span:nth-child(2) > strong {
+  font: 400 16px/1.3 var(--gl-serif);
+  color: var(--gl-text);
+}
+/* Play or pause: the badge's pairing (gold face, base glyph). The page's own
+   glyph colour is !important, so this one is too. */
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > button:nth-child(2) {
+  width: 44px;
+  height: 44px;
+  background: var(--gl-accent);
+  color: var(--gl-base) !important;
+  box-shadow: none;
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > div,
+html:has(.client-app-shell) [data-sanctuary-player="bar"] > div > div > span {
+  font: 500 10px/1 var(--gl-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--gl-text-dim);
+}
+/* The line: a 2px hair with the played part in gold, no separate thumb. The
+   input keeps its 24px pointer target; only the middle 2px of it is painted
+   (a mask keeps hit testing, which clip-path would not). The played part is
+   the thumb's shadow, clipped at the input's left edge. Any opaque token
+   serves the mask; only its alpha counts. */
+html:has(.client-app-shell) [data-sanctuary-player="bar"] input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  accent-color: var(--gl-accent);
+  -webkit-mask: linear-gradient(var(--gl-btn-bg) 0 0) 0 50% / 100% 2px no-repeat;
+  mask: linear-gradient(var(--gl-btn-bg) 0 0) 0 50% / 100% 2px no-repeat;
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] input[type="range"]::-webkit-slider-runnable-track {
+  height: 24px;
+  background: var(--gl-hair);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 2px;
+  height: 24px;
+  border: 0;
+  border-radius: 0;
+  background: var(--gl-accent);
+  box-shadow: -100vw 0 0 100vw var(--gl-accent);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--gl-hair);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] input[type="range"]::-moz-range-progress {
+  height: 2px;
+  background: var(--gl-accent);
+}
+html:has(.client-app-shell) [data-sanctuary-player="bar"] input[type="range"]::-moz-range-thumb {
+  width: 2px;
+  height: 2px;
+  border: 0;
+  border-radius: 0;
+  background: var(--gl-accent);
+}
+/* Close: the You tab's pill (client-you.css, .client-you-pill) as a round
+   44px control. */
+html:has(.client-app-shell) [data-sanctuary-player="close"] {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
+  color: var(--gl-text-dim);
+  cursor: pointer;
+}
+html:has(.client-app-shell) [data-sanctuary-player="close"]:hover {
+  background: var(--gl-glass-2);
+  color: var(--gl-text);
+}
+html:has(.client-app-shell) [data-sanctuary-player="close"]:focus-visible {
+  outline: 2px solid var(--gl-accent);
+  outline-offset: 2px;
+}
+
+/* Toasts (components/Toast) are mounted beside the app, not inside it. Inside
+   the app they take the shell's face. The root is the container's child
+   (ToastContainer.tsx:11, the data-hall-exempt box at top-6 right-6;
+   Toast.tsx:58, backdrop-blur-xl). Toast.tsx:62 hands the root Poppins inline
+   (theme.ts:69), which only !important outranks, and App.css:7-9 hands every
+   element inside it Poppins by name, so the rule names them too. */
+html:has(.client-app-shell) [data-hall-exempt].top-6.right-6 > .backdrop-blur-xl,
+html:has(.client-app-shell) [data-hall-exempt].top-6.right-6 > .backdrop-blur-xl * {
+  font-family: var(--gl-sans) !important;
 }

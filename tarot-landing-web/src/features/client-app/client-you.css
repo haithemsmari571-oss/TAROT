@@ -1,10 +1,10 @@
-/* The You tab inside the app shell: three frosted cards on the living sky.
+/* The You tab inside the app shell: four glass cards on the glass page.
 
    Header and section eyebrows are the chats list's own (client-chats.css), the
-   Add Stardust button is the hall's .begin (hall.css). Only what this screen
-   adds is here. Fraunces and Inter come through the hall's --display and --ui,
-   gold through --gold. client-app.css:1-5 hands every element in the shell
-   Inter, so each serif line below restates its family at (0,2,0). */
+   Add Stardust button is the hall's .begin (hall.css) in its shape, with its
+   colours and face restated below in the glass tokens. Only what this screen
+   adds is here. Fraunces and Inter come through the glass tokens --gl-serif
+   and --gl-sans, gold through --gl-accent (styles/glass.css). */
 
 /* The screen scrolls as one page inside the content area, the way
    client-readers.css:10-15 lays out the roster. */
@@ -23,21 +23,20 @@
   max-width: 640px;
   margin: 0 auto;
   padding: 0 16px 24px;
-  /* what the hall's document rule hands a panel by inheritance */
-  color: var(--text);
+  color: var(--gl-text);
   font-weight: 300;
 }
 
-/* One frosted recipe for the three cards: the chats row's glass
+/* One recipe for the three cards: the chats row's glass
    (client-chats.css, .client-chats-row), copied. */
 .client-app-shell .client-you-card {
   padding: 20px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 214, 150, .18);
-  background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
   backdrop-filter: blur(18px) saturate(1.15);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  color: var(--text);
+  color: var(--gl-text);
   font-weight: 300;
 }
 .client-app-shell .client-you-card .client-chats-notice { margin: 0; }
@@ -45,21 +44,32 @@
 /* ── Stardust ── */
 .client-app-shell .client-you-figure {
   margin: 0;
-  font: 300 40px/1.1 var(--display);
-  color: #FFFCF4;
+  font: 300 40px/1.1 var(--gl-serif);
+  color: var(--gl-text);
 }
 .client-app-shell .client-you-sub {
   margin: 4px 0 0;
-  font: 300 13px/1.5 var(--ui);
-  color: rgba(220, 205, 184, .9);
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text-dim);
 }
-.client-app-shell .client-you-payment {
+/* The same line carries what Edit details and Change password send back
+   (.client-you-notice, in the Account card). */
+.client-app-shell .client-you-payment,
+.client-app-shell .client-you-notice {
   margin: 10px 0 0;
-  font: 300 13px/1.5 var(--ui);
-  color: var(--gold);
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-accent);
 }
-.client-app-shell .client-you-payment.is-error { color: rgba(220, 205, 184, .9); }
-.client-app-shell .client-you-stardust .begin:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.client-app-shell .client-you-payment.is-error { color: var(--gl-text-dim); }
+/* Add Stardust in .gl-btn-solid's colours and face (glass.css:234-247),
+   which has no shadow at rest. */
+.client-app-shell .client-you-stardust .begin {
+  background: var(--gl-btn-bg);
+  color: var(--gl-btn-fg);
+  font-family: var(--gl-sans);
+  box-shadow: none;
+}
+.client-app-shell .client-you-stardust .begin:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
 
 /* ── Recent activity ── */
 .client-app-shell .client-you-rows { list-style: none; margin: 0; padding: 0; }
@@ -72,32 +82,32 @@
 }
 .client-app-shell .client-you-row:first-child { padding-top: 0; }
 .client-app-shell .client-you-row:last-child { padding-bottom: 0; }
-.client-app-shell .client-you-row + .client-you-row { border-top: 1px solid rgba(255, 214, 150, .12); }
+.client-app-shell .client-you-row + .client-you-row { border-top: 1px solid var(--gl-hair-soft); }
 .client-app-shell .client-you-row-text { flex: 1; min-width: 0; }
 .client-app-shell .client-you-row-title {
   display: block;
-  font: 400 15px/1.3 var(--display);
-  color: #F8F1E4;
+  font: 400 15px/1.3 var(--gl-serif);
+  color: var(--gl-text);
 }
 /* the chats list's small caps line (client-chats.css, .client-chats-back) */
 .client-app-shell .client-you-row-time {
   display: block;
   margin-top: 3px;
-  font: 500 10px/1.4 var(--ui);
+  font: 500 10px/1.4 var(--gl-sans);
   letter-spacing: .18em;
   text-transform: uppercase;
-  color: #A8917B;
+  color: var(--gl-text-faint);
 }
 .client-app-shell .client-you-amount {
   flex: none;
   white-space: nowrap;
-  font: 300 17px/1.2 var(--display);
-  color: #DCCDB8;
+  font: 300 17px/1.2 var(--gl-serif);
+  color: var(--gl-text-dim);
 }
-.client-app-shell .client-you-amount.is-in { color: var(--gold); }
+.client-app-shell .client-you-amount.is-in { color: var(--gl-accent); }
 
 /* Show more and Log out: the room's back control (hall-room.css:47-52), its
-   colours and border, drawn as a pill. That rule is scoped to
+   border, drawn as a pill in the glass tokens. That rule is scoped to
    html[data-hall="room"], and this screen never sets the flag. */
 .client-app-shell .client-you-pill {
   display: flex;
@@ -109,28 +119,304 @@
   padding: 0 16px;
   border-radius: 999px;
   cursor: pointer;
-  font: 500 12px/1 var(--ui);
+  font: 500 12px/1 var(--gl-sans);
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: rgba(224, 210, 190, .9);
-  background: rgba(255, 240, 214, .05);
-  border: 1px solid rgba(255, 214, 150, .22);
+  color: var(--gl-text-dim);
+  background: var(--gl-glass);
+  border: 1px solid var(--gl-glass-edge);
   transition: background .4s var(--ease), color .4s var(--ease);
 }
-.client-app-shell .client-you-pill:hover { background: rgba(255, 214, 150, .16); color: #fff; }
-.client-app-shell .client-you-pill:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.client-app-shell .client-you-pill:hover { background: var(--gl-glass-2); color: var(--gl-text); }
+.client-app-shell .client-you-pill:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
 
 /* ── Account ── */
 .client-app-shell .client-you-name {
   margin: 0;
   overflow-wrap: anywhere;
-  font: 400 17px/1.3 var(--display);
-  color: #F8F1E4;
+  font: 400 17px/1.3 var(--gl-serif);
+  color: var(--gl-text);
 }
 .client-app-shell .client-you-email {
   margin: 2px 0 0;
   overflow-wrap: anywhere;
-  font: 300 13px/1.5 var(--ui);
-  color: rgba(220, 205, 184, .9);
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text-dim);
 }
 .client-app-shell .client-you-logout { height: 48px; margin-top: 18px; }
+
+/* ── Account rows and the two account screens (YOU3A) ── */
+/* Edit details and Change password: two rows above Log out, each the height
+   of a touch target, in the activity rows' hairlines and serif. */
+.client-app-shell .client-you-links {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+  border-top: 1px solid var(--gl-hair-soft);
+}
+.client-app-shell .client-you-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--gl-hair-soft);
+  font: 400 15px/1.3 var(--gl-serif);
+  color: var(--gl-text);
+  text-decoration: none;
+  transition: color .4s var(--ease);
+}
+.client-app-shell .client-you-link-end { display: flex; align-items: center; gap: 10px; }
+.client-app-shell .client-you-link-chevron { font: 300 22px/1 var(--gl-sans); color: var(--gl-text-faint); }
+/* the tab bar's badge (client-app.css, .client-app-badge) in the row's flow */
+.client-app-shell .client-you-link .client-app-badge { position: static; font-family: var(--gl-sans); }
+.client-app-shell .client-you-link:hover { color: var(--gl-accent); }
+.client-app-shell .client-you-link:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; border-radius: 6px; }
+
+/* The two screens share the You column above. The way back is the reader
+   profile's control (client-readers.css, .client-reader-back), and the header
+   follows it at once. */
+.client-app-shell .client-you-screen .client-chats-header { padding-top: 4px; }
+.client-app-shell .client-you-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.client-app-shell .client-you-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+/* the activity rows' small caps line, one step brighter, as a label */
+.client-app-shell .client-you-label {
+  display: block;
+  padding: 0;
+  font: 500 11px/1.4 var(--gl-sans);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--gl-text-dim);
+}
+/* The Home search field's glass (client-home.css, .client-home-search) as a
+   plain input: the card behind it already frosts the sky, so no filter of
+   its own. */
+.client-app-shell .client-you-input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
+  outline: none;
+  appearance: none;
+  font: 300 15px/1.2 var(--gl-sans);
+  color: var(--gl-text);
+  color-scheme: dark;
+}
+:root[data-theme="light"] .client-app-shell .client-you-input { color-scheme: light; }
+.client-app-shell .client-you-input:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+.client-app-shell .client-you-input::placeholder { color: var(--gl-text-faint); opacity: 1; }
+.client-app-shell textarea.client-you-input {
+  min-height: 112px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+/* The gender answers: four radio pills in the kind chips' colours
+   (client-home.css, .client-home-kind), the input itself kept for the
+   keyboard and the reader, the pill drawn by its label. */
+.client-app-shell .client-you-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.client-app-shell .client-you-choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
+  cursor: pointer;
+  text-align: center;
+  font: 300 14px/1.2 var(--gl-sans);
+  color: var(--gl-text-dim);
+  transition: border-color .4s var(--ease), color .4s var(--ease), background .4s var(--ease);
+}
+.client-app-shell .client-you-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.client-app-shell .client-you-choice:hover { color: var(--gl-text); }
+.client-app-shell .client-you-choice:has(input:checked) {
+  border-color: var(--gl-accent-dim);
+  background: var(--gl-glass-2);
+  color: var(--gl-accent);
+}
+.client-app-shell .client-you-choice:has(input:focus-visible) { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+/* What the backend said when it refused, or what the form found first. */
+.client-app-shell .client-you-error {
+  margin: 0;
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text);
+}
+/* Save and Change password: Add Stardust's cream face and shape (.begin,
+   hall.css:187-188, in the glass tokens), restated so these screens carry no
+   hall class. */
+.client-app-shell .client-you-solid {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 17px;
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  font: 600 15px/1.2 var(--gl-sans);
+  letter-spacing: .03em;
+  background: var(--gl-btn-bg);
+  color: var(--gl-btn-fg);
+  transition: transform .2s var(--ease), opacity .3s var(--ease);
+}
+.client-app-shell .client-you-solid:active { transform: scale(.985); }
+.client-app-shell .client-you-solid:disabled { opacity: .55; cursor: default; transform: none; }
+.client-app-shell .client-you-solid:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
+
+/* ── The More card (YOU3C) ── */
+/* Four rows and nothing else: the list starts at the card's edge and the
+   last row keeps no hairline under it. */
+.client-app-shell .client-you-more { padding-top: 4px; padding-bottom: 4px; }
+.client-app-shell .client-you-more .client-you-links { margin-top: 0; border-top: 0; }
+.client-app-shell .client-you-more .client-you-link:last-child { border-bottom: 0; }
+
+/* ── Delete account (ROUND12) ── */
+/* Under Log out and quieter than it: no border, no fill, the card's small
+   faint line, centred, at a touch target's height. */
+.client-app-shell .client-you-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 6px;
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text-faint);
+  text-decoration: none;
+  transition: color .4s var(--ease);
+}
+.client-app-shell .client-you-delete:hover { color: var(--gl-text-dim); }
+.client-app-shell .client-you-delete:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; border-radius: 6px; }
+/* The screen's four plain lines, at the top of its form card. */
+.client-app-shell .client-you-delete-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 300 14px/1.55 var(--gl-sans);
+  color: var(--gl-text);
+}
+
+/* ── Add to your home screen (ROUND13) ── */
+/* The More card's last row is YouLink drawn as a button: the link row above,
+   with the button's own frame, fill and centring taken off. */
+.client-app-shell button.client-you-link {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--gl-hair-soft);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+/* The iPhone's two steps in a sheet at the foot of the screen, opened with
+   showModal, so it sits in the top layer over the tab bar. Its surface is the
+   glass popover's (glass.css:387-402, .gl-pop), its scrim the hall dialog's
+   (hall-room.css:143-146, .hdlg). */
+.client-app-shell .client-you-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100dvh - 24px);
+  margin: auto auto 0;
+  padding: 0;
+  border: 1px solid var(--gl-glass-edge);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  background: var(--gl-glass-2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: var(--gl-inset), var(--gl-card-shadow);
+  color: var(--gl-text);
+}
+.client-app-shell .client-you-sheet::backdrop {
+  background: rgba(5, 5, 8, .34);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.client-app-shell .client-you-sheet-body {
+  padding: 22px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.client-app-shell .client-you-sheet-title {
+  margin: 0;
+  font: 400 19px/1.3 var(--gl-serif);
+  color: var(--gl-text);
+}
+.client-app-shell .client-you-sheet-steps {
+  margin: 14px 0 0;
+  padding-left: 22px;
+  list-style: decimal outside;
+  font: 300 15px/1.55 var(--gl-sans);
+  color: var(--gl-text);
+}
+.client-app-shell .client-you-sheet-steps li + li { margin-top: 6px; }
+.client-app-shell .client-you-sheet-steps li::marker { color: var(--gl-accent); }
+
+/* ── Reply emails (ROUND20) ── */
+/* The Account card's switch row: the link rows' button form above (the
+   label in their serif, their hairline and height), with a switch in place
+   of the chevron. Off, the track is the pills' glass and the thumb faint; on,
+   the track takes the chosen gender pill's edge and fill and the thumb the
+   gold. */
+.client-app-shell .client-you-switch:disabled { cursor: default; }
+.client-app-shell .client-you-switch-track {
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
+  transition: border-color .4s var(--ease), background .4s var(--ease);
+}
+.client-app-shell .client-you-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gl-text-faint);
+  transition: transform .3s var(--ease), background .3s var(--ease);
+}
+.client-app-shell .client-you-switch[aria-checked="true"] .client-you-switch-track {
+  border-color: var(--gl-accent-dim);
+  background: var(--gl-glass-2);
+}
+.client-app-shell .client-you-switch[aria-checked="true"] .client-you-switch-thumb {
+  transform: translateX(18px);
+  background: var(--gl-accent);
+}
+.client-app-shell .client-you-switch-error { margin-top: 10px; }

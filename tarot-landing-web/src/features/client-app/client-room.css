@@ -15,6 +15,9 @@
 /* Phone: no tab bar inside a conversation. The room owns the viewport. */
 .client-app-shell.client-app-shell-thread { --client-app-nav-space: 0px; }
 .client-app-shell.client-app-shell-thread .client-app-nav { display: none; }
+/* So the player bar is not lifted over it (client-app.css:196-200) and keeps
+   its own foot, the gap and the safe area (client-app.css:225-227). */
+html:has(.client-app-shell.client-app-shell-thread) [data-sanctuary-player="bar"] { translate: none; }
 
 /* The room fills the shell's content area instead of the window, so on desktop
    nothing of it sits under the rail, and its header, thread and composer share
@@ -22,6 +25,17 @@
 .client-app-shell .room {
   position: absolute;
   padding-inline: max(0px, calc((100% - 760px) / 2));
+}
+
+/* While the Sanctuary's player bar is mounted it stands over the room's foot.
+   The room is absolute in the content area, so the padding the content takes
+   for the bar (client-app.css:213-215) cannot lift it; its own foot rises to
+   the bar's top edge instead: the bar's height and gap and the safe area
+   (client-app.css:225-227). In a conversation the bar is not lifted over the
+   tab bar at any width (above), so that height is not part of it. When the bar
+   is closed the rule lapses. */
+html:has([data-sanctuary-player="bar"]) .client-app-shell .room {
+  bottom: calc(var(--client-app-player-gap) + var(--client-app-player-h) + env(safe-area-inset-bottom, 0px));
 }
 
 /* The orb sits over the profile button wherever the header puts it. The

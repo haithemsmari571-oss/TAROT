@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../../../styles/glass.css";
 
@@ -54,6 +54,14 @@ export const PriceRangeFilter = ({
     onChange(undefined, undefined);
   };
 
+  // Escape closes the popover and hands focus back to its chip.
+  const closeOnEscape = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape" || !isOpen) return;
+    event.stopPropagation();
+    setIsOpen(false);
+    popRef.current?.querySelector<HTMLButtonElement>(":scope > button")?.focus();
+  };
+
   const hasApplied = minPrice !== undefined || maxPrice !== undefined;
 
   const suffix = unit === "message" ? " / message" : "/min";
@@ -66,7 +74,7 @@ export const PriceRangeFilter = ({
         : `Up to £${maxPrice}${suffix}`;
 
   return (
-    <div ref={popRef} className="relative">
+    <div ref={popRef} className="relative" onKeyDown={closeOnEscape}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

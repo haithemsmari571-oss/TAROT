@@ -9,6 +9,10 @@ import {
 
 export type NotificationTab = "all" | "unread" | "chats" | "payments";
 
+/** How often page 1 is asked for again, here and on the app's You tab
+    (features/client-app/useNotificationsUnreadCount.ts). */
+export const NOTIFICATIONS_POLL_MS = 10_000;
+
 const TAB_PARAMS: Record<NotificationTab, GetNotificationsParams> = {
   all: {},
   unread: { tab: "unread" },
@@ -48,10 +52,10 @@ export function usePaginatedNotifications() {
     fetch(activeTab, page);
   }, [activeTab, page, fetch]);
 
-  // Poll for new notifications every 10s when on page 1
+  // Poll for new notifications when on page 1
   useEffect(() => {
     if (page !== 1) return;
-    const interval = setInterval(() => fetch(activeTab, 1), 10_000);
+    const interval = setInterval(() => fetch(activeTab, 1), NOTIFICATIONS_POLL_MS);
     return () => clearInterval(interval);
   }, [activeTab, page, fetch]);
 

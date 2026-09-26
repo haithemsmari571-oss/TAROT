@@ -7,7 +7,7 @@
   overflow: hidden;
 }
 
-/* The hall's row values, scoped to the app instead of html[data-hall]. */
+/* The list's rows, in the glass system's tokens (styles/glass.css). */
 .client-app-shell .client-chats {
   display: flex;
   flex-direction: column;
@@ -20,16 +20,16 @@
 .client-app-shell .client-chats-header { flex: none; padding: 18px 0 12px; }
 .client-app-shell .client-chats-eyebrow {
   margin: 0 0 6px;
-  font: 600 11px/1.4 var(--ui);
+  font: 600 11px/1.4 var(--gl-sans);
   letter-spacing: .28em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--gl-accent);
 }
 .client-app-shell .client-chats-title {
   margin: 0;
-  font: 300 26px/1.1 var(--display);
+  font: 300 26px/1.1 var(--gl-serif);
   letter-spacing: .01em;
-  color: #F8F1E4;
+  color: var(--gl-text);
 }
 .client-app-shell .client-chats-scroll {
   flex: 1;
@@ -37,7 +37,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 14px 0 18px;
-  scrollbar-color: rgba(232, 200, 139, .3) transparent;
+  scrollbar-color: var(--gl-accent-dim) transparent;
 }
 .client-app-shell .client-chats-rows { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .client-app-shell .client-chats-row {
@@ -52,49 +52,49 @@
   cursor: pointer;
   padding: 8px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 214, 150, .18);
-  background: linear-gradient(165deg, rgba(30, 18, 48, .55), rgba(12, 6, 24, .45));
+  border: 1px solid var(--gl-glass-edge);
+  background: var(--gl-glass);
   backdrop-filter: blur(18px) saturate(1.15);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  color: #F8F1E4;
+  color: var(--gl-text);
   transition: transform 300ms var(--ease), border-color 300ms var(--ease), background 300ms var(--ease);
 }
-.client-app-shell .client-chats-row:hover { transform: translateY(-1px); border-color: rgba(232, 200, 139, .42); }
-.client-app-shell .client-chats-row:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
+.client-app-shell .client-chats-row:hover { transform: translateY(-1px); border-color: var(--gl-accent-dim); }
+.client-app-shell .client-chats-row:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: -3px; }
 .client-app-shell .client-chats-avatar {
   position: relative;
   flex: none;
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid rgba(232, 200, 139, .4);
-  background: rgba(232, 200, 139, .12);
+  border: 1px solid var(--gl-accent-dim);
+  background: var(--gl-glass-2);
   display: grid;
   place-items: center;
 }
-.client-app-shell .client-chats-initial { font: 400 17px/1 var(--display); color: var(--gold); }
+.client-app-shell .client-chats-initial { font: 400 17px/1 var(--gl-serif); color: var(--gl-accent); }
 .client-app-shell .client-chats-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.client-app-shell .client-chats-online-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border: 2px solid #0A0616; border-radius: 50%; background: #A8917B; }
-.client-app-shell .client-chats-online-dot.is-online { background: #9db89a; }
+.client-app-shell .client-chats-online-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border: 2px solid var(--gl-base); border-radius: 50%; background: var(--gl-text-faint); }
+.client-app-shell .client-chats-online-dot.is-online { background: var(--gl-live); }
 .client-app-shell .client-chats-summary { flex: 1; min-width: 0; overflow: hidden; }
-.client-app-shell .client-chats-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 16px/1.2 var(--display); color: #F8F1E4; }
+.client-app-shell .client-chats-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 16px/1.2 var(--gl-serif); color: var(--gl-text); }
 .client-app-shell .client-chats-preview-line { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
-.client-app-shell .client-chats-preview { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 300 12.5px/1.35 var(--ui); color: #A8917B; }
-.client-app-shell .client-chats-row.has-unread .client-chats-preview { color: #DCCDB8; }
+.client-app-shell .client-chats-preview { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 300 12.5px/1.35 var(--gl-sans); color: var(--gl-text-faint); }
+.client-app-shell .client-chats-row.has-unread .client-chats-preview { color: var(--gl-text-dim); }
 .client-app-shell .client-chats-ticks { flex: 0 0 17px; width: 17px; height: 12px; color: #70757a; }
 .client-app-shell .client-chats-ticks.seen { color: #168bd2; }
 .client-app-shell .client-chats-meta { flex: none; align-self: flex-start; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.client-app-shell .client-chats-time { white-space: nowrap; font: 500 11px/1.4 var(--ui); color: #A8917B; }
-.client-app-shell .client-chats-row.has-unread .client-chats-time { color: var(--gold); }
-.client-app-shell .client-chats-unread { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--gold); color: #2A1A10; text-align: center; font: 700 10px/18px var(--ui); }
-.client-app-shell .client-chats-back { display: block; margin-top: 3px; font: 500 10px/1.4 var(--ui); letter-spacing: .18em; text-transform: uppercase; color: #A8917B; }
+.client-app-shell .client-chats-time { white-space: nowrap; font: 500 11px/1.4 var(--gl-sans); color: var(--gl-text-faint); }
+.client-app-shell .client-chats-row.has-unread .client-chats-time { color: var(--gl-accent); }
+.client-app-shell .client-chats-unread { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--gl-accent); color: var(--gl-base); text-align: center; font: 700 10px/18px var(--gl-sans); }
+.client-app-shell .client-chats-back { display: block; margin-top: 3px; font: 500 10px/1.4 var(--gl-sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gl-text-faint); }
 .client-app-shell .client-chats-scroll.is-empty { display: grid; place-items: center; }
 .client-app-shell .client-chats-empty { text-align: center; padding: 24px 0; }
-.client-app-shell .client-chats-empty p { margin: 0; font: 300 22px/1.2 var(--display); color: #DCCDB8; }
-.client-app-shell .client-chats-empty a { display: inline-flex; align-items: center; justify-content: center; padding: 0 22px; height: 46px; margin-top: 18px; border-radius: 999px; background: linear-gradient(140deg, #FFECC4, #E6C48C); color: #2A1A10; font: 600 14px/1 var(--ui); letter-spacing: .03em; box-shadow: 0 14px 40px -20px rgba(0, 0, 0, .8); text-decoration: none; }
-.client-app-shell .client-chats-notice { padding: 18px 0; color: #A8917B; font-size: 13.5px; }
-.client-app-shell .client-chats-notice button { min-height: 44px; color: var(--gold); text-decoration: underline; cursor: pointer; }
-.client-app-shell .client-chats-empty a:focus-visible, .client-app-shell .client-chats-notice button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.client-app-shell .client-chats-empty p { margin: 0; font: 300 22px/1.2 var(--gl-serif); color: var(--gl-text-dim); }
+.client-app-shell .client-chats-empty a { display: inline-flex; align-items: center; justify-content: center; padding: 0 22px; height: 46px; margin-top: 18px; border-radius: 999px; background: var(--gl-btn-bg); color: var(--gl-btn-fg); font: 600 14px/1 var(--gl-sans); letter-spacing: .03em; text-decoration: none; }
+.client-app-shell .client-chats-notice { padding: 18px 0; color: var(--gl-text-faint); font-size: 13.5px; }
+.client-app-shell .client-chats-notice button { min-height: 44px; color: var(--gl-accent); text-decoration: underline; cursor: pointer; }
+.client-app-shell .client-chats-empty a:focus-visible, .client-app-shell .client-chats-notice button:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
 .client-app-shell .client-chats-sentinel { height: 1px; }
 
 @media (max-width: 560px) {

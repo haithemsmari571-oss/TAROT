@@ -13,6 +13,9 @@ import { TopUpProvider } from './features/payment/context/TopUpContext'
 import { BillingModeProvider } from './features/billing-mode/BillingModeContext'
 import { CelebrationProvider } from './features/celebrations/CelebrationProvider'
 import { SanctuaryPlayerProvider } from './features/sanctuary/SanctuaryPlayerProvider'
+// Holds the browser's install offer from the first moment, for the app's
+// home-screen row: it fires before the lazy app shell has loaded.
+import './features/client-app/useInstallPrompt'
 
 const queryClient = new QueryClient(
   {defaultOptions: {

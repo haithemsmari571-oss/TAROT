@@ -22,6 +22,14 @@ const ClientChatsScreen = lazy(() => import("./features/client-app/ClientChatsSc
 const ClientReadersScreen = lazy(() => import("./features/client-app/ClientReadersScreen"));
 const ClientReaderProfileScreen = lazy(() => import("./features/client-app/ClientReaderProfileScreen"));
 const ClientYouScreen = lazy(() => import("./features/client-app/ClientYouScreen"));
+const ClientEditDetailsScreen = lazy(() => import("./features/client-app/ClientEditDetailsScreen"));
+const ClientChangePasswordScreen = lazy(() => import("./features/client-app/ClientChangePasswordScreen"));
+const ClientFavouritesScreen = lazy(() => import("./features/client-app/ClientFavouritesScreen"));
+const ClientDeleteAccountScreen = lazy(() => import("./features/client-app/ClientDeleteAccountScreen"));
+const ClientConstellationScreen = lazy(() => import("./features/client-app/ClientConstellationScreen"));
+const ClientNotificationsScreen = lazy(() => import("./features/client-app/ClientNotificationsScreen"));
+const ClientTermsScreen = lazy(() => import("./features/client-app/ClientTermsScreen"));
+const ClientPrivacyScreen = lazy(() => import("./features/client-app/ClientPrivacyScreen"));
 const ClientHomeScreen = lazy(() => import("./features/client-app/ClientHomeScreen"));
 const ClientArticleScreen = lazy(() => import("./features/client-app/ClientArticleScreen"));
 const ClientShortsScreen = lazy(() => import("./features/client-app/ClientShortsScreen"));
@@ -151,6 +159,14 @@ export default function App() {
         <Route path="chats" element={<Suspense fallback={null}><ClientChatsScreen /></Suspense>} />
         <Route path="chats/:chatId" element={<Suspense fallback={null}><ClientThreadScreen /></Suspense>} />
         <Route path="you" element={<Suspense fallback={null}><ClientYouScreen /></Suspense>} />
+        <Route path="you/details" element={<Suspense fallback={null}><ClientEditDetailsScreen /></Suspense>} />
+        <Route path="you/password" element={<Suspense fallback={null}><ClientChangePasswordScreen /></Suspense>} />
+        <Route path="you/favourites" element={<Suspense fallback={null}><ClientFavouritesScreen /></Suspense>} />
+        <Route path="you/delete" element={<Suspense fallback={null}><ClientDeleteAccountScreen /></Suspense>} />
+        <Route path="you/constellation" element={<Suspense fallback={null}><ClientConstellationScreen /></Suspense>} />
+        <Route path="you/notifications" element={<Suspense fallback={null}><ClientNotificationsScreen /></Suspense>} />
+        <Route path="you/terms" element={<Suspense fallback={null}><ClientTermsScreen /></Suspense>} />
+        <Route path="you/privacy" element={<Suspense fallback={null}><ClientPrivacyScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}

@@ -20,6 +20,8 @@ type SanctuaryPlayerContextValue = {
   isPlaying: boolean;
   playItem: (item: SanctuaryBrowseItem) => void;
   pause: () => void;
+  /** Stops playback and unloads the track, so the bar leaves. */
+  stop: () => void;
   setTrackList: (items: SanctuaryBrowseItem[]) => void;
 };
 
@@ -301,6 +303,22 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
     });
   }, [enqueueTransport, playAudio]);
 
+  // The bar's Close: playback stops, the element forgets its source (its
+  // "emptied" event clears the playing flag above), and with no active item the
+  // bar unmounts. A later playItem sets the source afresh.
+  const stop = useCallback(() => {
+    activeItemRef.current = null;
+    setActiveItem(null);
+    setElapsedSeconds(0);
+    setTotalSeconds(0);
+    void enqueueTransport((audio) => {
+      audio.pause();
+      audio.removeAttribute("src");
+      delete audio.dataset.orbTrackName;
+      audio.load();
+    });
+  }, [enqueueTransport]);
+
   const skipTrack = useCallback((direction: -1 | 1) => {
     void enqueueTransport(async (audio) => {
       const current = activeItemRef.current;
@@ -374,8 +392,9 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
     isPlaying,
     playItem,
     pause: requestPause,
+    stop,
     setTrackList,
-  }), [activeItem, isPlaying, playItem, requestPause, setTrackList]);
+  }), [activeItem, isPlaying, playItem, requestPause, stop, setTrackList]);
 
   return (
     <SanctuaryPlayerContext.Provider value={contextValue}>
@@ -416,6 +435,14 @@ export function SanctuaryPlayerProvider({ children }: { children: ReactNode }) {
                 />
                 <span>{formatPlayerTime(totalSeconds)}</span>
               </div>
+              {/* Close stops and unloads. It takes the column after the last
+                  one the page's grid declares, so the page's own layout gains
+                  no row; the app styles it by its attribute (client-app.css). */}
+              <button type="button" data-sanctuary-player="close" style={{ gridColumn: -1 }} onClick={stop} aria-label="Close player">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
             </div>
           </aside>
         </>
