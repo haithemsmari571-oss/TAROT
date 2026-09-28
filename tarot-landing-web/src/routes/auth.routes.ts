@@ -1,45 +1,50 @@
-import Login from "../features/auth/views/login";
-import Register from "../features/auth/views/register";
-import ForgotPassword from "../features/auth/views/forgot-password";
-import ResetPassword from "../features/auth/views/reset-password";
-import VerifyEmail from "../features/auth/views/verify-email";
+import { lazy } from "react";
 import type { RouteConfig } from "./app.routes";
+import { withNoIndex, withSeo } from "../components/Seo";
+const Login = lazy(() => import("../features/auth/views/login"));
+const Register = lazy(() => import("../features/auth/views/register"));
+const ForgotPassword = lazy(() => import("../features/auth/views/forgot-password"));
+const ResetPassword = lazy(() => import("../features/auth/views/reset-password"));
+const VerifyEmail = lazy(() => import("../features/auth/views/verify-email"));
+// The account links (reset and verify) are kept out of search; /verify-email/:token
+// is the same screen as /verify-account and lands there.
+const VerifyEmailNoIndex = withNoIndex(VerifyEmail);
 
 const authRoutes: RouteConfig[] = [
   {
     path: "/login",
     name: "Login Page",
-    component: Login,
+    component: withSeo(Login, "/login"),
     layout: "guest",
   },
   {
     path: "/register",
     name: "Register Page",
-    component: Register,
+    component: withSeo(Register, "/register"),
     layout: "guest",
   },
   {
     path: "/forgot-password",
     name: "Forgot Password Page",
-    component: ForgotPassword,
+    component: withSeo(ForgotPassword, "/forgot-password"),
     layout: "guest",
   },
   {
     path: "/reset-password/:token",
     name: "Reset Password Page",
-    component: ResetPassword,
+    component: withNoIndex(ResetPassword),
     layout: "guest",
   },
   {
     path: "/verify-email/:token",
     name: "Verify Email Page",
-    component: VerifyEmail,
+    component: VerifyEmailNoIndex,
     layout: "guest",
   },
   {
     path: "/verify-account",
     name: "Verify Account Page",
-    component: VerifyEmail,
+    component: VerifyEmailNoIndex,
     layout: "guest",
   },
 ];

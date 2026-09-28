@@ -18,10 +18,12 @@ const ssrEntry = join(root, "dist-ssr", "entry-server.js");
 const NOT_FOUND_PATH = "/__not_found__";
 
 function injectHead(template, head) {
-  // Drop the build's default <title> and description; the per-route head owns them.
+  // Drop the build's default <title>, description and share tags (og:* and
+  // twitter:*, index.html); the per-route head owns them.
   let out = template
     .replace(/\s*<title>[\s\S]*?<\/title>/i, "")
-    .replace(/\s*<meta\s+name="description"[^>]*>/i, "");
+    .replace(/\s*<meta\s+name="description"[^>]*>/i, "")
+    .replace(/\s*<meta\s+(?:property="og:[^"]*"|name="twitter:[^"]*")[^>]*>/gi, "");
   // Insert per-route head tags just before </head>.
   out = out.replace(/<\/head>/i, `    ${head}\n  </head>`);
   return out;

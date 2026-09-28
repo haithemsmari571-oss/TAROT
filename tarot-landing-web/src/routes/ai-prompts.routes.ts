@@ -1,6 +1,7 @@
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
-import AiPrompts from "../features/ai-prompts/views/AiPrompts";
+const AiPrompts = lazy(() => import("../features/ai-prompts/views/AiPrompts"));
 
 const aiPromptsRoutes: RouteConfig[] = [
   {

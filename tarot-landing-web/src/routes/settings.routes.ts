@@ -1,6 +1,7 @@
-import { Settings } from "../features/settings/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const Settings = lazy(() => import("../features/settings/views/Settings"));
 
 const settingsRoutes: RouteConfig[] = [
   {

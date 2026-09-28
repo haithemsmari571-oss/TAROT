@@ -1,21 +1,26 @@
 import { useLocation, Navigate, Route, Routes } from "react-router-dom";
-import AdminLayout from "./layouts/AdminLayout";
 import PublicLayout from "./layouts/PublicLayout";
 import "./App.css";
 import type { RouteConfig } from "./routes/app.routes";
 import routes from "./routes/app.routes";
 import { lazy, Suspense, useEffect } from "react";
 import NotFound from "./features/misc/views/NotFound";
+import { NoIndexSeo } from "./components/Seo";
 import { ProtectedRoute, RoleProtectedRoute } from "./features/auth/components";
 import { useAuth } from "./features/auth/hooks";
 import { UserRole } from "./features/auth/types/auth.types";
 import BrandedLoader from "./components/motion/BrandedLoader";
+import PageSpace from "./components/PageSpace";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
 import RedirectSignedInClient, { type ClientAppRedirect } from "./features/client-app/RedirectSignedInClient";
 import { CHATS_PATH, HOME_PATH, READERS_PATH, YOU_PATH } from "./features/client-app/clientAppPaths";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
+// The old customer layout, with the Vanta clouds and net on three.js. No route
+// under it renders today (every /admin address leaves for the CRM), so it and
+// its 3D engine load only if one ever does.
+const AdminLayout = lazy(() => import("./layouts/AdminLayout"));
 const ClientAppShell = lazy(() => import("./features/client-app/ClientAppShell"));
 const ClientThreadScreen = lazy(() => import("./features/client-app/ClientThreadScreen"));
 const ClientChatsScreen = lazy(() => import("./features/client-app/ClientChatsScreen"));
@@ -30,6 +35,7 @@ const ClientConstellationScreen = lazy(() => import("./features/client-app/Clien
 const ClientNotificationsScreen = lazy(() => import("./features/client-app/ClientNotificationsScreen"));
 const ClientTermsScreen = lazy(() => import("./features/client-app/ClientTermsScreen"));
 const ClientPrivacyScreen = lazy(() => import("./features/client-app/ClientPrivacyScreen"));
+const ClientHelpScreen = lazy(() => import("./features/client-app/ClientHelpScreen"));
 const ClientHomeScreen = lazy(() => import("./features/client-app/ClientHomeScreen"));
 const ClientArticleScreen = lazy(() => import("./features/client-app/ClientArticleScreen"));
 const ClientShortsScreen = lazy(() => import("./features/client-app/ClientShortsScreen"));
@@ -144,6 +150,8 @@ export default function App() {
         path="/app"
         element={
           <RoleProtectedRoute allowedRoles={[UserRole.USER]}>
+            {/* The app is kept out of search, every screen of it (ROUND41). */}
+            <NoIndexSeo />
             <Suspense fallback={null}>
               <ClientAppShell />
             </Suspense>
@@ -167,6 +175,7 @@ export default function App() {
         <Route path="you/notifications" element={<Suspense fallback={null}><ClientNotificationsScreen /></Suspense>} />
         <Route path="you/terms" element={<Suspense fallback={null}><ClientTermsScreen /></Suspense>} />
         <Route path="you/privacy" element={<Suspense fallback={null}><ClientPrivacyScreen /></Suspense>} />
+        <Route path="you/help" element={<Suspense fallback={null}><ClientHelpScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}
@@ -186,13 +195,26 @@ export default function App() {
                 element={withClientAppRedirect(
                   r.path,
                   <ProtectedRoute>
-                    <r.component />
+                    <Suspense fallback={<PageSpace />}>
+                      <r.component />
+                    </Suspense>
                   </ProtectedRoute>
                 )}
               />
             );
           }
-          return <Route key={r.path} path={r.path} element={withClientAppRedirect(r.path, <r.component />)} />;
+          return (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={withClientAppRedirect(
+                r.path,
+                <Suspense fallback={<PageSpace />}>
+                  <r.component />
+                </Suspense>
+              )}
+            />
+          );
         })}
       </Route>
 
@@ -204,7 +226,9 @@ export default function App() {
       <Route
         element={
           <ProtectedRoute>
-            <AdminLayout />
+            <Suspense fallback={null}>
+              <AdminLayout />
+            </Suspense>
           </ProtectedRoute>
         }
       >
@@ -219,13 +243,15 @@ export default function App() {
                     allowedRoles={r.allowedRoles}
                     redirectTo="/admin/chats"
                   >
-                    <r.component />
+                    <Suspense fallback={null}>
+                      <r.component />
+                    </Suspense>
                   </RoleProtectedRoute>
                 }
               />
             );
           }
-          return <Route key={r.path} path={r.path} element={<r.component />} />;
+          return <Route key={r.path} path={r.path} element={<Suspense fallback={null}><r.component /></Suspense>} />;
         })}
       </Route>
 
@@ -233,7 +259,7 @@ export default function App() {
       {routes
         .filter((r) => r.layout === "guest")
         .map((r: RouteConfig) => (
-          <Route key={r.path} path={r.path} element={withClientAppRedirect(r.path, <r.component />)} />
+          <Route key={r.path} path={r.path} element={withClientAppRedirect(r.path, <Suspense fallback={null}><r.component /></Suspense>)} />
         ))}
       <Route path="/chats/:chatId" element={withClientAppRedirect("/chats/:chatId", <NotFound />)} />
 

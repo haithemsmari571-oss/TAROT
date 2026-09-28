@@ -1,5 +1,6 @@
+import { lazy } from "react";
 import type { RouteConfig } from "./app.routes";
-import { ClientProfile } from "../features/profile/views";
+const ClientProfile = lazy(() => import("../features/profile/views/ClientProfile"));
 
 const profileRoutes: RouteConfig[] = [
   {

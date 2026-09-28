@@ -1,7 +1,7 @@
-import React from "react";
+import React, { createElement, Fragment, lazy } from "react";
 import authRoutes from "./auth.routes";
 import HomeRedirect from "../features/home/views/HomeRedirect";
-import home from "../features/home/views/home";
+import PageSpace from "../components/PageSpace";
 import userRoutes from "./user.routes";
 import psychicsRoutes from "./psychics.routes";
 import chatRoutes from "./chat.routes";
@@ -35,6 +35,17 @@ import designPreviewRoutes from "./design-preview.routes";
 import readingRoutes from "./reading.routes";
 import { UserRole } from "../features/auth/types/auth.types";
 
+/* Every page arrives as its own file when its address is opened (the lazy()
+   pages here and in each route file), not all of them on every page: the old
+   admin screens, with three.js, vanta and recharts, never reach a client's
+   phone. App.tsx gives each page its Suspense boundary. */
+const home = lazy(() => import("../features/home/views/home"));
+
+/* "/" only sends a guest on to the readers list. For the frame that takes it
+   holds a screen's height, so the footer is not drawn at the top and then
+   pushed down when the list lands (PageSpace.tsx). */
+const HomeRedirectHoldingSpace = () =>
+  createElement(Fragment, null, createElement(HomeRedirect), createElement(PageSpace));
 
 export interface RouteConfig {
   path: string;
@@ -49,7 +60,7 @@ const routes: RouteConfig[] = [
   {
     path: "/",
     name: "home Redirect",
-    component: HomeRedirect,
+    component: HomeRedirectHoldingSpace,
     layout: "public",
   },
   {

@@ -1,6 +1,8 @@
-import { MyReviewsPage, MyProfilePage } from "../features/psychic-profile/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const MyReviewsPage = lazy(() => import("../features/psychic-profile/views/MyReviews"));
+const MyProfilePage = lazy(() => import("../features/psychic-profile/views/MyProfile"));
 
 const psychicProfileRoutes: RouteConfig[] = [
   {

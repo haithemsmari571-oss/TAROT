@@ -1,6 +1,7 @@
-import { CategoriesPage } from "../features/categories/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const CategoriesPage = lazy(() => import("../features/categories/views/Categories"));
 
 const categoriesRoutes: RouteConfig[] = [
   {

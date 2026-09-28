@@ -1,6 +1,7 @@
-import { BuyOptionsPage } from "../features/buy-options/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const BuyOptionsPage = lazy(() => import("../features/buy-options/views/BuyOptions"));
 
 const buyOptionsRoutes: RouteConfig[] = [
   {

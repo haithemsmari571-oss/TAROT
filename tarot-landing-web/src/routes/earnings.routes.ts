@@ -1,6 +1,7 @@
-import { EarningsPage } from "../features/earnings/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const EarningsPage = lazy(() => import("../features/earnings/views/Earnings"));
 
 const earningsRoutes: RouteConfig[] = [
   {

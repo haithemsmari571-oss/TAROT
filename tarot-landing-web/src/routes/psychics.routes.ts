@@ -1,7 +1,8 @@
+import { lazy } from "react";
 
-import { PractitionersPage } from "../features/psychics/views";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const PractitionersPage = lazy(() => import("../features/psychics/views/Practitioners"));
 
 
 const psychicsRoutes: RouteConfig[] = [

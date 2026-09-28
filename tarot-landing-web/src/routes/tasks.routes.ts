@@ -1,6 +1,8 @@
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
-import { TaskManager, ClaimsQueue } from "../features/tasks/views";
+const TaskManager = lazy(() => import("../features/tasks/views/TaskManager"));
+const ClaimsQueue = lazy(() => import("../features/tasks/views/ClaimsQueue"));
 
 const tasksRoutes: RouteConfig[] = [
   {

@@ -1,6 +1,7 @@
-import { ZodiacSignsPage } from "../features/zodiac/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const ZodiacSignsPage = lazy(() => import("../features/zodiac/views/ZodiacSigns"));
 
 const zodiacRoutes: RouteConfig[] = [
   {

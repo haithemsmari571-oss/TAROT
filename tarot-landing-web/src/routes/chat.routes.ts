@@ -1,9 +1,11 @@
 
-import { createElement } from "react";
-import { PsychicSessionPage, ClientChatPage, AdminChatDetailPage } from "../features/chat/views";
+import { createElement, lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
 import { ProtectedRoute } from "../features/auth/components";
+const PsychicSessionPage = lazy(() => import("../features/chat/views/PsychicSessionGlass"));
+const ClientChatPage = lazy(() => import("../features/chat/views/ClientChat"));
+const AdminChatDetailPage = lazy(() => import("../features/chat/views/AdminChatDetail"));
 
 /* The reading is drawn as the hall now, and the hall is the whole window — it
    paints its own sky to every edge. Under the public layout the navbar, the

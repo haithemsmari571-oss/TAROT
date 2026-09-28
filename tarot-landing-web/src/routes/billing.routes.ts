@@ -1,5 +1,6 @@
-import Billing from "../features/payment/views/Billing";
+import { lazy } from "react";
 import type { RouteConfig } from "./app.routes";
+const Billing = lazy(() => import("../features/payment/views/Billing"));
 
 const billingRoutes: RouteConfig[] = [
   {

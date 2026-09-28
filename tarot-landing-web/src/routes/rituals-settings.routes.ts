@@ -1,6 +1,7 @@
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
-import RitualsSettings from "../features/rituals-settings/views/RitualsSettings";
+const RitualsSettings = lazy(() => import("../features/rituals-settings/views/RitualsSettings"));
 
 const ritualsSettingsRoutes: RouteConfig[] = [
   {

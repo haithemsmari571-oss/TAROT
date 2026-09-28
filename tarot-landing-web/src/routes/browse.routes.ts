@@ -1,11 +1,15 @@
+import { lazy } from "react";
 import type { RouteConfig } from "./app.routes";
-import { PsychicsBrowse, PsychicDetails } from "../features/browse/views";
+import { withSeo } from "../components/Seo";
+const PsychicsBrowse = lazy(() => import("../features/browse/views/PsychicsBrowse"));
+// The profile with its head, which needs the reader's name (PsychicDetailsRoute.tsx).
+const PsychicDetails = lazy(() => import("../features/browse/views/PsychicDetailsRoute"));
 
 const browseRoutes: RouteConfig[] = [
   {
     path: "/psychics-browse",
     name: "Browse Psychics",
-    component: PsychicsBrowse,
+    component: withSeo(PsychicsBrowse, "/psychics-browse"),
     layout: "public",
   },
   {

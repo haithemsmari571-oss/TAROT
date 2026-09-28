@@ -1,6 +1,7 @@
-import { PsychicOnboardingPage } from "../features/onboarding/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const PsychicOnboardingPage = lazy(() => import("../features/onboarding/views/PsychicOnboarding"));
 
 const onboardingRoutes: RouteConfig[] = [
   {

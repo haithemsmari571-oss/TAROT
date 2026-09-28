@@ -1,6 +1,7 @@
-import { LandingEditorPage } from "../features/landing-editor/views";
+import { lazy } from "react";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const LandingEditorPage = lazy(() => import("../features/landing-editor/views/LandingEditor"));
 
 const landingEditorRoutes: RouteConfig[] = [
   {

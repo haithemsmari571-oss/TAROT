@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="https://api.iconify.design/ph:eye-duotone.svg?color=%23F2AE40" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- viewport-fit=cover is what makes env(safe-area-inset-*) resolve to real
          numbers on a notched phone; without it those insets are always 0 and
          edge-pinned furniture sits under the notch and the home indicator.
@@ -16,10 +16,14 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <meta name="theme-color" content="#120c18" />
 
-    <!-- Glass design system faces: Fraunces (display serif) + Inter (UI) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Glass design system faces: Fraunces (display serif) + Inter (UI), served
+         from the site itself (src/styles/fonts.css, loaded by main.tsx) -->
+    <!-- The two faces the first screen draws, the latin files fonts.css names,
+         asked for with the page instead of after the stylesheet, so headings
+         do not re-wrap when they arrive. The build gives these links the same
+         hashed file as fonts.css, so each downloads once. -->
+    <link rel="preload" href="/src/assets/fonts/fraunces-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/src/assets/fonts/inter-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- Google Search Console verification -->
     <meta name="google-site-verification" content="5hUXjqlhtsrmAB-6FHgn2UhRu8enmDETLF_Ps8OTiLo" />
@@ -27,6 +31,25 @@
     <title>Private Love Readings & Tarot Clarity | Ask Valentina</title>
 
     <meta name="description" content="Private, judgment-free love and tarot readings with intuitive readers — your first reading is on us. Get clarity on him, your relationship and what happens next." />
+
+    <!-- The share card every page starts with: WhatsApp, Instagram, Facebook and X
+         read only this served HTML. The same values as src/seo/seoData.ts
+         (DEFAULT_SEO and the share image, public/og-image.jpg). Seo.tsx updates
+         them per page once the app runs; scripts/prerender.mjs replaces them with
+         each prerendered page's own. One tag per line, for the prerender. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ask Valentina" />
+    <meta property="og:title" content="Private Love Readings &amp; Tarot Clarity | Ask Valentina" />
+    <meta property="og:description" content="Private, judgment-free love and tarot readings with intuitive readers — your first reading is on us. Get clarity on him, your relationship and what happens next." />
+    <meta property="og:url" content="https://askvalentina.co.uk/" />
+    <meta property="og:image" content="https://askvalentina.co.uk/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ask Valentina" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Private Love Readings &amp; Tarot Clarity | Ask Valentina" />
+    <meta name="twitter:description" content="Private, judgment-free love and tarot readings with intuitive readers — your first reading is on us. Get clarity on him, your relationship and what happens next." />
+    <meta name="twitter:image" content="https://askvalentina.co.uk/og-image.jpg" />
 
     <script type="application/ld+json">
       {

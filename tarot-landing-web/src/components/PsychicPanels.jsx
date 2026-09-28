@@ -6,16 +6,31 @@ import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWe
 // "What you'll Receive" cards. Uses inline styles + a small <style> block for
 // the pulsing glow keyframe, because the glow colours are data-driven and can't
 // live in static Tailwind classes.
-import panelLove from "../assets/panels/panel-love.jpg";
-import panelCareer from "../assets/panels/panel-career.jpg";
-import panelFamily from "../assets/panels/panel-family.jpg";
-import panelPastlife from "../assets/panels/panel-pastlife.jpg";
-import panelMeditation from "../assets/panels/panel-meditation.jpg";
+
+// Below this width the panels stack as full-width cards (useIsMobile).
+const MOBILE_BREAKPOINT = 768;
+
+// Each panel's art as WebP at the widths it is drawn at: 480 for a laptop's
+// one-fifth panel, 720 for a phone's full-width card, 941 (the art's own
+// width) for sharp screens. The browser picks one from PANEL_SIZES: a phone
+// draws the card the screen's width less the section's 16px padding each side
+// (home.tsx, px-4); a laptop draws the 941x1672 art as tall as the 680px panel
+// with object-fit: cover, which is about 400px wide.
+const PANEL_WIDTHS = [480, 720, 941];
+const PANEL_SIZES = `(max-width: ${MOBILE_BREAKPOINT - 1}px) calc(100vw - 32px), 400px`;
+const panelArt = import.meta.glob("../assets/panels/*.webp", { eager: true, import: "default" });
+const panelImage = (id) => {
+  const url = (width) => panelArt[`../assets/panels/panel-${id}-${width}.webp`];
+  return {
+    src: url(PANEL_WIDTHS[PANEL_WIDTHS.length - 1]),
+    srcSet: PANEL_WIDTHS.map((width) => `${url(width)} ${width}w`).join(", "),
+  };
+};
 
 const PANELS = [
   {
     id: "love",
-    image: panelLove,
+    image: panelImage("love"),
     category: "Love & Relationships",
     number: "01",
     title: "Who stays.\nWho leaves.",
@@ -30,7 +45,7 @@ const PANELS = [
   },
   {
     id: "career",
-    image: panelCareer,
+    image: panelImage("career"),
     category: "Money & Career",
     number: "02",
     title: "What is about\nto change.",
@@ -45,7 +60,7 @@ const PANELS = [
   },
   {
     id: "family",
-    image: panelFamily,
+    image: panelImage("family"),
     category: "Family",
     number: "03",
     title: "What no one\nwill say out loud.",
@@ -60,7 +75,7 @@ const PANELS = [
   },
   {
     id: "pastlife",
-    image: panelPastlife,
+    image: panelImage("pastlife"),
     category: "Past Life",
     number: "04",
     title: "Why this life\nfeels familiar.",
@@ -75,7 +90,7 @@ const PANELS = [
   },
   {
     id: "meditation",
-    image: panelMeditation,
+    image: panelImage("meditation"),
     category: "Guided Meditation",
     number: "05",
     title: "The frequency\nyou have not unlocked.",
@@ -96,10 +111,10 @@ const EASE = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.innerWidth < 768 : false
+    typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false
   );
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
+    const onResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -136,7 +151,9 @@ const Panel = ({ panel, active, isMobile, onEnter, onLeave, panelRef }) => {
     >
       {/* Background image */}
       <img
-        src={panel.image}
+        src={panel.image.src}
+        srcSet={panel.image.srcSet}
+        sizes={PANEL_SIZES}
         alt=""
         aria-hidden="true"
         style={{

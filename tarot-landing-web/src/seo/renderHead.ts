@@ -1,6 +1,14 @@
 // Framework-agnostic <head> tag builder shared by the prerenderer. Produces a
 // raw HTML string of title/meta/canonical/OG/Twitter/JSON-LD tags for a route.
-import { canonicalUrl, DEFAULT_OG_IMAGE, SITE_NAME, type SeoMeta } from "./seoData";
+import {
+  canonicalUrl,
+  DEFAULT_OG_IMAGE,
+  DEFAULT_OG_IMAGE_ALT,
+  DEFAULT_OG_IMAGE_HEIGHT,
+  DEFAULT_OG_IMAGE_WIDTH,
+  SITE_NAME,
+  type SeoMeta,
+} from "./seoData";
 
 const escapeHtml = (s: string): string =>
   s
@@ -25,6 +33,14 @@ export function renderHeadTags(meta: SeoMeta): string {
     `<meta property="og:description" content="${escapeHtml(meta.description)}" />`,
     `<meta property="og:url" content="${canonical}" />`,
     `<meta property="og:image" content="${ogImage}" />`,
+    // Size and name only for the site's own share image (as Seo.tsx does).
+    ...(ogImage === DEFAULT_OG_IMAGE
+      ? [
+          `<meta property="og:image:width" content="${DEFAULT_OG_IMAGE_WIDTH}" />`,
+          `<meta property="og:image:height" content="${DEFAULT_OG_IMAGE_HEIGHT}" />`,
+          `<meta property="og:image:alt" content="${escapeHtml(DEFAULT_OG_IMAGE_ALT)}" />`,
+        ]
+      : []),
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escapeHtml(meta.title)}" />`,
     `<meta name="twitter:description" content="${escapeHtml(meta.description)}" />`,

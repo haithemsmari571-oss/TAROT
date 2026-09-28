@@ -4,10 +4,23 @@
 // build-time prerenderer (src/entry-server.tsx + scripts/prerender.mjs) read
 // from this map, so a crawler and a live visitor always see the same title,
 // description, canonical and Open Graph tags for a given path.
+//
+// index.html carries the same defaults as static tags (DEFAULT_SEO and the share
+// image below) for the crawlers that never run the app: WhatsApp, Instagram,
+// Facebook and X read only the served HTML.
+
+import { COMPANY_NAME } from "../lib/company";
 
 export const SITE_URL = "https://askvalentina.co.uk";
 export const SITE_NAME = "Ask Valentina";
-export const DEFAULT_OG_IMAGE = `${SITE_URL}/logo.svg`;
+/** The share image: public/og-image.jpg, 1200x630, the app's sky and the
+    wordmark (made by relay/round41-evidence/og_image.cjs). */
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.jpg`;
+export const DEFAULT_OG_IMAGE_WIDTH = 1200;
+export const DEFAULT_OG_IMAGE_HEIGHT = 630;
+export const DEFAULT_OG_IMAGE_ALT = SITE_NAME;
+/** Pages kept out of search: sign-in, sign-up, the app and the account links. */
+export const NOINDEX = "noindex";
 
 export interface JsonLd {
   [key: string]: unknown;
@@ -30,10 +43,12 @@ export interface SeoMeta {
   jsonLd?: JsonLd[];
 }
 
+/** The site's default title and description: the ones index.html serves on
+    every page that has none of its own. */
 export const DEFAULT_SEO: SeoMeta = {
   title: "Private Love Readings & Tarot Clarity | Ask Valentina",
   description:
-    "Private, judgment-free love and tarot readings with intuitive readers. Get clarity on him, your relationship and what happens next.",
+    "Private, judgment-free love and tarot readings with intuitive readers — your first reading is on us. Get clarity on him, your relationship and what happens next.",
   path: "/",
   ogType: "website",
 };
@@ -55,16 +70,56 @@ export const SEO: Record<string, SeoMeta> = {
   },
   "/psychics-browse": {
     path: "/psychics-browse",
-    title: "Browse Our Psychic & Tarot Readers | Ask Valentina",
+    title: "Love & Tarot Readers | Ask Valentina",
     description:
-      "Meet our intuitive love and tarot readers — your first reading is on us. Choose the reader who feels right and start a private one-to-one reading whenever you're ready.",
+      "Browse love and tarot readers, see their reviews and prices, and start a private reading by message.",
     ogType: "website",
   },
   "/about": {
     path: "/about",
-    title: "About Ask Valentina | Private Intuitive Readings",
+    title: "About Ask Valentina",
+    description: `Private love and tarot readings by message, from ${COMPANY_NAME} in London.`,
+    ogType: "website",
+  },
+  "/terms": {
+    path: "/terms",
+    title: "Terms of Service | Ask Valentina",
+    description: "The terms for using Ask Valentina.",
+    ogType: "website",
+  },
+  "/privacy": {
+    path: "/privacy",
+    title: "Privacy Policy | Ask Valentina",
+    description: "How Ask Valentina collects, uses and protects your information.",
+    ogType: "website",
+  },
+  "/login": {
+    path: "/login",
+    title: "Sign in | Ask Valentina",
+    description: DEFAULT_SEO.description,
+    robots: NOINDEX,
+    ogType: "website",
+  },
+  "/register": {
+    path: "/register",
+    title: "Create your account | Ask Valentina",
+    description: "Create your free account and start your first private reading.",
+    robots: NOINDEX,
+    ogType: "website",
+  },
+  // Guest pages with no words of their own in the brief: the page's h1 and its
+  // first intro sentence, word for word (ROUND41).
+  "/oracle": {
+    path: "/oracle",
+    title: "Cosmic Compatibility | Ask Valentina",
     description:
-      "Ask Valentina is a sanctuary for private, honest love and tarot readings. Learn about our readers and how we help you find clarity.",
+      "Discover how the stars aligned at your birth — and what that means for love, communication, emotional bonds, and your soul's unique journey.",
+    ogType: "website",
+  },
+  "/forgot-password": {
+    path: "/forgot-password",
+    title: "Reset your password | Ask Valentina",
+    description: "Enter your email to receive password reset instructions.",
     ogType: "website",
   },
   "/404": {
@@ -192,13 +247,32 @@ export const SEO: Record<string, SeoMeta> = {
   },
 };
 
+/** A reader's profile, /psychics/:id/details. The name is the one the page shows. */
+export function readerSeo(id: number, name: string): SeoMeta {
+  return {
+    path: `/psychics/${id}/details`,
+    title: `${name}, Love & Tarot Reader | Ask Valentina`,
+    description: `See ${name}'s reviews, specialities and price per message, then start a private reading.`,
+    ogType: "website",
+  };
+}
+
+/** A page kept out of search: the site's default title and description, its
+    own canonical, noindex. */
+export function noindexSeo(path: string): SeoMeta {
+  return { ...DEFAULT_SEO, path, robots: NOINDEX };
+}
+
 /** Look up metadata for a path, falling back to sensible defaults. */
 export function getSeo(path: string): SeoMeta {
   const clean = path.replace(/\/+$/, "") || "/";
   return SEO[clean] ?? { ...DEFAULT_SEO, path: clean };
 }
 
-/** Absolute canonical URL for a path. */
+/** Absolute canonical URL for a path. One slash rule for every page the app
+    draws: the site address and the path with no trailing slash (the root keeps
+    its one "/"). The sitemap (TAROT-BACKEND app/routers/public_seo.py) lists the
+    same form, and nginx answers each of them 200 with no redirect. */
 export function canonicalUrl(path: string): string {
   const clean = path.replace(/\/+$/, "") || "/";
   return clean === "/" ? `${SITE_URL}/` : `${SITE_URL}${clean}`;

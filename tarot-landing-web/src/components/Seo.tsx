@@ -2,11 +2,16 @@
 // path change it imperatively syncs <title>, meta description, canonical, Open
 // Graph / Twitter tags and any JSON-LD blocks — so client-side navigation keeps
 // the head in step with the prerendered HTML.
-import { useEffect } from "react";
+import { useEffect, type ComponentType } from "react";
+import { useLocation } from "react-router-dom";
 import {
   canonicalUrl,
   DEFAULT_OG_IMAGE,
+  DEFAULT_OG_IMAGE_ALT,
+  DEFAULT_OG_IMAGE_HEIGHT,
+  DEFAULT_OG_IMAGE_WIDTH,
   getSeo,
+  noindexSeo,
   SITE_NAME,
   type SeoMeta,
 } from "../seo/seoData";
@@ -23,6 +28,10 @@ function upsertMeta(selector: string, attr: "name" | "property", key: string, co
     document.head.appendChild(el);
   }
   el.setAttribute("content", content);
+}
+
+function removeMeta(selector: string) {
+  document.head.querySelectorAll(selector).forEach((n) => n.remove());
 }
 
 function upsertLink(rel: string, href: string) {
@@ -52,6 +61,15 @@ function applySeo(meta: SeoMeta) {
   upsertMeta('meta[property="og:description"]', "property", "og:description", meta.description);
   upsertMeta('meta[property="og:url"]', "property", "og:url", canonical);
   upsertMeta('meta[property="og:image"]', "property", "og:image", ogImage);
+  // The share image's size and name are known only for the site's own image;
+  // a page with another image (an article's cover) carries none.
+  if (ogImage === DEFAULT_OG_IMAGE) {
+    upsertMeta('meta[property="og:image:width"]', "property", "og:image:width", String(DEFAULT_OG_IMAGE_WIDTH));
+    upsertMeta('meta[property="og:image:height"]', "property", "og:image:height", String(DEFAULT_OG_IMAGE_HEIGHT));
+    upsertMeta('meta[property="og:image:alt"]', "property", "og:image:alt", DEFAULT_OG_IMAGE_ALT);
+  } else {
+    removeMeta('meta[property="og:image:width"], meta[property="og:image:height"], meta[property="og:image:alt"]');
+  }
 
   upsertMeta('meta[name="twitter:card"]', "name", "twitter:card", "summary_large_image");
   upsertMeta('meta[name="twitter:title"]', "name", "twitter:title", meta.title);
@@ -87,4 +105,34 @@ export default function Seo({ path, meta }: SeoProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
   return null;
+}
+
+/** For pages kept out of search (sign-in links, the app): the site's default
+    title and description, noindex, and the address shown as the canonical. */
+export function NoIndexSeo() {
+  const { pathname } = useLocation();
+  return <Seo meta={noindexSeo(pathname)} />;
+}
+
+/* For the route files (src/routes/*.routes.ts, no JSX there): a page with its
+   head, from the path's entry in seoData.ts, or kept out of search. The page
+   itself is untouched. */
+export function withSeo(Page: ComponentType, path: string): ComponentType<unknown> {
+  const PageWithSeo = () => (
+    <>
+      <Seo path={path} />
+      <Page />
+    </>
+  );
+  return PageWithSeo;
+}
+
+export function withNoIndex(Page: ComponentType): ComponentType<unknown> {
+  const PageWithNoIndex = () => (
+    <>
+      <NoIndexSeo />
+      <Page />
+    </>
+  );
+  return PageWithNoIndex;
 }

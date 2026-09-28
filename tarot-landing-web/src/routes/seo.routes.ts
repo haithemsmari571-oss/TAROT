@@ -1,6 +1,7 @@
-import DoesHeMissMe from "../features/seo/views/DoesHeMissMe";
-import WillMyExComeBack from "../features/seo/views/WillMyExComeBack";
+import { lazy } from "react";
 import type { RouteConfig } from "./app.routes";
+const DoesHeMissMe = lazy(() => import("../features/seo/views/DoesHeMissMe"));
+const WillMyExComeBack = lazy(() => import("../features/seo/views/WillMyExComeBack"));
 
 // Long-form SEO content pages. Public, crawlable, prerendered at build time.
 const seoRoutes: RouteConfig[] = [

@@ -1,5 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
+// The site's faces, Fraunces and Inter, from the site itself (not Google Fonts)
+import './styles/fonts.css'
 import App from './App.tsx'
 import { BrowserRouter } from 'react-router-dom'
 import React from 'react'
@@ -16,6 +18,11 @@ import { SanctuaryPlayerProvider } from './features/sanctuary/SanctuaryPlayerPro
 // Holds the browser's install offer from the first moment, for the app's
 // home-screen row: it fires before the lazy app shell has loaded.
 import './features/client-app/useInstallPrompt'
+import { endRefusedStoredSession } from './features/auth/websiteSignIn'
+
+// A reader's or admin's stored session ends here, before any route renders,
+// and the page opens on /login with the sign-in page's refusal.
+endRefusedStoredSession()
 
 const queryClient = new QueryClient(
   {defaultOptions: {

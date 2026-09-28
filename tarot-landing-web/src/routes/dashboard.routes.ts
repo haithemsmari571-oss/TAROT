@@ -1,7 +1,8 @@
+import { lazy } from "react";
 
-import { DashboardPage } from "../features/dashboard/views";
 import { UserRole } from "../features/auth/types/auth.types";
 import type { RouteConfig } from "./app.routes";
+const DashboardPage = lazy(() => import("../features/dashboard/views/Dashboard"));
 
 
 const dashboardRoutes: RouteConfig[] = [
