@@ -51,7 +51,7 @@ def _body(**changes):
 def signup(db, monkeypatch):
     from app.main import domain_exception_handler
 
-    async def _no_mail(user):
+    async def _no_mail(db, user):
         return None
 
     monkeypatch.setattr(auth_service, "send_verify_mail", _no_mail)

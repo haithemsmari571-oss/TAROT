@@ -1,3 +1,4 @@
+import html
 import re
 from typing import List
 
@@ -22,6 +23,18 @@ logger = get_logger(__name__)
 # Who every email is from, on the MAIL_FROM address, and how the client emails
 # sign off ({{brand}} in the templates, filled by send_email).
 BRAND_NAME = "Ask Valentina"
+
+# Who runs the site, in the owner's words (ROUND39), at the foot of every
+# client email ({{company_identity}} and {{company_contact}}, filled by
+# send_email), as the site's footer shows them (tarot-landing-web
+# src/lib/company.ts holds the same words for the site).
+COMPANY_IDENTITY = (
+    f"{BRAND_NAME} is a trading name of Numinous Holdings Ltd, a company "
+    "registered in England and Wales (company number 17151844)."
+)
+REGISTERED_OFFICE = "66 Paul Street, London, EC2A 4NA"
+SUPPORT_EMAIL = "support@askvalentina.co.uk"
+COMPANY_CONTACT = f"Registered office: {REGISTERED_OFFICE} · Contact: {SUPPORT_EMAIL}"
 
 
 class EmailSchema(BaseModel):
@@ -105,6 +118,7 @@ _CONVERSATION_EMAIL = """
     <div class="footer">
       <p><a href="{{you_link}}" target="_blank">Turn these emails off</a> in the app, under You.</p>
       &copy; 2026 {{brand}}. All rights reserved.
+      <p>{{company_identity}}<br>{{company_contact}}</p>
     </div>
   </div>
 </body>
@@ -169,10 +183,11 @@ templates = {
     <p>
       <a href="{{reset_link}}" target="_blank" class="button">Reset Password</a>
     </p>
-    <p>If you did not request a password reset, you can safely ignore this email. This link will expire in 5 minutes.</p>
+    <p>If you did not request a password reset, you can safely ignore this email. This link will expire in {{link_minutes}} minutes.</p>
     <p>Thanks,<br>{{brand}}</p>
     <div class="footer">
       &copy; 2026 {{brand}}. All rights reserved.
+      <p>{{company_identity}}<br>{{company_contact}}</p>
     </div>
   </div>
 </body>
@@ -238,6 +253,7 @@ templates = {
     <p>Thanks,<br>{{brand}}</p>
     <div class="footer">
       &copy; 2026 {{brand}}. All rights reserved.
+      <p>{{company_identity}}<br>{{company_contact}}</p>
     </div>
   </div>
 </body>
@@ -296,7 +312,7 @@ templates = {
     </table>
     <p>Transaction record: #{{transaction_id}} (also flagged in the admin order list).</p>
     <div class="footer">
-      &copy; 2026 AskValentina. Automated notification.
+      &copy; 2026 {{brand}}. Automated notification.
     </div>
   </div>
 </body>
@@ -323,16 +339,21 @@ async def send_email(
             )
             raise TemplateNotFound()
 
-        mail_body = _fill_body_variables(template, {**vars, "brand": BRAND_NAME})
+        mail_body = _fill_body_variables(template, {
+            **vars,
+            "brand": BRAND_NAME,
+            "company_identity": COMPANY_IDENTITY,
+            "company_contact": COMPANY_CONTACT,
+        })
 
         email_subjects = {
             MailTemplateKey.FORGOT_PASSWORD.value: "Reset your password",
-            MailTemplateKey.VERIFY_ACCOUNT.value: "Verify your AskValentina account",
+            MailTemplateKey.VERIFY_ACCOUNT.value: f"Verify your {BRAND_NAME} account",
             MailTemplateKey.LIFETIME_ACCESS.value: (
                 "⚡ Lifetime Access purchased — manual fulfilment needed"
             ),
         }
-        subject = subject or email_subjects.get(template_key, "AskValentina Notification")
+        subject = subject or email_subjects.get(template_key, f"{BRAND_NAME} Notification")
 
         message = MessageSchema(
             subject=subject,
@@ -379,7 +400,12 @@ def _fill_body_variables(template: str, vars: dict):
 
     for key, value in vars.items():
         placeholder = f"{{{{{key}}}}}"
-        template_filled = template_filled.replace(placeholder, str(value))
+        # Every value is HTML-escaped: these fill an HTML email, and some come
+        # from the account (username, email). Without this a crafted username
+        # injected markup into the verify/reset email and into the owner's
+        # Lifetime Access notification. URLs and numbers escape harmlessly (only
+        # "&" changes, which is correct inside an href).
+        template_filled = template_filled.replace(placeholder, html.escape(str(value)))
 
     _validate_all_vars_are_filled(template_filled)
 

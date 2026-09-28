@@ -44,7 +44,6 @@ def issue_refund(
         "refund_requested",
         admin_user_id=admin.id,
         admin_username=admin.username,
-        admin_email=admin.email,
         original_transaction_id=refund_request.transaction_id,
         refund_amount=refund_request.amount,
         refund_reason=refund_request.reason,

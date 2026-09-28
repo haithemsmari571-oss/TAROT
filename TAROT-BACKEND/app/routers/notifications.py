@@ -14,6 +14,8 @@ from app.notification_manager import notification_manager
 from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.models.user import User
+from app.enums.user_status import UserStatus
+from app.utils.security import decode_access_token
 from app.models.notification import Notification
 from app.schemas.notification import NotificationOut, PaginatedNotifications
 from app.enums.notification_type import NotificationType
@@ -230,9 +232,9 @@ async def authenticate_websocket_user(token, db):
     Raises various jwt exceptions that should be caught by caller.
     """
     try:
-        payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-        )
+        # Reject a refresh token here too (type != "access"): the socket is a
+        # bearer-authenticated surface like the HTTP API.
+        payload = decode_access_token(token)
         user_id: str = payload.get("sub")
 
         if not user_id:
@@ -247,6 +249,13 @@ async def authenticate_websocket_user(token, db):
                 user_id=user_id,
             )
             raise ValueError("User not found")
+
+        # A suspended or self-deleted account is logged out everywhere, the
+        # notification socket included (mirrors get_current_user and the chat
+        # socket).
+        if user.status == UserStatus.SUSPENDED:
+            logger.warning("websocket_auth_failed_account_suspended", user_id=user.id)
+            raise ValueError("This account has been deactivated")
 
         logger.debug("websocket_auth_success", user_id=user.id)
 

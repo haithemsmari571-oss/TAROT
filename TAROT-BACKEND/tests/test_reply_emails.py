@@ -248,11 +248,22 @@ def test_only_a_confirmed_active_client_with_the_switch_on(local, people):
 
 
 def test_the_names_are_escaped_in_the_email(local, outbox):
+    # ROUND34: markup is no display name, so only its first name part reaches
+    # the email; the apostrophe a name may hold is still escaped.
     _conversation(local, reader="<b>Eve</b>")
     reply_emails.email_pass([], asyncio.run)
     [message] = outbox
     assert "<b>eve" not in message.body.lower()
-    assert "&lt;b&gt;eve&lt;/b&gt; replied to you" in message.body
+    assert "&lt;" not in message.body
+    assert "<h2>B replied to you</h2>" in message.body
+
+
+def test_an_apostrophe_in_a_name_is_escaped_in_the_email(local, outbox):
+    _conversation(local, reader="O'Brien")
+    reply_emails.email_pass([], asyncio.run)
+    [message] = outbox
+    assert message.subject == "O'brien replied to you"
+    assert "<h2>O&#x27;brien replied to you</h2>" in message.body
 
 
 def test_a_failed_send_is_logged_and_not_repeated(local, outbox, monkeypatch):
@@ -385,7 +396,7 @@ def test_reader_names_are_title_case_as_in_the_app():
 # ── the sign-up and password emails ──────────────────────────────────────────
 @pytest.mark.parametrize("key, vars", [
     (MailTemplateKey.VERIFY_ACCOUNT, {"username": "nadia", "verify_link": "https://x/v"}),
-    (MailTemplateKey.FORGOT_PASSWORD, {"username": "nadia", "reset_link": "https://x/r"}),
+    (MailTemplateKey.FORGOT_PASSWORD, {"username": "nadia", "reset_link": "https://x/r", "link_minutes": 60}),
 ])
 def test_the_account_emails_sign_off_as_ask_valentina(outbox, key, vars):
     for template in (MailTemplateKey.VERIFY_ACCOUNT, MailTemplateKey.FORGOT_PASSWORD):
@@ -399,7 +410,7 @@ def test_the_account_emails_sign_off_as_ask_valentina(outbox, key, vars):
     [message] = outbox
     assert "Thanks,<br>Ask Valentina" in message.body
     assert "&copy; 2026 Ask Valentina. All rights reserved." in message.body
-    assert message.subject in ("Verify your AskValentina account", "Reset your password")
+    assert message.subject in ("Verify your Ask Valentina account", "Reset your password")
 
 
 # ── her switch, PATCH /api/profile/me ────────────────────────────────────────

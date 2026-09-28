@@ -101,9 +101,10 @@ def find_or_open_conversation(
     opener is written.
 
     The caller holds the client's row lock. An existing conversation comes
-    back as it is, with no session and no opener: nothing on it changes here.
-    A new one is created ACTIVE and automatic, with its clockless joined
-    session and the reader's opener, flushed and not committed.
+    back as it is, whatever its response mode, with no session and no opener:
+    nothing on it changes here. A new one is created ACTIVE and automatic, with
+    its clockless joined session and the reader's opener, flushed and not
+    committed.
     """
     chat = (
         db.query(Chat)
@@ -111,8 +112,6 @@ def find_or_open_conversation(
         .populate_existing()
         .first()
     )
-    if chat is not None and chat.response_mode != ResponseMode.SABRI:
-        raise _refuse_unavailable()
     if chat is not None:
         return chat, None, None
 
@@ -234,6 +233,11 @@ async def start_automatic_conversation(db: Session, user: User, request: ChatSta
         client = _lock_client(db, user)
         reader = _reader_or_404(db, request.psychic_id)
         chat, reading_session, opener = find_or_open_conversation(db, client, reader)
+        if chat.response_mode != ResponseMode.SABRI:
+            # /request queues an automatic reply, so it never sends into a
+            # conversation a person answers. The thread itself still opens
+            # (open_conversation) and takes her messages over the socket.
+            raise _refuse_unavailable()
         if reading_session is None:
             # A returning conversation: revived for this send, as the socket does.
             reading_session = _prepare_joined_session(db, chat)
@@ -269,7 +273,9 @@ def open_conversation(db: Session, user: User, psychic_id: int) -> dict:
     locks it. A new conversation is created ACTIVE with its clockless joined
     session and the reader's opener, nothing charged, no reply queued, and it
     is then registered with the session manager as /request registers its own.
-    An existing conversation, whatever its status, is returned untouched:
+    An existing conversation, whatever its status or response mode (one a
+    person answers included: the profile's Message button opens the thread
+    she can already write in from her Chats list), is returned untouched:
     reviving it is the send's business. Nothing here looks at her balance; a
     client with nothing can open a thread and read the opener.
     """

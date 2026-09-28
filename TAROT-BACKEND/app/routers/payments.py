@@ -15,6 +15,7 @@ from app.schemas.payment import (
     CreateStardustCheckoutSessionRequest,
     UnitPriceResponse,
 )
+from app.services.email_confirmation import require_confirmed_email_for_top_up
 from app.services.stardust import (
     LIFETIME_COPY,
     calculate_stardust_quote,
@@ -31,8 +32,13 @@ def checkout_return_urls(return_url: str | None) -> tuple[str, str]:
     """The success and cancel URLs for a Stripe Checkout session.
 
     With a return_url the client comes back to the page it left, with
-    ``&status=success`` or ``&status=cancelled``; without one it lands on /billing."""
-    base = settings.FRONT_BASE_URL
+    ``&status=success`` or ``&status=cancelled``; without one it lands on /billing.
+
+    FRONT_BASE_URL ends with a slash (its default, and production's) and every
+    path starts with one, so the slash is dropped first, as the email links do
+    (reply_emails._app_link): "https://askvalentina.co.uk//app/you" is the
+    site's 404 page."""
+    base = settings.FRONT_BASE_URL.rstrip("/")
     if return_url:
         return (
             f"{base}{return_url}&status=success",
@@ -96,6 +102,8 @@ async def create_checkout_session(
 ):
     # Bind user to context for logging
     bind_user_to_context(user.id)
+    # Her first top-up waits for her confirmed email; Stripe is not called.
+    require_confirmed_email_for_top_up(user)
 
     logger.info(
         "checkout_session_requested",
@@ -201,6 +209,8 @@ async def create_stardust_checkout_session(
     pre-set Price ID).
     """
     bind_user_to_context(user.id)
+    # Her first top-up waits for her confirmed email; Stripe is not called.
+    require_confirmed_email_for_top_up(user)
 
     # Server-side tier calculation — never trust a client-sent point total.
     quote = calculate_stardust_quote(request.amount_usd)
@@ -295,9 +305,12 @@ async def create_stardust_checkout_session(
             error_type=e.__class__.__name__,
             exc_info=True,
         )
+        # The error stays in the log. Its text never goes to the client: a
+        # Stripe error names the key it was given (masked) and Stripe's own
+        # account details.
         raise HTTPException(
             status_code=400,
-            detail=f"Error creating checkout session: {str(e)}",
+            detail="Error creating checkout session",
         )
 
 
@@ -330,6 +343,7 @@ async def _handle_lifetime_purchase(
     from app.models import Transaction, User
     from app.models.notification import Notification
     from app.notification_manager import notification_manager
+    from app.services.reply_emails import pounds
 
     amount_usd = int(metadata.get("amount_usd", (amount_total or 0) // 100))
 
@@ -352,7 +366,7 @@ async def _handle_lifetime_purchase(
             return
 
         description = (
-            f"⚡ LIFETIME ACCESS — manual fulfilment needed (${amount_usd})"
+            f"⚡ LIFETIME ACCESS — manual fulfilment needed ({pounds(amount_usd)})"
         )
         txn_metadata = {
             "flow": "stardust",
@@ -440,7 +454,7 @@ async def _handle_lifetime_purchase(
             .all()
         )
         admin_message = (
-            f"{user.username} purchased Lifetime Access (${amount_usd}). "
+            f"{user.username} purchased Lifetime Access ({pounds(amount_usd)}). "
             "Grant access manually — no automatic tracking."
         )
         admin_payload_data = {

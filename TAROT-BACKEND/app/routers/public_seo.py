@@ -12,13 +12,20 @@ from sqlalchemy.orm import Session
 from app.database.client import get_db
 from app.models.article import Article, ArticleSlugRedirect, ArticleVersion
 from app.services.article_content import estimated_reading_minutes, render_article_body
+from app.services.psychics import get_psychics
 
 router = APIRouter()
 SITE = "https://askvalentina.co.uk"
+# The site's pages in their canonical form: no trailing slash, as the pages' own
+# canonical tags (tarot-landing-web/src/seo/seoData.ts canonicalUrl); the
+# articles keep the slash the backend serves them at.
 FIXED_PATHS = [
     "/", "/psychics-browse", "/does-he-miss-me", "/will-my-ex-come-back",
+    "/about", "/terms", "/privacy",
     "/articles/",
 ]
+# A reader's profile (tarot-landing-web/src/routes/browse.routes.ts).
+READER_PATH = "/psychics/{id}/details"
 CATEGORY_SLUGS = {
     "numerology": "Numerology",
     "tarot": "Tarot",
@@ -334,7 +341,9 @@ def dynamic_sitemap(db: Session = Depends(get_db)):
         for slug, name in CATEGORY_SLUGS.items()
         if name in published_categories
     ]
-    urls = [f"{SITE}{path}" for path in [*FIXED_PATHS, *category_paths]]
+    # Every reader the public list shows (listed readers only), in its order.
+    reader_paths = [READER_PATH.format(id=reader.id) for reader in get_psychics(db, [])["items"]]
+    urls = [f"{SITE}{path}" for path in [*FIXED_PATHS, *reader_paths, *category_paths]]
     urls += [f"{SITE}/articles/{slug}/" for slug in slugs]
     unique = list(dict.fromkeys(urls))
     xml = (

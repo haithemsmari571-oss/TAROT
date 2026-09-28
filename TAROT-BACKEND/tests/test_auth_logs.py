@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from app.config import get_app_settings
 from app.database.client import engine as app_engine
 from app.database.client import get_db
+from app.enums.role import Role
 from app.exceptions.domain import DomainError
 from app.logging_config import (
     AccessLogPathFilter,
@@ -242,6 +243,9 @@ def test_a_failed_signin_logs_no_password_hash_or_full_email(db, auth, logs, cas
     elif case == "unknown email":
         body = {"email": "Someone.Else@test.co", "password": WRONG_PASSWORD}
     else:
+        # Since ROUND38 only a reader or admin account is refused unverified;
+        # a client signs in (tests/test_email_confirmation_gate.py).
+        user.role = Role.PSYCHIC
         user.is_verified = False
         db.commit()
     logs()

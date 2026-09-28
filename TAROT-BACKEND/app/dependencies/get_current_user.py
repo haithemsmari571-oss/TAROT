@@ -8,6 +8,7 @@ from app.database.client import get_db
 from app.enums.user_status import UserStatus
 from app.logging_config import get_logger
 from app.models.user import User
+from app.utils.security import decode_access_token
 
 security = HTTPBearer(auto_error=False)
 
@@ -34,9 +35,9 @@ def get_current_user(
 
     token = credentials.credentials
     try:
-        payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-        )
+        # decode_access_token also rejects a refresh token (type != "access"):
+        # the 7-day refresh token is for /refresh-token only, never a bearer.
+        payload = decode_access_token(token)
         user_id: str = payload.get("sub")
 
         if not user_id:

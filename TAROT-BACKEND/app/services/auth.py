@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -7,9 +8,9 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.cache import Cache, Value
 from app.config import get_app_settings
 from app.enums.email_template_key import MailTemplateKey
+from app.enums.role import Role
 from app.enums.transaction_type import TransactionType
 from app.exceptions.auth import AccountNotVerified, BadCredentials, InvalidResetLink
 from app.exceptions.email import EmailServiceUnavailable
@@ -21,6 +22,11 @@ from app.exceptions.users import (
     UserNotFoundError,
 )
 from app.logging_config import bind_user_to_context, error_fields, get_logger, mask_email
+from app.models.auth_link_token import (
+    RESET_PASSWORD_PURPOSE,
+    VERIFY_ACCOUNT_PURPOSE,
+    AuthLinkToken,
+)
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.auth import ResetPasswordReq, SignupResponse, UserLogin, UserSignup
@@ -36,8 +42,13 @@ from app.utils.security import (
 )
 
 settings = get_app_settings()
-cache = Cache()
 logger = get_logger(__name__)
+
+# How long an emailed link works. The verification link keeps its 30 minutes;
+# the reset link lasts 60 (ROUND31, B6), and the reset email states its
+# minutes from here.
+VERIFY_LINK_LIFETIME = timedelta(minutes=30)
+RESET_LINK_LIFETIME = timedelta(minutes=60)
 
 # The settings row that holds the welcome credit, whole pounds (1 Stardust is £1).
 SIGNUP_BONUS_SETTING = "signup_bonus"
@@ -198,7 +209,7 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
     # Try to send verification email (non-fatal if it fails)
     email_sent = True
     try:
-        await send_verify_mail(user)
+        await send_verify_mail(db, user)
     except Exception as e:
         email_sent = False
         logger.critical(
@@ -217,8 +228,80 @@ async def sign_up(db: Session, user_data: UserSignup) -> SignupResponse:
     return SignupResponse(user=_user_to_out(user), email_sent=email_sent)
 
 
-async def send_verify_mail(user: User):
-    verify_link = _generate_verify_account_link(str(user.id))
+def _minutes(lifetime: timedelta) -> int:
+    return int(lifetime.total_seconds() // 60)
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _issue_link_token(db: Session, user_id: int, purpose: str, lifetime: timedelta) -> str:
+    """A new emailed link's token. Its row, holding the token's sha256 and
+    never the token, is committed before the email goes out, so the link
+    outlives this process: a restart or a deploy no longer voids it."""
+    token = secrets.token_urlsafe(32).lower()
+    db.add(
+        AuthLinkToken(
+            user_id=user_id,
+            purpose=purpose,
+            token_hash=_token_hash(token),
+            expires_at=datetime.now(timezone.utc) + lifetime,
+        )
+    )
+    db.commit()
+    return token
+
+
+def _use_link_token(db: Session, token: str, purpose: str) -> int | None:
+    """The user id of an unused, unexpired link of this purpose, which is now
+    marked used; None for any other token. One conditional UPDATE, so two uses
+    at the same moment cannot both pass. Not committed here: the caller commits
+    it with the change the link makes, so a change that fails leaves the link
+    unused."""
+    now = datetime.now(timezone.utc)
+    token_hash = _token_hash(token)
+    used = (
+        db.query(AuthLinkToken)
+        .filter(
+            AuthLinkToken.token_hash == token_hash,
+            AuthLinkToken.purpose == purpose,
+            AuthLinkToken.used_at.is_(None),
+            AuthLinkToken.expires_at > now,
+        )
+        .update(
+            {AuthLinkToken.used_at: now, AuthLinkToken.updated_at: now},
+            synchronize_session=False,
+        )
+    )
+    if used != 1:
+        return None
+    return db.query(AuthLinkToken.user_id).filter(AuthLinkToken.token_hash == token_hash).scalar()
+
+
+def _cancel_open_link_tokens(db: Session, user_id: int, purpose: str) -> int:
+    """Marks every still open (unused, unexpired) link of this purpose for the
+    account used, so none of them works any more; how many it cancelled. The
+    rows stay (ROUND32, decision 4). Not committed here: the caller commits it
+    with the change the link makes."""
+    now = datetime.now(timezone.utc)
+    return (
+        db.query(AuthLinkToken)
+        .filter(
+            AuthLinkToken.user_id == user_id,
+            AuthLinkToken.purpose == purpose,
+            AuthLinkToken.used_at.is_(None),
+            AuthLinkToken.expires_at > now,
+        )
+        .update(
+            {AuthLinkToken.used_at: now, AuthLinkToken.updated_at: now},
+            synchronize_session=False,
+        )
+    )
+
+
+async def send_verify_mail(db: Session, user: User):
+    verify_link = _generate_verify_account_link(db, user.id)
 
     logger.debug("sending_verification_email", user_id=user.id)
 
@@ -231,29 +314,23 @@ async def send_verify_mail(user: User):
     logger.info("verification_email_sent", user_id=user.id)
 
 
-def _generate_verify_account_link(user_id: str):
-    token = secrets.token_urlsafe(32).lower()
-    exp_at = datetime.now() + timedelta(minutes=30)
-
-    cache.set_value(token, Value(value=user_id.encode(), exp_at=exp_at))
+def _generate_verify_account_link(db: Session, user_id: int):
+    token = _issue_link_token(db, user_id, VERIFY_ACCOUNT_PURPOSE, VERIFY_LINK_LIFETIME)
 
     logger.debug(
         "verification_token_generated",
         user_id=user_id,
-        expires_in_minutes=30,
+        expires_in_minutes=_minutes(VERIFY_LINK_LIFETIME),
     )
 
     return f"{settings.VERIFY_ACCOUNT_BASE_URL}/{token}"
 
 
-def _verify_verify_token(token: str):
-    user_id_encoded = cache.get(token)
-    if not user_id_encoded:
+def _verify_verify_token(db: Session, token: str):
+    user_id = _use_link_token(db, token, VERIFY_ACCOUNT_PURPOSE)
+    if user_id is None:
         logger.warning("verification_token_invalid_or_expired")
         raise InvalidResetLink()
-
-    cache.remove(token)
-    user_id = user_id_encoded.decode()
 
     logger.debug("verification_token_validated", user_id=user_id)
 
@@ -261,7 +338,7 @@ def _verify_verify_token(token: str):
 
 
 def verify_account(db: Session, token: str):
-    user_id = _verify_verify_token(token)
+    user_id = _verify_verify_token(db, token)
     user = db.query(User).filter_by(id=user_id).first()
     if not user:
         logger.error(
@@ -296,7 +373,11 @@ def sign_in(db: Session, user_data: UserLogin) -> dict:
         logger.warning("signin_failed_incorrect_password", user_id=user.id)
         raise BadCredentials()
 
-    if not user.is_verified:
+    # A client signs in before she confirms her email (EmailConfirm=A): the
+    # confirmation waits for her second message and her first top-up
+    # (services/email_confirmation.py). A reader or admin account still
+    # confirms first.
+    if not user.is_verified and user.role != Role.USER:
         logger.warning("signin_failed_account_not_verified", user_id=user.id)
         raise AccountNotVerified()
 
@@ -337,7 +418,7 @@ async def resend_verify_link(db: Session, email: str):
     bind_user_to_context(user.id)
 
     try:
-        await send_verify_mail(user)
+        await send_verify_mail(db, user)
         logger.info("verification_email_resent", user_id=user.id)
     except Exception as e:
         logger.critical(
@@ -367,8 +448,12 @@ async def forgot_password(db: Session, email: EmailStr) -> str:
     # Bind user to context for tracking
     bind_user_to_context(user.id)
 
-    reset_link = _generate_reset_link(str(user.id))
-    mail_vars = {"reset_link": reset_link, "username": user.username}
+    reset_link = _generate_reset_link(db, user.id)
+    mail_vars = {
+        "reset_link": reset_link,
+        "username": user.username,
+        "link_minutes": _minutes(RESET_LINK_LIFETIME),
+    }
 
     try:
         await send_email(
@@ -390,31 +475,24 @@ async def forgot_password(db: Session, email: EmailStr) -> str:
     return message
 
 
-def _generate_reset_link(user_id: str):
-    token = secrets.token_urlsafe(32).lower()
-
-    exp_at = datetime.now() + timedelta(minutes=5)
-
-    cache.set_value(token, Value(value=user_id.encode(), exp_at=exp_at))
+def _generate_reset_link(db: Session, user_id: int):
+    token = _issue_link_token(db, user_id, RESET_PASSWORD_PURPOSE, RESET_LINK_LIFETIME)
 
     logger.debug(
         "password_reset_token_generated",
         user_id=user_id,
-        expires_in_minutes=5,
+        expires_in_minutes=_minutes(RESET_LINK_LIFETIME),
     )
 
     return f"{settings.RESET_PASSWORD_BASE_URL}/{token}"
 
 
-def _verify_reset_token(token: str):
-    user_id_encoded = cache.get(token)
+def _verify_reset_token(db: Session, token: str):
+    user_id = _use_link_token(db, token, RESET_PASSWORD_PURPOSE)
 
-    if not user_id_encoded:
+    if user_id is None:
         logger.warning("reset_token_invalid_or_expired")
         raise InvalidResetLink()
-
-    cache.remove(token)
-    user_id = user_id_encoded.decode()
 
     logger.debug("reset_token_validated", user_id=user_id)
 
@@ -422,7 +500,7 @@ def _verify_reset_token(token: str):
 
 
 def reset_password(db: Session, reset_data: ResetPasswordReq):
-    user_id = _verify_reset_token(reset_data.reset_token)
+    user_id = _verify_reset_token(db, reset_data.reset_token)
     user = db.query(User).filter_by(id=user_id).first()
     if not user:
         logger.error(
@@ -437,9 +515,12 @@ def reset_password(db: Session, reset_data: ResetPasswordReq):
     password_hash = hash_password(reset_data.new_password)
 
     user.password_hash = password_hash
+    # Using one reset link cancels every other open reset link of the account
+    # (ROUND32, decision 3), in the same commit as the new password.
+    cancelled = _cancel_open_link_tokens(db, user.id, RESET_PASSWORD_PURPOSE)
     db.commit()
 
-    logger.info("password_reset_completed", user_id=user.id)
+    logger.info("password_reset_completed", user_id=user.id, other_reset_links_cancelled=cancelled)
 
     return _user_to_out(user)
 

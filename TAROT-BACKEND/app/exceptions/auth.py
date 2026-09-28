@@ -12,5 +12,7 @@ class InvalidResetLink(DomainError):
 
 
 class AccountNotVerified(DomainError):
-    status_code = 400
+    # 403, not BadCredentials' 400: the email and password were right, so the
+    # sign-in page shows these words instead of "Incorrect email or password".
+    status_code = 403
     message = "Account not verified, please verify your account to login"

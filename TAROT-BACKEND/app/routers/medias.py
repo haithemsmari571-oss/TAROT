@@ -11,6 +11,26 @@ router = APIRouter()
 settings = get_app_settings()
 MEDIA_DIR = settings.MEDIA_DIR
 
+# The only content types the folder legitimately serves inline: the reader and
+# client pictures and the owner's hall-sound audio. Anything else — including an
+# uploaded HTML or SVG file — is served as an opaque download so a browser can
+# never render it as active content on our own origin (stored XSS). Paired with
+# X-Content-Type-Options: nosniff below so the browser cannot sniff past it.
+INLINE_SAFE_MEDIA_TYPES = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/avif",
+        "audio/mpeg",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/aac",
+        "audio/wav",
+    }
+)
+
 
 @router.get("/uploads/{filename}")
 def get_thumbnail(filename: str):
@@ -24,9 +44,19 @@ def get_thumbnail(filename: str):
     if mime_type is None:
         mime_type = "application/octet-stream"
 
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if mime_type in INLINE_SAFE_MEDIA_TYPES:
+        headers["Content-Disposition"] = "inline"
+        media_type = mime_type
+    else:
+        # Unknown or browser-executable type (html, svg, xml, …): hand it back as
+        # an opaque attachment, never rendered inline on our origin.
+        headers["Content-Disposition"] = "attachment"
+        media_type = "application/octet-stream"
+
     return FileResponse(
         path=file_path,
-        media_type=mime_type,
+        media_type=media_type,
         filename=None,
-        headers={"Content-Disposition": "inline"},
+        headers=headers,
     )

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.enums.chat_status import ChatStatus
 from app.logging_config import get_logger
+from app.services.email_confirmation import EMAIL_NOT_CONFIRMED, message_needs_confirmed_email
 
 logger = get_logger(__name__)
 
@@ -33,9 +34,10 @@ INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE"
 class PerMessageRefusal(Exception):
     """A client message that must not be stored or charged.
 
-    ``reason`` is one of SESSION_NOT_ACTIVE, READER_UNAVAILABLE or
-    INSUFFICIENT_BALANCE. ``payload`` is the complete ``data`` block of the
-    room's message_rejected frame for that reason, reason included.
+    ``reason`` is one of SESSION_NOT_ACTIVE, READER_UNAVAILABLE,
+    EMAIL_NOT_CONFIRMED or INSUFFICIENT_BALANCE. ``payload`` is the complete
+    ``data`` block of the room's message_rejected frame for that reason,
+    reason included.
     """
 
     def __init__(self, reason: str, payload: dict):
@@ -107,6 +109,20 @@ def _insufficient(price: float, balance: float) -> PerMessageRefusal:
     )
 
 
+def require_confirmed_email(db: Session, author, message=None, *, chat_id=None) -> None:
+    """The confirmation gate (services/email_confirmation.py): a client who has
+    not confirmed her email sends her first message and no more. Checked
+    before the balance, so she is asked to confirm, not to top up (a top-up
+    waits for the same confirmation)."""
+    if message_needs_confirmed_email(db, author, message):
+        logger.info(
+            "per_message_rejected_email_not_confirmed",
+            chat_id=chat_id,
+            user_id=author.id,
+        )
+        raise PerMessageRefusal(EMAIL_NOT_CONFIRMED, {"reason": EMAIL_NOT_CONFIRMED})
+
+
 def require_affordable(db: Session, author, price: float, *, chat_id=None) -> float:
     """The balance gate. Returns the spendable balance it checked."""
     from app.services.stardust_rewards import get_spendable_stardust
@@ -149,6 +165,7 @@ async def charge_client_message(
     from app.services.transactions import create_debit_transaction
 
     price = require_priced_reader(chat, log_context={"user_id": author.id})
+    require_confirmed_email(db, author, message, chat_id=chat.id)
     require_affordable(db, author, price, chat_id=chat.id)
 
     try:

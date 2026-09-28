@@ -15,7 +15,7 @@ Both go only to a client (role USER, ACTIVE) whose email address is confirmed
 and whose switch is on (users.reply_emails). No email carries the reply's words.
 """
 
-import html
+import re
 from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 
@@ -63,9 +63,26 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+# A reader's name as clients see it, the app's rule (readerName.ts). Her username
+# is her display name when it reads as one: words of letters (an apostrophe may
+# join letters) with single spaces between them. Any other username
+# (end_control_reader_fee70ab6, sophie-moon-2) has no display name in it, so she
+# is named by its first name part. Never the raw username.
+_NAME_WORD = r"[^\W\d_]+(?:['’][^\W\d_]+)*"
+_DISPLAY_NAME = re.compile(rf"{_NAME_WORD}(?: {_NAME_WORD})*")
+_FIRST_NAME_PART = re.compile(_NAME_WORD)
+
+
 def reader_name(username):
-    """In the app's Title case (appReaders.tsx readerName): "Sophie"."""
-    return username[:1].upper() + username[1:].lower() if username else ""
+    """In the app's Title case (readerName.ts): "Sophie";
+    "end_control_reader_fee70ab6" -> "End"."""
+    username = (username or "").strip()
+    if _DISPLAY_NAME.fullmatch(username):
+        name = username
+    else:
+        part = _FIRST_NAME_PART.search(username)
+        name = part.group(0) if part else ""
+    return name[:1].upper() + name[1:].lower()
 
 
 def pounds(amount):
@@ -207,7 +224,9 @@ async def send(email):
         recepientEmail=[NameEmail(email=email.to_email, name=email.to_name)],
         template_key=email.template.value,
         vars={
-            "line": html.escape(email.subject),
+            # send_email HTML-escapes every value now (email.py), so the line is
+            # passed raw here — escaping it twice would show the entities.
+            "line": email.subject,
             "chat_link": _app_link(CHAT_PATH.format(chat_id=email.chat_id)),
             "you_link": _app_link(YOU_PATH),
         },

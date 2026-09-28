@@ -76,28 +76,34 @@ def has_entry(db, message_id):
 
 
 def is_queued(db, message_id):
-    """Waiting for an away reader; a live send's entry is not."""
+    """Waiting for an away reader; a live send's entry is not, and neither is
+    one a person answers (manual)."""
     debit = _debit(db, message_id)
     queue = _metadata(debit).get(QUEUE_KEY) if debit is not None else None
-    return queue is not None and not queue.get("live", False)
+    return queue is not None and not queue.get("live", False) and not queue.get("manual", False)
 
 
 def stage_if_offline(db, chat, message, *, stage_live=True):
     """No commit or charge here. Returns True when the reader is away and the
     message waits for her.
 
-    Called inside the charge's transaction, it gives every charged message on
-    an automatic chat its entry, so the sweep answers or refunds it whatever
-    happens to the reply. A live send's entry carries a lease the live reply
-    takes over at once (claim_live); until then the sweep leaves it alone."""
-    if chat.response_mode != ResponseMode.SABRI:
-        return False
+    Called inside the charge's transaction, it gives every charged message its
+    entry, so the sweep answers or refunds it whatever happens to the reply. A
+    live send's entry carries a lease the live reply takes over at once
+    (claim_live); until then the sweep leaves it alone. On a chat a person
+    answers (HUMAN or HYBRID, switched from the owner's console) the entry is
+    marked manual: the automatic reader never claims it (claim_next), and the
+    sweep refunds it at the window unless the reader's side has replied by then
+    (refund_queued), the promise the room shows for every paid message."""
     debit = _debit(db, message.id)
     if debit is None or debit.status != TransactionStatus.COMPLETED:
         return False
     queue = _metadata(debit).get(QUEUE_KEY)
     if queue is not None:
-        return not queue.get("live", False)
+        return not queue.get("live", False) and not queue.get("manual", False)
+    if chat.response_mode != ResponseMode.SABRI:
+        _write(debit, {"state": "queued", "reply_ids": [], "manual": True})
+        return False
     reader = db.query(User).filter(User.id == chat.psychic_id).populate_existing().one()
     online = reader_availability(reader.online_from, reader.online_to).is_online
     if online:
@@ -139,13 +145,19 @@ def _owned(db, message_id, token):
 
 
 def claim_next(reader_id):
-    """Claim only the reader's oldest outstanding message, across all chats."""
+    """Claim only the reader's oldest outstanding message, across her automatic
+    chats. A chat a person answers (HUMAN or HYBRID) is never answered here, even
+    for a message queued before it was switched; switched back, it is again."""
     with SessionLocal() as db:
         # Serialize claims for one reader, including across backend processes.
         reader = db.query(User).filter(User.id == reader_id).with_for_update().one()
         if not reader_availability(reader.online_from, reader.online_to).is_online:
             return None
-        row = _pending(db).filter(Chat.psychic_id == reader_id).first()
+        row = (
+            _pending(db)
+            .filter(Chat.psychic_id == reader_id, Chat.response_mode == ResponseMode.SABRI)
+            .first()
+        )
         if row is None:
             return None
         debit, message, chat = row
@@ -232,6 +244,25 @@ def persist_bubble(db, chat, text, message_id, token, position):
     return message
 
 
+def _reader_reply_after(db, chat, message):
+    """The id of the first message the reader's side wrote in the chat after
+    ``message``, or None. A person at the reader's socket, an approved draft and
+    the automatic reader are all stored as the reader (save_message,
+    prepare_ai_message); system rows are not replies."""
+    row = (
+        db.query(Message.id)
+        .filter(
+            Message.chat_id == chat.id,
+            Message.sender_id == chat.psychic_id,
+            Message.is_system.is_(False),
+            Message.id > message.id,
+        )
+        .order_by(Message.id)
+        .first()
+    )
+    return row[0] if row is not None else None
+
+
 def refund_queued(message_id, *, token=None, expired=False):
     """Use the existing bucket-preserving, idempotent message reversal."""
     from app.services.chats import save_system_message
@@ -249,6 +280,18 @@ def refund_queued(message_id, *, token=None, expired=False):
         message = db.get(Message, message_id)
         if expired and message.created_at > _now() - OFFLINE_REPLY_TIMEOUT:
             return None
+        chat = db.get(Chat, message.chat_id)
+        if expired and (queue.get("manual") or chat.response_mode != ResponseMode.SABRI):
+            # A person answers this chat, so no reply_ids are written. If the
+            # reader's side has written since her message, it was answered and
+            # the entry closes without a refund.
+            reply_id = _reader_reply_after(db, chat, message)
+            if reply_id is not None:
+                queue.update(state="delivered", reply_ids=[reply_id],
+                             completed_at=_now().isoformat(), lease_until=None)
+                _write(debit, queue)
+                db.commit()
+                return None
         # The quiet line in her thread, which announce_refund later finds by note_id.
         note = save_system_message(db, message.chat_id, REFUND_NOTE, commit=False)
         queue.update(state="refunded", refunded_at=_now().isoformat(), lease_until=None,

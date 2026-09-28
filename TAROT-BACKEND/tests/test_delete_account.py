@@ -191,6 +191,9 @@ def test_delete_forfeits_her_waiting_messages_and_the_sweep_neither_refunds_nor_
 ):
     monkeypatch.setattr(profile_router.settings, "BILLING_MODE", "per_message")
     client = make_user(balance=20)
+    # She sends two messages, so her email is confirmed (ROUND38,
+    # tests/test_email_confirmation_gate.py).
+    client.is_verified = True
     other = make_user(balance=20)
     reader = make_user(role=Role.PSYCHIC)
     reader.price_per_message = PRICE

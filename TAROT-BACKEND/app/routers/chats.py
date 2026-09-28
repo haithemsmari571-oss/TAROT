@@ -22,6 +22,8 @@ from app.dependencies.get_current_user import get_current_user
 
 from app.models.chat import Chat
 from app.models.user import User
+from app.enums.user_status import UserStatus
+from app.utils.security import decode_access_token
 from app.models.message import Message
 from app.models.chat_session import ChatSession
 from app.models.session_intervals import SessionInterval
@@ -2288,9 +2290,9 @@ async def authenticate_websocket_user(token, db):
     Raises various jwt exceptions that should be caught by caller.
     """
     try:
-        payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-        )
+        # Reject a refresh token here too (type != "access"): the socket is a
+        # bearer-authenticated surface like the HTTP API.
+        payload = decode_access_token(token)
         user_id: str = payload.get("sub")
 
         if not user_id:
@@ -2305,6 +2307,14 @@ async def authenticate_websocket_user(token, db):
                 user_id=user_id,
             )
             raise ValueError("User not found")
+
+        # A suspended or self-deleted (anonymized) account must be logged out
+        # everywhere, the socket included — get_current_user already refuses it
+        # on the HTTP API. Without this the still-unexpired token kept working
+        # on the chat socket after account deletion.
+        if user.status == UserStatus.SUSPENDED:
+            logger.warning("websocket_auth_failed_account_suspended", user_id=user.id)
+            raise ValueError("This account has been deactivated")
 
         logger.debug("websocket_auth_success", user_id=user.id)
 

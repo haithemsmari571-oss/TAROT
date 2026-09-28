@@ -275,9 +275,11 @@ def _model(journey, script):
 
 
 def _people(db, *, balance=20.0, per_second=RATE):
+    # A client who has confirmed her email: an unconfirmed one sends one
+    # message only (ROUND38, tests/test_email_confirmation_gate.py).
     client = User(
         email="client@test.co", username="client", password_hash="hash",
-        balance=balance, role=Role.USER,
+        balance=balance, role=Role.USER, is_verified=True,
     )
     psychic = User(
         email="sophie@test.co", username="sophie", password_hash="hash",

@@ -664,25 +664,40 @@ def test_conversation_with_an_unpriced_reader_is_refused(sqlite, monkeypatch):
     assert _rows(db) == (0, 0, 0, 0)
 
 
-def test_conversation_with_a_non_automatic_chat_is_refused(sqlite, monkeypatch):
+@pytest.mark.parametrize("mode", ["HUMAN", "HYBRID"])
+def test_conversation_with_a_non_automatic_chat_opens_that_thread(sqlite, monkeypatch, mode):
+    """ROUND31 C8 = B: the profile's Message button opens the existing thread
+    whatever its mode, the thread she can already write in from her Chats
+    list. It is returned untouched, and nothing is charged or queued."""
     from app.enums.response_mode import ResponseMode
 
     db, _ = sqlite
     _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
     client, psychic = _people(db, balance=10.0)
     chat = Chat(
         user_id=client.id, psychic_id=psychic.id,
-        status=ChatStatus.ENDED, response_mode=ResponseMode.HUMAN,
+        status=ChatStatus.ENDED, response_mode=ResponseMode(mode),
     )
     db.add(chat)
     db.commit()
-    http = _client(db, client, SessionManager(), monkeypatch)
+    manager = SessionManager()
+    http = _client(db, client, manager, monkeypatch)
 
     resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
 
-    assert resp.status_code == 402, resp.text
-    assert resp.json()["detail"] == "READER_UNAVAILABLE"
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["chat_id"] == chat.id
+    assert body["created"] is False
+    assert body["opener_message_id"] is None
+    assert body["price_per_message"] == PRICE
+    db.expire_all()
+    assert db.get(Chat, chat.id).response_mode == ResponseMode(mode)
+    assert db.get(Chat, chat.id).status == ChatStatus.ENDED
     assert _rows(db) == (1, 0, 0, 0)
+    assert manager.active_sessions == {}
+    assert calls == {"enqueue": [], "stage": []}
 
 
 def test_conversation_by_a_psychic_is_refused(sqlite, monkeypatch):

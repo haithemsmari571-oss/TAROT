@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -92,7 +92,9 @@ async def forgot_password_endpoint(
         raise
 
 
-@router.post("/reset-password")
+# A real 204 with no body. It used to be JSONResponse(204): a 200 whose body
+# was the number 204. The website's resetPassword (authApi.ts) reads no body.
+@router.post("/reset-password", status_code=204, response_class=Response)
 def reset_password_endpoint(
     reset_data: ResetPasswordReq, db: Session = Depends(get_db)
 ):
@@ -100,7 +102,7 @@ def reset_password_endpoint(
         logger.info("reset_password_attempt")
         auth_service.reset_password(db, reset_data)
         logger.info("reset_password_success")
-        return JSONResponse(204)
+        return Response(status_code=204)
     except Exception as e:
         logger.warning("reset_password_failed", **error_fields(e))
         raise

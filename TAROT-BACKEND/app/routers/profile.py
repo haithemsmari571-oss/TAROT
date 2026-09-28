@@ -1,6 +1,7 @@
-import os
 import uuid
+from io import BytesIO
 
+from PIL import Image, UnidentifiedImageError
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -136,8 +137,28 @@ async def upload_profile_picture(
     # Reset file pointer
     await file.seek(0)
 
+    # The declared content-type is client-controlled, so confirm the bytes are a
+    # real raster image and take the extension from what Pillow actually decodes,
+    # never from the client's filename. Without this a client could upload an
+    # HTML or SVG file named ".png" and have it served as active content from our
+    # own origin (stored XSS — the auth token lives in localStorage).
+    SAFE_EXTENSIONS = {"JPEG": ".jpg", "PNG": ".png", "GIF": ".gif", "WEBP": ".webp"}
+    try:
+        with Image.open(BytesIO(file_content)) as probe:
+            detected_format = (probe.format or "").upper()
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="The selected file is not a valid JPEG, PNG, GIF or WebP image.",
+        )
+    if detected_format not in SAFE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: JPEG, PNG, GIF, WebP",
+        )
+    file_extension = SAFE_EXTENSIONS[detected_format]
+
     # Generate unique filename
-    file_extension = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
     unique_filename = f"profile_{user.id}_{uuid.uuid4().hex}{file_extension}"
 
     # Ensure media directory exists
