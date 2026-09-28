@@ -19,6 +19,7 @@ import axiosClient from "@/lib/axiosClient";
 import { formatGbp } from "@/lib/currency";
 import { readerName } from "./appReaders";
 import { CHATS_PATH } from "./clientAppPaths";
+import ConfirmEmailSheet, { CONFIRM_EMAIL_COPY, EMAIL_NOT_CONFIRMED } from "./ConfirmEmailSheet";
 import { receiptOf, useThreadConnection } from "./useThreadConnection";
 import { clockAt, dayOf } from "./ukTime";
 import "./client-chats.css";
@@ -53,6 +54,7 @@ const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
 const REJECTION_COPY: Record<string, string> = {
   READER_UNAVAILABLE: PER_MESSAGE_COPY.readerUnavailable,
   SESSION_NOT_ACTIVE: PER_MESSAGE_COPY.sessionNotActive,
+  [EMAIL_NOT_CONFIRMED]: CONFIRM_EMAIL_COPY.title,
 };
 const noProfileYet = () => {};
 
@@ -60,11 +62,14 @@ export default function ClientThreadScreen() {
   const { chatId: rawId } = useParams();
   const chatId = Number(rawId);
   const { billingMode, loaded } = useBillingMode();
-  usePaymentReturn(chatId, loaded && billingMode === "per_message");
+  // Per-message unless the server says per-minute: a failed or unknown mode
+  // keeps her in this room (BillingModeContext.tsx).
+  const perMinute = billingMode === "per_minute";
+  usePaymentReturn(chatId, loaded && !perMinute);
   if (!Number.isSafeInteger(chatId) || chatId <= 0) return <p role="alert">Chat not found.</p>;
   if (!loaded) return <RoomDocument><Waiting /></RoomDocument>;
   // The existing per-minute room remains the destination in that mode.
-  if (billingMode !== "per_message") return <Navigate to={`/chats?chat_id=${chatId}`} replace />;
+  if (perMinute) return <Navigate to={`/chats?chat_id=${chatId}`} replace />;
   return <RoomDocument><ThreadLoader key={chatId} chatId={chatId} /></RoomDocument>;
 }
 
@@ -110,6 +115,7 @@ function Waiting() {
 
 function ThreadLoader({ chatId }: { chatId: number }) {
   const { user } = useAuth();
+  const billing = useBillingMode();
   const details = useQuery({
     queryKey: ["client-thread-details", user?.id, chatId],
     queryFn: async ({ signal }) => (await axiosClient.get<ThreadDetails>(`/chat/${chatId}/details`, { signal })).data,
@@ -121,10 +127,18 @@ function ThreadLoader({ chatId }: { chatId: number }) {
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
+  // Try again asks for the room's answers again, and the billing mode when
+  // that is missing too, so a moment's failure is not a dead end.
+  const tryAgain = () => {
+    if (billing.failed) billing.retry();
+    void details.refetch();
+    if (details.data) void reader.refetch();
+  };
   if (details.isError || reader.isError) return (
     <div className="client-room client-room-wait">
       <div className="client-chats-empty">
         <p role="alert">This chat could not be loaded.</p>
+        <div className="client-chats-notice"><button type="button" onClick={tryAgain}>Try again</button></div>
         <Link to={CHATS_PATH}>Back to chats</Link>
       </div>
     </div>
@@ -187,14 +201,17 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
   // the same glider /billing uses, in place, back to this room afterwards
   const offerStardust = useCallback(() => {
     openTopUp({
-      reason: `Add Stardust to keep going with ${reader.username}.${chat.price != null ? ` Each message is ${formatGbp(chat.price)}.` : ""}`,
+      reason: `Add Stardust to keep going with ${readerName(reader)}.${chat.price != null ? ` Each message is ${formatGbp(chat.price)}.` : ""}`,
       returnUrl: `${CHATS_PATH}/${details.id}?topup=1`,
     });
-  }, [openTopUp, reader.username, chat.price, details.id]);
+  }, [openTopUp, reader, chat.price, details.id]);
   const offer = useRef(offerStardust);
   useEffect(() => { offer.current = offerStardust; }, [offerStardust]);
   // the server refused a send for want of balance: her draft is back in the box
   useEffect(() => { if (chat.rejection === INSUFFICIENT_BALANCE) offer.current(); }, [chat.rejection]);
+  // or until she confirms her email (her second message): the confirm sheet
+  const [confirmEmail, setConfirmEmail] = useState(false);
+  useEffect(() => { if (chat.rejection === EMAIL_NOT_CONFIRMED) setConfirmEmail(true); }, [chat.rejection]);
 
   const send = () => {
     if (!chat.draft.trim() || chat.pending || !chat.connected || chat.price == null) return;
@@ -232,7 +249,7 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
       <HallOrb />
       <HallRoom
         phase="room"
-        readerName={reader.username}
+        readerName={readerName(reader)}
         readerPhoto={reader.profile_picture_url}
         minutesLeft={null}
         isPaused={false}
@@ -263,6 +280,7 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
         onBack={() => navigate(CHATS_PATH)}
         onOpenProfile={noProfileYet}
       />
+      <ConfirmEmailSheet open={confirmEmail} onClose={() => setConfirmEmail(false)} />
     </div>
   );
 }

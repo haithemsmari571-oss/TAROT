@@ -9,9 +9,12 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/hooks";
+import { FIRST_READING_ON_US, welcomeCreditLine } from "../client-app/useWelcomeCredit";
+import { paymentApi } from "../payment/api/paymentApi";
 import { constellationApi } from "../profile/api/constellationApi";
 import CelebrationModal from "./CelebrationModal";
 import type { Celebration } from "./types";
+import { takeWelcomeMoment } from "./welcomeMoment";
 
 interface CelebrationContextValue {
   celebrate: (c: Celebration) => void;
@@ -75,15 +78,42 @@ export const CelebrationProvider = ({ children }: { children: React.ReactNode })
   }, []);
 
   const useStardust = useCallback(() => {
-    ack(queueRef.current[0]);
+    const current = queueRef.current[0];
+    ack(current);
     setQueue([]);
-    navigate("/psychics-browse");
-  }, [navigate]);
+    // The welcome moment leads to her reader, where she may be already.
+    const to = current?.to ?? "/psychics-browse";
+    if (to !== pathname) navigate(to);
+  }, [navigate, pathname]);
 
   // A celebration never survives a route change.
   useEffect(() => {
     setQueue([]);
   }, [pathname]);
+
+  // Her welcome credit, once, on the screen she lands on after sign-up
+  // (welcomeMoment.ts), in the amount her account holds.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const moment = takeWelcomeMoment(pathname);
+    if (!moment) return;
+    paymentApi
+      .getMyBalance()
+      .then((balance) => {
+        const credit = balance.credit_balance ?? 0;
+        if (credit <= 0) return;
+        celebrate({
+          kind: "welcome",
+          title: FIRST_READING_ON_US,
+          amount: credit,
+          message: moment.price ? welcomeCreditLine(credit, moment.price) : undefined,
+          to: moment.to,
+        });
+      })
+      .catch(() => {
+        /* best-effort, like the server's celebrations */
+      });
+  }, [pathname, isAuthenticated, celebrate]);
 
   // Check for pending rewards on each view and once auth is ready.
   useEffect(() => {

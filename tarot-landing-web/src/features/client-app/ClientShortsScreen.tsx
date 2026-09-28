@@ -199,6 +199,8 @@ export default function ClientShortsScreen() {
 
   return (
     <section className="client-shorts-screen" aria-label="Shorts">
+      {/* The tab's one h1, as every other tab has; not drawn over the reels. */}
+      <h1 className="sr-only">Shorts</h1>
       {reels.isPending && <div className="client-shorts-state"><p className="client-chats-notice" role="status">Loading…</p></div>}
       {reels.isError && !reels.data && <div className="client-shorts-state"><p className="client-chats-notice" role="alert">Could not load reels. <button onClick={() => { void reels.refetch(); }}>Try again</button></p></div>}
       {reels.data?.length === 0 && (

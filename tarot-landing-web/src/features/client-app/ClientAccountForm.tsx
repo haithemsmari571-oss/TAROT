@@ -6,7 +6,8 @@
    back alone. */
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { isAxiosError } from "axios";
+import { COMPANY_IDENTITY, REGISTERED_OFFICE_LINE } from "@/lib/company";
+import { REFUSAL_FALLBACK, serverRefusal } from "@/lib/serverRefusal";
 import { YOU_PATH } from "./clientAppPaths";
 import "./client-chats.css";
 import "./client-readers.css";
@@ -19,27 +20,14 @@ export const ACCOUNT_COPY = {
   eyebrow: "Your account",
   back: "Back to You",
   /** When there is no answer to quote: the request never reached the server. */
-  failed: "Something went wrong. Please try again.",
+  failed: REFUSAL_FALLBACK,
 } as const;
 
-/* The backend's own words. A DomainError answers {message} (main.py:350-361,
-   for a wrong current password, services/auth.py:528, and a taken name,
-   services/users.py:393); an HTTPException answers {detail: string}; a schema
-   refusal is a 422 whose detail is a list of {msg} lines, each behind
-   Pydantic's "Value error, " framing (schemas/user.py:43-67). */
+/* The backend's own words (lib/serverRefusal.ts): a wrong current password
+   (services/auth.py:528), a taken name (services/users.py:393), a schema
+   refusal's lines (schemas/user.py:43-67). */
 export function refusalText(error: unknown): string {
-  if (isAxiosError(error) && error.response) {
-    const data = error.response.data as { message?: unknown; detail?: unknown } | undefined;
-    if (typeof data?.message === "string") return data.message;
-    if (typeof data?.detail === "string") return data.detail;
-    if (Array.isArray(data?.detail)) {
-      const lines = data.detail
-        .map(item => (typeof (item as { msg?: unknown })?.msg === "string" ? (item as { msg: string }).msg.replace(/^Value error, /, "") : null))
-        .filter((line): line is string => line !== null);
-      if (lines.length > 0) return lines.join(" ");
-    }
-  }
-  return ACCOUNT_COPY.failed;
+  return serverRefusal(error) ?? ACCOUNT_COPY.failed;
 }
 
 /** The way back to /app/you: the reader profile's round control at the top
@@ -51,6 +39,12 @@ export function BackToYou() {
       <button type="button" className="client-reader-back" aria-label={ACCOUNT_COPY.back} onClick={() => navigate(YOU_PATH)}>‹</button>
     </div>
   );
+}
+
+/** Who runs the site (lib/company.ts), in the You tab's fine print: at the
+    foot of You and of Help & contact, as the site's footer shows it. */
+export function CompanyLegal() {
+  return <p className="legal" data-company-legal="">{COMPANY_IDENTITY}<br />{REGISTERED_OFFICE_LINE}</p>;
 }
 
 export function AccountFrame({ title, children }: { title: string; children: ReactNode }) {

@@ -14,7 +14,8 @@ export function useInboxUnreadCount() {
 
   return useQuery({
     queryKey: ["client-app-inbox-unread", user?.id],
-    enabled: !!user && billingMode === "per_message",
+    // Per-message unless the server says per-minute (BillingModeContext.tsx).
+    enabled: !!user && billingMode !== "per_minute",
     queryFn: async ({ signal }) => {
       let offset = 0;
       let unreadCount = 0;

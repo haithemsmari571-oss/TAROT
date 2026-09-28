@@ -180,12 +180,15 @@ interface StardustGliderProps {
    * can sit inside a scrolling page (e.g. Billing) without hijacking its backdrop.
    */
   fullBleed?: boolean;
+  /** The heading's id, for a dialog that is named by it (the top-up window). */
+  titleId?: string;
 }
 
 const StardustGlider = ({
   loading = false,
   onPurchase,
   fullBleed = false,
+  titleId,
 }: StardustGliderProps) => {
   const [amount, setAmount] = useState<number>(50);
 
@@ -220,6 +223,7 @@ const StardustGlider = ({
       {/* Scoped range-input styling + registered --beacon for smooth colour tweening. */}
       <style>{`
         .stardust-range { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border-radius: 999px; outline: none; cursor: pointer; }
+        .stardust-range:focus-visible { outline: 2px solid var(--beacon); outline-offset: 6px; }
         .stardust-range::-webkit-slider-thumb {
           -webkit-appearance: none; appearance: none;
           width: 30px; height: 30px; border-radius: 50%;
@@ -298,6 +302,7 @@ const StardustGlider = ({
         </div>
 
         <h2
+          id={titleId}
           className="text-4xl leading-none sm:text-5xl"
           style={{
             fontFamily: "var(--gl-serif)",
@@ -306,7 +311,9 @@ const StardustGlider = ({
             color: COLORS.neutralWhite,
           }}
         >
-          Name your <i style={{ color: "#d9c49a" }}>offering</i>
+          {/* fontFamily inherit: App.css's `*` Poppins (never loaded) drew the
+              italic in Arial beside the Fraunces heading (ROUND35 V1). */}
+          Name your <i style={{ color: "#d9c49a", fontFamily: "inherit" }}>offering</i>
         </h2>
         <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
           Slide to choose any amount from {formatGbp(STARDUST_MIN_USD)} to {formatGbp(STARDUST_MAX_USD)}. Larger

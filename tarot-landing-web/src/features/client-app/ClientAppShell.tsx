@@ -1,5 +1,8 @@
-import { NavLink, Outlet, useMatch } from "react-router-dom";
+import { useEffect } from "react";
+import { NavLink, Outlet, useLocation, useMatch } from "react-router-dom";
 import HallStage from "../hall/HallStage";
+import ClientScreenBoundary from "./ClientScreenBoundary";
+import { registerAppServiceWorker } from "./offline/appServiceWorker";
 import { useInboxUnreadCount } from "./useInboxUnreadCount";
 import { badgeText } from "./unreadBadge";
 import "../../styles/glass.css";
@@ -33,6 +36,10 @@ export default function ClientAppShell() {
   const isYou = useMatch("/app/you/*");
   const isHome = useMatch("/app/home/*");
   const isShorts = useMatch("/app/shorts");
+  const { pathname } = useLocation();
+
+  // The installed app's offline screen and kept build files (offline/sw.js).
+  useEffect(() => registerAppServiceWorker(), []);
 
   /* The hall's sky and runtime live only while the conversation screen is
      showing. Mounted behind every tab, HallStage's frame loop kept drawing the
@@ -40,8 +47,10 @@ export default function ClientAppShell() {
      room reads the running hall from HallStage's context (HallRoom.tsx:168),
      so the stage wraps the content on /app/chats/:chatId alone; leaving the
      room unmounts it, which stops the loop and drops its canvases. The nav
-     stays outside, so a tab press does not remount the control it sits on. */
-  const content = <main className="client-app-content"><Outlet /></main>;
+     stays outside, so a tab press does not remount the control it sits on.
+     A screen that cannot load or draw fails inside the content area, not the
+     whole app (ClientScreenBoundary.tsx). */
+  const content = <main className="client-app-content"><ClientScreenBoundary resetKey={pathname}><Outlet /></ClientScreenBoundary></main>;
 
   return (
     <div className={`client-app-shell${isThread ? " client-app-shell-thread" : ""}${isInbox ? " client-app-shell-inbox" : ""}${isReaders ? " client-app-shell-readers" : ""}${isYou ? " client-app-shell-you" : ""}${isHome ? " client-app-shell-home" : ""}${isShorts ? " client-app-shell-shorts" : ""}`}>

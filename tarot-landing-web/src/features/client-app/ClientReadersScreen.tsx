@@ -70,7 +70,8 @@ export default function ClientReadersScreen() {
   const welcomeCreditGbp = useGiftCredit();
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => categoriesApi.getCategories(), staleTime: 5 * 60_000 });
   const { billingMode } = useBillingMode();
-  const perMessage = billingMode === "per_message";
+  // Per-message unless the server says per-minute (BillingModeContext.tsx).
+  const perMessage = billingMode !== "per_minute";
   const empty = !!readers.data && readers.data.total === 0;
   // The shelf shows only readers the roster holds, so it is empty until the
   // roster and the favourites have both been read.
@@ -232,7 +233,8 @@ export default function ClientReadersScreen() {
         <div className="gl-grid">
           {shown.map(reader => (
             <div key={reader.id} className="client-readers-card">
-              <PsychicCard psychic={reader} welcomeCreditGbp={welcomeCreditGbp} onClick={() => navigate(`${READERS_PATH}/${reader.id}`)} />
+              {/* The shared card names a reader by her username; here it gets the app's name (readerName.ts). */}
+              <PsychicCard psychic={{ ...reader, username: readerName(reader) }} welcomeCreditGbp={welcomeCreditGbp} onClick={() => navigate(`${READERS_PATH}/${reader.id}`)} />
               <FavouriteHeart readerId={reader.id} name={readerName(reader)} />
             </div>
           ))}

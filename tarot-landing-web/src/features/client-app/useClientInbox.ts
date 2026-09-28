@@ -36,7 +36,8 @@ export function useClientInbox() {
   const queryClient = useQueryClient();
   return useInfiniteQuery({
     queryKey: ["client-inbox", user?.id],
-    enabled: !!user && billingMode === "per_message",
+    // Per-message unless the server says per-minute (BillingModeContext.tsx).
+    enabled: !!user && billingMode !== "per_minute",
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
       const { data } = await axiosClient.get<InboxPage>("/chat/inbox", { params: { offset: pageParam, limit: 20 }, signal });

@@ -18,6 +18,11 @@ export const PER_MESSAGE_COPY = {
       profile under the price; the hours are the backend's refund window */
   refundPromise: (price: number, hours: number) =>
     `Her hello is free. Each message you send is ${formatGbp(price)}, refunded automatically if she has not replied within ${hours} hours.`,
+  /** the owner's refund line where she pays and decides: the top-up window
+      and the guest reader profile beside the price; the hours are the
+      backend's refund window (24 today, which gives the owner's exact words) */
+  refundGuarantee: (hours: number) =>
+    `If your reader doesn't reply within ${hours} hours, your Stardust is refunded automatically.`,
   /** a refunded message: the quiet line in the room, the row in the You tab */
   refund: (reader?: string) => (reader ? `${REFUND_NOTE} from ${reader}` : REFUND_NOTE),
   /** under the composer when her balance no longer covers one message */

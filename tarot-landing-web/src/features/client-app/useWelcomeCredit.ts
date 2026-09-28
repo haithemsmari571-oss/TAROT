@@ -73,6 +73,10 @@ export function useGiftCredit(): number | undefined {
   return left >= credit ? credit : 0;
 }
 
+/* The sign-up page's welcome line (register.tsx), also the welcome-credit
+   moment's title after sign-up (CelebrationProvider.tsx). */
+export const FIRST_READING_ON_US = "Your first reading is on us";
+
 /** True when there is a credit to promise: the figure is known and above 0. */
 export function hasWelcomeCredit(creditGbp: number | undefined): creditGbp is number {
   return creditGbp !== undefined && creditGbp > 0;

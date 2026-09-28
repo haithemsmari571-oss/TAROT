@@ -11,6 +11,7 @@ import {
   TransactionType,
   type Transaction,
 } from "../../ledger/types/transaction.types";
+import { SUPPORT_MAILTO } from "../../../lib/company";
 
 // ─── Constellation data for background patterns ──────────────────────────────
 const CONSTELLATION_DATA = [
@@ -1018,7 +1019,7 @@ const Billing = () => {
               >
                 Your payment could not be processed. Please try again or{" "}
                 <a
-                  href="mailto:support@askvalentina.co.uk"
+                  href={SUPPORT_MAILTO}
                   className="underline hover:opacity-80 transition-opacity"
                   style={{ color: "var(--gl-accent)" }}
                 >

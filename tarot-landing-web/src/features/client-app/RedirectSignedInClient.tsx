@@ -3,9 +3,11 @@
    takes her to the app's own screen, with the query string and the hash kept.
    Guests and every other role get the old page exactly as before.
 
-   The app's chats run on per-message only. In any other mode the old hall is
+   The app's chats run on per-message only. Under per-minute the old hall is
    still the room, and the app's own chats screens send her there, so the chat
-   redirects hold back unless the site runs per-message. */
+   redirects hold back when the site runs per-minute. A mode that failed to
+   load counts as per-message, as it does in the app (BillingModeContext.tsx):
+   she is never left in the old hall for want of an answer. */
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useParams, type Params } from "react-router-dom";
 import { useAuth } from "@/features/auth/hooks";
@@ -30,6 +32,6 @@ export default function RedirectSignedInClient({
   if (isLoading) return null;
   if (!isAuthenticated || user?.role !== UserRole.USER) return <>{children}</>;
   if (perMessageOnly && !loaded) return null;
-  if (perMessageOnly && billingMode !== "per_message") return <>{children}</>;
+  if (perMessageOnly && billingMode === "per_minute") return <>{children}</>;
   return <Navigate to={{ pathname: to(params), search, hash }} replace />;
 }

@@ -10,20 +10,17 @@ import { isAxiosError } from "axios";
 import { usePsychicDetails } from "@/features/browse/hooks/usePsychicDetails";
 import type { Psychic } from "@/features/browse/types/psychic.types";
 import { PER_MESSAGE_COPY } from "@/features/chat/perMessage";
-import axiosClient from "@/lib/axiosClient";
 import { GUIDANCE_LINE, sanitizeClaims } from "@/lib/copy";
 import { formatGbp } from "@/lib/currency";
 import { presenceLine, readerName } from "./appReaders";
 import { READERS_PATH } from "./clientAppPaths";
 import ClientReaderReviews from "./ClientReaderReviews";
 import FavouriteHeart from "./FavouriteHeart";
+import { openConversation, threadPath } from "./readerIntent";
 import { hasWelcomeCredit, useGiftCredit, useRefundAfterHours, welcomeCreditLine } from "./useWelcomeCredit";
 import "./client-chats.css";
 import "./client-readers.css";
 import "./client-favourites.css";
-
-/** POST /chat/conversation: the fields the profile reads from its answer. */
-interface ConversationOpened { chat_id: number; created: boolean }
 
 export default function ClientReaderProfileScreen() {
   const { psychicId: rawId } = useParams();
@@ -80,8 +77,8 @@ function Profile({ reader }: { reader: Psychic }) {
     setRefusal(null);
     setOpening(true);
     try {
-      const { data } = await axiosClient.post<ConversationOpened>("/chat/conversation", { psychic_id: reader.id });
-      navigate(`/app/chats/${data.chat_id}`);
+      const opened = await openConversation(reader.id);
+      navigate(threadPath(opened.chat_id));
     } catch (error) {
       setRefusal(isAxiosError(error) && error.response?.status === 402 ? PER_MESSAGE_COPY.readerUnavailable : PER_MESSAGE_COPY.openFailed);
       setOpening(false);

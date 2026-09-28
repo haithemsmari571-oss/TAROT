@@ -5,6 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { psychicsApi } from "@/features/browse/api/psychicsApi";
 import type { Psychic } from "@/features/browse/types/psychic.types";
+import { readerDisplayName } from "./readerName";
 import { clockAt } from "./ukTime";
 import "./client-chats.css";
 
@@ -19,10 +20,9 @@ export function useAppReaders() {
   });
 }
 
-/** Serif names read as names, not labels: Title case whatever the DB holds,
-    exactly as the card does (PsychicCard.tsx:33-35). */
-export const readerName = (reader: Pick<Psychic, "username">) =>
-  reader.username ? reader.username.charAt(0).toUpperCase() + reader.username.slice(1).toLowerCase() : "";
+/** Serif names read as names, not labels: Title case, as the card writes them
+    (PsychicCard.tsx:36-38), and never a raw username (readerName.ts). */
+export const readerName = (reader: Pick<Psychic, "username">) => readerDisplayName(reader.username);
 
 /** Online now, Back at 20:00, or Offline. */
 export const presenceLine = (reader: Pick<Psychic, "is_online" | "next_online_at">) =>

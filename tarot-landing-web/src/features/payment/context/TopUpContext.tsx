@@ -3,9 +3,17 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
+  useId,
+  useRef,
   type ReactNode,
 } from "react";
 import { Icon } from "@iconify/react";
+import { isAxiosError } from "axios";
+import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
+import { PER_MESSAGE_COPY } from "@/features/chat/perMessage";
+import ConfirmEmailSheet, { EMAIL_NOT_CONFIRMED } from "@/features/client-app/ConfirmEmailSheet";
+import { useRefundAfterHours } from "@/features/client-app/useWelcomeCredit";
 import StardustGlider from "../components/StardustGlider";
 import { usePayment } from "../hooks/usePayment";
 import { TYPOGRAPHY } from "@/theme";
@@ -32,6 +40,11 @@ interface TopUpContextValue {
 }
 
 const TopUpContext = createContext<TopUpContextValue | null>(null);
+
+const CHECKOUT_FAILED = "We couldn't start checkout. Please try again.";
+
+// What Tab can land on inside the window (and inside the mobile menu, Navbar.tsx).
+export const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Every "Add Stardust" entry point in the app opens this one modal — the same
@@ -68,6 +81,55 @@ function StardustGliderModal({
   const { createStardustCheckoutSession } = usePayment();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmEmail, setConfirmEmail] = useState(false);
+  // The refund promise under the Buy button: per-message only (a per-minute
+  // reading has no such refund), with the server's own refund window, and
+  // nothing until both are known.
+  const { billingMode } = useBillingMode();
+  const refundAfterHours = useRefundAfterHours();
+  const refundLine = billingMode === "per_message" && refundAfterHours !== undefined
+    ? PER_MESSAGE_COPY.refundGuarantee(refundAfterHours)
+    : null;
+
+  // The window is a dialog (ROUND35 A5), named by the glider's heading: focus
+  // moves in when it opens, Tab and Shift+Tab stay inside, Escape closes it,
+  // and focus goes back to what opened it (Add Stardust).
+  const titleId = useId();
+  const windowRef = useRef<HTMLDivElement>(null);
+  const latest = useRef({ onClose, confirmEmail });
+  useEffect(() => {
+    latest.current = { onClose, confirmEmail };
+  });
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const stops = () =>
+      [...(windowRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((el) => el.getClientRects().length > 0);
+    stops()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      // The confirm-email sheet is a native modal dialog with its own Escape and Tab.
+      if (latest.current.confirmEmail) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        latest.current.onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const all = stops();
+      if (all.length === 0) return;
+      const first = all[0];
+      const last = all[all.length - 1];
+      const inside = windowRef.current?.contains(document.activeElement) ?? false;
+      if (event.shiftKey ? !inside || document.activeElement === first : !inside || document.activeElement === last) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
 
   const handlePurchase = useCallback(
     async (amountUsd: number) => {
@@ -84,13 +146,19 @@ function StardustGliderModal({
           amount_usd: amountUsd,
           return_url: returnUrl,
         });
-      } catch (e: any) {
-        setError(
-          e?.response?.data?.detail ??
-            e?.message ??
-            "We couldn't start checkout. Please try again."
-        );
+      } catch (failure) {
         setBusy(false);
+        // Her first top-up waits for her confirmed email (ROUND38): the
+        // server refused before Stripe, so the confirm sheet, not an error.
+        if (isAxiosError(failure) && failure.response?.status === 403
+          && failure.response.data?.detail === EMAIL_NOT_CONFIRMED) {
+          setConfirmEmail(true);
+          return;
+        }
+        // Always the window's own words: the server's text named the Stripe
+        // key it was given (masked) and its own settings, and the browser's
+        // is "Request failed with status code 400" or "Network Error".
+        setError(CHECKOUT_FAILED);
       }
     },
     [busy, options, createStardustCheckoutSession]
@@ -98,6 +166,10 @@ function StardustGliderModal({
 
   return (
     <div
+      ref={windowRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
       data-hall-exempt=""
       className="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto p-4 sm:p-6"
       style={{
@@ -121,7 +193,13 @@ function StardustGliderModal({
           </p>
         )}
 
-        <StardustGlider onPurchase={handlePurchase} loading={busy} />
+        <StardustGlider onPurchase={handlePurchase} loading={busy} titleId={titleId} />
+
+        {refundLine && (
+          <p data-topup-refund="" className="mt-4 px-2 text-center text-xs leading-relaxed text-white/70">
+            {refundLine}
+          </p>
+        )}
 
         {error && (
           <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-sm text-red-400">
@@ -129,6 +207,7 @@ function StardustGliderModal({
           </div>
         )}
       </div>
+      <ConfirmEmailSheet open={confirmEmail} onClose={() => setConfirmEmail(false)} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
+import { readerDisplayName } from "./readerName";
 import { useClientInbox, type InboxConversation } from "./useClientInbox";
 import { ukClock } from "./ukTime";
 import "./client-chats.css";
@@ -28,16 +29,17 @@ function ConversationRow({ conversation, now }: { conversation: InboxConversatio
   const navigate = useNavigate();
   const { reader, last_message: last, unread_count: unread } = conversation;
   const state = conversation.client_last_message_state ?? "sent";
+  const name = readerDisplayName(reader.display_name);
   return (
     <li>
       <button type="button" onClick={() => navigate(`/app/chats/${conversation.chat_id}`)} className={`client-chats-row${unread > 0 ? " has-unread" : ""}`} data-chat-id={conversation.chat_id}>
         <span className="client-chats-avatar">
-          <span className="client-chats-initial" aria-hidden="true">{reader.display_name.slice(0, 1).toUpperCase()}</span>
+          <span className="client-chats-initial" aria-hidden="true">{name.slice(0, 1)}</span>
           {reader.profile_picture_url && <img src={reader.profile_picture_url} alt="" onError={event => { event.currentTarget.hidden = true; }} />}
           <span className={`client-chats-online-dot${reader.is_online ? " is-online" : ""}`} aria-label={reader.is_online ? "Online" : "Offline"} />
         </span>
         <span className="client-chats-summary">
-          <span className="client-chats-name">{reader.display_name}</span>
+          <span className="client-chats-name">{name}</span>
           <span className="client-chats-preview-line">
             {last?.sent_by === "client" && <svg className={`client-chats-ticks ${state}`} width="17" height="12" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={state}>
               <path d="m2 8 4 4L16 2" />
@@ -57,13 +59,16 @@ function ConversationRow({ conversation, now }: { conversation: InboxConversatio
 }
 
 export default function ClientChatsScreen() {
-  const { billingMode, loaded } = useBillingMode();
-  if (loaded && billingMode !== "per_message") return <Navigate to="/chats" replace />;
+  const { billingMode } = useBillingMode();
+  // Per-message unless the server says per-minute: a failed or unknown mode
+  // keeps her here (BillingModeContext.tsx).
+  if (billingMode === "per_minute") return <Navigate to="/chats" replace />;
   return <ClientChatsList />;
 }
 
 function ClientChatsList() {
   const inbox = useClientInbox();
+  const billing = useBillingMode();
   const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } = inbox;
@@ -101,7 +106,7 @@ function ClientChatsList() {
         </div> : <>
           {inbox.isPending && <p className="client-chats-notice" role="status">Loading chats…</p>}
           {conversations.length > 0 && <ul className="client-chats-rows">{conversations.map(conversation => <ConversationRow key={conversation.chat_id} conversation={conversation} now={now} />)}</ul>}
-          {inbox.isError && <p className="client-chats-notice" role="alert">Could not load chats. <button onClick={() => { void (isFetchNextPageError ? fetchNextPage() : inbox.refetch()); }}>Try again</button></p>}
+          {inbox.isError && <p className="client-chats-notice" role="alert">Could not load chats. <button onClick={() => { if (billing.failed) billing.retry(); void (isFetchNextPageError ? fetchNextPage() : inbox.refetch()); }}>Try again</button></p>}
           {inbox.isFetchingNextPage && <p className="client-chats-notice" role="status">Loading more chats…</p>}
           <div ref={sentinel} className="client-chats-sentinel" aria-hidden="true" />
         </>}
