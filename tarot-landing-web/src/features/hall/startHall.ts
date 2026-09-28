@@ -464,7 +464,10 @@ function frame(now:number){
   const S=RM?0:(CALM?.5:1);
 /* ADDED-END */
   clock+=dt*0.001*S;
-  const br=(1-Math.cos((((now-t00)%BREATH)/BREATH)*6.283))/2;
+/* ADDED-BEGIN reduced motion holds the breath too (ROUND35 A13): it ran on the wall
+   clock, so the sky and the dust kept pulsing. Held at its first frame's value. */
+  const br=RM?0:(1-Math.cos((((now-t00)%BREATH)/BREATH)*6.283))/2;
+/* ADDED-END */
 
   ptrS += (((down?1:(px>-900?0.34:0)) - ptrS))*Math.min(1,dt*0.006);
 

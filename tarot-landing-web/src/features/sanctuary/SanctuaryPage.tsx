@@ -177,7 +177,9 @@ export default function SanctuaryPage() {
       </div>
 
       {loading || error || !items.length ? <QuietState loading={loading} error={error} /> : (
-        <main className={styles.content}>
+        // A div: the public layout's <main> already holds the page, and a page
+        // has one main landmark (ROUND41).
+        <div className={styles.content}>
           <section className={`${styles.hero} ${styles.shell}${revealed ? ` ${styles.revealed}` : ""}`} aria-labelledby="sanctuary-hero-title">
             <span className={styles.headerWhisper}>come as you are, stay as long as you need</span>
             <div className={styles.heroArtWrap}>
@@ -234,7 +236,7 @@ export default function SanctuaryPage() {
               </div>
             </div>
           </section>
-        </main>
+        </div>
       )}
 
       {!loading && !error && items.length ? <footer className={styles.footer}>The door stays open. Come back whenever the night feels long.</footer> : null}

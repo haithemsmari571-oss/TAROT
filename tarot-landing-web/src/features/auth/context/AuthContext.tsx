@@ -9,6 +9,8 @@ import {
   saveRefreshToken,
 } from "../utils";
 import type { User, AuthContextType } from "../types";
+import { getCurrentUser } from "../api";
+import { fillStoredUser, storedSessionStart, tokenSignsInHere } from "../websiteSignIn";
 
 export const AuthContext = createContext<AuthContextType | undefined>(
   undefined,
@@ -40,6 +42,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(storedUser);
         }
       } else if (storedToken && !storedUser) {
+        // A session stored without its user, as the CRM on this host stores
+        // its sign-in: kept when it signs in here, and the user read from
+        // /profile/me (websiteSignIn.ts storedSessionStart).
+        if (storedSessionStart(storedToken, false) === "fill-user") {
+          console.log("Token without user data, filling the user from /profile/me");
+          fillStoredUser(getCurrentUser).then((filled) => {
+            // getToken(): the read may have refreshed the token.
+            setToken(filled ? getToken() : null);
+            setUser(filled);
+            setIsLoading(false);
+          });
+          return;
+        }
         // Token exists but no user data - clear everything
         console.log("Token exists but no user data, clearing auth");
         clearTokens();
@@ -56,7 +71,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "auth_token") {
-        if (e.newValue === null) {
+        // A reader's or admin's token stored by another tab is not adopted:
+        // the website refuses those sessions (websiteSignIn.ts).
+        if (e.newValue === null || !tokenSignsInHere(e.newValue)) {
           console.log("Token removed from storage, logging out");
           setToken(null);
           setUser(null);

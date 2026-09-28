@@ -1,10 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
+import { isAxiosError } from "axios";
 import { Link, useSearchParams } from "react-router-dom";
-import backgroundImage from "../../../assets/Cover.png";
-import PageBackground from "../../../components/PageBackground";
+import { readerIdFrom, withReader } from "@/features/client-app/readerIntent";
+import AuthBackground from "../components/AuthBackground";
+import ShowPasswordButton from "../components/ShowPasswordButton";
 import { useGlassTheme } from "../../../lib/glassTheme";
 import { useLogin } from "../hooks";
+import { INCORRECT_CREDENTIALS, loginRefusal } from "../signInRefusal";
+import { WEBSITE_SIGN_IN_REFUSED, storedSessionWasRefused } from "../websiteSignIn";
 import "../../../styles/glass.css";
 
 // Glass auth shell — shared inline tokens for the guest screens. Everything
@@ -41,6 +45,19 @@ const errorTextStyle: React.CSSProperties = {
   margin: 0,
 };
 
+// Each label names its field, and a refusal names the fields it is about (ROUND40).
+const EMAIL_ID = "signin-email";
+const PASSWORD_ID = "signin-password";
+const ERROR_ID = "signin-error";
+
+/** The fields a refusal is about: both for a wrong email or password, the
+    email for an address the server cannot read (422), none otherwise. */
+function refusedFieldIds(error: unknown): string[] {
+  if (!error) return [];
+  if (loginRefusal(error) === INCORRECT_CREDENTIALS) return [EMAIL_ID, PASSWORD_ID];
+  return isAxiosError(error) && error.response?.status === 422 ? [EMAIL_ID] : [];
+}
+
 const successBoxStyle: React.CSSProperties = {
   border: "1px solid var(--gl-live-bd)",
   background: "var(--gl-glass)",
@@ -52,10 +69,27 @@ const successBoxStyle: React.CSSProperties = {
 const LoginPage = () => {
   useGlassTheme(); // apply the stored candlelight/daylight mood on hard loads
   const [searchParams] = useSearchParams();
+  // The reader she chose as a guest, carried on to sign-up (readerIntent.ts).
+  const readerId = readerIdFrom(searchParams);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showVerifiedMessage, setShowVerifiedMessage] = useState(false);
+  // A reader's or admin's stored session this page load ended (main.tsx) gets
+  // the same refusal, until she tries to sign in.
+  const [sessionRefused, setSessionRefused] = useState(storedSessionWasRefused);
   const { mutate: login, isPending, error } = useLogin();
+  const [showPassword, setShowPassword] = useState(false);
+  const emailField = useRef<HTMLInputElement>(null);
+
+  // The fields the refusal on show is about are tied to it and marked invalid;
+  // the email, first of them, takes focus.
+  const badFields = refusedFieldIds(error);
+  const errorFor = (id: string) =>
+    badFields.includes(id) ? { "aria-invalid": true, "aria-describedby": ERROR_ID } : {};
+
+  useEffect(() => {
+    if (refusedFieldIds(error).length > 0) emailField.current?.focus();
+  }, [error]);
 
   const verified = searchParams.get("verified");
 
@@ -68,16 +102,18 @@ const LoginPage = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setSessionRefused(false);
     await login({ email, password });
   };
 
   return (
-    <div
+    // main: the page's landmark (axe landmark-one-main).
+    <main
       className="relative min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
     >
-      {/* The cover art stays vivid in both moods; the token tint carries mood. */}
-      <PageBackground images={backgroundImage} variant="glass" />
+      {/* The app's sky; the token tint carries the mood. */}
+      <AuthBackground />
 
       {/* Back to home */}
       <Link
@@ -117,7 +153,7 @@ const LoginPage = () => {
 
           <form className="space-y-5" onSubmit={handleLogin}>
             <div>
-              <label style={labelStyle}>Email</label>
+              <label htmlFor={EMAIL_ID} style={labelStyle}>Email</label>
               <div className="relative">
                 <Icon
                   icon="ph:user-bold"
@@ -126,6 +162,8 @@ const LoginPage = () => {
                 />
                 <input
                   required
+                  id={EMAIL_ID}
+                  ref={emailField}
                   type="email"
                   name="email"
                   autoComplete="username"
@@ -134,13 +172,14 @@ const LoginPage = () => {
                   style={{ ...inputStyle, paddingLeft: 46 }}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  {...errorFor(EMAIL_ID)}
                 />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between items-baseline" style={{ margin: "0 2px 8px" }}>
-                <label style={{ ...labelStyle, margin: 0 }}>Password</label>
+                <label htmlFor={PASSWORD_ID} style={{ ...labelStyle, margin: 0 }}>Password</label>
                 <Link
                   to="/forgot-password"
                   className="gl-acc hover:underline"
@@ -157,24 +196,34 @@ const LoginPage = () => {
                 />
                 <input
                   required
-                  type="password"
+                  id={PASSWORD_ID}
+                  type={showPassword ? "text" : "password"}
                   name="password"
                   autoComplete="current-password"
                   placeholder="••••••••••••"
                   className="gl-pop-input"
-                  style={{ ...inputStyle, paddingLeft: 46 }}
+                  style={{ ...inputStyle, paddingLeft: 46, paddingRight: 46 }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  {...errorFor(PASSWORD_ID)}
                 />
+                <ShowPasswordButton shown={showPassword} onToggle={() => setShowPassword((s) => !s)} controls={PASSWORD_ID} />
               </div>
             </div>
 
-            {error && (
-              <div style={errorBoxStyle}>
-                <p style={errorTextStyle}>
-                  {error?.response?.data?.detail || "Incorrect email or password."}
+            {/* role="alert": read out the moment it appears (ROUND35 A3). */}
+            {error ? (
+              <div role="alert" style={errorBoxStyle}>
+                <p id={ERROR_ID} style={errorTextStyle}>
+                  {loginRefusal(error)}
                 </p>
               </div>
+            ) : (
+              sessionRefused && (
+                <div role="alert" style={errorBoxStyle}>
+                  <p style={errorTextStyle}>{WEBSITE_SIGN_IN_REFUSED}</p>
+                </div>
+              )
             )}
 
             <button
@@ -198,7 +247,7 @@ const LoginPage = () => {
               New to Ask Valentina?
             </p>
             <Link
-              to="/register"
+              to={withReader("/register", readerId)}
               className="gl-btn-ghost inline-block"
               style={{ textDecoration: "none", padding: "11px 26px" }}
             >
@@ -207,7 +256,7 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

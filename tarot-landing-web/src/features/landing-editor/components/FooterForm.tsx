@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { COLORS } from "../../../theme";
+import { BRAND_NAME, COPYRIGHT_LINE } from "../../../lib/company";
 import type { FooterContent, SocialLink, NavLink } from "../types/landingEditor.types";
 import { FieldSet } from "./FieldSet";
 
@@ -53,7 +54,7 @@ export const FooterForm = ({ content, onChange }: FooterFormProps) => {
         <input
           value={content.brandName}
           onChange={(e) => update("brandName", e.target.value)}
-          placeholder="The Alchemical Exchange"
+          placeholder={BRAND_NAME}
           className="w-full px-4 py-3 rounded-xl outline-none transition-all"
           style={inputStyle}
         />
@@ -74,7 +75,7 @@ export const FooterForm = ({ content, onChange }: FooterFormProps) => {
         <input
           value={content.copyright}
           onChange={(e) => update("copyright", e.target.value)}
-          placeholder="\u00a9 2026 The Alchemical Exchange"
+          placeholder={COPYRIGHT_LINE}
           className="w-full px-4 py-3 rounded-xl outline-none transition-all max-w-md"
           style={inputStyle}
         />

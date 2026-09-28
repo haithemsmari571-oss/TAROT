@@ -12,7 +12,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:admin-crm-routes": "node scripts/test-admin-crm-routes.mts",
-    "test:crm-long-video-proxy": "node scripts/test-crm-long-video-upload-proxy.mts"
+    "test:crm-long-video-proxy": "node scripts/test-crm-long-video-upload-proxy.mts",
+    "test:website-sign-in": "node --experimental-transform-types scripts/test-website-sign-in.mts",
+    "test:app-service-worker": "node scripts/test-app-service-worker.mts",
+    "test:reader-name": "node scripts/test-reader-name.mts",
+    "test:offline-icons": "node scripts/test-offline-icons.mts"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",

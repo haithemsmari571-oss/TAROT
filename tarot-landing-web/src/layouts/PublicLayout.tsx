@@ -11,6 +11,8 @@ import "../styles/glass.css";
 // The navbar's height, and the offer bar's above it (AnnouncementBar, h-9).
 const NAVBAR_HEIGHT_PX = 68;
 const OFFER_BAR_HEIGHT_PX = 36;
+// Where "Skip to content" lands.
+const MAIN_CONTENT_ID = "main-content";
 
 export default function PublicLayout() {
   const { isAuthenticated } = useAuth();
@@ -24,10 +26,13 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "var(--gl-base)" }}>
+      {/* The first Tab stop: straight past the offer bar and the navbar (glass.css .gl-skip). */}
+      <a href={`#${MAIN_CONTENT_ID}`} className="gl-skip">Skip to content</a>
       {/* Slim welcome-offer bar pinned to the very top; navbar sits 36px below it. */}
       {offerBar && <AnnouncementBar creditGbp={welcomeCreditGbp} />}
       <Navbar topOffset={offerBar ? OFFER_BAR_HEIGHT_PX : 0} />
-      <main style={{ paddingTop: NAVBAR_HEIGHT_PX + (offerBar ? OFFER_BAR_HEIGHT_PX : 0) }}>
+      {/* tabIndex -1 lets the skip link hand focus to the page itself; it is never a Tab stop. */}
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} style={{ paddingTop: NAVBAR_HEIGHT_PX + (offerBar ? OFFER_BAR_HEIGHT_PX : 0), outline: "none" }}>
         <Outlet />
       </main>
       {!isAuthenticated && !isSanctuary && <Footer />}

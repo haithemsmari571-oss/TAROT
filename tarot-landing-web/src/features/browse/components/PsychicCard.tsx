@@ -1,4 +1,3 @@
-import type { KeyboardEvent } from "react";
 import { Icon } from "@iconify/react";
 import type { Psychic } from "../types/psychic.types";
 import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
@@ -38,18 +37,12 @@ const PsychicCard = ({ psychic, onClick, welcomeCreditGbp }: PsychicCardProps) =
     ? psychic.username.charAt(0).toUpperCase() + psychic.username.slice(1).toLowerCase()
     : "";
 
-  // Enter and Space on the card itself do what a click does. A key pressed on the
-  // Start button inside is left to the button, whose own click bubbles up here.
-  // Start does nothing the card does not, so it stays out of the Tab order and
-  // out of the accessibility tree.
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
-    event.preventDefault();
-    onClick();
-  };
-
+  // One control per card (ROUND35 A6): Start, the card's visible button, is the
+  // Tab stop and what a screen reader names; its click bubbles up to the card's.
+  // The card itself stays a mouse and touch target only, so a screen reader
+  // reads the name, bio, tags and price as text instead of one button hiding them.
   return (
-    <div className="gl-pc" role="button" tabIndex={0} aria-label={`Open ${displayName}'s profile`} onClick={onClick} onKeyDown={onKeyDown}>
+    <div className="gl-pc" onClick={onClick}>
       {/* PHOTO */}
       <div className="gl-ph">
         {psychic.profile_picture_url ? (
@@ -102,7 +95,7 @@ const PsychicCard = ({ psychic, onClick, welcomeCreditGbp }: PsychicCardProps) =
               </div>
             )
           )}
-          <button className="gl-start" type="button" tabIndex={-1} aria-hidden="true">
+          <button className="gl-start" type="button" aria-label={`Start: open ${displayName}'s profile`}>
             Start
           </button>
         </div>

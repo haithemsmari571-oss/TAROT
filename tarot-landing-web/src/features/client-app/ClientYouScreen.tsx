@@ -3,14 +3,16 @@
    balance and the ledger, the global top-up window (the glider and its
    checkout) for adding Stardust, the auth context for who she is and for
    logging out. The More card leads to the site's own pages hosted in the
-   app (the Constellation, Notifications, Terms, Privacy; ClientMoreScreen.tsx),
+   app (the Constellation, Notifications, Terms, Privacy; ClientMoreScreen.tsx)
+   and to Help & contact (ClientHelpScreen.tsx),
    its Notifications row carrying the API's unread count
    (useNotificationsUnreadCount.ts), and last, where this browser can do it,
    Add to your home screen (useInstallPrompt.ts). The
    Account card leads to the account screens, Favourites, Edit details and
    Change password, and shows the line one of them sends back; then the
    switch for her reply emails; under its Log out, a quieter Delete account
-   (ClientDeleteAccountScreen.tsx). */
+   (ClientDeleteAccountScreen.tsx). At the foot, who runs the site
+   (CompanyLegal, lib/company.ts). */
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,7 +27,7 @@ import { GUIDANCE_LINE } from "@/lib/copy";
 import { formatGbp } from "@/lib/currency";
 import { readerName } from "./appReaders";
 import { YOU_DELETE_PATH, YOU_DETAILS_PATH, YOU_FAVOURITES_PATH, YOU_PASSWORD_PATH, YOU_PATH } from "./clientAppPaths";
-import { refusalText, type YouNotice } from "./ClientAccountForm";
+import { CompanyLegal, refusalText, type YouNotice } from "./ClientAccountForm";
 import { MORE_LINKS } from "./ClientMoreScreen";
 import { badgeText } from "./unreadBadge";
 import { clockAt, shortDayOf } from "./ukTime";
@@ -377,6 +379,7 @@ export default function ClientYouScreen() {
       </section>
 
       <p className="legal">{GUIDANCE_LINE}</p>
+      <CompanyLegal />
     </section>
   );
 }

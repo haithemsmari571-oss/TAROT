@@ -3,6 +3,7 @@
 // client app renders the full PublicLayout (Navbar/Footer) instead — this markup
 // is replaced on client mount (createRoot), so it doesn't need to match exactly.
 import { Link } from "react-router-dom";
+import { COMPANY_IDENTITY, CONTACT_LABEL, COPYRIGHT_LINE, REGISTERED_OFFICE_LINE, SUPPORT_EMAIL, SUPPORT_MAILTO } from "../lib/company";
 import { COLORS } from "../theme";
 
 export default function MarketingShell({ children }: { children: React.ReactNode }) {
@@ -50,7 +51,12 @@ export default function MarketingShell({ children }: { children: React.ReactNode
           <Link to="/privacy" style={{ color: COLORS.neutralGray }}>Privacy</Link>
           <Link to="/terms" style={{ color: COLORS.neutralGray }}>Terms</Link>
         </nav>
-        <p>© 2026 Ask Valentina · Private love &amp; tarot readings</p>
+        <p>{COPYRIGHT_LINE} · Private love &amp; tarot readings</p>
+        <p className="mt-2 text-xs">{COMPANY_IDENTITY}</p>
+        <p className="text-xs">
+          {REGISTERED_OFFICE_LINE} · {CONTACT_LABEL}:{" "}
+          <a href={SUPPORT_MAILTO} style={{ color: COLORS.neutralGray }}>{SUPPORT_EMAIL}</a>
+        </p>
       </footer>
     </div>
   );

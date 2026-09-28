@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { useAuth } from "../features/auth/hooks";
 import { paymentApi } from "../features/payment/api/paymentApi";
@@ -9,18 +9,62 @@ import { useGlassTheme } from "../lib/glassTheme";
 import { UserRole } from "../features/auth/types/auth.types";
 import { HOME_PATH } from "../features/client-app/clientAppPaths";
 import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWelcomeCredit";
+import { FOCUSABLE } from "../features/payment/context/TopUpContext";
+import { SUPPORT_MAILTO } from "../lib/company";
 import "../styles/glass.css";
+
+const MOBILE_MENU_ID = "mobile-menu";
+// The drawer's labels name no face of their own, so App.css's `*` Poppins
+// (never loaded) drew them in Arial; they take the glass sans (ROUND35 V1).
+const DRAWER_LABEL_FONT = "var(--gl-sans)";
 
 export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
   const { theme, toggleTheme } = useGlassTheme();
+  // The theme toggle shows only ☀ or ☾; these words are its name to a screen
+  // reader as well as its tooltip (ROUND31, C2).
+  const themeToggleLabel = theme === "dark" ? "Switch to daylight" : "Switch to candlelight";
   const welcomeCreditGbp = useWelcomeCredit();
 
   const [balance, setBalance] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
+
+  // The open drawer is a dialog, as the top-up window is (TopUpContext.tsx,
+  // ROUND41): focus moves in (Close), Tab and Shift+Tab stay inside, Escape
+  // closes it, and focus goes back to the Menu button however it closes.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const stops = () =>
+      [...(drawer.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((el) => el.getClientRects().length > 0);
+    stops()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const all = stops();
+      if (all.length === 0) return;
+      const first = all[0];
+      const last = all[all.length - 1];
+      const inside = drawer.current?.contains(document.activeElement) ?? false;
+      if (event.shiftKey ? !inside || document.activeElement === first : !inside || document.activeElement === last) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      menuButton.current?.focus();
+    };
+  }, [mobileNavOpen]);
 
   // Sync internal layout balance with background ledger fetches
   useEffect(() => {
@@ -127,7 +171,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
           <div className="hidden lg:flex items-center gap-3.5 ml-auto">
             {/* Help — always reachable, opens the support email */}
             <a
-              href="mailto:support@askvalentina.co.uk"
+              href={SUPPORT_MAILTO}
               title="Email our support team"
               className="gl-navlink"
             >
@@ -148,7 +192,8 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   type="button"
                   onClick={toggleTheme}
                   className="gl-theme-toggle"
-                  title={theme === "dark" ? "Switch to daylight" : "Switch to candlelight"}
+                  title={themeToggleLabel}
+                  aria-label={themeToggleLabel}
                 >
                   {theme === "dark" ? "☀" : "☾"}
                 </button>
@@ -173,7 +218,8 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   type="button"
                   onClick={toggleTheme}
                   className="gl-theme-toggle"
-                  title={theme === "dark" ? "Switch to daylight" : "Switch to candlelight"}
+                  title={themeToggleLabel}
+                  aria-label={themeToggleLabel}
                 >
                   {theme === "dark" ? "☀" : "☾"}
                 </button>
@@ -196,14 +242,19 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
               type="button"
               onClick={toggleTheme}
               className="gl-theme-toggle"
-              title={theme === "dark" ? "Switch to daylight" : "Switch to candlelight"}
+              title={themeToggleLabel}
+              aria-label={themeToggleLabel}
             >
               {theme === "dark" ? "☀" : "☾"}
             </button>
             <button
+              ref={menuButton}
               onClick={() => setMobileNavOpen(true)}
               className="gl-theme-toggle"
               title="Menu"
+              aria-haspopup="dialog"
+              aria-expanded={mobileNavOpen}
+              aria-controls={MOBILE_MENU_ID}
             >
               <Icon icon="ph:list-bold" className="text-lg mx-auto" />
             </button>
@@ -218,8 +269,16 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
         />
       )}
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer. Closed, it is only slid off screen, so inert keeps its
+          items out of the Tab order and away from screen readers (ROUND35 A4).
+          Open, it is a modal dialog named by the Menu button's word. */}
       <div
+        id={MOBILE_MENU_ID}
+        ref={drawer}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        inert={!mobileNavOpen}
         className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] z-[70] transform transition-transform duration-300 lg:hidden ${
           mobileNavOpen ? "translate-x-0" : "translate-x-full"
         }`}
@@ -242,6 +301,8 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
               <img src="/logo short normal.svg" alt="Ask Valentina home" className="gl-logo-img" />
               <span className="gl-wm">Ask Valentina</span>
             </div>
+            {/* Focus goes back to the Menu button as the drawer closes (the dialog
+                effect above): it turns inert, which would drop focus to the page. */}
             <button
               onClick={() => setMobileNavOpen(false)}
               className="gl-theme-toggle"
@@ -269,7 +330,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   />
                   <span
                     className="text-xs font-semibold uppercase tracking-[2px]"
-                    style={{ color: location.pathname === "/profile" ? "var(--gl-accent)" : "var(--gl-text)" }}
+                    style={{ color: location.pathname === "/profile" ? "var(--gl-accent)" : "var(--gl-text)", fontFamily: DRAWER_LABEL_FONT }}
                   >
                     Your Constellation
                   </span>
@@ -296,7 +357,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                     />
                     <span
                       className="text-xs font-semibold uppercase tracking-[2px]"
-                      style={{ color: isActive ? "var(--gl-accent)" : "var(--gl-text-dim)" }}
+                      style={{ color: isActive ? "var(--gl-accent)" : "var(--gl-text-dim)", fontFamily: DRAWER_LABEL_FONT }}
                     >
                       {item.name}
                     </span>
@@ -319,7 +380,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   />
                   <span
                     className="text-xs font-semibold uppercase tracking-[2px]"
-                    style={{ color: location.pathname === "/notifications" ? "var(--gl-accent)" : "var(--gl-text-dim)" }}
+                    style={{ color: location.pathname === "/notifications" ? "var(--gl-accent)" : "var(--gl-text-dim)", fontFamily: DRAWER_LABEL_FONT }}
                   >
                     Notifications
                   </span>
@@ -341,12 +402,12 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   </div>
 
                   <a
-                    href="mailto:support@askvalentina.co.uk"
+                    href={SUPPORT_MAILTO}
                     onClick={() => setMobileNavOpen(false)}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
                   >
                     <Icon icon="ph:lifebuoy-duotone" className="text-xl" style={{ color: "var(--gl-accent)" }} />
-                    <span className="text-xs font-semibold uppercase tracking-[2px]" style={{ color: "var(--gl-text-dim)" }}>
+                    <span className="text-xs font-semibold uppercase tracking-[2px]" style={{ color: "var(--gl-text-dim)", fontFamily: DRAWER_LABEL_FONT }}>
                       Help &amp; Support
                     </span>
                   </a>
@@ -356,7 +417,7 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
                   >
                     <Icon icon="ph:sign-out-duotone" className="text-xl" style={{ color: "#c1443a" }} />
-                    <span className="text-xs font-semibold uppercase tracking-[2px]" style={{ color: "#c1443a" }}>
+                    <span className="text-xs font-semibold uppercase tracking-[2px]" style={{ color: "#c1443a", fontFamily: DRAWER_LABEL_FONT }}>
                       Sign Out
                     </span>
                   </button>
@@ -381,12 +442,12 @@ export default function Navbar({ topOffset = 0 }: { topOffset?: number } = {}) {
                   </button>
 
                   <a
-                    href="mailto:support@askvalentina.co.uk"
+                    href={SUPPORT_MAILTO}
                     onClick={() => setMobileNavOpen(false)}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
                   >
                     <Icon icon="ph:lifebuoy-duotone" className="text-xl" style={{ color: "var(--gl-accent)" }} />
-                    <span className="text-xs font-semibold uppercase tracking-[2px]" style={{ color: "var(--gl-text-dim)" }}>
+                    <span className="text-xs font-semibold uppercase tracking-[2px]" style={{ color: "var(--gl-text-dim)", fontFamily: DRAWER_LABEL_FONT }}>
                       Help &amp; Support
                     </span>
                   </a>

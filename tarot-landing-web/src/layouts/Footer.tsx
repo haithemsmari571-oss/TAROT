@@ -5,16 +5,21 @@ import { useNavigate } from "react-router-dom";
 import axiosClient from "../lib/axiosClient";
 import { formatGbp } from "../lib/currency";
 import { hasWelcomeCredit, useWelcomeCredit } from "../features/client-app/useWelcomeCredit";
+import { BRAND_NAME, COMPANY_IDENTITY, CONTACT_LABEL, COPYRIGHT_LINE, REGISTERED_OFFICE_LINE, SUPPORT_EMAIL, SUPPORT_MAILTO } from "../lib/company";
 import "../styles/glass.css";
 
+// The copyright and the legal buttons name no face of their own, so App.css's
+// `*` Poppins (never loaded) drew them in Arial; they take the glass sans (ROUND35 V1).
+const BOTTOM_BAR_FONT = "var(--gl-sans)";
+
 const DEFAULT_FOOTER = {
-  brandName: "Ask Valentina",
+  brandName: BRAND_NAME,
   description: "A sanctuary for private, honest love and tarot readings. Talk to an intuitive reader and find clarity on the connection you can't stop thinking about.",
   socialLinks: [
     { platform: "instagram", url: "https://www.instagram.com/askvalentina.co.uk/", icon: "ph:instagram-logo-fill" },
     { platform: "tiktok", url: "https://www.tiktok.com/@valentina_clarity", icon: "ph:tiktok-logo-fill" },
   ],
-  copyright: "© 2026 Ask Valentina",
+  copyright: COPYRIGHT_LINE,
   navLinks: [
     { name: "Home", path: "/" },
     { name: "Readers", path: "/psychics-browse" },
@@ -31,8 +36,11 @@ const Footer = () => {
   const welcomeCreditGbp = useWelcomeCredit();
 
   useEffect(() => {
+    // The CMS row may still carry the old brand name (the local seed's did),
+    // so the brand and the copyright are always the site's own
+    // (lib/company.ts); the rest is the CMS's.
     axiosClient.get("/landing/footer").then((res) => {
-      if (res.data?.content) setContent({ ...DEFAULT_FOOTER, ...res.data.content });
+      if (res.data?.content) setContent({ ...DEFAULT_FOOTER, ...res.data.content, brandName: DEFAULT_FOOTER.brandName, copyright: DEFAULT_FOOTER.copyright });
     }).catch(() => {});
   }, []);
 
@@ -68,9 +76,10 @@ const Footer = () => {
           <div className="lg:col-span-5 space-y-7">
             <div className="flex items-center gap-3">
               <Icon icon="ph:star-four-fill" className="gl-acc text-xl" />
-              <h1 className="gl-wm" style={{ fontSize: 22 }}>
+              {/* h2, then h3 below: the page keeps its one h1 (ROUND35 A8). */}
+              <h2 className="gl-wm" style={{ fontSize: 22 }}>
                 {content.brandName}
-              </h1>
+              </h2>
             </div>
             <p className="gl-td text-sm leading-relaxed max-w-sm">
               {content.description}
@@ -93,7 +102,7 @@ const Footer = () => {
 
           {/* QUICK NAVIGATION */}
           <div className="lg:col-span-3 space-y-7">
-            <h4 className="gl-acc text-[10px] font-semibold uppercase tracking-[0.4em]">Explore</h4>
+            <h3 className="gl-acc text-[10px] font-semibold uppercase tracking-[0.4em]">Explore</h3>
             <ul className="space-y-4">
               {content.navLinks.map((link) => (
                 <li key={link.name}>
@@ -111,9 +120,10 @@ const Footer = () => {
           {/* SPACER - newsletter removed */}
         </div>
 
-        {/* WELCOME-CREDIT TERMS — site-wide fine print */}
+        {/* WELCOME-CREDIT TERMS — site-wide fine print, at full accent: at 80%
+            it read 2.8:1 in daylight (ROUND40). */}
         {hasWelcomeCredit(welcomeCreditGbp) && (
-          <div className="gl-acc flex items-center justify-center gap-1.5 mb-6" style={{ opacity: 0.8 }}>
+          <div className="gl-acc flex items-center justify-center gap-1.5 mb-6">
             <Icon icon="ph:gift-fill" className="text-[11px]" />
             <span className="text-[10px] uppercase tracking-[0.2em] font-semibold">
               {formatGbp(welcomeCreditGbp)} welcome credit — new members only, one per person.
@@ -123,7 +133,7 @@ const Footer = () => {
 
         {/* GUIDANCE LINE — must stay on every version of this footer */}
         <div className="gl-foot-line mb-10">
-          Readings are for guidance and entertainment · <b>Ask Valentina</b> · Private &amp; judgment-free
+          Readings are for guidance and entertainment · <b>{BRAND_NAME}</b> · Private &amp; judgment-free
         </div>
 
         {/* BOTTOM BAR */}
@@ -132,12 +142,13 @@ const Footer = () => {
           style={{ borderTop: "1px solid var(--gl-hair-soft)" }}
         >
           <div className="flex gap-6 items-center flex-wrap justify-center">
-            <p className="gl-tf text-[9px] uppercase tracking-widest font-semibold">{content.copyright}</p>
+            <p className="gl-tf text-[9px] uppercase tracking-widest font-semibold" style={{ fontFamily: BOTTOM_BAR_FONT }}>{content.copyright}</p>
             {legalLinks.map((link) => (
               <button
                 key={link.name}
                 onClick={() => navigate(link.path)}
                 className="gl-tf text-[9px] uppercase tracking-widest cursor-pointer transition-colors hover:opacity-70"
+                style={{ fontFamily: BOTTOM_BAR_FONT }}
               >
                 {link.name}
               </button>
@@ -170,6 +181,15 @@ const Footer = () => {
               </motion.a>
             ))}
           </div>
+        </div>
+
+        {/* COMPANY — who runs the site, the same words everywhere (lib/company.ts) */}
+        <div data-footer-company="" className="gl-td mt-10 text-center text-[11px] leading-relaxed space-y-1">
+          <p>{COMPANY_IDENTITY}</p>
+          <p>
+            {REGISTERED_OFFICE_LINE} · {CONTACT_LABEL}:{" "}
+            <a href={SUPPORT_MAILTO} className="underline underline-offset-2 transition-opacity hover:opacity-70">{SUPPORT_EMAIL}</a>
+          </p>
         </div>
       </div>
     </footer>

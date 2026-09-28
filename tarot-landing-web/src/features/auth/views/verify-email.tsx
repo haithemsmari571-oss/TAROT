@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import backgroundImage from "../../../assets/Cover.png";
-import PageBackground from "../../../components/PageBackground";
+import { REFUSAL_FALLBACK, serverRefusal } from "@/lib/serverRefusal";
+import AuthBackground from "../components/AuthBackground";
 import { useGlassTheme } from "../../../lib/glassTheme";
 import { useVerifyAccount, useResendVerify } from "../hooks";
 import "../../../styles/glass.css";
@@ -37,7 +37,7 @@ const VerifyEmailPage = () => {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const { mutate: verifyAccount, isPending, error, isSuccess } = useVerifyAccount();
-  const { mutate: resendVerify, isPending: isResending, isSuccess: resendSuccess } = useResendVerify();
+  const { mutate: resendVerify, isPending: isResending, isSuccess: resendSuccess, error: resendError } = useResendVerify();
 
   const status = searchParams.get("status");
   const isSuccessFromQuery = status === "success";
@@ -68,7 +68,9 @@ const VerifyEmailPage = () => {
   // codes like "InvalidResetLink" that leak the password-reset flow's wording
   // into email verification. Verification errors always show verification copy.
   const isErrorFromQuery = status === "error";
-  const emailDisplay = searchParams.get("email") || email || "your inbox";
+  // Only the address she signed up with (register.tsx puts it in the query),
+  // never what she types into the resend box before anything is sent.
+  const emailDisplay = searchParams.get("email") || "your inbox";
 
   const showSuccess = isSuccess || isSuccessFromQuery;
   const showError = !!error || isErrorFromQuery;
@@ -139,16 +141,26 @@ const VerifyEmailPage = () => {
             <>Resend verification email <Icon icon="ph:paper-plane-tilt-bold" /></>
           )}
         </button>
+        {/* A refused resend (already verified, no such account, an address the
+            server cannot read) says why instead of leaving the button silent. */}
+        {resendError && !isResending && (
+          <div style={{ ...errorBoxStyle, padding: "12px 16px" }}>
+            <p role="alert" style={{ fontFamily: "var(--gl-sans)", fontSize: 13, color: "#c1443a", margin: 0 }}>
+              {serverRefusal(resendError) ?? REFUSAL_FALLBACK}
+            </p>
+          </div>
+        )}
       </form>
     );
 
   return (
-    <div
+    // main: the page's landmark, as on sign-in and sign-up (ROUND41).
+    <main
       className="relative min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
     >
-      {/* The cover art stays vivid in both moods; the token tint carries mood. */}
-      <PageBackground images={backgroundImage} variant="glass" />
+      {/* The app's sky; the token tint carries the mood. */}
+      <AuthBackground />
 
       <div className="relative z-10 w-full" style={{ maxWidth: 440 }}>
         <div
@@ -171,19 +183,10 @@ const VerifyEmailPage = () => {
               <p style={{ marginTop: 18, marginBottom: 0 }}>Verifying your account…</p>
             </div>
           ) : showSuccess ? (
+            // The page title already says "Email verified": the panel keeps
+            // only the tick and Sign in.
             <div className="space-y-4" style={successBoxStyle}>
               <Icon icon="ph:check-circle-bold" className="text-5xl mx-auto" style={{ color: "var(--gl-live)" }} />
-              <div>
-                <h3
-                  className="gl-h3"
-                  style={{ fontSize: 20, color: "var(--gl-live-fg)", marginBottom: 8 }}
-                >
-                  Email verified
-                </h3>
-                <p className="gl-td" style={{ fontFamily: "var(--gl-sans)", fontSize: 13, lineHeight: 1.6, margin: 0 }}>
-                  Your email is verified — you can now sign in to your account.
-                </p>
-              </div>
               <Link
                 to="/login?verified=true"
                 className="gl-btn-ghost inline-block"
@@ -239,7 +242,8 @@ const VerifyEmailPage = () => {
             </div>
           ) : null}
 
-          {!showShell && (
+          {/* The verified panel has its own Sign in, so no second one there. */}
+          {!showShell && !showSuccess && (
             <div className="text-center" style={{ marginTop: 28 }}>
               <div className="gl-divider" style={{ marginBottom: 20 }} />
               <Link
@@ -255,7 +259,7 @@ const VerifyEmailPage = () => {
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

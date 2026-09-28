@@ -1,9 +1,12 @@
 import { Icon } from "@iconify/react";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { formatGbp, formatPerMinuteGbp, welcomeCreditMinutes } from "../../../lib/currency";
-import { hasWelcomeCredit, useWelcomeCredit, welcomeCreditLine } from "@/features/client-app/useWelcomeCredit";
+import { hasWelcomeCredit, useRefundAfterHours, useWelcomeCredit, welcomeCreditLine } from "@/features/client-app/useWelcomeCredit";
+import { PER_MESSAGE_COPY } from "@/features/chat/perMessage";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
+import { withReader } from "@/features/client-app/readerIntent";
 import { sanitizeClaims } from "../../../lib/copy";
 import { reviewsApi } from "../api/reviewsApi";
 import type { Review } from "../types/review.types";
@@ -15,7 +18,8 @@ import "../../../styles/glass.css";
 import PageBackground from "../../../components/PageBackground";
 import zodiacHall2 from "../../../assets/backgrounds/zodiac-hall-2.webp";
 
-
+// ROUND31, B5 = A: a reader's page that answers 404.
+const READER_GONE = "This reader is no longer here.";
 
 const PsychicDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +31,8 @@ const PsychicDetails = () => {
   const { billingMode } = useBillingMode();
   const perMessage = billingMode === "per_message";
   const welcomeCreditGbp = useWelcomeCredit();
-  
+  const refundAfterHours = useRefundAfterHours();
+
   const psychicId = id ? parseInt(id) : undefined;
   
   // TanStack Query hooks
@@ -63,7 +68,12 @@ const PsychicDetails = () => {
   const [reviewComment, setReviewComment] = useState(myReview?.comment || "");
   
   const loading = psychicLoading || summaryLoading || reviewsLoading;
-  const error = psychicError ? "Failed to load psychic details. Please try again later." : null;
+  // A reader who is gone (404) is told so; a real fault keeps its own line.
+  const error = !psychicError
+    ? null
+    : isAxiosError(psychicError) && psychicError.response?.status === 404
+      ? READER_GONE
+      : "Failed to load psychic details. Please try again later.";
 
   // Convert price per second to a GBP price-per-minute string (e.g. "£5.20").
   const getPricePerMinute = (pricePerSecond: number) => {
@@ -84,14 +94,17 @@ const PsychicDetails = () => {
   // her opening question, sends the real request and holds the wait; when the
   // psychic accepts, the global Incoming Reading prompt (mounted at main.tsx:37)
   // takes over and carries her into /chats exactly as before.
+  // A guest has no account yet: she goes to sign-up, with no error, carrying
+  // this reader, so she lands in this reader's thread once signed in
+  // (readerIntent.ts, ROUND38).
   const handleStartReading = useCallback(() => {
-    if (!psychic || !user) {
-      toast.error("Please log in to start a reading");
-      navigate("/login");
+    if (!psychic) return;
+    if (!user) {
+      navigate(withReader("/register", psychic.id));
       return;
     }
     navigate(`/reading/new/${psychic.id}`);
-  }, [psychic, user, toast, navigate]);
+  }, [psychic, user, navigate]);
 
   // Render star rating
   const renderStars = (rating: number, size: string = "text-base") => {
@@ -254,9 +267,10 @@ const PsychicDetails = () => {
         <div className="relative z-10 gl-state">
           <Icon icon="ph:warning" className="gl-acc text-5xl mb-4 mx-auto" />
           <p>{error || "Reader not found"}</p>
-          <button onClick={() => navigate("/psychics-browse")} className="gl-btn-solid">
+          {/* A link back to all readers. */}
+          <Link to="/psychics-browse" className="gl-btn-solid" style={{ display: "inline-block", textDecoration: "none" }}>
             Back to Browse
-          </button>
+          </Link>
         </div>
       </div>
     );
@@ -380,7 +394,7 @@ const PsychicDetails = () => {
                       <div className="text-2xl font-bold" style={{ color: "var(--gl-accent)" }}>
                         {reviewSummary.average_rating.toFixed(1)}
                       </div>
-                      <div className="text-xs opacity-60" style={{ color: "var(--gl-text)" }}>
+                      <div className="text-xs" style={{ color: "var(--gl-text-dim)" }}>
                         {reviewSummary.total_reviews} {reviewSummary.total_reviews === 1 ? "review" : "reviews"}
                       </div>
                     </div>
@@ -424,10 +438,17 @@ const PsychicDetails = () => {
                   <span className="text-3xl font-black" style={{ color: "var(--gl-accent)" }}>
                     {perMessage && perMessagePrice != null ? formatGbp(perMessagePrice) : getPricePerMinute(psychic.price_per_second)}
                   </span>
-                  <span className="text-sm uppercase font-bold opacity-60" style={{ color: "var(--gl-text)" }}>
+                  <span className="text-sm uppercase font-bold" style={{ color: "var(--gl-text-dim)" }}>
                     {perMessage ? "per message" : "per minute"}
                   </span>
                 </div>
+                {/* The refund promise beside the price: per-message only, with
+                    the server's own refund window, never from a guess. */}
+                {perMessage && perMessagePrice != null && refundAfterHours !== undefined && (
+                  <p data-profile-refund="" className="mt-2 text-xs leading-relaxed opacity-80" style={{ color: "var(--gl-text)" }}>
+                    {PER_MESSAGE_COPY.refundGuarantee(refundAfterHours)}
+                  </p>
+                )}
               </div>
               )}
 
@@ -458,13 +479,14 @@ const PsychicDetails = () => {
                   fontFamily: "var(--gl-sans)",
                 }}
               >
-                <span className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--gl-btn-fg)" }}>
+                {/* fontFamily inherit: the button's Inter, not App.css's `*` Poppins (never loaded, so Arial; ROUND35 V1). */}
+                <span className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--gl-btn-fg)", fontFamily: "inherit" }}>
                   Start Reading
                 </span>
               </button>
               
               {!psychic.is_online && (
-                <p className="text-xs text-center opacity-60" style={{ color: "var(--gl-text)" }}>
+                <p className="text-xs text-center" style={{ color: "var(--gl-text-dim)" }}>
                   This psychic is currently offline
                 </p>
               )}
@@ -548,7 +570,7 @@ const PsychicDetails = () => {
                     View Chat
                   </button>
                 </div>
-                <p className="text-sm opacity-60" style={{ color: "var(--gl-text)" }}>
+                <p className="text-sm" style={{ color: "var(--gl-text-dim)" }}>
                   You have an existing conversation with {psychic.username}. Click above to view your chat history.
                 </p>
               </div>
@@ -616,7 +638,7 @@ const PsychicDetails = () => {
                         {myReview.comment}
                       </p>
                     )}
-                    <p className="text-xs opacity-60 mt-4" style={{ color: "var(--gl-text)" }}>
+                    <p className="text-xs mt-4" style={{ color: "var(--gl-text-dim)" }}>
                       Posted on {formatDate(myReview.created_at)}
                     </p>
                   </div>
@@ -661,7 +683,7 @@ const PsychicDetails = () => {
                           color: "var(--gl-text)",
                         }}
                       />
-                      <p className="text-xs opacity-60 mt-2" style={{ color: "var(--gl-text)" }}>
+                      <p className="text-xs mt-2" style={{ color: "var(--gl-text-dim)" }}>
                         {reviewComment.length}/1000 characters
                       </p>
                     </div>
@@ -708,7 +730,7 @@ const PsychicDetails = () => {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm opacity-60 text-center py-6" style={{ color: "var(--gl-text)" }}>
+                  <p className="text-sm text-center py-6" style={{ color: "var(--gl-text-dim)" }}>
                     You haven't reviewed this psychic yet. Click "Write Review" to share your experience.
                   </p>
                 )}
@@ -724,7 +746,8 @@ const PsychicDetails = () => {
               {totalReviews === 0 ? (
                 <div className="text-center py-12">
                   <Icon icon="ph:chat-text" className="text-5xl mb-4 mx-auto opacity-30" style={{ color: "var(--gl-text)" }} />
-                  <p className="text-base opacity-60" style={{ color: "var(--gl-text)" }}>
+                  {/* The dim token, not 60% of the text colour: that read 4.3:1 in daylight (ROUND40). */}
+                  <p className="text-base" style={{ color: "var(--gl-text-dim)" }}>
                     No reviews yet
                   </p>
                 </div>
@@ -749,7 +772,7 @@ const PsychicDetails = () => {
                               </span>
                               {renderStars(review.rating, "text-sm")}
                             </div>
-                            <span className="text-xs opacity-60" style={{ color: "var(--gl-text)" }}>
+                            <span className="text-xs" style={{ color: "var(--gl-text-dim)" }}>
                               {formatDate(review.created_at)}
                             </span>
                           </div>
@@ -768,7 +791,7 @@ const PsychicDetails = () => {
                   {/* PAGINATION CONTROLS */}
                   {totalReviews > reviewsPerPage && (
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t" style={{ borderColor: "var(--gl-hair-soft)" }}>
-                      <div className="text-xs sm:text-sm opacity-60" style={{ color: "var(--gl-text)" }}>
+                      <div className="text-xs sm:text-sm" style={{ color: "var(--gl-text-dim)" }}>
                         Showing {reviewsPage * reviewsPerPage + 1}-{Math.min((reviewsPage + 1) * reviewsPerPage, totalReviews)} of {totalReviews}
                       </div>
                       <div className="flex gap-2">

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { Link, useParams } from "react-router-dom";
-import backgroundImage from "../../../assets/Cover.png";
-import PageBackground from "../../../components/PageBackground";
+import { serverRefusal } from "@/lib/serverRefusal";
+import AuthBackground from "../components/AuthBackground";
+import ShowPasswordButton from "../components/ShowPasswordButton";
 import { useGlassTheme } from "../../../lib/glassTheme";
 import { useResetPassword } from "../hooks";
 import "../../../styles/glass.css";
@@ -55,6 +56,9 @@ const ResetPasswordPage = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  // The eye on each field, as on sign-up and sign-in (ROUND41).
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const { mutate: resetPassword, isPending, error, isSuccess } = useResetPassword();
 
   const handleSubmit = (e) => {
@@ -80,12 +84,13 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <div
+    // main: the page's landmark (axe landmark-one-main).
+    <main
       className="relative min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
     >
-      {/* The cover art stays vivid in both moods; the token tint carries mood. */}
-      <PageBackground images={backgroundImage} variant="glass" />
+      {/* The app's sky; the token tint carries the mood. */}
+      <AuthBackground />
 
       <div className="relative z-10 w-full" style={{ maxWidth: 440 }}>
         <div
@@ -106,12 +111,12 @@ const ResetPasswordPage = () => {
             <div className="space-y-4" style={successBoxStyle}>
               <Icon icon="ph:check-circle-bold" className="text-5xl mx-auto" style={{ color: "var(--gl-live)" }} />
               <div>
-                <h3
+                <h2
                   className="gl-h3"
                   style={{ fontSize: 20, color: "var(--gl-live-fg)", marginBottom: 8 }}
                 >
                   Password reset successful
-                </h3>
+                </h2>
                 <p className="gl-td" style={{ fontFamily: "var(--gl-sans)", fontSize: 13, lineHeight: 1.6, margin: 0 }}>
                   Your password has been updated. You can now login with your new credentials.
                 </p>
@@ -127,7 +132,7 @@ const ResetPasswordPage = () => {
           ) : (
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div>
-                <label style={labelStyle}>New Password</label>
+                <label htmlFor="reset-password" style={labelStyle}>New Password</label>
                 <div className="relative">
                   <Icon
                     icon="ph:lock-key-bold"
@@ -136,18 +141,21 @@ const ResetPasswordPage = () => {
                   />
                   <input
                     required
-                    type="password"
+                    id="reset-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     placeholder="••••••••••••"
                     className="gl-pop-input"
-                    style={{ ...inputStyle, paddingLeft: 46 }}
+                    style={{ ...inputStyle, paddingLeft: 46, paddingRight: 46 }}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  <ShowPasswordButton shown={showPassword} onToggle={() => setShowPassword((s) => !s)} controls="reset-password" />
                 </div>
               </div>
 
               <div>
-                <label style={labelStyle}>Confirm Password</label>
+                <label htmlFor="reset-confirm" style={labelStyle}>Confirm Password</label>
                 <div className="relative">
                   <Icon
                     icon="ph:lock-key-bold"
@@ -156,20 +164,23 @@ const ResetPasswordPage = () => {
                   />
                   <input
                     required
-                    type="password"
+                    id="reset-confirm"
+                    type={showConfirm ? "text" : "password"}
+                    autoComplete="new-password"
                     placeholder="••••••••••••"
                     className="gl-pop-input"
-                    style={{ ...inputStyle, paddingLeft: 46 }}
+                    style={{ ...inputStyle, paddingLeft: 46, paddingRight: 46 }}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
+                  <ShowPasswordButton shown={showConfirm} onToggle={() => setShowConfirm((s) => !s)} controls="reset-confirm" />
                 </div>
               </div>
 
               {(passwordError || error) && (
-                <div style={errorBoxStyle}>
+                <div role="alert" style={errorBoxStyle}>
                   <p style={errorTextStyle}>
-                    {passwordError || error?.response?.data?.detail || "Failed to reset password"}
+                    {passwordError || serverRefusal(error) || "Failed to reset password"}
                   </p>
                 </div>
               )}
@@ -205,7 +216,7 @@ const ResetPasswordPage = () => {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

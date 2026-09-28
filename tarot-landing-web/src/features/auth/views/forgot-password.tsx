@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { Link } from "react-router-dom";
-import backgroundImage from "../../../assets/Cover.png";
-import PageBackground from "../../../components/PageBackground";
+import { serverRefusal } from "@/lib/serverRefusal";
+import AuthBackground from "../components/AuthBackground";
 import { useGlassTheme } from "../../../lib/glassTheme";
 import { useForgotPassword } from "../hooks";
 import "../../../styles/glass.css";
@@ -60,12 +60,13 @@ const ForgotPasswordPage = () => {
   };
 
   return (
-    <div
+    // main: the page's landmark (axe landmark-one-main).
+    <main
       className="relative min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: "var(--gl-base)", fontFamily: "var(--gl-sans)" }}
     >
-      {/* The cover art stays vivid in both moods; the token tint carries mood. */}
-      <PageBackground images={backgroundImage} variant="glass" />
+      {/* The app's sky; the token tint carries the mood. */}
+      <AuthBackground />
 
       <div className="relative z-10 w-full" style={{ maxWidth: 440 }}>
         <div
@@ -86,12 +87,12 @@ const ForgotPasswordPage = () => {
             <div className="space-y-4" style={successBoxStyle}>
               <Icon icon="ph:check-circle-bold" className="text-5xl mx-auto" style={{ color: "var(--gl-live)" }} />
               <div>
-                <h3
+                <h2
                   className="gl-h3"
                   style={{ fontSize: 20, color: "var(--gl-live-fg)", marginBottom: 8 }}
                 >
                   Reset link sent
-                </h3>
+                </h2>
                 <p className="gl-td" style={{ fontFamily: "var(--gl-sans)", fontSize: 13, lineHeight: 1.6, margin: 0 }}>
                   If an account exists with that email, you'll receive reset instructions shortly.
                 </p>
@@ -107,7 +108,7 @@ const ForgotPasswordPage = () => {
           ) : (
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div>
-                <label style={labelStyle}>Email</label>
+                <label htmlFor="forgot-email" style={labelStyle}>Email</label>
                 <div className="relative">
                   <Icon
                     icon="ph:envelope-simple-bold"
@@ -116,7 +117,9 @@ const ForgotPasswordPage = () => {
                   />
                   <input
                     required
+                    id="forgot-email"
                     type="email"
+                    autoComplete="email"
                     placeholder="you@email.com"
                     className="gl-pop-input"
                     style={{ ...inputStyle, paddingLeft: 46 }}
@@ -127,9 +130,9 @@ const ForgotPasswordPage = () => {
               </div>
 
               {error && (
-                <div style={errorBoxStyle}>
+                <div role="alert" style={errorBoxStyle}>
                   <p style={errorTextStyle}>
-                    {error?.response?.data?.detail || "Failed to send reset link"}
+                    {serverRefusal(error) ?? "Failed to send reset link"}
                   </p>
                 </div>
               )}
@@ -165,7 +168,7 @@ const ForgotPasswordPage = () => {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

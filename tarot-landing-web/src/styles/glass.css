@@ -14,7 +14,8 @@
   /* candlelight (dark) — default mood */
   --gl-text: rgba(244, 239, 230, 0.95);
   --gl-text-dim: rgba(244, 239, 230, 0.68);
-  --gl-text-faint: rgba(244, 239, 230, 0.42);
+  /* 0.42 read 3.7:1 on the glass; 0.52 reads 5:1, WCAG AA for small text (ROUND40). */
+  --gl-text-faint: rgba(244, 239, 230, 0.52);
   --gl-accent: #d9c49a;
   --gl-accent-dim: rgba(217, 196, 154, 0.45);
   --gl-hair: rgba(244, 239, 230, 0.16);
@@ -41,8 +42,10 @@
   /* daylight — white frosted glass over the same vivid artwork */
   --gl-text: #211d26;
   --gl-text-dim: rgba(33, 29, 38, 0.66);
-  --gl-text-faint: rgba(33, 29, 38, 0.42);
-  --gl-accent: #9a7b4f;
+  /* 0.42 read 2.6:1 and #9a7b4f 3.4-3.8:1 on the daylight glass; these read
+     4.7:1 and 4.9:1 or more, WCAG AA for small text (ROUND40). */
+  --gl-text-faint: rgba(33, 29, 38, 0.64);
+  --gl-accent: #806239;
   --gl-accent-dim: rgba(154, 123, 79, 0.5);
   --gl-hair: rgba(33, 29, 38, 0.14);
   --gl-hair-soft: rgba(33, 29, 38, 0.08);
@@ -92,6 +95,9 @@
   transition: background 0.5s ease, color 0.5s ease;
 }
 .gl-offer b { color: var(--gl-accent); font-weight: 600; }
+/* App.css gives every element Poppins, a face the site never loads, so the
+   offer line's words drew in Arial; they take the line's Inter (ROUND35 V1). */
+.gl-offer * { font-family: inherit; }
 
 /* ————— Nav ————— */
 .gl-nav {
@@ -103,6 +109,24 @@
   padding: 14px 0;
 }
 .gl-nav--scrolled { padding: 8px 0; }
+/* "Skip to content" (PublicLayout.tsx): the first Tab stop on every guest page,
+   out of sight until it has focus, then a pill over the top-left corner (ROUND35 A4). */
+.gl-skip {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--gl-btn-bg);
+  color: var(--gl-btn-fg);
+  font-family: var(--gl-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.gl-skip:focus { transform: none; outline: 2px solid var(--gl-accent); outline-offset: 2px; }
 .gl-nav-inner {
   max-width: 1440px;
   margin: 0 auto;
@@ -288,7 +312,9 @@
   margin-bottom: 20px;
   color: var(--gl-text);
 }
-.gl-h1 i { font-style: italic; font-weight: 300; }
+/* font-family: inherit. App.css's `*` Poppins (never loaded) drew the italic
+   words in Arial beside the Fraunces headline (ROUND35 V1). */
+.gl-h1 i { font-style: italic; font-weight: 300; font-family: inherit; }
 .gl-sub {
   font-family: var(--gl-sans);
   font-size: 15.5px;
@@ -325,6 +351,9 @@
   font-family: var(--gl-sans);
 }
 .gl-search input::placeholder { color: var(--gl-text-faint); }
+/* The field itself draws no ring (outline: none above), so the pill does while
+   anything in it has focus: the readers lists and the articles search (ROUND41). */
+.gl-search:focus-within { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
 .gl-search-clear {
   background: none;
   border: none;
@@ -414,6 +443,28 @@
   padding: 8px 14px;
 }
 .gl-pop-input::placeholder { color: var(--gl-text-faint); }
+/* The field she is in, and a gender choice reached by Tab, show a ring
+   (ROUND35 A1: the outline above left none). */
+.gl-pop-input:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+/* The show-password eye inside a password field (auth/components/ShowPasswordButton.tsx). */
+.gl-eye {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gl-text-faint);
+  transition: color 0.2s;
+}
+.gl-eye:hover, .gl-eye[aria-pressed="true"] { color: var(--gl-text); }
+.gl-eye:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 0; }
 .gl-pop-item {
   width: 100%;
   display: flex;
@@ -484,7 +535,7 @@
   border-color: var(--gl-accent-dim);
   box-shadow: var(--gl-inset), var(--gl-card-shadow-hover);
 }
-.gl-pc:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+.gl-pc:focus-visible, .gl-start:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
 .gl-ph { position: relative; height: 250px; overflow: hidden; flex-shrink: 0; }
 .gl-ph img, .gl-ph .gl-ph-fallback {
   width: 100%;
@@ -567,7 +618,8 @@
   padding: 4px 11px;
   border-radius: 999px;
   font-family: var(--gl-sans);
-  font-size: 9px;
+  /* 9px was too small to read on a phone (ROUND35 V10: at least 11px). */
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 1.4px;
   text-transform: uppercase;
@@ -644,7 +696,7 @@
   line-height: 1.08;
   color: var(--gl-text);
 }
-.gl-h2 i { font-style: italic; font-weight: 300; }
+.gl-h2 i { font-style: italic; font-weight: 300; font-family: inherit; }
 .gl-h3 {
   font-family: var(--gl-serif);
   font-size: clamp(22px, 3vw, 30px);

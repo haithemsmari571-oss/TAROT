@@ -159,14 +159,17 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
   const renderBlock = (block: Block, idx: number): React.ReactNode => {
     const key = `block-${idx}`;
     switch (block.type) {
+      // One level down: the page that shows the text already has its h1 (the
+      // Terms and Privacy titles), so "#" is an h2 and so on (ROUND35 A8).
+      // The look of each level is unchanged.
       case "h1":
-        return <h1 key={key} className="gl-h2 mt-12 mb-6">{renderInline(parseInline(block.text), key)}</h1>;
+        return <h2 key={key} className="gl-h2 mt-12 mb-6">{renderInline(parseInline(block.text), key)}</h2>;
       case "h2":
-        return <h2 key={key} className="gl-h3 mt-10 mb-4">{renderInline(parseInline(block.text), key)}</h2>;
+        return <h3 key={key} className="gl-h3 mt-10 mb-4">{renderInline(parseInline(block.text), key)}</h3>;
       case "h3":
-        return <h3 key={key} className="gl-serif mt-8 mb-3" style={{ color: "var(--gl-text)", fontSize: 20, fontWeight: 400, letterSpacing: "-0.2px" }}>{renderInline(parseInline(block.text), key)}</h3>;
+        return <h4 key={key} className="gl-serif mt-8 mb-3" style={{ color: "var(--gl-text)", fontSize: 20, fontWeight: 400, letterSpacing: "-0.2px" }}>{renderInline(parseInline(block.text), key)}</h4>;
       case "h4":
-        return <h4 key={key} className="uppercase mt-6 mb-2" style={{ color: "var(--gl-text-faint)", fontFamily: "var(--gl-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "2px" }}>{renderInline(parseInline(block.text), key)}</h4>;
+        return <h5 key={key} className="uppercase mt-6 mb-2" style={{ color: "var(--gl-text-faint)", fontFamily: "var(--gl-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "2px" }}>{renderInline(parseInline(block.text), key)}</h5>;
       case "p":
         return <p key={key} className="text-base leading-relaxed mb-4" style={{ color: "var(--gl-text-dim)" }}>{renderInline(parseInline(block.text), key)}</p>;
       case "blockquote":

@@ -301,6 +301,9 @@
 .client-app-shell .client-you-more { padding-top: 4px; padding-bottom: 4px; }
 .client-app-shell .client-you-more .client-you-links { margin-top: 0; border-top: 0; }
 .client-app-shell .client-you-more .client-you-link:last-child { border-bottom: 0; }
+/* Help & contact (ClientHelpScreen.tsx): the complaints line under the
+   address row, apart from it */
+.client-app-shell .client-you-more .client-you-complaint { margin-top: 12px; }
 
 /* ── Delete account (ROUND12) ── */
 /* Under Log out and quieter than it: no border, no fill, the card's small

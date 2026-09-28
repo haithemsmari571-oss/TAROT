@@ -16,3 +16,5 @@ export const YOU_CONSTELLATION_PATH = `${YOU_PATH}/constellation`;
 export const YOU_NOTIFICATIONS_PATH = `${YOU_PATH}/notifications`;
 export const YOU_TERMS_PATH = `${YOU_PATH}/terms`;
 export const YOU_PRIVACY_PATH = `${YOU_PATH}/privacy`;
+/* Help & contact (ROUND39): the support address and the complaints line. */
+export const YOU_HELP_PATH = `${YOU_PATH}/help`;

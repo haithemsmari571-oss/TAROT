@@ -32,7 +32,9 @@ const AboutHero = ({ content }: AboutHeroProps) => {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative text-center pt-16 pb-8 px-6 flex flex-col items-center"
+      /* overflow-x-clip: the rotated right tag's line box ran 4px past the
+         window at 1280 and scrolled the page sideways (ROUND31, C1). */
+      className="relative overflow-x-clip text-center pt-16 pb-8 px-6 flex flex-col items-center"
     >
       {/* Frosted hero panel carries readability over the artwork in both moods. */}
       <div className="gl-hero-panel--solid relative z-10 w-full max-w-3xl px-6 py-12 md:px-14 md:py-14">

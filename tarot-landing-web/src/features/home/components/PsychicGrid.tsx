@@ -156,11 +156,12 @@ const TarotCouncil = () => {
       </div>
 
       <div className="absolute top-[55%] left-4 z-40 hidden xl:block">
-        <NavBtn icon="ph:caret-left-light" onClick={() => scrollSide("left")} />
+        <NavBtn icon="ph:caret-left-light" label="Previous readers" onClick={() => scrollSide("left")} />
       </div>
       <div className="absolute top-[55%] right-4 z-40 hidden xl:block">
         <NavBtn
           icon="ph:caret-right-light"
+          label="Next readers"
           onClick={() => scrollSide("right")}
         />
       </div>
@@ -231,6 +232,7 @@ const TarotCard = ({ psychic, welcomeCreditGbp }: { psychic: any; welcomeCreditG
         {picture ? (
           <motion.img
             src={picture}
+            alt={displayName}
             onError={() => setFailedPicture(picture)}
             className="w-full h-full object-cover transition-all duration-700"
           />
@@ -310,8 +312,9 @@ const TarotCard = ({ psychic, welcomeCreditGbp }: { psychic: any; welcomeCreditG
   );
 };
 
-const NavBtn = ({ icon, onClick }: { icon: string; onClick: () => void }) => (
-  <button onClick={onClick} className="gl-theme-toggle" style={{ width: 46, height: 46 }}>
+// Icon only, so the label is its accessible name.
+const NavBtn = ({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) => (
+  <button onClick={onClick} aria-label={label} className="gl-theme-toggle" style={{ width: 46, height: 46 }}>
     <Icon icon={icon} className="text-xl mx-auto" />
   </button>
 );

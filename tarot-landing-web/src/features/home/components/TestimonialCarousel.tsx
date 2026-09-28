@@ -152,9 +152,10 @@ const FloatingCard = ({ review, position, progress, stacked }: {
         )}
 
         <div className="flex flex-col">
-          <h4 className="gl-serif gl-t" style={{ fontSize: 18 }}>
+          {/* A name, not a heading: an h4 here skipped a level under the page's h2s (ROUND35 A8). */}
+          <p className="gl-serif gl-t" style={{ fontSize: 18 }}>
             {review.username}
-          </h4>
+          </p>
           <span className="gl-tf text-[9px] uppercase tracking-widest mt-1">{HOME_REVIEW_COPY.reader(review.readerName)}</span>
         </div>
       </div>
