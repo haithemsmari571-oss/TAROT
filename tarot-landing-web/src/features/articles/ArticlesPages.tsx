@@ -315,7 +315,7 @@ export function ArticleDetail() {
             <div className="article-share"><span>Found this useful?</span><button className="gl-btn-ghost" onClick={share}>Share article</button>{shareNotice && <small role="status">{shareNotice}</small>}</div>
             <div className="article-ctas">
               {item.calculator_cta && <Link className="article-cta article-cta--gold" to="/numerology/calculator/" onClick={() => window.dispatchEvent(new CustomEvent("analytics", { detail: { event: "article_to_calculator" } }))}><span>Free numerology tool</span><strong>Discover the pattern in your date of birth</strong><em>Try the calculator →</em></Link>}
-              {item.reading_cta && <Link className="article-cta" to="/psychics-browse"><span>Personal guidance</span><strong>Bring your own question to a human reader</strong><em>Explore readings →</em></Link>}
+              {item.reading_cta && <Link className="article-cta" to="/psychics-browse"><span>Personal guidance</span><strong>Bring your own question to a reader</strong><em>Explore readings →</em></Link>}
             </div>
           </div>
         </div>
