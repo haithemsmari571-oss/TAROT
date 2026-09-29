@@ -269,7 +269,7 @@ def article_page(slug: str, db: Session = Depends(get_db)):
     if version.calculator_cta:
         ctas.append('<a class="cta gold" href="/numerology/calculator/"><small>Free numerology tool</small><strong>Discover the pattern in your date of birth</strong><em>Try the calculator →</em></a>')
     if version.reading_cta:
-        ctas.append('<a class="cta" href="/psychics-browse"><small>Personal guidance</small><strong>Bring your own question to a human reader</strong><em>Explore readings →</em></a>')
+        ctas.append('<a class="cta" href="/psychics-browse"><small>Personal guidance</small><strong>Bring your own question to a reader</strong><em>Explore readings →</em></a>')
     wanted = json.loads(version.related_slugs or "[]")
     related_query = db.query(Article).filter(Article.status == "published", Article.id != article.id)
     related_articles = related_query.filter(Article.published_slug.in_(wanted)).limit(3).all() if wanted else []
