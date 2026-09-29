@@ -11,6 +11,11 @@ import MarkdownRenderer from "./MarkdownRenderer";
 
 type LegalField = "terms_of_service" | "privacy_policy";
 
+// The text opens with its own title ("# Terms of Service"), and the page
+// already draws that title as its h1, so the text's first "# " line is not
+// drawn a second time (ROUND44).
+const OWN_TITLE_LINE = /^# [^\n]*\n*/;
+
 export default function LegalText({ field }: { field: LegalField }) {
   const text = useQuery({
     queryKey: ["legal-text", field],
@@ -22,7 +27,7 @@ export default function LegalText({ field }: { field: LegalField }) {
     },
   });
 
-  if (text.data) return <MarkdownRenderer content={text.data} />;
+  if (text.data) return <MarkdownRenderer content={text.data.replace(OWN_TITLE_LINE, "")} />;
   if (text.isError && !text.isFetching) {
     return (
       <div className="gl-state">
