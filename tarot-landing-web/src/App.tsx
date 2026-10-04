@@ -14,6 +14,7 @@ import PageSpace from "./components/PageSpace";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
 import RedirectSignedInClient, { type ClientAppRedirect } from "./features/client-app/RedirectSignedInClient";
 import { CHATS_PATH, HOME_PATH, READERS_PATH, YOU_PATH } from "./features/client-app/clientAppPaths";
+import { OWNER_PATH, OWNER_PODCAST_PATH, OWNER_REEL_PATH, OWNER_SIGN_IN_PATH } from "./features/owner/ownerPaths";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
@@ -39,6 +40,12 @@ const ClientHelpScreen = lazy(() => import("./features/client-app/ClientHelpScre
 const ClientHomeScreen = lazy(() => import("./features/client-app/ClientHomeScreen"));
 const ClientArticleScreen = lazy(() => import("./features/client-app/ClientArticleScreen"));
 const ClientShortsScreen = lazy(() => import("./features/client-app/ClientShortsScreen"));
+// The owner's phone admin (ROUND50).
+const OwnerShell = lazy(() => import("./features/owner/OwnerShell"));
+const OwnerSignInScreen = lazy(() => import("./features/owner/OwnerSignInScreen"));
+const OwnerHomeScreen = lazy(() => import("./features/owner/OwnerHomeScreen"));
+const OwnerReelScreen = lazy(() => import("./features/owner/OwnerReelScreen"));
+const OwnerPodcastScreen = lazy(() => import("./features/owner/OwnerPodcastScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -176,6 +183,15 @@ export default function App() {
         <Route path="you/terms" element={<Suspense fallback={null}><ClientTermsScreen /></Suspense>} />
         <Route path="you/privacy" element={<Suspense fallback={null}><ClientPrivacyScreen /></Suspense>} />
         <Route path="you/help" element={<Suspense fallback={null}><ClientHelpScreen /></Suspense>} />
+      </Route>
+
+      {/* The owner's phone admin: its own sign-in and guard (OwnerShell.tsx),
+          outside the site's layouts, never /login and never the CRM. */}
+      <Route path={OWNER_PATH} element={<Suspense fallback={null}><OwnerShell /></Suspense>}>
+        <Route index element={<Suspense fallback={null}><OwnerHomeScreen /></Suspense>} />
+        <Route path={OWNER_SIGN_IN_PATH} element={<Suspense fallback={null}><OwnerSignInScreen /></Suspense>} />
+        <Route path={OWNER_REEL_PATH} element={<Suspense fallback={null}><OwnerReelScreen /></Suspense>} />
+        <Route path={OWNER_PODCAST_PATH} element={<Suspense fallback={null}><OwnerPodcastScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}

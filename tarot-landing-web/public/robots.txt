@@ -1,37 +1,46 @@
 User-agent: *
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: GPTBot
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: OAI-SearchBot
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: ChatGPT-User
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: ClaudeBot
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: Claude-User
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: PerplexityBot
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: Google-Extended
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 User-agent: CCBot
 Allow: /
 Disallow: /app/
+Disallow: /owner/
 
 Sitemap: https://askvalentina.co.uk/sitemap.xml

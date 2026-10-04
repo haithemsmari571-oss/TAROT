@@ -28,12 +28,17 @@ from app.services.object_storage import ObjectNotFoundError, get_object_storage
 
 
 AUDIO_UPLOAD_URL_EXPIRY_SECONDS = 15 * 60
+# A phone's own files are accepted as they come (ROUND50): Voice Memos and
+# most recorders save AAC in MP4 (.m4a), and an iPhone's camera roll hands
+# over QuickTime (.mov). The object key patterns below follow these lists.
 ALLOWED_LIBRARY_AUDIO_TYPES = {
     "audio/mpeg": ".mp3",
     "audio/ogg": ".ogg",
+    "audio/mp4": ".m4a",
 }
 ALLOWED_LIBRARY_VIDEO_TYPES = {
     "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
 }
 
 # These are the article-media rules. Keep the accepted formats, byte limit,
@@ -43,8 +48,15 @@ MAX_LIBRARY_COVER_PIXELS = 24_000_000
 ALLOWED_LIBRARY_COVER_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 _SLUG = re.compile(r"[^a-z0-9]+")
-_AUDIO_OBJECT_KEY = re.compile(r"^library/audio/[A-Za-z0-9_-]{32}\.(mp3|ogg)$")
-_VIDEO_OBJECT_KEY = re.compile(r"^library/video/[A-Za-z0-9_-]{32}\.(mp4)$")
+
+
+def _object_key_pattern(kind: str, allowed_types: dict[str, str]) -> re.Pattern[str]:
+    extensions = "|".join(re.escape(extension.lstrip(".")) for extension in allowed_types.values())
+    return re.compile(rf"^library/{kind}/[A-Za-z0-9_-]{{32}}\.({extensions})$")
+
+
+_AUDIO_OBJECT_KEY = _object_key_pattern("audio", ALLOWED_LIBRARY_AUDIO_TYPES)
+_VIDEO_OBJECT_KEY = _object_key_pattern("video", ALLOWED_LIBRARY_VIDEO_TYPES)
 
 
 class LibraryItemError(Exception):
@@ -108,7 +120,7 @@ def _validate_text(type_value: str, title: str) -> tuple[str, str]:
 def _validate_audio_claim(audio: LibraryAudioUploadRequest) -> str:
     extension = ALLOWED_LIBRARY_AUDIO_TYPES.get(audio.content_type)
     if extension is None:
-        raise LibraryItemError(415, "Upload an MP3 or OGG audio file.")
+        raise LibraryItemError(415, "Upload an MP3, OGG or M4A audio file.")
     if audio.size_bytes > MAX_LIBRARY_AUDIO_SIZE_BYTES:
         raise LibraryItemError(413, "Library audio files must be smaller than 2 GB.")
     return extension
@@ -117,7 +129,7 @@ def _validate_audio_claim(audio: LibraryAudioUploadRequest) -> str:
 def _validate_video_claim(video: LibraryVideoUploadRequest) -> str:
     extension = ALLOWED_LIBRARY_VIDEO_TYPES.get(video.content_type)
     if extension is None:
-        raise LibraryItemError(415, "Upload an MP4 video file.")
+        raise LibraryItemError(415, "Upload an MP4 or MOV video file.")
     if video.size_bytes > MAX_LIBRARY_VIDEO_SIZE_BYTES:
         raise LibraryItemError(
             413,

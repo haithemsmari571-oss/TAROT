@@ -606,10 +606,10 @@ def test_video_upload_url_signs_mp4_and_refuses_other_types_and_oversize(
 
     wrong = client.post(
         "/api/admin/library-items/video-upload-url",
-        json=_video_claim(content_type="video/quicktime"),
+        json=_video_claim(content_type="video/webm"),
     )
     assert wrong.status_code == 415
-    assert wrong.json() == {"detail": "Upload an MP4 video file."}
+    assert wrong.json() == {"detail": "Upload an MP4 or MOV video file."}
     at_cap = client.post(
         "/api/admin/library-items/video-upload-url",
         json=_video_claim(size_bytes=MAX_LIBRARY_VIDEO_SIZE_BYTES),
@@ -665,6 +665,99 @@ def test_video_create_runs_the_verification_gate_before_writing_a_row(
     assert reused.status_code == 409
     assert reused.json() == {"detail": "That direct video upload has already been used."}
     assert db.query(LibraryItem).count() == 1
+
+
+def test_iphone_quicktime_video_is_signed_and_registered_as_mov(db, make_user, fake_storage):
+    client = _client(db, make_user(role=Role.SUPERADMIN))
+    claim = _video_claim(
+        b"\x00\x00\x00\x14ftypqt  " + bytes(64),
+        content_type="video/quicktime",
+        original_filename="IMG_0001.MOV",
+    )
+    granted = client.post("/api/admin/library-items/video-upload-url", json=claim)
+    assert granted.status_code == 200, granted.text
+    grant = granted.json()
+    assert grant["object_key"].startswith("library/video/")
+    assert grant["object_key"].endswith(".mov")
+    assert fake_storage.presigns[-1]["content_type"] == "video/quicktime"
+    assert grant["headers"]["Content-Type"] == "video/quicktime"
+
+    fake_storage.complete_direct_upload(grant["object_key"], claim)
+    data = _video_form(grant, claim)
+    data["title"] = "Phone reel"
+    mislabelled = client.post(
+        "/api/admin/library-items/video",
+        data={**data, "video_content_type": "video/mp4"},
+    )
+    assert mislabelled.status_code == 400
+    assert mislabelled.json() == {"detail": "That video object key was not issued for this file type."}
+
+    created = client.post("/api/admin/library-items/video", data=data)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["video_content_type"] == "video/quicktime"
+    assert body["video_file_path"] == grant["object_key"]
+    assert body["type"] == "reel"
+
+
+def test_phone_m4a_audio_is_signed_and_registered_as_a_podcast(db, make_user, fake_storage):
+    client = _client(db, make_user(role=Role.SUPERADMIN))
+    claim = _audio_claim(
+        b"\x00\x00\x00\x20ftypM4A " + bytes(64),
+        content_type="audio/mp4",
+        original_filename="New Recording.m4a",
+    )
+    granted = client.post("/api/admin/library-items/audio-upload-url", json=claim)
+    assert granted.status_code == 200, granted.text
+    grant = granted.json()
+    assert grant["object_key"].startswith("library/audio/")
+    assert grant["object_key"].endswith(".m4a")
+    assert fake_storage.presigns[-1]["content_type"] == "audio/mp4"
+
+    fake_storage.complete_direct_upload(grant["object_key"], claim)
+    data = {
+        "audio_key": grant["object_key"],
+        "audio_content_type": claim["content_type"],
+        "audio_size_bytes": str(claim["size_bytes"]),
+        "audio_sha256": claim["sha256"],
+        "audio_md5": claim["content_md5"],
+        "duration_seconds": str(claim["duration_seconds"]),
+        "audio_original_filename": claim["original_filename"],
+        "type": "podcast",
+        "title": "Phone podcast",
+    }
+    mislabelled = client.post(
+        "/api/admin/library-items",
+        data={**data, "audio_content_type": "audio/mpeg"},
+    )
+    assert mislabelled.status_code == 400
+    assert mislabelled.json() == {"detail": "That audio object key was not issued for this file type."}
+
+    created = client.post("/api/admin/library-items", data=data)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["audio_content_type"] == "audio/mp4"
+    assert body["audio_file_path"] == grant["object_key"]
+    assert body["type"] == "podcast"
+
+
+@pytest.mark.parametrize(
+    ("route", "claim", "detail"),
+    [
+        ("audio-upload-url", _audio_claim(content_type="audio/x-m4a"), "Upload an MP3, OGG or M4A audio file."),
+        ("audio-upload-url", _audio_claim(content_type="audio/flac"), "Upload an MP3, OGG or M4A audio file."),
+        ("video-upload-url", _video_claim(content_type="video/x-matroska"), "Upload an MP4 or MOV video file."),
+        ("video-upload-url", _video_claim(content_type="application/octet-stream"), "Upload an MP4 or MOV video file."),
+    ],
+)
+def test_unknown_media_types_are_refused_with_415_before_signing(
+    db, make_user, fake_storage, route, claim, detail
+):
+    client = _client(db, make_user(role=Role.SUPERADMIN))
+    refused = client.post(f"/api/admin/library-items/{route}", json=claim)
+    assert refused.status_code == 415
+    assert refused.json() == {"detail": detail}
+    assert fake_storage.presigns == []
 
 
 def test_public_reels_list_newest_first_and_audio_list_excludes_video(
