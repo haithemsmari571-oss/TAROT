@@ -28,33 +28,78 @@ export interface UploadGrant {
   headers: Record<string, string>;
 }
 
+/* The fields of the server's LibraryItemAdmin (schemas/library_item.py) the
+   owner's screens read. Every item holds exactly one of video and audio
+   (ck_library_items_one_media). */
 export interface OwnerLibraryItem {
   id: number;
   key: string;
   type: string;
   title: string;
   description: string | null;
+  audio_url: string | null;
+  video_url: string | null;
+  video_width: number | null;
+  video_height: number | null;
+  duration_seconds: number;
+  cover_url: string | null;
   enabled: boolean;
   published_at: string | null;
-  cover_url: string | null;
+  created_at: string;
 }
 
+const LIBRARY_PATH = "/admin/library-items";
 const GRANT_PATHS: Record<OwnerMedium, string> = {
-  video: "/admin/library-items/video-upload-url",
-  audio: "/admin/library-items/audio-upload-url",
+  video: `${LIBRARY_PATH}/video-upload-url`,
+  audio: `${LIBRARY_PATH}/audio-upload-url`,
 };
 const REGISTER_PATHS: Record<OwnerMedium, string> = {
-  video: "/admin/library-items/video",
-  audio: "/admin/library-items",
+  video: `${LIBRARY_PATH}/video`,
+  audio: LIBRARY_PATH,
 };
-const itemPath = (id: number) => `/admin/library-items/${id}`;
+const itemPath = (id: number) => `${LIBRARY_PATH}/${id}`;
+
+/* Every item, in the server's order (sort_order, then id). */
+export async function listLibraryItems(): Promise<OwnerLibraryItem[]> {
+  const { data } = await axiosClient.get<OwnerLibraryItem[]>(LIBRARY_PATH);
+  return data;
+}
+
+export interface ItemChanges {
+  title?: string;
+  /* An empty description clears it (the route reads "" as none). */
+  description?: string;
+  enabled?: boolean;
+}
+
+/* Text fields go form-encoded, not multipart: multipart turns every line
+   break into CR LF on the way, and a caption's breaks are kept as typed. */
+function textForm(fields: Record<string, string | number | boolean | undefined>): URLSearchParams {
+  const form = new URLSearchParams();
+  Object.entries(fields).forEach(([field, value]) => {
+    if (value !== undefined) form.append(field, String(value));
+  });
+  return form;
+}
+
+/* One PATCH of the fields given. */
+export async function updateItem(id: number, changes: ItemChanges, signal?: AbortSignal): Promise<OwnerLibraryItem> {
+  const { data } = await axiosClient.patch<OwnerLibraryItem>(itemPath(id), textForm({ ...changes }), { signal });
+  return data;
+}
+
+/* Removes the row, then its files in storage (services/library_items.py
+   delete_library_item). */
+export async function deleteItem(id: number): Promise<void> {
+  await axiosClient.delete(itemPath(id));
+}
 
 /* The grant schema caps the name (schemas/library_item.py:24). */
 const MAX_ORIGINAL_FILENAME_LENGTH = 255;
 export const originalFilename = (file: File) => file.name.slice(0, MAX_ORIGINAL_FILENAME_LENGTH);
 
-export async function requestUploadGrant(medium: OwnerMedium, claim: UploadClaim): Promise<UploadGrant> {
-  const { data } = await axiosClient.post<UploadGrant>(GRANT_PATHS[medium], claim);
+export async function requestUploadGrant(medium: OwnerMedium, claim: UploadClaim, signal?: AbortSignal): Promise<UploadGrant> {
+  const { data } = await axiosClient.post<UploadGrant>(GRANT_PATHS[medium], claim, { signal });
   return data;
 }
 
@@ -78,14 +123,21 @@ export class StorageUploadError extends Error {
 
 /* One PUT to the signed address with exactly the signed headers, by
    XMLHttpRequest for its upload progress. No Authorization header: the
-   signature is the permission. */
+   signature is the permission. The signal stops it when the owner discards
+   the post. */
 export function putToStorage(
   grant: UploadGrant,
   file: File,
   onProgress: (loaded: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new StorageUploadError("NETWORK"));
+      return;
+    }
     const request = new XMLHttpRequest();
+    signal?.addEventListener("abort", () => request.abort(), { once: true });
     request.open(grant.method, grant.upload_url, true);
     request.timeout = 0;
     Object.entries(grant.headers).forEach(([name, value]) => request.setRequestHeader(name, value));
@@ -114,39 +166,44 @@ export interface Registration {
 
 /* Registered hidden, with today's date: the post appears only when it is
    finished (ROUND49 B.2). */
-export async function registerItem(medium: OwnerMedium, registration: Registration): Promise<OwnerLibraryItem> {
+export async function registerItem(
+  medium: OwnerMedium,
+  registration: Registration,
+  signal?: AbortSignal,
+): Promise<OwnerLibraryItem> {
   const { grant, claim } = registration;
-  const form = new FormData();
-  form.append(`${medium}_key`, grant.object_key);
-  form.append(`${medium}_content_type`, claim.content_type);
-  form.append(`${medium}_size_bytes`, String(claim.size_bytes));
-  form.append(`${medium}_sha256`, claim.sha256);
-  form.append(`${medium}_md5`, claim.content_md5);
-  form.append(`${medium}_original_filename`, claim.original_filename);
-  form.append("duration_seconds", signedDuration(grant, claim));
-  if (claim.width) form.append("video_width", String(claim.width));
-  if (claim.height) form.append("video_height", String(claim.height));
-  form.append("type", registration.type);
-  form.append("title", registration.title);
-  if (registration.description) form.append("description", registration.description);
-  form.append("enabled", "false");
-  form.append("published_at", new Date().toISOString());
-  const { data } = await axiosClient.post<OwnerLibraryItem>(REGISTER_PATHS[medium], form);
+  const form = textForm({
+    [`${medium}_key`]: grant.object_key,
+    [`${medium}_content_type`]: claim.content_type,
+    [`${medium}_size_bytes`]: claim.size_bytes,
+    [`${medium}_sha256`]: claim.sha256,
+    [`${medium}_md5`]: claim.content_md5,
+    [`${medium}_original_filename`]: claim.original_filename,
+    duration_seconds: signedDuration(grant, claim),
+    video_width: claim.width || undefined,
+    video_height: claim.height || undefined,
+    type: registration.type,
+    title: registration.title,
+    description: registration.description || undefined,
+    enabled: false,
+    published_at: new Date().toISOString(),
+  });
+  const { data } = await axiosClient.post<OwnerLibraryItem>(REGISTER_PATHS[medium], form, { signal });
   return data;
 }
 
 /* The last step: the cover, when there is one, and enabled=true in the same
    PATCH, which the server applies in one commit (services/library_items.py
-   update_library_item). A refused cover leaves the post hidden. */
+   update_library_item). A refused cover leaves the post hidden. Multipart
+   for the picture; it carries no text. */
 export async function finishItem(
   id: number,
   cover: File | null,
-  changes: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<OwnerLibraryItem> {
   const form = new FormData();
   if (cover) form.append("cover_image", cover, cover.name);
-  Object.entries(changes).forEach(([field, value]) => form.append(field, value));
   form.append("enabled", "true");
-  const { data } = await axiosClient.patch<OwnerLibraryItem>(itemPath(id), form);
+  const { data } = await axiosClient.patch<OwnerLibraryItem>(itemPath(id), form, { signal });
   return data;
 }

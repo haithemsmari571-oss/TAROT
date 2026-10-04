@@ -9,6 +9,8 @@ import {
   registerItem,
   requestUploadGrant,
   StorageUploadError,
+  updateItem,
+  type ItemChanges,
   type OwnerLibraryItem,
   type OwnerMedium,
   type UploadClaim,
@@ -17,9 +19,9 @@ import {
 import { ownerSessionUsable } from "./ownerSession";
 
 /* The words the owner sees while a post goes up (ROUND50), one source for
-   both screens. */
+   the Share step (ROUND51). */
 export const PUBLISH_COPY = {
-  publish: "Publish",
+  share: "Share",
   checking: "Checking",
   uploading: (percent: number) => `Uploading ${percent}%`,
   publishing: "Publishing",
@@ -37,7 +39,8 @@ export interface PublishInput {
   medium: OwnerMedium;
   file: File;
   contentType: string;
-  /* The library item's type: "reel" on Shorts, "podcast" on Home. */
+  /* The library item's type: "reel" on Shorts, "podcast" or "meditation" on
+     Home (ownerMedia.ts POST_KINDS). */
   itemType: string;
   title: string;
   description: string;
@@ -76,8 +79,14 @@ export function useOwnerPublish(onSignedOut: () => void) {
   const [percent, setPercent] = useState(0);
   const [failure, setFailure] = useState<string | null>(null);
   const progress = useRef<Progress | null>(null);
+  const attempt = useRef<AbortController | null>(null);
 
+  /* Starts over, and stops an attempt still running: a discarded post goes no
+     further. Stopped after its registration was sent, it may stay behind
+     hidden, shown under "Your posts" with Hidden. */
   const reset = useCallback(() => {
+    attempt.current?.abort();
+    attempt.current = null;
     progress.current = null;
     setStep("idle");
     setPercent(0);
@@ -92,6 +101,9 @@ export function useOwnerPublish(onSignedOut: () => void) {
     }
     if (progress.current?.file !== input.file) progress.current = { file: input.file };
     const kept = progress.current;
+    const controller = new AbortController();
+    attempt.current = controller;
+    const { signal } = controller;
     let stage: Stage = "checking";
     setFailure(null);
     try {
@@ -100,6 +112,7 @@ export function useOwnerPublish(onSignedOut: () => void) {
           setStep("checking");
           kept.probe ??= await probeMedia(input.file, input.medium);
           kept.hashes ??= await hashMediaFile(input.file);
+          if (signal.aborted) return;
           const claim: UploadClaim = {
             content_type: input.contentType,
             size_bytes: input.file.size,
@@ -111,7 +124,7 @@ export function useOwnerPublish(onSignedOut: () => void) {
               ? { width: kept.probe.width, height: kept.probe.height }
               : {}),
           };
-          const grant = await requestUploadGrant(input.medium, claim);
+          const grant = await requestUploadGrant(input.medium, claim, signal);
           kept.claim = claim;
           kept.grant = grant;
 
@@ -120,7 +133,7 @@ export function useOwnerPublish(onSignedOut: () => void) {
           setStep("uploading");
           await putToStorage(grant, input.file, (loaded, total) => {
             setPercent(total > 0 ? Math.min(100, Math.floor((loaded / total) * 100)) : 0);
-          });
+          }, signal);
           kept.uploaded = true;
         }
 
@@ -132,20 +145,26 @@ export function useOwnerPublish(onSignedOut: () => void) {
           type: input.itemType,
           title: input.title,
           description: input.description,
-        });
+        }, signal);
         kept.registered = { title: input.title, description: input.description };
       }
 
       stage = "finishing";
       setStep("publishing");
-      // A title or description edited after a failed last step goes with it.
-      const changes: Record<string, string> = {};
+      // A title or description edited after a failed last step goes first.
+      const changes: ItemChanges = {};
       if (kept.registered && input.title !== kept.registered.title) changes.title = input.title;
       if (kept.registered && input.description !== kept.registered.description) changes.description = input.description;
-      await finishItem(kept.item.id, input.cover, changes);
+      if (changes.title !== undefined || changes.description !== undefined) {
+        await updateItem(kept.item.id, changes, signal);
+        kept.registered = { title: input.title, description: input.description };
+      }
+      await finishItem(kept.item.id, input.cover, signal);
       progress.current = null;
+      attempt.current = null;
       setStep("done");
     } catch (error) {
+      if (signal.aborted) return;
       // A failed PUT asks for a new grant next time (the old one writes once).
       // A refused registration uploads again; a lost answer only registers again.
       if (stage === "uploading") kept.uploaded = false;

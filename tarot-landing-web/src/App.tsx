@@ -14,7 +14,7 @@ import PageSpace from "./components/PageSpace";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
 import RedirectSignedInClient, { type ClientAppRedirect } from "./features/client-app/RedirectSignedInClient";
 import { CHATS_PATH, HOME_PATH, READERS_PATH, YOU_PATH } from "./features/client-app/clientAppPaths";
-import { OWNER_PATH, OWNER_PODCAST_PATH, OWNER_REEL_PATH, OWNER_SIGN_IN_PATH } from "./features/owner/ownerPaths";
+import { OWNER_NEW_POST_PATH, OWNER_PATH, OWNER_POST_PATH, OWNER_SIGN_IN_PATH } from "./features/owner/ownerPaths";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
@@ -40,12 +40,12 @@ const ClientHelpScreen = lazy(() => import("./features/client-app/ClientHelpScre
 const ClientHomeScreen = lazy(() => import("./features/client-app/ClientHomeScreen"));
 const ClientArticleScreen = lazy(() => import("./features/client-app/ClientArticleScreen"));
 const ClientShortsScreen = lazy(() => import("./features/client-app/ClientShortsScreen"));
-// The owner's phone admin (ROUND50).
+// The owner's phone admin (ROUND50); posting is one flow (ROUND51).
 const OwnerShell = lazy(() => import("./features/owner/OwnerShell"));
 const OwnerSignInScreen = lazy(() => import("./features/owner/OwnerSignInScreen"));
 const OwnerHomeScreen = lazy(() => import("./features/owner/OwnerHomeScreen"));
-const OwnerReelScreen = lazy(() => import("./features/owner/OwnerReelScreen"));
-const OwnerPodcastScreen = lazy(() => import("./features/owner/OwnerPodcastScreen"));
+const OwnerNewPostScreen = lazy(() => import("./features/owner/OwnerNewPostScreen"));
+const OwnerPostScreen = lazy(() => import("./features/owner/OwnerPostScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -190,8 +190,8 @@ export default function App() {
       <Route path={OWNER_PATH} element={<Suspense fallback={null}><OwnerShell /></Suspense>}>
         <Route index element={<Suspense fallback={null}><OwnerHomeScreen /></Suspense>} />
         <Route path={OWNER_SIGN_IN_PATH} element={<Suspense fallback={null}><OwnerSignInScreen /></Suspense>} />
-        <Route path={OWNER_REEL_PATH} element={<Suspense fallback={null}><OwnerReelScreen /></Suspense>} />
-        <Route path={OWNER_PODCAST_PATH} element={<Suspense fallback={null}><OwnerPodcastScreen /></Suspense>} />
+        <Route path={OWNER_NEW_POST_PATH} element={<Suspense fallback={null}><OwnerNewPostScreen /></Suspense>} />
+        <Route path={OWNER_POST_PATH} element={<Suspense fallback={null}><OwnerPostScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}
