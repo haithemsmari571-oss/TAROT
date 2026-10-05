@@ -262,8 +262,9 @@ def test_an_apostrophe_in_a_name_is_escaped_in_the_email(local, outbox):
     _conversation(local, reader="O'Brien")
     reply_emails.email_pass([], asyncio.run)
     [message] = outbox
-    assert message.subject == "O'brien replied to you"
-    assert "<h2>O&#x27;brien replied to you</h2>" in message.body
+    # ROUND56: the letter after an apostrophe is a capital too.
+    assert message.subject == "O'Brien replied to you"
+    assert "<h2>O&#x27;Brien replied to you</h2>" in message.body
 
 
 def test_a_failed_send_is_logged_and_not_repeated(local, outbox, monkeypatch):

@@ -235,7 +235,7 @@ export default function ClientReadersScreen() {
           {shown.map(reader => (
             <div key={reader.id} className="client-readers-card">
               {/* The shared card names a reader by her username; here it gets the app's name (readerName.ts). */}
-              <PsychicCard psychic={{ ...reader, username: readerName(reader) }} welcomeCreditGbp={welcomeCreditGbp} languagesLine={cardLanguagesLine(reader.languages)} onClick={() => navigate(`${READERS_PATH}/${reader.id}`)} />
+              <PsychicCard psychic={{ ...reader, username: readerName(reader) }} shownName={readerName(reader)} welcomeCreditGbp={welcomeCreditGbp} languagesLine={cardLanguagesLine(reader.languages)} onClick={() => navigate(`${READERS_PATH}/${reader.id}`)} />
               <FavouriteHeart readerId={reader.id} name={readerName(reader)} />
             </div>
           ))}

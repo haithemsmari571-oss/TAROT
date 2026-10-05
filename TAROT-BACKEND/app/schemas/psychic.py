@@ -61,7 +61,7 @@ class PsychicRead(PsychicBase):
     # viewer may write a new review of her now. None on the roster.
     can_review: bool | None = None
     # Her profile (ROUND54), None until the owner fills it in; ethnicity
-    # included (ROUND55).
+    # included (ROUND55), as her country codes, "MA" or "GB,RO" (ROUND56).
     years_experience: int | None = None
     zodiac_sign: str | None = None
     languages: List[str] | None = None

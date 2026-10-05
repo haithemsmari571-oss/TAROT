@@ -1162,6 +1162,16 @@
   color: #fffcf4;
 }
 .owner-shell .owner-reader-price { font: 400 14px/1.35 var(--gl-sans); color: var(--gl-text-dim); }
+/* Her countries as clients see them (ROUND56): in her row, and under her
+   name on her page. */
+.owner-shell .owner-reader-ethnicity {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 400 14px/1.35 var(--gl-sans);
+  color: rgba(244, 239, 230, 0.86);
+}
+.owner-shell .owner-reader-title-line { margin: 0 0 4px; font-size: 16px; }
 
 /* Her page: the form's sections one under another, Save at its end. */
 .owner-shell .owner-reader-form {
@@ -1246,6 +1256,59 @@
   gap: 10px;
 }
 .owner-shell .owner-reader-add-language .owner-button-quiet { width: auto; }
+
+/* Ethnicity (ROUND56): her countries as chips a tap removes, the search
+   field, and under it, while it is open, every country in rows a thumb can
+   take. The list stays short enough to show between the field and the
+   iPhone keyboard. */
+.owner-shell .owner-country-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.owner-shell .owner-country-chips { margin: 0; padding: 0; list-style: none; }
+.owner-shell .owner-country-chip { gap: 8px; padding-right: 14px; }
+.owner-shell .owner-country-flag { font-size: 20px; line-height: 1; }
+.owner-shell .owner-country-remove {
+  margin-left: 2px;
+  font: 400 22px/1 var(--gl-sans);
+  color: var(--gl-accent);
+}
+.owner-shell .owner-country-search { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 16px); }
+.owner-shell .owner-country-list {
+  max-height: 260px;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 214, 150, 0.24);
+  background: rgba(8, 4, 18, 0.72);
+}
+.owner-shell .owner-country-list li + li { border-top: 1px solid rgba(255, 214, 150, 0.08); }
+.owner-shell .owner-country-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: #fffcf4;
+  font: 400 16px/1.3 var(--gl-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.owner-shell .owner-country-row:active { background: rgba(255, 240, 214, 0.08); }
+.owner-shell .owner-country-row:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: -2px; }
+.owner-shell .owner-country-none {
+  padding: 14px 16px;
+  font: 400 15px/1.4 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
+.owner-shell .owner-country-was { color: var(--gl-text-faint); }
 
 /* Years reading: − the number + */
 .owner-shell .owner-stepper {

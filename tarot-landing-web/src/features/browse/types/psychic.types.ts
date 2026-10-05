@@ -39,7 +39,7 @@ export interface Psychic {
   /** one of the twelve signs as the site writes them ("Scorpio") */
   zodiac_sign?: string | null;
   languages?: string[] | null;
-  /** as the owner wrote it; null when not filled in */
+  /** her countries as ISO codes, "MA" or "GB,RO" (ROUND56, client-app/countries.ts); null when not filled in */
   ethnicity?: string | null;
 }
 

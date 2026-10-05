@@ -24,15 +24,24 @@ from app.models import Transaction
 from app.services import reply_emails
 from tests.test_reply_emails import NOW, _chat, _message, _people, local, outbox  # noqa: F401 - fixtures
 
-# Her username is her display name: Title case, as the app writes it.
+# Her username is her display name: Title case, as the app writes it. Each
+# word, and each part after an apostrophe, starts with a capital (ROUND56).
 DISPLAY_NAMES = [
     ("Sophie", "Sophie"),
     ("Delphine", "Delphine"),
     ("AMRIT", "Amrit"),
     ("sophie", "Sophie"),
-    ("Mary Ann", "Mary ann"),
+    ("Mary Ann", "Mary Ann"),
+    ("MARY ANN", "Mary Ann"),
+    ("mary ann", "Mary Ann"),
+    ("mARY aNN", "Mary Ann"),
     ("Zoé", "Zoé"),
-    ("O'Brien", "O'brien"),
+    ("ZOÉ MARIE", "Zoé Marie"),
+    ("O'Brien", "O'Brien"),
+    ("o'neil", "O'Neil"),
+    ("O'NEIL", "O'Neil"),
+    ("o’neil", "O’Neil"),
+    ("mary ann o'neil", "Mary Ann O'Neil"),
     ("  Delphine  ", "Delphine"),
 ]
 # A handle: the first name part, with a capital letter.
@@ -45,6 +54,8 @@ HANDLES = [
     ("user123", "User"),
     ("_x9", "X"),
     ("Mary  Ann", "Mary"),
+    ("mary-ann", "Mary"),
+    ("o'neil_reader_2", "O'Neil"),
     ("sophie@example.com", "Sophie"),
     # nothing in it that could be a name
     ("12345", ""),
@@ -99,6 +110,17 @@ def test_the_refund_email_names_a_handle_by_its_first_name_part(local, outbox):
     [sent] = outbox
     assert sent.subject == "End could not reply in time. Your £2.50 is back."
     assert "end_control" not in sent.body.lower()
+
+
+def test_the_reply_email_capitalises_each_word_of_a_two_word_name(local, outbox):
+    client, psychic = _people(local, reader="MARY ANN")
+    chat = _chat(local, client, psychic)
+    _message(local, chat, psychic.id, NOW - reply_emails.REPLY_EMAIL_DELAY - timedelta(minutes=1))
+
+    reply_emails.email_pass([], asyncio.run)
+
+    [sent] = outbox
+    assert sent.subject == "Mary Ann replied to you"
 
 
 def test_a_display_name_is_unchanged_in_the_email(local, outbox):

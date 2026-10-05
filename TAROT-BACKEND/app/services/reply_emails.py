@@ -71,18 +71,20 @@ def _now():
 _NAME_WORD = r"[^\W\d_]+(?:['’][^\W\d_]+)*"
 _DISPLAY_NAME = re.compile(rf"{_NAME_WORD}(?: {_NAME_WORD})*")
 _FIRST_NAME_PART = re.compile(_NAME_WORD)
+# Each word, and each part after an apostrophe, starts with a capital (ROUND56).
+_CAPITAL_AFTER = re.compile(r"([ '’])")
 
 
 def reader_name(username):
-    """In the app's Title case (readerName.ts): "Sophie";
-    "end_control_reader_fee70ab6" -> "End"."""
+    """In the app's Title case (readerName.ts): "Sophie"; "MARY ANN" ->
+    "Mary Ann"; "o'neil" -> "O'Neil"; "end_control_reader_fee70ab6" -> "End"."""
     username = (username or "").strip()
     if _DISPLAY_NAME.fullmatch(username):
         name = username
     else:
         part = _FIRST_NAME_PART.search(username)
         name = part.group(0) if part else ""
-    return name[:1].upper() + name[1:].lower()
+    return "".join(piece[:1].upper() + piece[1:].lower() for piece in _CAPITAL_AFTER.split(name))
 
 
 def pounds(amount):

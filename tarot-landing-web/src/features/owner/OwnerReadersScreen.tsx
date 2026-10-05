@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { ethnicityLine } from "@/features/client-app/countries";
 import { ReaderPicture } from "./OwnerMessageParts";
 import { OwnerBack } from "./OwnerParts";
 import { OWNER_NEW_READER_PATH, ownerReaderPath } from "./ownerPaths";
@@ -15,7 +16,8 @@ const COPY = {
 } as const;
 
 /* Every reader (ROUND54), hidden ones too, in the site's order: her photo, her
-   name, her price, and Hidden when clients cannot see her. Add reader on top. */
+   name, her countries as clients see them (ROUND56), her price, and Hidden
+   when clients cannot see her. Add reader on top. */
 export default function OwnerReadersScreen() {
   const readers = useOwnerReaders();
 
@@ -39,23 +41,27 @@ export default function OwnerReadersScreen() {
       {readers.data?.items.length === 0 && <p className="owner-note">{COPY.empty}</p>}
       {readers.data && readers.data.items.length > 0 && (
         <ul className="owner-panel owner-reader-list">
-          {readers.data.items.map((reader) => (
-            <li key={reader.id}>
-              <Link
-                className="owner-reader-row"
-                to={ownerReaderPath(reader.id)}
-                aria-label={`${reader.name}, ${priceLine(reader.price_per_message)}${reader.is_listed ? "" : `, ${COPY.hidden}`}`}
-                data-owner-reader={reader.id}
-              >
-                <ReaderPicture url={reader.picture_url} name={reader.name} size="row" />
-                <span className="owner-reader-main">
-                  <span className="owner-reader-name">{reader.name}</span>
-                  <span className="owner-reader-price">{priceLine(reader.price_per_message)}</span>
-                </span>
-                {!reader.is_listed && <span className="owner-badge owner-badge-hidden">{COPY.hidden}</span>}
-              </Link>
-            </li>
-          ))}
+          {readers.data.items.map((reader) => {
+            const ethnicity = ethnicityLine(reader.ethnicity);
+            return (
+              <li key={reader.id}>
+                <Link
+                  className="owner-reader-row"
+                  to={ownerReaderPath(reader.id)}
+                  aria-label={[reader.name, ethnicity, priceLine(reader.price_per_message), reader.is_listed ? null : COPY.hidden].filter(Boolean).join(", ")}
+                  data-owner-reader={reader.id}
+                >
+                  <ReaderPicture url={reader.picture_url} name={reader.name} size="row" />
+                  <span className="owner-reader-main">
+                    <span className="owner-reader-name">{reader.name}</span>
+                    {ethnicity && <span className="owner-reader-ethnicity">{ethnicity}</span>}
+                    <span className="owner-reader-price">{priceLine(reader.price_per_message)}</span>
+                  </span>
+                  {!reader.is_listed && <span className="owner-badge owner-badge-hidden">{COPY.hidden}</span>}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>

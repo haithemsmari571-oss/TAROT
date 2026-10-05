@@ -7,15 +7,24 @@ import { readFileSync } from "node:fs";
 
 const { readerDisplayName } = await import("../src/features/client-app/readerName.ts");
 
-// Her username is her display name: Title case, as the card writes it.
+// Her username is her display name: Title case, as the card writes it. Each
+// word, and each part after an apostrophe, starts with a capital (ROUND56).
 const DISPLAY_NAMES: [string, string][] = [
   ["Sophie", "Sophie"],
   ["Delphine", "Delphine"],
   ["AMRIT", "Amrit"],
   ["sophie", "Sophie"],
-  ["Mary Ann", "Mary ann"],
+  ["Mary Ann", "Mary Ann"],
+  ["MARY ANN", "Mary Ann"],
+  ["mary ann", "Mary Ann"],
+  ["mARY aNN", "Mary Ann"],
   ["Zoé", "Zoé"],
-  ["O'Brien", "O'brien"],
+  ["ZOÉ MARIE", "Zoé Marie"],
+  ["O'Brien", "O'Brien"],
+  ["o'neil", "O'Neil"],
+  ["O'NEIL", "O'Neil"],
+  ["o’neil", "O’Neil"],
+  ["mary ann o'neil", "Mary Ann O'Neil"],
   ["  Delphine  ", "Delphine"],
 ];
 // A handle: the first name part, with a capital letter.
@@ -28,6 +37,8 @@ const HANDLES: [string, string][] = [
   ["user123", "User"],
   ["_x9", "X"],
   ["Mary  Ann", "Mary"],
+  ["mary-ann", "Mary"],
+  ["o'neil_reader_2", "O'Neil"],
   ["sophie@example.com", "Sophie"],
   // nothing in it that could be a name
   ["12345", ""],
@@ -61,6 +72,11 @@ assert.match(chats, /const name = readerDisplayName\(reader\.display_name\);/, "
 assert.doesNotMatch(chats, /\{reader\.display_name/, "the chats list never prints the username");
 const readers = source("ClientReadersScreen.tsx");
 assert.match(readers, /<PsychicCard psychic=\{\{ \.\.\.reader, username: readerName\(reader\) \}\}/, "the Readers tab card");
-checks += 8;
+// ROUND56: the shared card Title-cases a username its own way ("Mary ann"),
+// so the app hands it the name as the app writes it, drawn as given.
+assert.match(readers, /<PsychicCard [^\n]*shownName=\{readerName\(reader\)\}/, "the Readers tab card draws the app's name");
+const card = readFileSync(new URL("../src/features/browse/components/PsychicCard.tsx", import.meta.url), "utf8");
+assert.match(card, /const displayName = shownName \?\? \(/, "the card draws the name it is given");
+checks += 10;
 
 console.log(`reader names: ${checks} checks passed`);

@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import get_app_settings
+from app.enums.country_codes import shown_ethnicity
 from app.enums.role import Role
 from app.enums.user_status import UserStatus
 from app.exceptions.users import UserNotFoundError
@@ -157,8 +158,9 @@ def _psychic_to_out(
         zodiac_sign=psychic.zodiac_sign,
         languages=psychic.languages,
         # Shown whenever it is filled in (ROUND55), like the rest of her
-        # profile, in the one public reader shape (the roster, one reader, the CRM).
-        ethnicity=psychic.ethnicity,
+        # profile, in the one public reader shape (the roster, one reader, the
+        # CRM): her country codes ("GB,RO"), never free text (ROUND56).
+        ethnicity=shown_ethnicity(psychic.ethnicity),
     )
 
 

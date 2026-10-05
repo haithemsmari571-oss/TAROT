@@ -3,9 +3,11 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { categoriesApi } from "@/features/browse/api/categoriesApi";
 import type { Category } from "@/features/browse/types/category.types";
+import { ethnicityLine } from "@/features/client-app/countries";
 import { ZodiacGlyph } from "@/features/client-app/ReaderFacts";
 import { SIGNS } from "@/features/oracle/data/Signs";
 import { compressScreenshot } from "@/features/profile/lib/compressImage";
+import OwnerCountryPicker from "./OwnerCountryPicker";
 import { OwnerBack, OwnerFileChooser } from "./OwnerParts";
 import { OWNER_READERS_PATH, ownerReaderPath } from "./ownerPaths";
 import {
@@ -14,6 +16,7 @@ import {
   keepReader,
   LANGUAGE_CHOICES,
   newReaderOf,
+  oldEthnicityOf,
   parsePrice,
   READER_BIO_MAX_LENGTH,
   readerRefusal,
@@ -56,6 +59,7 @@ const COPY = {
   moreYears: "One year more",
   yearsEmpty: "Empty shows nothing on her profile.",
   ethnicity: "Ethnicity",
+  was: (text: string) => `Was: ${text}`,
   specialities: "Specialities",
   noSpecialities: "The specialities could not be loaded.",
   price: "Price per message (£)",
@@ -247,6 +251,8 @@ function ReaderForm({
   };
 
   const pictureUrl = preview?.url ?? reader?.picture_url ?? null;
+  const savedEthnicity = reader ? ethnicityLine(reader.ethnicity) : null;
+  const oldEthnicity = oldEthnicityOf(reader);
   const customLanguages = draft.languages.filter((language) => !(LANGUAGE_CHOICES as readonly string[]).includes(language));
   const bioLonger = draft.bio.length > READER_BIO_MAX_LENGTH;
 
@@ -254,6 +260,7 @@ function ReaderForm({
     <main className="owner-screen owner-reader" data-owner-reader={reader?.id ?? "new"}>
       <OwnerBack onClick={onBack} disabled={busy} />
       <h1 className="owner-title">{reader ? reader.name : COPY.newTitle}</h1>
+      {savedEthnicity && <p className="owner-reader-ethnicity owner-reader-title-line">{savedEthnicity}</p>}
       {reader && created && (
         <p className="owner-status owner-reader-added" role="status">
           {COPY.added(reader.name)} {created.emailSent ? COPY.emailSent : COPY.emailNotSent}
@@ -434,15 +441,13 @@ function ReaderForm({
         </Section>
 
         <Section title={COPY.ethnicity}>
-          <input
-            className="owner-input"
-            aria-label={COPY.ethnicity}
-            value={draft.ethnicity}
-            maxLength={limits.ethnicity_max_length}
-            autoComplete="off"
+          <OwnerCountryPicker
+            codes={draft.ethnicity}
+            max={limits.ethnicity_max_countries}
             disabled={busy}
-            onChange={(event) => edit({ ethnicity: event.target.value })}
+            onChange={(ethnicity) => edit({ ethnicity })}
           />
+          {oldEthnicity && <p className="owner-caption-hint owner-country-was">{COPY.was(oldEthnicity)}</p>}
         </Section>
 
         <Section title={COPY.specialities}>

@@ -16,6 +16,7 @@
     "test:website-sign-in": "node --experimental-transform-types scripts/test-website-sign-in.mts",
     "test:app-service-worker": "node scripts/test-app-service-worker.mts",
     "test:reader-name": "node scripts/test-reader-name.mts",
+    "test:countries": "node scripts/test-countries.mts",
     "test:offline-icons": "node scripts/test-offline-icons.mts"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 /* A reader's profile under her name (ROUND54), and a sign's glyph, which the
    owner's sign chips draw too. The readings are readerProfile.ts's. */
 import type { Psychic } from "@/features/browse/types/psychic.types";
+import { ethnicityLine } from "./countries";
 import { speaksLine, yearsReadingLine, zodiacSignOf, type ZodiacSign } from "./readerProfile";
 
 /* Draws a zodiac glyph as text, never as a coloured emoji. */
@@ -10,14 +11,16 @@ export function ZodiacGlyph({ sign }: { sign: ZodiacSign }) {
   return <span className="reader-zodiac-glyph" aria-hidden="true">{sign.symbol}{TEXT_PRESENTATION}</span>;
 }
 
-/* Sign, years reading, languages, ethnicity; a field left empty says nothing. */
+/* Sign, years reading, languages, ethnicity as flags and demonyms ("🇲🇦
+   Moroccan", ROUND56); a field left empty, or an ethnicity that is not
+   countries, says nothing. */
 export default function ReaderFacts({ reader }: { reader: Pick<Psychic, "zodiac_sign" | "years_experience" | "languages" | "ethnicity"> }) {
   const sign = zodiacSignOf(reader.zodiac_sign);
   const facts = [
     sign && <><ZodiacGlyph sign={sign} /> {sign.name}</>,
     yearsReadingLine(reader.years_experience),
     speaksLine(reader.languages),
-    reader.ethnicity || null,
+    ethnicityLine(reader.ethnicity),
   ].filter(Boolean);
   if (facts.length === 0) return null;
   return (

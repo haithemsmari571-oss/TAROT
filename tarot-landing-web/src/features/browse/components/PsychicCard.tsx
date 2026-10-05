@@ -15,9 +15,13 @@ interface PsychicCardProps {
   /** The app's Readers tab only (ROUND54): "Speaks English, French", under
       the tags. Absent elsewhere, so the card draws as before. */
   languagesLine?: string | null;
+  /** The app's Readers tab only (ROUND56): her name as the app writes it
+      (client-app/readerName.ts, "Mary Ann"), drawn as given. Absent
+      elsewhere, so the card Title-cases the username as before. */
+  shownName?: string;
 }
 
-const PsychicCard = ({ psychic, onClick, welcomeCreditGbp, languagesLine }: PsychicCardProps) => {
+const PsychicCard = ({ psychic, onClick, welcomeCreditGbp, languagesLine, shownName }: PsychicCardProps) => {
   const perMinute = (psychic.price_per_second || 0) * 60;
   const freeMinutes = hasWelcomeCredit(welcomeCreditGbp) ? welcomeCreditMinutes(welcomeCreditGbp, psychic.price_per_second) : 0;
   /* Per-message billing (step 5b): the card prices a message, not a minute,
@@ -36,9 +40,9 @@ const PsychicCard = ({ psychic, onClick, welcomeCreditGbp, languagesLine }: Psyc
   const extraTags = categories.length - shownTags.length;
 
   // Serif names read as names, not labels — Title case whatever the DB holds.
-  const displayName = psychic.username
+  const displayName = shownName ?? (psychic.username
     ? psychic.username.charAt(0).toUpperCase() + psychic.username.slice(1).toLowerCase()
-    : "";
+    : "");
 
   // One control per card (ROUND35 A6): Start, the card's visible button, is the
   // Tab stop and what a screen reader names; its click bubbles up to the card's.

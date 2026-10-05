@@ -2,7 +2,8 @@
 /api/admin/readers under real auth, beside the public psychics router, on the
 in-memory database. A new reader is made by the shared create_psychic, gets the
 site's reset email (send_email recorded) and never a password on the phone;
-ethnicity reaches every client-facing answer whenever it is filled in (ROUND55)."""
+ethnicity reaches every client-facing answer whenever it is filled in (ROUND55),
+as one or two ISO country codes, and free text from before is never shown (ROUND56)."""
 
 import json
 from io import BytesIO
@@ -13,6 +14,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.database.client import get_db
+from app.enums.country_codes import ETHNICITY_MAX_COUNTRIES, ISO_COUNTRY_CODES
 from app.enums.role import Role
 from app.models import User
 from app.models.auth_link_token import RESET_PASSWORD_PURPOSE, AuthLinkToken
@@ -91,7 +93,7 @@ FULL = {
     "email": "Celeste@Readers.example",
     "bio": "Tarot and timing.\nTwenty years at the cards.",
     "price_per_message": 3,
-    "ethnicity": "British Indian",
+    "ethnicity": "GB,IN",
     "years_experience": 20,
     "zodiac_sign": "Scorpio",
     "languages": ["English", "French", "Hindi"],
@@ -126,7 +128,7 @@ def test_create_makes_a_reader_through_the_shared_path_and_sends_the_reset_email
     assert body["bio"] == FULL["bio"]
     assert body["price_per_message"] == 3
     assert [c["title"] for c in body["categories"]] == ["Tarot", "Love and timing"]
-    assert body["ethnicity"] == "British Indian" and "show_ethnicity" not in body
+    assert body["ethnicity"] == "GB,IN" and "show_ethnicity" not in body
     assert (body["years_experience"], body["zodiac_sign"]) == (20, "Scorpio")
     assert body["languages"] == ["English", "French", "Hindi"]
     assert body["is_listed"] is True
@@ -156,7 +158,7 @@ def test_a_new_reader_starts_at_the_defaults(owner):
     assert body["ethnicity"] is None and body["years_experience"] is None and body["zodiac_sign"] is None
     listed = owner.http.get(READERS, headers=owner.headers).json()
     assert listed["defaults"] == {"price_per_message": DEFAULT_PRICE_PER_MESSAGE, "languages": list(DEFAULT_LANGUAGES)}
-    assert listed["limits"] == {"ethnicity_max_length": 60, "years_experience_max": 60, "language_name_max_length": 40}
+    assert listed["limits"] == {"ethnicity_max_countries": 2, "years_experience_max": 60, "language_name_max_length": 40}
 
 
 def test_ethnicity_reaches_clients_whenever_it_is_filled_in(owner):
@@ -168,28 +170,91 @@ def test_ethnicity_reaches_clients_whenever_it_is_filled_in(owner):
         listed = next(item for item in roster if item["id"] == reader_id)
         return one["ethnicity"], listed["ethnicity"]
 
-    assert public() == ("British Indian", "British Indian")
+    assert public() == ("GB,IN", "GB,IN")
     one = owner.http.get(f"/api/psychic/{reader_id}").json()
     assert (one["zodiac_sign"], one["years_experience"], one["languages"]) == ("Scorpio", 20, ["English", "French", "Hindi"])
     assert "show_ethnicity" not in one
     owned = owner.http.get(READERS, headers=owner.headers).json()["items"][0]
-    assert owned["ethnicity"] == "British Indian" and "show_ethnicity" not in owned
+    assert owned["ethnicity"] == "GB,IN" and "show_ethnicity" not in owned
 
     # The kept column is read nowhere: a reader stored with it off (ROUND54's
     # unticked box) shows her ethnicity, and an old phone sending it changes nothing.
     reader = owner.db.get(User, reader_id)
     reader.show_ethnicity = False
     owner.db.commit()
-    assert public() == ("British Indian", "British Indian")
+    assert public() == ("GB,IN", "GB,IN")
     assert owner.patch(reader_id, {"show_ethnicity": False}).status_code == 200
-    assert public() == ("British Indian", "British Indian")
+    assert public() == ("GB,IN", "GB,IN")
     owner.db.expire_all()
     assert owner.db.get(User, reader_id).show_ethnicity is True
 
     assert owner.patch(reader_id, {"ethnicity": None}).json()["ethnicity"] is None
     assert public() == (None, None)
-    assert owner.patch(reader_id, {"ethnicity": "Irish"}).status_code == 200
-    assert public() == ("Irish", "Irish")
+    assert owner.patch(reader_id, {"ethnicity": "IE"}).status_code == 200
+    assert public() == ("IE", "IE")
+
+
+def test_the_country_list_is_every_iso_code():
+    assert len(ISO_COUNTRY_CODES) == 249
+    assert all(len(code) == 2 and code.isascii() and code.isupper() for code in ISO_COUNTRY_CODES)
+    assert {"MA", "GB", "RO", "US", "IE", "IN"} <= ISO_COUNTRY_CODES
+    # Not officially assigned: user-assigned, reserved or withdrawn.
+    assert not {"XX", "XK", "UK", "EU", "AN", "YU"} & ISO_COUNTRY_CODES
+    assert ETHNICITY_MAX_COUNTRIES == 2
+
+
+def test_ethnicity_is_empty_or_one_or_two_different_countries(owner):
+    reader_id = owner.create({**FULL, "ethnicity": "MA"}).json()["id"]
+    assert owner.http.get(f"/api/psychic/{reader_id}").json()["ethnicity"] == "MA"
+    for sent, stored in (("GB,RO", "GB,RO"), (" RO,GB ", "RO,GB"), ("", None), ("  ", None), (None, None), ("US", "US")):
+        response = owner.patch(reader_id, {"ethnicity": sent})
+        assert response.status_code == 200, (sent, response.text)
+        assert response.json()["ethnicity"] == stored
+    refusals = {
+        "XX": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+        "GB,RO,MA": "At most 2 countries.",
+        "GB,GB": "The two countries must be different.",
+        "ma": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+        "GB, RO": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+        "GB,": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+        "GBR": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+        "UK": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+        "British Romanian": "Not a country from the ISO list. Send one or two codes, such as MA or GB,RO.",
+    }
+    for sent, message in refusals.items():
+        response = owner.patch(reader_id, {"ethnicity": sent})
+        assert response.status_code == 422, (sent, response.text)
+        [error] = response.json()["detail"]
+        assert (error["loc"], error["msg"]) == (["ethnicity"], message), sent
+    refused = owner.create({**FULL, "name": "Nova", "email": "nova@readers.example", "ethnicity": "XX"})
+    assert refused.status_code == 422 and refused.json()["detail"][0]["msg"] == refusals["XX"]
+    owner.db.expire_all()
+    assert owner.db.get(User, reader_id).ethnicity == "US"
+    assert owner.db.query(User).filter(User.username == "Nova").count() == 0
+
+
+def test_free_text_from_before_is_kept_for_the_owner_and_never_shown_to_clients(owner):
+    reader_id = owner.create({**FULL, "ethnicity": None}).json()["id"]
+    reader = owner.db.get(User, reader_id)
+    reader.ethnicity = "British Romanian"
+    owner.db.commit()
+
+    def public():
+        one = owner.http.get(f"/api/psychic/{reader_id}").json()
+        listed = next(item for item in owner.http.get("/api/psychic/").json()["items"] if item["id"] == reader_id)
+        return one["ethnicity"], listed["ethnicity"]
+
+    def owned():
+        return owner.http.get(READERS, headers=owner.headers).json()["items"][0]["ethnicity"]
+
+    assert public() == (None, None)
+    assert owned() == "British Romanian"
+    # An edit that leaves ethnicity out leaves the old text in its row.
+    assert owner.patch(reader_id, {"bio": "Changed."}).status_code == 200
+    assert owned() == "British Romanian" and public() == (None, None)
+    # Countries picked and saved replace it.
+    assert owner.patch(reader_id, {"ethnicity": "GB,RO"}).status_code == 200
+    assert owned() == "GB,RO" and public() == ("GB,RO", "GB,RO")
 
 
 def test_an_edit_changes_only_what_is_sent_and_keeps_a_long_bio(owner):
@@ -265,6 +330,8 @@ def test_refusals_change_nothing(owner):
         {"years_experience": 61},
         {"years_experience": -1},
         {"ethnicity": "x" * 61},
+        {"ethnicity": "XX"},
+        {"ethnicity": "GB,RO,MA"},
         {"name": "   "},
         {"name": None},
         {"price_per_message": 0},

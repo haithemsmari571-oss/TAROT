@@ -22,6 +22,8 @@ export interface OwnerReader {
   price_per_message: number | null;
   categories: ReaderCategory[];
   is_listed: boolean;
+  /* As stored: her countries ("GB,RO", client-app/countries.ts), or free text
+     kept from before ROUND56, which the form shows as "Was: …". */
   ethnicity: string | null;
   years_experience: number | null;
   zodiac_sign: string | null;
@@ -33,7 +35,7 @@ export interface OwnerReaderList {
   /* What a new reader's form starts at. */
   defaults: { price_per_message: number; languages: string[] };
   /* The form's limits, the server's own. */
-  limits: { ethnicity_max_length: number; years_experience_max: number; language_name_max_length: number };
+  limits: { ethnicity_max_countries: number; years_experience_max: number; language_name_max_length: number };
 }
 
 /* The fields a change sends; only those present change. null clears. */

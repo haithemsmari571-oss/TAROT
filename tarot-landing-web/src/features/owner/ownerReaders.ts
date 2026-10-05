@@ -1,5 +1,6 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
+import { countriesOf, ETHNICITY_SEPARATOR } from "@/features/client-app/countries";
 import { formatGbp } from "@/lib/currency";
 import {
   listReaders,
@@ -64,7 +65,8 @@ export interface ReaderDraft {
   bio: string;
   price: string;
   categoryIds: number[];
-  ethnicity: string;
+  /* Her countries' codes in the order picked (ROUND56). */
+  ethnicity: string[];
   years: number | null;
   zodiac: string | null;
   languages: string[];
@@ -73,10 +75,21 @@ export interface ReaderDraft {
 
 const priceText = (price: number | null) => (price == null ? "" : price.toFixed(2));
 
+/* The codes of a stored ethnicity; none for free text kept from before
+   ROUND56, so the picker starts empty and the text stays as it is until a
+   country is picked and saved. */
+const pickedCodes = (ethnicity: string | null) => countriesOf(ethnicity)?.map((country) => country.code) ?? [];
+const storedEthnicity = (codes: string[]) => codes.join(ETHNICITY_SEPARATOR) || null;
+
+/* Free text kept from before ROUND56, which clients never see; null when she
+   has countries or nothing. */
+export const oldEthnicityOf = (reader: OwnerReader | null) =>
+  reader?.ethnicity && !countriesOf(reader.ethnicity) ? reader.ethnicity : null;
+
 export function draftOf(reader: OwnerReader | null, defaults: OwnerReaderList["defaults"]): ReaderDraft {
   if (!reader) {
     return {
-      name: "", bio: "", price: priceText(defaults.price_per_message), categoryIds: [], ethnicity: "",
+      name: "", bio: "", price: priceText(defaults.price_per_message), categoryIds: [], ethnicity: [],
       years: null, zodiac: null, languages: [...defaults.languages], email: "",
     };
   }
@@ -85,7 +98,7 @@ export function draftOf(reader: OwnerReader | null, defaults: OwnerReaderList["d
     bio: reader.bio ?? "",
     price: priceText(reader.price_per_message),
     categoryIds: reader.categories.map((category) => category.id),
-    ethnicity: reader.ethnicity ?? "",
+    ethnicity: pickedCodes(reader.ethnicity),
     years: reader.years_experience,
     zodiac: reader.zodiac_sign,
     languages: [...reader.languages],
@@ -114,7 +127,7 @@ export function newReaderOf(draft: ReaderDraft): NewReader {
     bio: draft.bio.trim() || null,
     price_per_message: parsePrice(draft.price) ?? undefined,
     categories_ids: draft.categoryIds,
-    ethnicity: singleSpaced(draft.ethnicity) || null,
+    ethnicity: storedEthnicity(draft.ethnicity),
     years_experience: draft.years,
     zodiac_sign: draft.zodiac,
     languages: draft.languages,
@@ -133,8 +146,8 @@ export function changesOf(draft: ReaderDraft, reader: OwnerReader): ReaderChange
   if (!sameList(sortedIds(draft.categoryIds), sortedIds(reader.categories.map((category) => category.id)))) {
     changes.categories_ids = draft.categoryIds;
   }
-  const ethnicity = singleSpaced(draft.ethnicity) || null;
-  if (ethnicity !== reader.ethnicity) changes.ethnicity = ethnicity;
+  const ethnicity = storedEthnicity(draft.ethnicity);
+  if (ethnicity !== storedEthnicity(pickedCodes(reader.ethnicity))) changes.ethnicity = ethnicity;
   if (draft.years !== reader.years_experience) changes.years_experience = draft.years;
   if (draft.zodiac !== reader.zodiac_sign) changes.zodiac_sign = draft.zodiac;
   if (!sameList(draft.languages, reader.languages)) changes.languages = draft.languages;

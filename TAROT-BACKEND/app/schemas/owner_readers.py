@@ -6,9 +6,10 @@ reach the server as typed."""
 from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
+from app.enums.country_codes import ETHNICITY_MAX_COUNTRIES, EthnicityRefused, ethnicity_codes
 from app.enums.zodiac_sign import ZODIAC_SIGNS
-from app.models.user import ETHNICITY_MAX_LENGTH
 from app.schemas.psychic import PsychicCategoryRead
 
 # A new reader's price per message when the phone sends none, and what its form
@@ -74,12 +75,18 @@ class _ReaderProfile(BaseModel):
     @field_validator("ethnicity")
     @classmethod
     def _ethnicity(cls, value: Optional[str]) -> Optional[str]:
+        """Empty, or one or two different ISO country codes ("MA", "GB,RO",
+        enums/country_codes.py). Anything else is refused in plain words."""
         if value is None:
             return None
-        ethnicity = _single_spaced(value)
-        if len(ethnicity) > ETHNICITY_MAX_LENGTH:
-            raise ValueError(f"At most {ETHNICITY_MAX_LENGTH} characters.")
-        return ethnicity or None
+        ethnicity = value.strip()
+        if not ethnicity:
+            return None
+        try:
+            ethnicity_codes(ethnicity)
+        except EthnicityRefused as refusal:
+            raise PydanticCustomError("ethnicity", str(refusal)) from None
+        return ethnicity
 
     @field_validator("zodiac_sign")
     @classmethod
@@ -148,6 +155,8 @@ class OwnerReaderRead(BaseModel):
     price_per_message: Optional[float] = None
     categories: List[PsychicCategoryRead]
     is_listed: bool
+    # As stored: her countries ("GB,RO"), or free text kept from before
+    # ROUND56, which the form shows as "Was: …" and clients never see.
     ethnicity: Optional[str] = None
     years_experience: Optional[int] = None
     zodiac_sign: Optional[str] = None
@@ -164,7 +173,7 @@ class OwnerReaderDefaults(BaseModel):
 class OwnerReaderLimits(BaseModel):
     """The form's limits, from the rules above, so the phone holds no copy of them."""
 
-    ethnicity_max_length: int = ETHNICITY_MAX_LENGTH
+    ethnicity_max_countries: int = ETHNICITY_MAX_COUNTRIES
     years_experience_max: int = YEARS_EXPERIENCE_MAX
     language_name_max_length: int = LANGUAGE_NAME_MAX_LENGTH
 
