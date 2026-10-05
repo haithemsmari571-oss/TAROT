@@ -29,7 +29,11 @@ from app.services.auth import send_password_link
 # never kept: only its hash is stored), as psychic_onboarding.confirm_batch.
 _UNSEEN_PASSWORD_BYTES = 24
 # Her profile's own columns, which the shared PsychicUpdate does not carry.
-_PROFILE_FIELDS = ("ethnicity", "show_ethnicity", "years_experience", "zodiac_sign", "languages")
+_PROFILE_FIELDS = ("ethnicity", "years_experience", "zodiac_sign", "languages")
+# users.show_ethnicity is kept but nothing reads it since ROUND55: her
+# ethnicity is shown whenever it is filled in. Every reader added or edited
+# here stores it as this.
+_SHOW_ETHNICITY = True
 # The fields a change shares with PATCH /api/psychic/{id}.
 _SHARED_FIELDS = ("bio", "price_per_message", "categories_ids", "is_listed")
 
@@ -51,7 +55,7 @@ class UnknownCategory(Exception):
 
 
 def reader_out(reader: User) -> OwnerReaderRead:
-    """Everything the owner may see of her, ethnicity included whatever her consent."""
+    """Everything the owner may see of her."""
     return OwnerReaderRead(
         id=reader.id,
         name=reader.username,
@@ -65,7 +69,6 @@ def reader_out(reader: User) -> OwnerReaderRead:
         ],
         is_listed=reader.is_listed,
         ethnicity=reader.ethnicity,
-        show_ethnicity=bool(reader.show_ethnicity),
         years_experience=reader.years_experience,
         zodiac_sign=reader.zodiac_sign,
         languages=reader.languages or [],
@@ -117,12 +120,6 @@ def _check_categories(db: Session, category_ids: list[int]) -> None:
         raise UnknownCategory()
 
 
-def _shown(ethnicity: str | None, show_ethnicity: bool | None) -> bool | None:
-    """No agreement without something to show: with no ethnicity the tick is off,
-    so an ethnicity written later is never shown on an old agreement."""
-    return False if ethnicity is None and show_ethnicity else show_ethnicity
-
-
 async def create_reader(db: Session, data: OwnerReaderCreate, photo: UploadFile) -> tuple[User, bool]:
     """The new reader, and whether her set-your-password email went out."""
     _check_name_free(db, data.name)
@@ -141,7 +138,7 @@ async def create_reader(db: Session, data: OwnerReaderCreate, photo: UploadFile)
         is_online=True,
     )
     profile = {field: getattr(data, field) for field in _PROFILE_FIELDS}
-    profile["show_ethnicity"] = _shown(data.ethnicity, data.show_ethnicity)
+    profile["show_ethnicity"] = _SHOW_ETHNICITY
     # The owner vouches for her, as the bulk onboarding's confirm does, so the
     # password she sets is one she can sign in with (services/auth.py sign_in).
     profile["is_verified"] = True
@@ -173,7 +170,7 @@ def update_reader(db: Session, reader_id: int, data: OwnerReaderUpdate | None, p
     for field in _PROFILE_FIELDS:
         if field in changes:
             setattr(reader, field, changes[field])
-    reader.show_ethnicity = _shown(reader.ethnicity, reader.show_ethnicity)
+    reader.show_ethnicity = _SHOW_ETHNICITY
 
     shared = {field: changes[field] for field in _SHARED_FIELDS if field in changes}
     # The change PATCH /api/psychic/{id} makes, committed with the fields above.

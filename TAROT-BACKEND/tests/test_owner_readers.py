@@ -2,7 +2,7 @@
 /api/admin/readers under real auth, beside the public psychics router, on the
 in-memory database. A new reader is made by the shared create_psychic, gets the
 site's reset email (send_email recorded) and never a password on the phone;
-ethnicity reaches a client-facing answer only while she agreed to show it."""
+ethnicity reaches every client-facing answer whenever it is filled in (ROUND55)."""
 
 import json
 from io import BytesIO
@@ -92,7 +92,6 @@ FULL = {
     "bio": "Tarot and timing.\nTwenty years at the cards.",
     "price_per_message": 3,
     "ethnicity": "British Indian",
-    "show_ethnicity": False,
     "years_experience": 20,
     "zodiac_sign": "Scorpio",
     "languages": ["English", "French", "Hindi"],
@@ -127,13 +126,14 @@ def test_create_makes_a_reader_through_the_shared_path_and_sends_the_reset_email
     assert body["bio"] == FULL["bio"]
     assert body["price_per_message"] == 3
     assert [c["title"] for c in body["categories"]] == ["Tarot", "Love and timing"]
-    assert (body["ethnicity"], body["show_ethnicity"]) == ("British Indian", False)
+    assert body["ethnicity"] == "British Indian" and "show_ethnicity" not in body
     assert (body["years_experience"], body["zodiac_sign"]) == (20, "Scorpio")
     assert body["languages"] == ["English", "French", "Hindi"]
     assert body["is_listed"] is True
 
     reader = owner.db.get(User, body["id"])
     assert reader.role == Role.PSYCHIC and reader.is_verified is True
+    assert reader.show_ethnicity is True
     assert reader.password_hash and reader.password_hash != "hash"
     # Stored where reader pictures are, under our own name and the real format.
     saved = list(owner.media_dir.iterdir())
@@ -153,14 +153,13 @@ def test_a_new_reader_starts_at_the_defaults(owner):
     body = response.json()
     assert body["price_per_message"] == DEFAULT_PRICE_PER_MESSAGE
     assert body["languages"] == list(DEFAULT_LANGUAGES)
-    assert body["show_ethnicity"] is False
     assert body["ethnicity"] is None and body["years_experience"] is None and body["zodiac_sign"] is None
     listed = owner.http.get(READERS, headers=owner.headers).json()
     assert listed["defaults"] == {"price_per_message": DEFAULT_PRICE_PER_MESSAGE, "languages": list(DEFAULT_LANGUAGES)}
     assert listed["limits"] == {"ethnicity_max_length": 60, "years_experience_max": 60, "language_name_max_length": 40}
 
 
-def test_ethnicity_reaches_clients_only_while_she_agreed(owner):
+def test_ethnicity_reaches_clients_whenever_it_is_filled_in(owner):
     reader_id = owner.create(FULL).json()["id"]
 
     def public():
@@ -169,20 +168,28 @@ def test_ethnicity_reaches_clients_only_while_she_agreed(owner):
         listed = next(item for item in roster if item["id"] == reader_id)
         return one["ethnicity"], listed["ethnicity"]
 
-    assert public() == (None, None)
+    assert public() == ("British Indian", "British Indian")
     one = owner.http.get(f"/api/psychic/{reader_id}").json()
     assert (one["zodiac_sign"], one["years_experience"], one["languages"]) == ("Scorpio", 20, ["English", "French", "Hindi"])
     assert "show_ethnicity" not in one
-    assert owner.http.get(READERS, headers=owner.headers).json()["items"][0]["ethnicity"] == "British Indian"
+    owned = owner.http.get(READERS, headers=owner.headers).json()["items"][0]
+    assert owned["ethnicity"] == "British Indian" and "show_ethnicity" not in owned
 
-    assert owner.patch(reader_id, {"show_ethnicity": True}).status_code == 200
+    # The kept column is read nowhere: a reader stored with it off (ROUND54's
+    # unticked box) shows her ethnicity, and an old phone sending it changes nothing.
+    reader = owner.db.get(User, reader_id)
+    reader.show_ethnicity = False
+    owner.db.commit()
     assert public() == ("British Indian", "British Indian")
+    assert owner.patch(reader_id, {"show_ethnicity": False}).status_code == 200
+    assert public() == ("British Indian", "British Indian")
+    owner.db.expire_all()
+    assert owner.db.get(User, reader_id).show_ethnicity is True
 
-    cleared = owner.patch(reader_id, {"ethnicity": None}).json()
-    assert (cleared["ethnicity"], cleared["show_ethnicity"]) == (None, False)
-    # A new ethnicity is not shown on the old agreement.
-    assert owner.patch(reader_id, {"ethnicity": "Irish"}).json()["show_ethnicity"] is False
+    assert owner.patch(reader_id, {"ethnicity": None}).json()["ethnicity"] is None
     assert public() == (None, None)
+    assert owner.patch(reader_id, {"ethnicity": "Irish"}).status_code == 200
+    assert public() == ("Irish", "Irish")
 
 
 def test_an_edit_changes_only_what_is_sent_and_keeps_a_long_bio(owner):

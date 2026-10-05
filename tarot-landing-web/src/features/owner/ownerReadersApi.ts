@@ -11,7 +11,7 @@ export interface ReaderCategory {
   title: string;
 }
 
-/* Everything the owner sees of a reader, ethnicity included whatever her consent. */
+/* Everything the owner sees of a reader. */
 export interface OwnerReader {
   id: number;
   /* Her username, which clients see as her name. */
@@ -23,8 +23,6 @@ export interface OwnerReader {
   categories: ReaderCategory[];
   is_listed: boolean;
   ethnicity: string | null;
-  /* She agreed to show her ethnicity on her profile. */
-  show_ethnicity: boolean;
   years_experience: number | null;
   zodiac_sign: string | null;
   languages: string[];
@@ -45,7 +43,6 @@ export interface ReaderChanges {
   price_per_message?: number;
   categories_ids?: number[];
   ethnicity?: string | null;
-  show_ethnicity?: boolean;
   years_experience?: number | null;
   zodiac_sign?: string | null;
   languages?: string[];

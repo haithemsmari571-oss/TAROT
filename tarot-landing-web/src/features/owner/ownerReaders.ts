@@ -65,7 +65,6 @@ export interface ReaderDraft {
   price: string;
   categoryIds: number[];
   ethnicity: string;
-  showEthnicity: boolean;
   years: number | null;
   zodiac: string | null;
   languages: string[];
@@ -78,7 +77,7 @@ export function draftOf(reader: OwnerReader | null, defaults: OwnerReaderList["d
   if (!reader) {
     return {
       name: "", bio: "", price: priceText(defaults.price_per_message), categoryIds: [], ethnicity: "",
-      showEthnicity: false, years: null, zodiac: null, languages: [...defaults.languages], email: "",
+      years: null, zodiac: null, languages: [...defaults.languages], email: "",
     };
   }
   return {
@@ -87,7 +86,6 @@ export function draftOf(reader: OwnerReader | null, defaults: OwnerReaderList["d
     price: priceText(reader.price_per_message),
     categoryIds: reader.categories.map((category) => category.id),
     ethnicity: reader.ethnicity ?? "",
-    showEthnicity: reader.show_ethnicity,
     years: reader.years_experience,
     zodiac: reader.zodiac_sign,
     languages: [...reader.languages],
@@ -108,9 +106,6 @@ export function parsePrice(text: string): number | null {
 const sameList = <T,>(a: T[], b: T[]) => a.length === b.length && a.every((item, index) => item === b[index]);
 const sortedIds = (ids: number[]) => [...ids].sort((x, y) => x - y);
 
-/* The tick counts only with an ethnicity to show (the server's rule too). */
-const shownWith = (draft: ReaderDraft) => draft.showEthnicity && singleSpaced(draft.ethnicity) !== "";
-
 /* A new reader's fields. */
 export function newReaderOf(draft: ReaderDraft): NewReader {
   return {
@@ -120,7 +115,6 @@ export function newReaderOf(draft: ReaderDraft): NewReader {
     price_per_message: parsePrice(draft.price) ?? undefined,
     categories_ids: draft.categoryIds,
     ethnicity: singleSpaced(draft.ethnicity) || null,
-    show_ethnicity: shownWith(draft),
     years_experience: draft.years,
     zodiac_sign: draft.zodiac,
     languages: draft.languages,
@@ -141,7 +135,6 @@ export function changesOf(draft: ReaderDraft, reader: OwnerReader): ReaderChange
   }
   const ethnicity = singleSpaced(draft.ethnicity) || null;
   if (ethnicity !== reader.ethnicity) changes.ethnicity = ethnicity;
-  if (shownWith(draft) !== reader.show_ethnicity) changes.show_ethnicity = shownWith(draft);
   if (draft.years !== reader.years_experience) changes.years_experience = draft.years;
   if (draft.zodiac !== reader.zodiac_sign) changes.zodiac_sign = draft.zodiac;
   if (!sameList(draft.languages, reader.languages)) changes.languages = draft.languages;

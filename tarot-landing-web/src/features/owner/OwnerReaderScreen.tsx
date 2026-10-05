@@ -56,8 +56,6 @@ const COPY = {
   moreYears: "One year more",
   yearsEmpty: "Empty shows nothing on her profile.",
   ethnicity: "Ethnicity",
-  consent: "She has agreed to show this on her profile.",
-  notShown: "Without the tick it is kept here and never shown to clients.",
   specialities: "Specialities",
   noSpecialities: "The specialities could not be loaded.",
   price: "Price per message (£)",
@@ -445,20 +443,6 @@ function ReaderForm({
             disabled={busy}
             onChange={(event) => edit({ ethnicity: event.target.value })}
           />
-          {draft.ethnicity.trim() !== "" && (
-            <>
-              <label className="owner-consent">
-                <input
-                  type="checkbox"
-                  checked={draft.showEthnicity}
-                  disabled={busy}
-                  onChange={(event) => edit({ showEthnicity: event.target.checked })}
-                />
-                <span>{COPY.consent}</span>
-              </label>
-              {!draft.showEthnicity && <p className="owner-caption-hint">{COPY.notShown}</p>}
-            </>
-          )}
         </Section>
 
         <Section title={COPY.specialities}>

@@ -156,9 +156,9 @@ def _psychic_to_out(
         years_experience=psychic.years_experience,
         zodiac_sign=psychic.zodiac_sign,
         languages=psychic.languages,
-        # Sensitive: sent only while she has agreed to show it (ROUND54). This
-        # is the one public reader shape (the roster, one reader, the CRM).
-        ethnicity=psychic.ethnicity if psychic.show_ethnicity else None,
+        # Shown whenever it is filled in (ROUND55), like the rest of her
+        # profile, in the one public reader shape (the roster, one reader, the CRM).
+        ethnicity=psychic.ethnicity,
     )
 
 

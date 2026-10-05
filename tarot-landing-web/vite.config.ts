@@ -1,9 +1,37 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Connect, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 import { SERVICE_WORKER_FILE } from "./src/features/client-app/offline/appServiceWorker";
+import { isOwnerPath } from "./src/features/owner/ownerPaths";
+
+/* The owner's phone admin has its own page (ROUND55): the same app as
+   index.html, with the owner's install files in its static head, which is
+   what an iPhone reads when it adds a page to the home screen. nginx.conf
+   serves it for every /owner address; this does the same on the dev server
+   and the preview server, where every other address still gets index.html. */
+const OWNER_PAGE = "owner.html";
+
+const serveOwnerPage: Connect.NextHandleFunction = (req, _res, next) => {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if ((req.method === "GET" || req.method === "HEAD") && isOwnerPath(url.pathname)) {
+    req.url = `/${OWNER_PAGE}${url.search}`;
+  }
+  next();
+};
+
+function ownerPage(): Plugin {
+  return {
+    name: "owner-page",
+    configureServer(server) {
+      server.middlewares.use(serveOwnerPage);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(serveOwnerPage);
+    },
+  };
+}
 
 /* The installed app's service worker (ROUND31, B2). On the client build (not
    the SSR build that prerenders pages) it fills the template
@@ -35,8 +63,18 @@ function appServiceWorker(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), appServiceWorker()],
+  plugins: [react(), tailwindcss(), appServiceWorker(), ownerPage()],
   base: "/",
+  build: {
+    rollupOptions: {
+      // Two pages, one app: both load src/main.tsx, so they share one bundle.
+      // The SSR build (build:ssr) names its own entry, which Vite takes instead.
+      input: {
+        index: fileURLToPath(new URL("./index.html", import.meta.url)),
+        owner: fileURLToPath(new URL(`./${OWNER_PAGE}`, import.meta.url)),
+      },
+    },
+  },
   resolve: {
     alias: [
       { find: "@", replacement: "/src" },

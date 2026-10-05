@@ -10,7 +10,8 @@ import { decodeToken, getRefreshToken, getToken, isTokenExpired } from "@/featur
 export const OWNER_SIGN_IN_REFUSED = "This account cannot use AV Admin.";
 
 /* The home-screen name, also the manifest's name and short_name
-   (public/owner.webmanifest) and the iPhone's apple-mobile-web-app-title. */
+   (public/owner.webmanifest) and owner.html's title and the iPhone's
+   apple-mobile-web-app-title. */
 export const OWNER_APP_NAME = "AV Admin";
 
 export function isOwnerRole(role: string | undefined): boolean {

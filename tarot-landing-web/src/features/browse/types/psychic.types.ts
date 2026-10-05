@@ -39,7 +39,7 @@ export interface Psychic {
   /** one of the twelve signs as the site writes them ("Scorpio") */
   zodiac_sign?: string | null;
   languages?: string[] | null;
-  /** only when she agreed to show it; the server sends null otherwise */
+  /** as the owner wrote it; null when not filled in */
   ethnicity?: string | null;
 }
 

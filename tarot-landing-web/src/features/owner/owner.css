@@ -1124,8 +1124,7 @@
 .owner-shell .owner-readers-tile:focus-visible,
 .owner-shell .owner-reader-row:focus-visible,
 .owner-shell .owner-chip:focus-visible,
-.owner-shell .owner-stepper-button:focus-visible,
-.owner-shell .owner-consent:focus-within {
+.owner-shell .owner-stepper-button:focus-visible {
   outline: 2px solid var(--gl-accent);
   outline-offset: 3px;
 }
@@ -1269,27 +1268,6 @@
 }
 .owner-shell .owner-stepper-button:disabled { opacity: 0.4; cursor: default; }
 .owner-shell .owner-stepper-value { text-align: center; font-variant-numeric: tabular-nums; }
-
-/* The consent tick: the whole row is the target. */
-.owner-shell .owner-consent {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 56px;
-  padding: 8px 4px;
-  border-top: 1px solid rgba(255, 214, 150, 0.14);
-  color: #fffcf4;
-  font: 500 16px/1.4 var(--gl-sans);
-  cursor: pointer;
-}
-.owner-shell .owner-consent input {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  margin: 0;
-  accent-color: #e6c48c;
-  cursor: pointer;
-}
 
 /* The price with its pound sign. */
 .owner-shell .owner-price-field {

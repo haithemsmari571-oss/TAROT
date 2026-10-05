@@ -66,10 +66,9 @@ class User(Base):
     profile_picture_path: Mapped[str] = mapped_column(nullable=True)
     bio: Mapped[str] = mapped_column(nullable=True)
     # A reader's profile (ROUND54), set from the owner's phone
-    # (routers/owner_readers.py); empty on every other account. Ethnicity is
-    # sensitive: clients see it only while show_ethnicity is true, because she
-    # agreed to show it, and services/psychics.py _psychic_to_out is the one
-    # place that decides.
+    # (routers/owner_readers.py); empty on every other account. Clients see
+    # ethnicity whenever it is filled in (ROUND55). show_ethnicity is kept but
+    # nothing reads it: every reader the owner adds or edits stores it as true.
     ethnicity: Mapped[Optional[str]] = mapped_column(String(ETHNICITY_MAX_LENGTH), nullable=True)
     show_ethnicity: Mapped[Optional[bool]] = mapped_column(nullable=True)
     years_experience: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

@@ -1,8 +1,7 @@
 /* A reader's profile as clients read it (ROUND54): her sign, her years
-   reading, the languages she speaks and, only when she agreed to show it, her
-   ethnicity (the server sends it only then, TAROT-BACKEND
-   services/psychics.py _psychic_to_out). Nothing is said for a field the owner
-   has not filled in. The twelve signs and their glyphs are the site's own
+   reading, the languages she speaks and her ethnicity (ROUND55: shown
+   whenever it is filled in, TAROT-BACKEND services/psychics.py
+   _psychic_to_out). Nothing is said for a field the owner has not filled in. The twelve signs and their glyphs are the site's own
    (features/oracle/data/Signs.ts). Drawn by ReaderFacts.tsx. */
 import { SIGNS } from "@/features/oracle/data/Signs";
 

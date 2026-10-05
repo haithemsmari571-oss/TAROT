@@ -23,7 +23,7 @@ YEARS_EXPERIENCE_MAX = 60
 LANGUAGE_NAME_MAX_LENGTH = 40
 
 # Fields an edit may leave out but never send as null.
-_NOT_NULL_ON_EDIT = ("name", "price_per_message", "categories_ids", "languages", "show_ethnicity", "is_listed")
+_NOT_NULL_ON_EDIT = ("name", "price_per_message", "categories_ids", "languages", "is_listed")
 
 
 def _single_spaced(value: str) -> str:
@@ -38,7 +38,6 @@ class _ReaderProfile(BaseModel):
     price_per_message: Optional[float] = Field(default=None, gt=0)
     categories_ids: Optional[List[int]] = None
     ethnicity: Optional[str] = None
-    show_ethnicity: Optional[bool] = None
     years_experience: Optional[int] = Field(default=None, ge=0, le=YEARS_EXPERIENCE_MAX)
     zodiac_sign: Optional[str] = None
     languages: Optional[List[str]] = None
@@ -117,7 +116,6 @@ class OwnerReaderCreate(_ReaderProfile):
     email: EmailStr
     price_per_message: float = Field(default=DEFAULT_PRICE_PER_MESSAGE, gt=0)
     categories_ids: List[int] = []
-    show_ethnicity: bool = False
     languages: List[str] = list(DEFAULT_LANGUAGES)
 
     @field_validator("email")
@@ -151,8 +149,6 @@ class OwnerReaderRead(BaseModel):
     categories: List[PsychicCategoryRead]
     is_listed: bool
     ethnicity: Optional[str] = None
-    # Whether she agreed to show her ethnicity on her profile.
-    show_ethnicity: bool
     years_experience: Optional[int] = None
     zodiac_sign: Optional[str] = None
     languages: List[str]

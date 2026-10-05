@@ -7,6 +7,15 @@ import {
   clearTokens,
   isTokenExpired
 } from "@/features/auth/utils";
+import { OWNER_SIGN_IN_PATH, isOwnerPath } from "@/features/owner/ownerPaths";
+
+/* Where a session that cannot be refreshed signs in again: on the owner's
+   pages, the owner's own sign-in, so AV Admin never leaves /owner for the
+   website's /login, which sends the superadmin on to the CRM (ROUND55);
+   everywhere else /login. */
+function signInPathHere(): string {
+  return isOwnerPath(window.location.pathname) ? OWNER_SIGN_IN_PATH : "/login";
+}
 
 const axiosClient = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL}/api`,
@@ -123,8 +132,9 @@ axiosClient.interceptors.response.use(
       if (!refreshToken) {
         // No refresh token, redirect to login
         clearTokens();
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
+        const signInPath = signInPathHere();
+        if (window.location.pathname !== signInPath) {
+          window.location.href = signInPath;
         }
         return Promise.reject(error);
       }
@@ -161,9 +171,10 @@ axiosClient.interceptors.response.use(
         // Refresh failed, clear tokens and redirect
         processQueue(refreshError as Error, null);
         clearTokens();
-        if (window.location.pathname !== "/login") {
+        const signInPath = signInPathHere();
+        if (window.location.pathname !== signInPath) {
           console.log("Redirecting to login after refresh failure");
-          window.location.href = "/login";
+          window.location.href = signInPath;
         }
         return Promise.reject(refreshError);
       } finally {

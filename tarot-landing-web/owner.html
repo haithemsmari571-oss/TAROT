@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The same viewport as index.html (viewport-fit=cover, pinch-zoom kept). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- The owner's phone admin, AV Admin (ROUND55): the same app as
+         index.html (src/main.tsx, one bundle), served for every /owner address
+         (nginx.conf; vite.config.ts ownerPage on the dev server). Its install
+         files are in this static head because an iPhone reads only the served
+         HTML when it adds a page to the home screen: the owner's manifest
+         (start_url and scope /owner/), its icon and its name, OWNER_APP_NAME
+         (src/features/owner/ownerSession.ts). The theme colour is index.html's. -->
+    <link rel="manifest" href="/owner.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/owner-apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="AV Admin" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#120c18" />
+    <!-- Kept out of search, as NOINDEX (src/seo/seoData.ts) and public/robots.txt. -->
+    <meta name="robots" content="noindex" />
+
+    <!-- The two faces the owner's screens draw, as index.html preloads them. -->
+    <link rel="preload" href="/src/assets/fonts/fraunces-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/src/assets/fonts/inter-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
+
+    <title>AV Admin</title>
+  </head>
+  <body style="background-color: #0B0B0B;"> <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
