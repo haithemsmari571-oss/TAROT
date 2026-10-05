@@ -16,6 +16,30 @@ PREVIEW_LENGTH = 160
 logger = get_logger(__name__)
 
 
+def picture_url(path, base_url):
+    """A stored profile picture as a URL: kept when already absolute, else
+    under the app's base URL. Also the owner's inbox (owner_messaging.py)."""
+    if path and not path.startswith(("https://", "http://")):
+        return base_url.rstrip("/") + "/" + path.lstrip("/")
+    return path
+
+
+def receipt_state(status):
+    """A message's receipt in the app's words: seen, delivered or sent."""
+    return {
+        MessageStatus.READ: "seen", MessageStatus.DELIVERED: "delivered",
+    }.get(status, "sent")
+
+
+def preview_text(column):
+    """A message's text cut to PREVIEW_LENGTH, as SQL."""
+    return case(
+        (func.length(column) > PREVIEW_LENGTH,
+         func.substr(column, 1, PREVIEW_LENGTH - 1) + "…"),
+        else_=column,
+    )
+
+
 def mark_chat_opened(db, chat_id, client_id):
     """Ownership checked in the UPDATE; never called by reply generation.
 
@@ -43,11 +67,7 @@ def _inbox_query(client_id, offset, limit):
     messages = select(
         Message.id, Message.chat_id, Message.sender_id, Message.status,
         Message.created_at, Message.author_type,
-        case(
-            (func.length(Message.content) > PREVIEW_LENGTH,
-             func.substr(Message.content, 1, PREVIEW_LENGTH - 1) + "…"),
-            else_=Message.content,
-        ).label("preview"),
+        preview_text(Message.content).label("preview"),
     ).join(owned, owned.c.id == Message.chat_id).where(
         Message.is_system.is_(False)
     ).cte("inbox_messages")
@@ -112,13 +132,11 @@ def list_client_chats(db, client_id, *, offset, limit):
         total = db.scalar(select(func.count()).select_from(Chat).where(Chat.user_id == client_id))
         rows = db.execute(_inbox_query(client_id, offset, limit)).mappings().all()
         now = datetime.now(timezone.utc)
-        base_url = get_app_settings().APP_BASE_URL.rstrip("/")
+        base_url = get_app_settings().APP_BASE_URL
         items = []
         for row in rows:
             availability = reader_availability(row.online_from, row.online_to, now=now)
-            picture = row.profile_picture_path
-            if picture and not picture.startswith(("https://", "http://")):
-                picture = base_url + "/" + picture.lstrip("/")
+            picture = picture_url(row.profile_picture_path, base_url)
             last_message = None
             if row.last_message_id is not None:
                 last_message = {
@@ -130,9 +148,7 @@ def list_client_chats(db, client_id, *, offset, limit):
                 }
             state = None
             if row.client_last_message_id is not None:
-                state = {
-                    MessageStatus.READ: "seen", MessageStatus.DELIVERED: "delivered",
-                }.get(row.client_last_message_status, "sent")
+                state = receipt_state(row.client_last_message_status)
             items.append({
                 "chat_id": row.chat_id, "chat_status": row.chat_status.value,
                 "reader": {

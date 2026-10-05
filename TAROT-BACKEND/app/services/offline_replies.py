@@ -49,6 +49,13 @@ def _write(debit, queue):
     debit.transaction_metadata = json.dumps(metadata)
 
 
+def pending_state():
+    """The SQL test for an entry still waiting (queued or delivering), on a
+    debit row. One source for the sweep below and the owner's inbox
+    (owner_messaging.py)."""
+    return cast(Transaction.transaction_metadata, JSON)[QUEUE_KEY]["state"].as_string().in_(PENDING_STATES)
+
+
 def _pending(db):
     return (
         db.query(Transaction, Message, Chat)
@@ -57,7 +64,7 @@ def _pending(db):
         .filter(
             Transaction.transaction_type == TransactionType.DEBIT,
             Transaction.status == TransactionStatus.COMPLETED,
-            cast(Transaction.transaction_metadata, JSON)[QUEUE_KEY]["state"].as_string().in_(PENDING_STATES),
+            pending_state(),
         )
         .order_by(Message.created_at, Message.id)
     )
@@ -144,37 +151,79 @@ def _owned(db, message_id, token):
     return debit, queue
 
 
+def _leased(queue, now):
+    return bool(queue.get("lease_until")) and datetime.fromisoformat(queue["lease_until"]) > now
+
+
+def _take(db, debit, message, now):
+    """Fence one waiting entry for the automatic reader: the token and lease a
+    wake claim has, committed. None when it is not claimable now."""
+    queue = _metadata(debit).get(QUEUE_KEY)
+    if debit.status != TransactionStatus.COMPLETED or not queue or queue["state"] not in PENDING_STATES:
+        return None
+    if not queue["reply_ids"] and message.created_at <= now - OFFLINE_REPLY_TIMEOUT:
+        return None  # Expiry is handled before any wake claims.
+    if _leased(queue, now):
+        return None
+    token = uuid4().hex
+    queue.update(state="delivering", token=token, lease_until=(now + LEASE_DURATION).isoformat())
+    _write(debit, queue)
+    db.commit()
+    return token
+
+
+def _covered(db, queue):
+    """True while the entry waits inside another message's one reply
+    (hand_to_automatic) and that message is still waiting for it."""
+    head_id = queue.get("covered_by")
+    if head_id is None:
+        return False
+    head = _debit(db, head_id)
+    head_queue = _metadata(head).get(QUEUE_KEY) if head is not None else None
+    return bool(head_queue) and head_queue.get("state") in PENDING_STATES
+
+
 def claim_next(reader_id):
     """Claim only the reader's oldest outstanding message, across her automatic
     chats. A chat a person answers (HUMAN or HYBRID) is never answered here, even
-    for a message queued before it was switched; switched back, it is again."""
+    for a message queued before it was switched; switched back, it is again. A
+    message another one's reply covers (hand_to_automatic) is left to that one."""
     with SessionLocal() as db:
         # Serialize claims for one reader, including across backend processes.
         reader = db.query(User).filter(User.id == reader_id).with_for_update().one()
         if not reader_availability(reader.online_from, reader.online_to).is_online:
             return None
-        row = (
+        rows = (
             _pending(db)
             .filter(Chat.psychic_id == reader_id, Chat.response_mode == ResponseMode.SABRI)
-            .first()
+            .all()
         )
+        row = next((r for r in rows if not _covered(db, _metadata(r[0])[QUEUE_KEY])), None)
         if row is None:
             return None
         debit, message, chat = row
         debit = _debit(db, message.id, lock=True)
-        queue = _metadata(debit)[QUEUE_KEY]
-        if debit.status != TransactionStatus.COMPLETED or queue["state"] not in PENDING_STATES:
+        token = _take(db, debit, message, _now())
+        return (chat.id, message.id, token) if token is not None else None
+
+
+def claim(message_id):
+    """The automatic reader takes this one message's entry now, as claim_next
+    takes a reader's oldest: only on an automatic chat whose reader keeps her
+    hours now, only an entry no lease holds. Returns its token, or None, and the
+    sweep then takes it when it can."""
+    with SessionLocal() as db:
+        message = db.get(Message, message_id)
+        chat = db.get(Chat, message.chat_id) if message is not None else None
+        if chat is None:
             return None
-        now = _now()
-        if not queue["reply_ids"] and message.created_at <= now - OFFLINE_REPLY_TIMEOUT:
-            return None  # Expiry is handled before any wake claims.
-        if queue.get("lease_until") and datetime.fromisoformat(queue["lease_until"]) > now:
+        reader = db.query(User).filter(User.id == chat.psychic_id).with_for_update().one()
+        if chat.response_mode != ResponseMode.SABRI or not reader_availability(
+            reader.online_from, reader.online_to
+        ).is_online:
             return None
-        token = uuid4().hex
-        queue.update(state="delivering", token=token, lease_until=(now + LEASE_DURATION).isoformat())
-        _write(debit, queue)
-        db.commit()
-        return chat.id, message.id, token
+        debit = _debit(db, message_id, lock=True)
+        return _take(db, debit, message, _now()) if debit is not None else None
 
 
 def renew(message_id, token):
@@ -238,13 +287,107 @@ def persist_bubble(db, chat, text, message_id, token, position):
     message = prepare_ai_message(db, chat, text)
     db.flush()
     queue["reply_ids"].append(message.id)
+    if len(queue["reply_ids"]) == 1:
+        # One reply answers every message it covers (hand_to_automatic): its
+        # first bubble closes them, in this same commit.
+        for covered_id in queue.get("covers", []):
+            covered = _debit(db, covered_id, lock=True)
+            covered_queue = _metadata(covered).get(QUEUE_KEY) if covered is not None else None
+            if covered_queue and covered_queue["state"] in PENDING_STATES and not covered_queue["reply_ids"]:
+                _close(covered, covered_queue, message.id)
     if len(queue["reply_ids"]) == len(queue["bubbles"]):
         queue.update(state="delivered", completed_at=_now().isoformat(), lease_until=None)
     _write(debit, queue)
     return message
 
 
-def _reader_reply_after(db, chat, message):
+def _close(debit, queue, reply_id):
+    """Close a waiting entry as answered by ``reply_id``: no refund will come."""
+    queue.update(state="delivered", reply_ids=[reply_id],
+                 completed_at=_now().isoformat(), lease_until=None)
+    _write(debit, queue)
+
+
+def _entries(db, chat, *, lock=False):
+    """The chat's waiting entries, oldest message first: (debit, message, queue).
+    With ``lock`` each is re-read under its row lock, for a caller that writes."""
+    entries = []
+    for debit, message, _chat in _pending(db).filter(Chat.id == chat.id).all():
+        if lock:
+            debit = _debit(db, message.id, lock=True)
+        queue = _metadata(debit).get(QUEUE_KEY) if debit is not None else None
+        if queue and debit.status == TransactionStatus.COMPLETED and queue["state"] in PENDING_STATES:
+            entries.append((debit, message, queue))
+    return entries
+
+
+def unanswered(db, chat):
+    """Her paid messages in ``chat`` still owed a reply, oldest first: a waiting
+    entry with nothing written on the reader's side since (reader_reply_after,
+    the rule the window applies to a chat a person answers). What a suggestion
+    answers, and what a switch to Automatic hands to the automatic reader.
+    Takes no lock."""
+    return [message for _debit_row, message, _queue in _entries(db, chat)
+            if reader_reply_after(db, chat, message) is None]
+
+
+def close_answered(db, chat):
+    """No commit here. Close every waiting entry in ``chat`` that the reader's
+    side has answered since, as refund_queued closes one at the window. An entry
+    the automatic reader has begun to deliver (reply_ids) is left to it; one a
+    worker holds but has not delivered is fenced by this, so it never sends.
+    Returns the message ids closed."""
+    closed = []
+    for debit, message, queue in _entries(db, chat, lock=True):
+        if queue["reply_ids"]:
+            continue
+        reply_id = reader_reply_after(db, chat, message)
+        if reply_id is not None:
+            _close(debit, queue, reply_id)
+            closed.append(message.id)
+    return closed
+
+
+def hand_to_automatic(db, chat):
+    """No commit here. On a switch to Automatic, after close_answered, the
+    messages still unanswered become ONE turn of the automatic reader: each entry
+    loses the person's mark (manual), a live mark, any reply saved for it alone
+    and any earlier cover; the newest is the head and lists the others (covers),
+    which claim_next then leaves to it (covered_by). An entry a live reply or a
+    worker holds (a lease) is left to it. Returns the head's message id, or None."""
+    now = _now()
+    turn = []
+    for debit, message, queue in _entries(db, chat, lock=True):
+        if queue["reply_ids"] or queue.get("token") or _leased(queue, now):
+            continue
+        if reader_reply_after(db, chat, message) is not None:
+            continue
+        for key in ("manual", "live", "bubbles", "covers", "covered_by"):
+            queue.pop(key, None)
+        turn.append((debit, message, queue))
+    if not turn:
+        return None
+    head_debit, head, head_queue = turn[-1]
+    for debit, _message, queue in turn[:-1]:
+        queue["covered_by"] = head.id
+        _write(debit, queue)
+    if len(turn) > 1:
+        head_queue["covers"] = [message.id for _debit_row, message, _queue in turn[:-1]]
+    _write(head_debit, head_queue)
+    return head.id
+
+
+def _uncover(db, queue):
+    """The head's reply will not come (refunded): what it covered waits on its
+    own again, for the sweep to answer or refund."""
+    for covered_id in queue.get("covers", []):
+        covered = _debit(db, covered_id, lock=True)
+        covered_queue = _metadata(covered).get(QUEUE_KEY) if covered is not None else None
+        if covered_queue and covered_queue.pop("covered_by", None) is not None:
+            _write(covered, covered_queue)
+
+
+def reader_reply_after(db, chat, message):
     """The id of the first message the reader's side wrote in the chat after
     ``message``, or None. A person at the reader's socket, an approved draft and
     the automatic reader are all stored as the reader (save_message,
@@ -285,11 +428,9 @@ def refund_queued(message_id, *, token=None, expired=False):
             # A person answers this chat, so no reply_ids are written. If the
             # reader's side has written since her message, it was answered and
             # the entry closes without a refund.
-            reply_id = _reader_reply_after(db, chat, message)
+            reply_id = reader_reply_after(db, chat, message)
             if reply_id is not None:
-                queue.update(state="delivered", reply_ids=[reply_id],
-                             completed_at=_now().isoformat(), lease_until=None)
-                _write(debit, queue)
+                _close(debit, queue, reply_id)
                 db.commit()
                 return None
         # The quiet line in her thread, which announce_refund later finds by note_id.
@@ -297,6 +438,7 @@ def refund_queued(message_id, *, token=None, expired=False):
         queue.update(state="refunded", refunded_at=_now().isoformat(), lease_until=None,
                      reason="expired" if expired else "generation_failed", note_id=note.id)
         _write(debit, queue)
+        _uncover(db, queue)
         # refund_message commits the reversal, this terminal queue state and the
         # line together; if it refunds nothing, none of them is kept.
         reversal = refund_message(db, message_id)

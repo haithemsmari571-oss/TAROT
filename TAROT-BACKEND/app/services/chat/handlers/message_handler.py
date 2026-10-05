@@ -321,13 +321,14 @@ class MessageHandler(BaseEventHandler):
             # queue entry, committed with the charge, leaves it to the offline
             # sweep, which answers it or refunds it.
             from app.enums.response_mode import ResponseMode
+            from app.services.ai import reading_single
+            from app.services.owner_messaging import CLIENT_MESSAGE, notify_owner
 
             if chat.response_mode == ResponseMode.SABRI:
-                from app.services.ai import reading_single
-
                 await reading_single.enqueue_reply(
                     self.chat_id, db_message.id, committed_at=message_committed_at
                 )
+                notify_owner(self.chat_id, CLIENT_MESSAGE)
             else:
                 logger.info(
                     "per_message_manual_reader",
@@ -335,6 +336,10 @@ class MessageHandler(BaseEventHandler):
                     message_id=db_message.id,
                     response_mode=chat.response_mode.value,
                 )
+                # Hybrid (or a legacy HUMAN chat): a suggested reply for the
+                # owner, written fresh for all her unanswered messages and never
+                # sent without him (the owner is told once it is stored).
+                reading_single.request_suggestion(self.chat_id)
         elif chat.status == ChatStatus.ACTIVE:
             try:
                 from app.services.ai import reading_burst

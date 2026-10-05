@@ -263,6 +263,9 @@ async def start_automatic_conversation(db: Session, user: User, request: ChatSta
     await reading_single.enqueue_reply(
         result["chat_id"], result["message_id"], committed_at=committed_at
     )
+    from app.services.owner_messaging import CLIENT_MESSAGE, notify_owner
+
+    notify_owner(result["chat_id"], CLIENT_MESSAGE)
     return result
 
 

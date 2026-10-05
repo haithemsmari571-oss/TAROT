@@ -52,6 +52,7 @@ from app.routers.library_items import (
     admin_router as library_items_admin_router,
     public_router as library_items_public_router,
 )
+from app.routers.owner_messaging import router as owner_messaging_router
 
 # Configure logging
 configure_logging()
@@ -237,6 +238,11 @@ app.include_router(
     library_items_admin_router,
     prefix="/api/admin/library-items",
     tags=["Admin - Library Items"],
+)
+app.include_router(
+    owner_messaging_router,
+    prefix="/api/admin",
+    tags=["Admin - Owner Messaging"],
 )
 
 app.include_router(

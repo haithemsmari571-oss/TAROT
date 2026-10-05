@@ -436,12 +436,17 @@ def prepare_ai_message(
     content: str,
     *,
     chat_session_id: int | None = None,
+    author_type=None,
 ) -> Message:
     """Stage one AI reader message without committing it.
 
     Burst delivery uses this seam to advance its durable delivery position in
     the same transaction as the Message row. Existing callers retain the
     commit-on-call contract through ``persist_ai_message`` below.
+
+    ``author_type`` defaults to AI_DRAFTED; the owner's phone stores a person's
+    reply as the reader with HUMAN_PSYCHIC, as the reader's socket does
+    (owner_messaging.send_as_reader).
     """
     from app.enums.author_type import AuthorType
     from app.enums.message_status import MessageStatus
@@ -457,7 +462,7 @@ def prepare_ai_message(
         ),
         sender_id=chat.psychic_id,
         content=content,
-        author_type=AuthorType.AI_DRAFTED,
+        author_type=author_type or AuthorType.AI_DRAFTED,
     )
     if chat.user_id in manager.users_in_chat(str(chat.id)):
         message.status = MessageStatus.READ

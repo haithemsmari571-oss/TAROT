@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.config import get_app_settings
 from app.database.client import get_db
 from app.dependencies.get_current_user import get_current_user
 from app.enums.ai_draft_status import AiDraftStatus
@@ -94,6 +95,17 @@ async def set_response_mode(
         return JSONResponse(content={"detail": "Chat not found"}, status_code=404)
     if not _authorize(user, chat):
         return JSONResponse(content={"detail": "Not authorized"}, status_code=403)
+
+    if get_app_settings().BILLING_MODE == "per_message":
+        # A per-message conversation switches through the one function the
+        # owner's phone uses, with its double-reply guards.
+        from app.services.owner_messaging import set_conversation_mode
+
+        await set_conversation_mode(db, chat_id, payload.mode, by=user.id)
+        return JSONResponse(
+            content={"chat_id": chat_id, "response_mode": payload.mode.value},
+            status_code=200,
+        )
 
     chat.response_mode = payload.mode
     db.commit()

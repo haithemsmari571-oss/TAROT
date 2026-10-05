@@ -12,6 +12,13 @@ What this module owns:
     say_goodbye(chat_id)                 one unbilled closing bubble when she ends
     drain_on_end(chat_id)                refund what was queued and never started
     build_single_input(db, chat, ...)    the material the prompt is handed
+    request_suggestion(chat_id)          the same reply written for the owner, on a
+                                         chat a person answers, and never sent
+    record_reader_reply(db, chat, msg)   a reply the owner sent, into the memory
+
+An automatic reply goes out only while its chat is Automatic (ResponseMode.SABRI):
+the mode is read again before the call, when the reply is written and before
+the first bubble.
 
 What it reuses rather than copies: the session capsule (reading_capsule), the
 verified facts block (reading_client_facts), the Atlas memory fetch
@@ -62,6 +69,10 @@ PROMPT_KEY = "reading.single"
 ENGINE = "single"
 STAGE_REPLY = "single_reply"
 STAGE_GOODBYE = "single_goodbye"
+STAGE_SUGGESTION = "single_suggestion"
+# A suggestion keeps the reply's bubbles as one text, a blank line between
+# them: the boundary _parse_reply splits a reply on.
+BUBBLE_JOIN = "\n\n"
 MAX_ATTEMPTS = 2
 UNREACHABLE_NOTICE = (
     "i couldn't reach u this time. that message is refunded, try again in a moment"
@@ -86,6 +97,12 @@ _queue_tokens: Dict[Tuple[int, int], str] = {}
 # Per held message: the task renewing its lease from enqueue to the end of its
 # turn, so a message waiting its turn behind others is never taken by the sweep.
 _leases: Dict[Tuple[int, int], asyncio.Task] = {}
+# Per chat: the message ids the turn in flight answers (its own and its covers).
+_turn_covers: Dict[int, set] = {}
+# Per chat, for a person-answered chat (Hybrid, or a legacy HUMAN one): the task
+# writing the owner's suggestion, and the chats wanting a fresh one written.
+_suggesters: Dict[int, asyncio.Task] = {}
+_suggest_wanted: set = set()
 
 # Test seams for all presence deadlines. Use monotonic time for waiting and UTC
 # for the commit anchor and delivery logs.
@@ -194,10 +211,12 @@ async def _receipts(chat_id: int, message_id: int, client_id: int, presence: _Pr
         )
 
 
-async def _start_typing(presence: _Presence, typing: _Typing, message_id=None, queue_token=None) -> None:
+async def _start_typing(presence: _Presence, typing: _Typing, message_id=None, queue_token=None, automatic_only=False) -> None:
     if presence.receipts is not None:
         await presence.receipts
     await _sleep_until(presence.origin + (presence.seen_ms + presence.think_ms) / 1000)
+    if automatic_only and not _is_automatic(typing.chat_id):
+        return  # A person answers this chat now: no dots for a reply that will not come.
     if queue_token is not None:
         from app.services.offline_replies import receipt
 
@@ -221,6 +240,10 @@ async def _clear_presence(chat_id: int, message_id: int) -> None:
 
 class _EmptyReply(Exception):
     """The model answered, but nothing survived the parse."""
+
+
+class _Held(Exception):
+    """The chat stopped being Automatic before the reply's first bubble."""
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -417,7 +440,178 @@ async def wait_for_idle(chat_id: int) -> None:
             pass
 
 
-def build_single_input(db, chat, answer_message_id=None, ended=False) -> str:
+def record_reader_reply(db, chat, message) -> None:
+    """A message sent as the reader outside this engine (the owner's phone,
+    owner_messaging.send_as_reader) joins the engine's memory as a delivered
+    bubble does: the transcript catches up from the messages table, so her
+    messages and the reply are read in order with their ids, and the reply's
+    commitments go to the ledger."""
+    state = _state_for(chat)
+    _catch_up_transcript(db, state, chat)
+    record_commitments(state, message.content or "")
+    get_session_store().put(state)
+    schedule_fold(chat.id)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# The owner's suggestion, on a chat a person answers (Hybrid, or legacy HUMAN)
+# ═════════════════════════════════════════════════════════════════════════════
+def request_suggestion(chat_id: int, *, fresh: bool = True) -> None:
+    """Have one suggestion written for every unanswered paid message of hers in
+    a chat a person answers: the same build, call and parse as an automatic
+    reply, stored for the owner (owner_messaging.store_suggestion), never sent
+    and never shown to her (no typing, no receipt).
+
+    ``fresh`` (a new message of hers, or the owner's regenerate): writing already
+    under way starts again once it ends, so the stored one answers everything.
+    Not fresh (a chat just handed to a person): nothing starts while one is being
+    written, or when the stored one already answers her newest message. Must be
+    called on the event loop."""
+    if not fresh:
+        from app.services.owner_messaging import suggestion_is_current
+
+        if is_suggesting(chat_id) or suggestion_is_current(chat_id):
+            return
+    _suggest_wanted.add(chat_id)
+    task = _suggesters.get(chat_id)
+    if task is None or task.done():
+        task = asyncio.create_task(_suggest(chat_id))
+        _suggesters[chat_id] = task
+        task.add_done_callback(lambda done, cid=chat_id: _clear_suggester(cid, done))
+
+
+def is_suggesting(chat_id: int) -> bool:
+    task = _suggesters.get(chat_id)
+    return task is not None and not task.done()
+
+
+def turn_covers(chat_id: int) -> set:
+    """The message ids the automatic turn in flight answers; empty when none."""
+    return set(_turn_covers.get(chat_id, ()))
+
+
+def _clear_suggester(chat_id: int, done: asyncio.Task) -> None:
+    if _suggesters.get(chat_id) is done:
+        _suggesters.pop(chat_id, None)
+    if not done.cancelled() and done.exception() is not None:
+        logger.error(
+            "reading_single_suggester_crashed", chat_id=chat_id, error=str(done.exception())
+        )
+
+
+async def _suggest(chat_id: int) -> None:
+    while chat_id in _suggest_wanted:
+        _suggest_wanted.discard(chat_id)
+        try:
+            await _suggest_once(chat_id)
+        except Exception as error:  # noqa: BLE001 - the owner can ask again
+            logger.error(
+                "reading_single_suggestion_crashed",
+                chat_id=chat_id,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
+
+
+async def _suggest_once(chat_id: int) -> None:
+    from app.database.client import SessionLocal
+    from app.enums.response_mode import ResponseMode
+    from app.models.chat import Chat
+    from app.services import offline_replies
+    from app.services.owner_messaging import store_suggestion
+
+    settings = get_app_settings()
+    with SessionLocal() as db:
+        chat = db.get(Chat, chat_id)
+        if chat is None or chat.response_mode == ResponseMode.SABRI:
+            return
+        waiting = offline_replies.unanswered(db, chat)
+        if not waiting:
+            return
+        through_id = waiting[-1].id
+        earlier_ids = [m.id for m in waiting[:-1]]
+        client_text = waiting[-1].content or ""
+        state = _state_for(chat)
+        await _atlas_memory(state, chat.user_id, chat.psychic_id)
+        user_input = build_single_input(
+            db, chat, answer_message_id=through_id, also_answering=earlier_ids
+        )
+        turn_number = state.messages_sent_count
+    thinking = thinking_for_turn(client_text)
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            raw, model = await _generate(user_input, thinking, settings)
+        except Exception as error:  # noqa: BLE001 - any SDK error is one failed attempt
+            failure = f"{type(error).__name__}: {error}"
+            if isinstance(error, asyncio.TimeoutError):
+                failure = f"timeout after {settings.SINGLE_CALL_TIMEOUT_S}s"
+            _log_attempt(chat_id, turn_number, attempt, STAGE_SUGGESTION, error=failure)
+            logger.warning(
+                "reading_single_suggestion_attempt_failed",
+                chat_id=chat_id, attempt=attempt, error=failure,
+            )
+            continue
+        if chat_id in _suggest_wanted:
+            return  # She wrote again meanwhile: the next pass answers it all.
+        bubbles, notes = _parse_reply(raw, chat_id=chat_id, message_id=through_id)
+        _log_attempt(
+            chat_id, turn_number, attempt, STAGE_SUGGESTION, raw=raw, notes=notes,
+            error=None if bubbles else "empty parsed output",
+        )
+        if not bubbles:
+            continue
+        suggestion_id = store_suggestion(chat_id, through_id, bubbles, attempt)
+        logger.info(
+            "reading_single_suggestion",
+            chat_id=chat_id,
+            suggestion_id=suggestion_id,
+            through_message_id=through_id,
+            answers=len(earlier_ids) + 1,
+            attempt=attempt,
+            bubbles=len(bubbles),
+            model=model,
+        )
+        return
+    logger.warning(
+        "reading_single_suggestion_failed", chat_id=chat_id, through_message_id=through_id
+    )
+
+
+def _keep_as_suggestion(chat_id: int, message_id: int, bubbles: List[str], attempt: int) -> None:
+    """An automatic reply written for a chat a person took over before it went
+    out: kept as the owner's suggestion instead of thrown away, unless a newer
+    one is already stored. A suggestion is then written only if she has sent
+    something it does not answer."""
+    from app.services.owner_messaging import store_suggestion
+
+    logger.info(
+        "reading_single_held_for_person", chat_id=chat_id, message_id=message_id,
+        stage="before_delivering",
+    )
+    try:
+        store_suggestion(chat_id, message_id, bubbles, attempt, replace_newer=False)
+    except Exception as error:  # noqa: BLE001 - the owner can ask for one
+        logger.error(
+            "reading_single_keep_suggestion_failed",
+            chat_id=chat_id,
+            message_id=message_id,
+            error_type=type(error).__name__,
+            error=str(error),
+        )
+    request_suggestion(chat_id, fresh=False)
+
+
+def _is_automatic(chat_id: int) -> bool:
+    from app.database.client import SessionLocal
+    from app.enums.response_mode import ResponseMode
+    from app.models.chat import Chat
+
+    with SessionLocal() as db:
+        chat = db.get(Chat, chat_id)
+        return chat is not None and chat.response_mode == ResponseMode.SABRI
+
+
+def build_single_input(db, chat, answer_message_id=None, ended=False, *, also_answering=()) -> str:
     """Assemble the material the reading.single prompt is handed, in this order:
 
       1. READER IDENTITY, from the chat's psychic row (name, specialisms, bio)
@@ -433,12 +627,19 @@ def build_single_input(db, chat, answer_message_id=None, ended=False) -> str:
       7. THE MESSAGE TO REPLY TO NOW, or with ``ended`` a SYSTEM NOTE that the
          client has ended the reading and there is nothing to answer
 
+    ``also_answering``: earlier unanswered messages of hers that the same one
+    reply answers (a suggestion, or the one turn of a switch to Automatic). They
+    join the marked message in item 7, in order, in the client-turn format the
+    two-role engine uses (reading_burst.format_client_turn), and leave the
+    capsule as the marked message does.
+
     The transcript is the engine's own session transcript, caught up from the
     messages table: rows newer than anything recorded are appended, and the
     answered message is always present as the last entry. Every builder here is
     the existing one. The state this updates is persisted before returning."""
     from app.models.message import Message
     from app.services.ai import reading_assistant, reading_steering
+    from app.services.ai.reading_burst import format_client_turn
     from app.services.client_dossier import get_client_dob
 
     store = get_session_store()
@@ -450,16 +651,22 @@ def build_single_input(db, chat, answer_message_id=None, ended=False) -> str:
         if answered is None or answered.chat_id != chat.id:
             raise ValueError(f"message {answer_message_id} is not in chat {chat.id}")
     _catch_up_transcript(db, state, chat, upto=answered)
-    answered_entry = _entry_for(state, answered.id) if answered is not None else None
+    marked = []
+    if answered is not None:
+        earlier = [db.get(Message, message_id) for message_id in also_answering]
+        marked = [m for m in earlier if m is not None and m.chat_id == chat.id] + [answered]
+    marked_entries = [_entry_for(state, m.id) for m in marked]
 
     client_file = reading_assistant.build_client_file(db, chat.user_id)
     state.client_file = client_file
     date_of_birth = get_client_dob(db, chat.user_id)
     gender = getattr(getattr(chat, "user", None), "gender", None)
-    client_text = (answered.content or "") if answered is not None else None
+    client_text = format_client_turn([m.content or "" for m in marked]) if marked else None
 
     view = copy.copy(state)
-    view.chat_transcript = [e for e in state.chat_transcript if e is not answered_entry]
+    view.chat_transcript = [
+        e for e in state.chat_transcript if not any(e is entry for entry in marked_entries)
+    ]
 
     parts: List[str] = []
     identity = _reader_identity_block(getattr(chat, "psychic", None))
@@ -553,10 +760,13 @@ async def _reply(chat_id: int, message_id: int) -> None:
         typing = _Typing(chat_id, chat.psychic_id)
     presence = _presence[(chat_id, message_id)]
     token = _queue_tokens.get((chat_id, message_id))
-    ready = asyncio.create_task(_start_typing(presence, typing, message_id, token))
+    ready = asyncio.create_task(
+        _start_typing(presence, typing, message_id, token, automatic_only=True)
+    )
     try:
         await _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=token)
     finally:
+        _turn_covers.pop(chat_id, None)
         await _cancel_task(ready)
         await typing.set(False)
 
@@ -581,12 +791,31 @@ async def _renew_lease(message_id, token):
 async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=None) -> None:
     """One paid client message: build, call (retry once), parse, deliver, record.
     Both attempts failing means her money back and one honest line. Calls stay
-    serial so the next input contains this reply; presence runs alongside them."""
+    serial so the next input contains this reply; presence runs alongside them.
+
+    The reply also answers the messages its entry covers (a switch to Automatic,
+    offline_replies.hand_to_automatic). It goes out only while the chat is
+    Automatic: the mode is read again before the call, as soon as the reply is
+    written and, under the chat's row lock, before the first bubble; the typing
+    dots do not start once it is not. Taken over by a person in between, nothing
+    is sent: the written reply becomes the owner's suggestion, and her message
+    keeps its 24 hour promise."""
     from app.database.client import SessionLocal
+    from app.enums.response_mode import ResponseMode
     from app.models.chat import Chat
     from app.models.message import Message
 
     settings = get_app_settings()
+    saved = None
+    covers: List[int] = []
+    if queue_token is not None:
+        from app.services.offline_replies import saved_reply
+
+        saved = saved_reply(message_id, queue_token)
+        if saved is None:
+            return
+        covers = list(saved.get("covers") or [])
+    _turn_covers[chat_id] = {message_id, *covers}
     with SessionLocal() as db:
         chat = db.get(Chat, chat_id)
         message = db.get(Message, message_id)
@@ -595,26 +824,32 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=
                 "reading_single_message_missing", chat_id=chat_id, message_id=message_id
             )
             return
+        if chat.response_mode != ResponseMode.SABRI:
+            logger.info(
+                "reading_single_held_for_person", chat_id=chat_id, message_id=message_id,
+                response_mode=chat.response_mode.value, stage="before_generating",
+            )
+            request_suggestion(chat_id, fresh=False)
+            return
         state = _state_for(chat)
         await _atlas_memory(state, chat.user_id, chat.psychic_id)
-        user_input = build_single_input(db, chat, answer_message_id=message_id)
+        user_input = build_single_input(
+            db, chat, answer_message_id=message_id, also_answering=covers
+        )
         client_text = message.content or ""
         asked_at = presence.committed_at
         psychic_id = chat.psychic_id
 
-    if queue_token is not None:
-        from app.services.offline_replies import saved_reply
-
-        saved = saved_reply(message_id, queue_token)
-        if saved is None:
-            return
-        if saved.get("bubbles"):
+    if saved is not None and saved.get("bubbles"):
+        try:
             await _deliver(
                 chat_id, psychic_id, saved["bubbles"], state, typing=typing, ready=ready,
                 queue_message_id=message_id, queue_token=queue_token,
-                start_position=len(saved["reply_ids"]),
+                start_position=len(saved["reply_ids"]), automatic_only=True,
             )
-            return
+        except _Held:
+            _keep_as_suggestion(chat_id, message_id, saved["bubbles"], 1)
+        return
 
     thinking = thinking_for_turn(client_text)
     turn_number = state.messages_sent_count
@@ -661,19 +896,32 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=
                 error=last_error,
             )
             continue
+        # Taken over while it was being written: held at once, not after the
+        # typing time (the first bubble's own check is the last line).
+        held = not _is_automatic(chat_id)
+        if held:
+            notes = {**notes, "held_for_person": True}
         _log_attempt(
-            chat_id, turn_number, attempt, STAGE_REPLY, raw=raw, notes=notes, delivered=True
+            chat_id, turn_number, attempt, STAGE_REPLY, raw=raw, notes=notes, delivered=not held
         )
+        if held:
+            _keep_as_suggestion(chat_id, message_id, bubbles, attempt)
+            return
         if queue_token is not None:
             from app.services.offline_replies import save_reply
 
             if not save_reply(message_id, queue_token, bubbles):
                 return
-        first_bubble_at = await _deliver(
-            chat_id, psychic_id, bubbles, state,
-            typing=typing, ready=ready, model_done=model_done,
-            queue_message_id=message_id, queue_token=queue_token,
-        )
+        try:
+            first_bubble_at = await _deliver(
+                chat_id, psychic_id, bubbles, state,
+                typing=typing, ready=ready, model_done=model_done,
+                queue_message_id=message_id, queue_token=queue_token,
+                automatic_only=True,
+            )
+        except _Held:
+            _keep_as_suggestion(chat_id, message_id, bubbles, attempt)
+            return
         logger.info(
             "reading_single_reply",
             chat_id=chat_id,
@@ -691,6 +939,15 @@ async def _reply_turn(chat_id, message_id, presence, typing, ready, queue_token=
         )
         return
 
+    if not _is_automatic(chat_id):
+        # A person answers this chat now: no early refund and no notice. Her
+        # message keeps its 24 hour promise, and the owner gets a suggestion.
+        logger.warning(
+            "reading_single_failed_held_for_person", chat_id=chat_id,
+            message_id=message_id, error=last_error,
+        )
+        request_suggestion(chat_id, fresh=False)
+        return
     await _refund_and_notify(
         chat_id, psychic_id, message_id, state, last_error,
         typing=typing, ready=ready, model_done=_monotonic(),
@@ -884,10 +1141,16 @@ async def _deliver(
     chat_id: int, psychic_id, bubbles: List[str], state, *,
     typing=None, ready=None, model_done=None,
     queue_message_id=None, queue_token=None, start_position=0,
+    automatic_only=False,
 ) -> Optional[datetime]:
     """Reveal ordered bubbles against the typing and model-completion clocks.
     The first typing clock may already be running while the model generates.
-    Every gap and hiccup is explicitly silent; cleanup only clears active dots."""
+    Every gap and hiccup is explicitly silent; cleanup only clears active dots.
+
+    ``automatic_only``: the first bubble of this call is stored only while the
+    chat is still Automatic, read under its row lock in the bubble's own
+    transaction; otherwise _Held is raised and nothing is sent. A reply that has
+    begun finishes."""
     from app.services.ai.reading_burst import message_flow_lock
 
     settings = get_app_settings()
@@ -919,12 +1182,16 @@ async def _deliver(
             if index == 0 and model_done is not None:
                 deadline = max(deadline, model_done + _jitter_ms(300) / 1000)
             await _sleep_until(deadline)
+            guard = automatic_only and index == start_position
             async with message_flow_lock(chat_id):
                 if queue_token is None:
-                    stored = await _persist_and_broadcast(chat_id, bubble)
+                    stored = await _persist_and_broadcast(
+                        chat_id, bubble, automatic_only=guard
+                    )
                 else:
                     stored = await _persist_and_broadcast(
-                        chat_id, bubble, queue_message_id, queue_token, index
+                        chat_id, bubble, queue_message_id, queue_token, index,
+                        automatic_only=guard,
                     )
                 if stored is None:
                     return first_bubble_at
@@ -942,14 +1209,26 @@ async def _deliver(
     return first_bubble_at
 
 
-async def _persist_and_broadcast(chat_id: int, text: str, queue_message_id=None, queue_token=None, position=0) -> Optional[Tuple[int, datetime]]:
-    """Store one reader message and push it to the room. Returns (id, sent at)."""
+async def _persist_and_broadcast(chat_id: int, text: str, queue_message_id=None, queue_token=None, position=0, *, automatic_only=False) -> Optional[Tuple[int, datetime]]:
+    """Store one reader message and push it to the room. Returns (id, sent at).
+    With ``automatic_only``, raises _Held instead when the chat is no longer
+    Automatic, read under the chat's row lock: a mode switch commits either
+    before this bubble (and nothing is sent) or after it."""
     from app.database.client import SessionLocal
+    from app.enums.response_mode import ResponseMode
     from app.models.chat import Chat
     from app.services.chats import broadcast_persisted_ai_message, prepare_ai_message
 
     with SessionLocal() as db:
-        chat = db.get(Chat, chat_id)
+        if automatic_only:
+            chat = (
+                db.query(Chat).filter(Chat.id == chat_id)
+                .with_for_update().populate_existing().one()
+            )
+            if chat.response_mode != ResponseMode.SABRI:
+                raise _Held()
+        else:
+            chat = db.get(Chat, chat_id)
         if queue_token is None:
             message = prepare_ai_message(db, chat, text)
         else:

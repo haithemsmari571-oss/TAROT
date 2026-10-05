@@ -540,20 +540,17 @@ def get_chat_details_endpoint(
             }
         )
 
-    # Generate JWT token for the psychic (for admin to connect as psychic)
+    # Generate JWT token for the psychic (for admin to connect as psychic). An
+    # access token like a sign-in's, so the chat socket's type check accepts it.
     psychic_token = None
     if user.role in [Role.ADMIN, Role.SUPERADMIN] and psychic:
-        import jwt
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
-        token_payload = {
-            "sub": str(psychic.id),
-            "exp": datetime.utcnow() + timedelta(hours=24),
-        }
-        psychic_token = jwt.encode(
-            token_payload,
-            settings.JWT_SECRET_KEY,
-            algorithm=settings.JWT_ALGORITHM,
+        from app.utils.security import create_access_token
+
+        psychic_token = create_access_token(
+            {"sub": str(psychic.id), "role": psychic.role.value},
+            timedelta(hours=24),
         )
 
     chat_details = {
