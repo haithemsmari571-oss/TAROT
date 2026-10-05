@@ -27,6 +27,12 @@ html:has(.client-app-shell.client-app-shell-thread) [data-sanctuary-player="bar"
   padding-inline: max(0px, calc((100% - 760px) / 2));
 }
 
+/* A message keeps the line breaks it was written with: a reply sent from AV
+   Admin in two paragraphs reaches her in two, as the owner's thread shows it. */
+.client-app-shell .room .bub {
+  white-space: pre-line;
+}
+
 /* While the Sanctuary's player bar is mounted it stands over the room's foot.
    The room is absolute in the content area, so the padding the content takes
    for the bar (client-app.css:213-215) cannot lift it; its own foot rises to

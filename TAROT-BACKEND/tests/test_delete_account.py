@@ -66,11 +66,20 @@ def _active_chat(db, client, reader, response_mode) -> Chat:
     return chat
 
 
-def test_client_with_an_active_per_message_thread_can_delete(db, make_user, monkeypatch):
+@pytest.mark.parametrize(
+    "response_mode",
+    [
+        # Automatic, as every thread opens.
+        ResponseMode.SABRI,
+        # Hybrid: the owner answers it from AV Admin (owner_messaging.MODES).
+        ResponseMode.HYBRID,
+    ],
+)
+def test_client_with_an_active_per_message_thread_can_delete(db, make_user, monkeypatch, response_mode):
     monkeypatch.setattr(profile_router.settings, "BILLING_MODE", "per_message")
     client = make_user(balance=5, credit_balance=3)
     reader = make_user(role=Role.PSYCHIC)
-    chat = _active_chat(db, client, reader, ResponseMode.SABRI)
+    chat = _active_chat(db, client, reader, response_mode)
 
     response = _client(db, client).delete("/api/profile/me")
 
@@ -84,7 +93,7 @@ def test_client_with_an_active_per_message_thread_can_delete(db, make_user, monk
     assert float(client.credit_balance) == 0
     db.refresh(chat)
     assert (chat.user_id, chat.psychic_id, chat.status, chat.response_mode) == (
-        client.id, reader.id, ChatStatus.ACTIVE, ResponseMode.SABRI,
+        client.id, reader.id, ChatStatus.ACTIVE, response_mode,
     )
 
 

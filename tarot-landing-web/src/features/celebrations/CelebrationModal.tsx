@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { TYPOGRAPHY } from "../../theme";
+import { formatGbp } from "../../lib/currency";
 import type { Celebration } from "./types";
 
 // Royal velvet + candlelight palette (local to the celebration).
@@ -53,7 +54,7 @@ const CelebrationModal = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Gentle count-up of the reward amount.
+  // Gentle count-up of the reward amount, in pence so £0.45 never shows as £0.
   useEffect(() => {
     const target = celebration.amount || 0;
     if (target <= 0) {
@@ -65,7 +66,7 @@ const CelebrationModal = ({
     const dur = 700;
     const tick = (t: number) => {
       const p = Math.min((t - start) / dur, 1);
-      setShown(Math.round(target * p));
+      setShown(Math.round(target * 100 * p) / 100);
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -130,8 +131,9 @@ const CelebrationModal = ({
           {celebration.title}
         </p>
 
+        {/* In pounds, as every amount the client sees (1 Stardust is £1). */}
         <p className="text-4xl font-black mb-4" style={{ color: GOLD }}>
-          +{shown} ⭐
+          +{formatGbp(shown)}
         </p>
 
         {/* personal note (gifts) — a handwritten card from Valentina */}

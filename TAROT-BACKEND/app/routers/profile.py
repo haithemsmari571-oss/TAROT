@@ -323,9 +323,9 @@ def delete_my_account(
     Chat and transaction history are preserved under the anonymized identity.
     """
     from app.enums.chat_status import ChatStatus
-    from app.enums.response_mode import ResponseMode
     from app.enums.role import Role
     from app.models.chat import Chat
+    from app.services.owner_messaging import MODES as CONVERSATION_MODES
     from app.services.users import soft_delete_own_account
 
     if user.role != Role.USER:
@@ -339,11 +339,13 @@ def delete_my_account(
         Chat.status.in_([ChatStatus.ACTIVE, ChatStatus.PAUSED]),
     ]
     if settings.BILLING_MODE == "per_message":
-        # Per-message threads are the SABRI chats (per_message_start.py opens
-        # each one SABRI and refuses any other mode) and never close, so they
-        # are not a reading in progress. In per_minute billing every chat is a
+        # Per-message threads open Automatic (SABRI, per_message_start.py) and
+        # the owner switches them between Automatic and Hybrid in AV Admin
+        # (owner_messaging.MODES). They never close, so neither mode is a
+        # reading in progress. A HUMAN chat left from before per-message
+        # billing still counts, and in per_minute billing every chat is a
         # per-minute reading, SABRI included, so all of them still count.
-        reading_filters.append(Chat.response_mode != ResponseMode.SABRI)
+        reading_filters.append(Chat.response_mode.notin_(list(CONVERSATION_MODES.values())))
     in_progress = db.query(Chat.id).filter(*reading_filters).first()
     if in_progress:
         raise HTTPException(
