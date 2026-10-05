@@ -12,9 +12,12 @@ interface PsychicCardProps {
   /** The welcome credit in pounds, from useWelcomeCredit. The gift line, per
       message or per minute, is drawn only when it is known and above 0. */
   welcomeCreditGbp?: number;
+  /** The app's Readers tab only (ROUND54): "Speaks English, French", under
+      the tags. Absent elsewhere, so the card draws as before. */
+  languagesLine?: string | null;
 }
 
-const PsychicCard = ({ psychic, onClick, welcomeCreditGbp }: PsychicCardProps) => {
+const PsychicCard = ({ psychic, onClick, welcomeCreditGbp, languagesLine }: PsychicCardProps) => {
   const perMinute = (psychic.price_per_second || 0) * 60;
   const freeMinutes = hasWelcomeCredit(welcomeCreditGbp) ? welcomeCreditMinutes(welcomeCreditGbp, psychic.price_per_second) : 0;
   /* Per-message billing (step 5b): the card prices a message, not a minute,
@@ -82,6 +85,8 @@ const PsychicCard = ({ psychic, onClick, welcomeCreditGbp }: PsychicCardProps) =
           ))}
           {extraTags > 0 && <span className="gl-tag">+{extraTags}</span>}
         </div>
+
+        {languagesLine && <div className="gl-langs">{languagesLine}</div>}
 
         <div className="gl-prow2">
           {perMinuteLine ? (

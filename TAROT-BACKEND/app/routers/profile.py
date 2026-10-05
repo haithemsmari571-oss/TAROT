@@ -1,7 +1,5 @@
 import uuid
-from io import BytesIO
 
-from PIL import Image, UnidentifiedImageError
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -14,6 +12,7 @@ from app.schemas.auth import ChangePasswordReq
 from app.logging_config import get_logger
 from app.schemas.user import PushTokenReq, UserProfileRead, UserProfileUpdate
 from app.services.auth import change_password
+from app.services.medias import MAX_PICTURE_BYTES, PICTURE_FORMAT_EXTENSIONS, picture_format
 from app.services.psychics import _pdp_path_to_url
 from app.services.users import set_profile_picture_path, update_user_profile
 
@@ -129,9 +128,8 @@ async def upload_profile_picture(
         )
 
     # Validate file size (5MB max)
-    max_size = 5 * 1024 * 1024  # 5MB in bytes
     file_content = await file.read()
-    if len(file_content) > max_size:
+    if len(file_content) > MAX_PICTURE_BYTES:
         raise HTTPException(status_code=400, detail="File too large. Maximum size: 5MB")
 
     # Reset file pointer
@@ -139,24 +137,19 @@ async def upload_profile_picture(
 
     # The declared content-type is client-controlled, so confirm the bytes are a
     # real raster image and take the extension from what Pillow actually decodes,
-    # never from the client's filename. Without this a client could upload an
-    # HTML or SVG file named ".png" and have it served as active content from our
-    # own origin (stored XSS — the auth token lives in localStorage).
-    SAFE_EXTENSIONS = {"JPEG": ".jpg", "PNG": ".png", "GIF": ".gif", "WEBP": ".webp"}
-    try:
-        with Image.open(BytesIO(file_content)) as probe:
-            detected_format = (probe.format or "").upper()
-    except (UnidentifiedImageError, OSError, ValueError):
+    # never from the client's filename (services/medias.py picture_format).
+    detected_format = picture_format(file_content)
+    if detected_format is None:
         raise HTTPException(
             status_code=400,
             detail="The selected file is not a valid JPEG, PNG, GIF or WebP image.",
         )
-    if detected_format not in SAFE_EXTENSIONS:
+    if detected_format not in PICTURE_FORMAT_EXTENSIONS:
         raise HTTPException(
             status_code=400,
             detail="Invalid file type. Allowed: JPEG, PNG, GIF, WebP",
         )
-    file_extension = SAFE_EXTENSIONS[detected_format]
+    file_extension = PICTURE_FORMAT_EXTENSIONS[detected_format]
 
     # Generate unique filename
     unique_filename = f"profile_{user.id}_{uuid.uuid4().hex}{file_extension}"

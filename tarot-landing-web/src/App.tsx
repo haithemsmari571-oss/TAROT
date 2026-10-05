@@ -14,7 +14,7 @@ import PageSpace from "./components/PageSpace";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
 import RedirectSignedInClient, { type ClientAppRedirect } from "./features/client-app/RedirectSignedInClient";
 import { CHATS_PATH, HOME_PATH, READERS_PATH, YOU_PATH } from "./features/client-app/clientAppPaths";
-import { OWNER_MESSAGES_PATH, OWNER_NEW_POST_PATH, OWNER_PATH, OWNER_POST_PATH, OWNER_SIGN_IN_PATH, OWNER_THREAD_PATH } from "./features/owner/ownerPaths";
+import { OWNER_MESSAGES_PATH, OWNER_NEW_POST_PATH, OWNER_NEW_READER_PATH, OWNER_PATH, OWNER_POST_PATH, OWNER_READER_PATH, OWNER_READERS_PATH, OWNER_SIGN_IN_PATH, OWNER_THREAD_PATH } from "./features/owner/ownerPaths";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
@@ -48,6 +48,9 @@ const OwnerNewPostScreen = lazy(() => import("./features/owner/OwnerNewPostScree
 const OwnerPostScreen = lazy(() => import("./features/owner/OwnerPostScreen"));
 const OwnerInboxScreen = lazy(() => import("./features/owner/OwnerInboxScreen"));
 const OwnerThreadScreen = lazy(() => import("./features/owner/OwnerThreadScreen"));
+// Readers (ROUND54).
+const OwnerReadersScreen = lazy(() => import("./features/owner/OwnerReadersScreen"));
+const OwnerReaderScreen = lazy(() => import("./features/owner/OwnerReaderScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -196,6 +199,9 @@ export default function App() {
         <Route path={OWNER_POST_PATH} element={<Suspense fallback={null}><OwnerPostScreen /></Suspense>} />
         <Route path={OWNER_MESSAGES_PATH} element={<Suspense fallback={null}><OwnerInboxScreen /></Suspense>} />
         <Route path={OWNER_THREAD_PATH} element={<Suspense fallback={null}><OwnerThreadScreen /></Suspense>} />
+        <Route path={OWNER_READERS_PATH} element={<Suspense fallback={null}><OwnerReadersScreen /></Suspense>} />
+        <Route path={OWNER_NEW_READER_PATH} element={<Suspense fallback={null}><OwnerReaderScreen /></Suspense>} />
+        <Route path={OWNER_READER_PATH} element={<Suspense fallback={null}><OwnerReaderScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}

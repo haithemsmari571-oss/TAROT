@@ -34,6 +34,13 @@ export interface Psychic {
   order?: number;
   /** one reader's page only (GET /psychic/{id}): whether the viewer may write a new review of her now; null on the roster */
   can_review?: boolean | null;
+  /** her profile (ROUND54), null until the owner fills it in */
+  years_experience?: number | null;
+  /** one of the twelve signs as the site writes them ("Scorpio") */
+  zodiac_sign?: string | null;
+  languages?: string[] | null;
+  /** only when she agreed to show it; the server sends null otherwise */
+  ethnicity?: string | null;
 }
 
 export interface PsychicCreate {

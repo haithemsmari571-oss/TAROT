@@ -5,13 +5,14 @@ import type { OwnerLibraryItem } from "./ownerLibraryApi";
 import { kindLabel } from "./ownerMedia";
 import { useAttentionCount } from "./ownerMessages";
 import { OwnerPostBadges } from "./OwnerParts";
-import { OWNER_MESSAGES_PATH, OWNER_NEW_POST_PATH, OWNER_SIGN_IN_PATH, ownerPostPath } from "./ownerPaths";
+import { OWNER_MESSAGES_PATH, OWNER_NEW_POST_PATH, OWNER_READERS_PATH, OWNER_SIGN_IN_PATH, ownerPostPath } from "./ownerPaths";
 import { browseItemOf, coverUrlOf, firstFrameUrl, useOwnerPosts, videoUrlOf } from "./ownerPosts";
 import { OWNER_APP_NAME } from "./ownerSession";
 
 const COPY = {
   messages: "Messages",
   needYou: (count: number) => `${count} ${count === 1 ? "conversation needs" : "conversations need"} you`,
+  readers: "Readers",
   newPost: "New post",
   yourPosts: "Your posts",
   loading: "Loading your posts…",
@@ -52,9 +53,9 @@ function PostPicture({ item }: { item: OwnerLibraryItem }) {
   return <span className="owner-grid-art"><Cover item={browseItemOf(item)} /></span>;
 }
 
-/* Home of the owner's phone admin (ROUND51, ROUND53): Messages, one big New
-   post, then "Your posts" three to a row as on an Instagram profile, and Sign
-   out at the bottom. */
+/* Home of the owner's phone admin (ROUND51, ROUND53, ROUND54): Messages,
+   Readers, one big New post, then "Your posts" three to a row as on an
+   Instagram profile, and Sign out at the bottom. */
 export default function OwnerHomeScreen() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -69,6 +70,14 @@ export default function OwnerHomeScreen() {
     <main className="owner-screen owner-home">
       <h1 className="owner-title">{OWNER_APP_NAME}</h1>
       <MessagesTile />
+      <Link className="owner-panel owner-readers-tile" to={OWNER_READERS_PATH}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+          <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6" />
+        </svg>
+        <span className="owner-messages-label">{COPY.readers}</span>
+      </Link>
       <Link className="owner-button owner-new-post" to={OWNER_NEW_POST_PATH}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />

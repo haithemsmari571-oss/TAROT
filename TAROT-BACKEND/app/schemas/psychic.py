@@ -60,6 +60,12 @@ class PsychicRead(PsychicBase):
     # One reader's page only (services/psychics.py, read_psychic): whether the
     # viewer may write a new review of her now. None on the roster.
     can_review: bool | None = None
+    # Her profile (ROUND54), None until the owner fills it in. ethnicity is
+    # None unless she agreed to show it (_psychic_to_out decides).
+    years_experience: int | None = None
+    zodiac_sign: str | None = None
+    languages: List[str] | None = None
+    ethnicity: str | None = None
 
     class Config:
         from_attributes = True

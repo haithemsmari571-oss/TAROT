@@ -718,8 +718,10 @@
   outline-offset: 3px;
 }
 
-/* Home: the Messages tile above New post, its gold count on the right. */
-.owner-shell .owner-messages-tile {
+/* Home: the Messages tile above New post, its gold count on the right; the
+   Readers tile (ROUND54) under it in the same shape. */
+.owner-shell .owner-messages-tile,
+.owner-shell .owner-readers-tile {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -728,7 +730,8 @@
   color: #fffcf4;
   text-decoration: none;
 }
-.owner-shell .owner-messages-tile svg { flex: none; color: var(--gl-accent); }
+.owner-shell .owner-messages-tile svg,
+.owner-shell .owner-readers-tile svg { flex: none; color: var(--gl-accent); }
 .owner-shell .owner-messages-label { font: 300 26px/1.15 var(--gl-serif); }
 .owner-shell .owner-count-badge {
   display: grid;
@@ -1115,4 +1118,192 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .owner-shell .owner-sheet { animation: none; }
+}
+
+/* ── Readers (ROUND54) ── */
+.owner-shell .owner-readers-tile:focus-visible,
+.owner-shell .owner-reader-row:focus-visible,
+.owner-shell .owner-chip:focus-visible,
+.owner-shell .owner-stepper-button:focus-visible,
+.owner-shell .owner-consent:focus-within {
+  outline: 2px solid var(--gl-accent);
+  outline-offset: 3px;
+}
+
+/* Every reader: one frosted panel, a row each with her photo, name and
+   price, and Hidden on the right while clients cannot see her. */
+.owner-shell .owner-reader-list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  overflow: hidden;
+}
+.owner-shell .owner-reader-list li + li { border-top: 1px solid rgba(255, 214, 150, 0.1); }
+.owner-shell .owner-reader-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.owner-shell .owner-reader-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.owner-shell .owner-reader-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 400 18px/1.25 var(--gl-serif);
+  color: #fffcf4;
+}
+.owner-shell .owner-reader-price { font: 400 14px/1.35 var(--gl-sans); color: var(--gl-text-dim); }
+
+/* Her page: the form's sections one under another, Save at its end. */
+.owner-shell .owner-reader-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.owner-shell .owner-reader-section { gap: 14px; }
+.owner-shell .owner-reader-listed { padding: 4px 18px; }
+.owner-shell .owner-reader-listed .owner-switch-row { border-top: 0; }
+.owner-shell .owner-reader-added { text-align: left; font-size: 16px; }
+/* The fields write at 16px, as the conversation's boxes do. */
+.owner-shell .owner-reader .owner-input { font-size: 16px; }
+.owner-shell .owner-reader-field-label { font: 500 14px/1.4 var(--gl-sans); color: var(--gl-text-dim); }
+.owner-shell .owner-reader-bio { min-height: 120px; line-height: 1.5; resize: vertical; }
+.owner-shell .owner-reader .owner-caption-hint:empty { display: none; }
+.owner-shell .owner-reader-left { text-align: left; }
+
+/* The photo: a round gold-edged disc beside its chooser. */
+.owner-shell .owner-reader-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.owner-shell .owner-reader-photo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 214, 150, 0.4);
+  background: rgba(8, 4, 18, 0.55);
+}
+.owner-shell .owner-reader-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.owner-shell .owner-reader-photo .owner-reader-initial { font-size: 34px; }
+.owner-shell .owner-reader-photo-row .owner-choose-quiet { flex: 1; }
+
+/* Chips: signs, languages, specialities. A chosen chip is gold. */
+.owner-shell .owner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.owner-shell .owner-sign-chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.owner-shell .owner-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.24);
+  background: rgba(255, 240, 214, 0.05);
+  color: rgba(244, 239, 230, 0.9);
+  font: 500 15px/1.2 var(--gl-sans);
+  cursor: pointer;
+}
+.owner-shell .owner-chip .reader-zodiac-glyph { color: var(--gl-accent); font-size: 17px; }
+.owner-shell .owner-chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: linear-gradient(140deg, #ffecc4, #e6c48c);
+  color: #2a1a10;
+  font-weight: 600;
+  box-shadow: 0 0 24px -10px var(--gl-accent);
+}
+.owner-shell .owner-chip[aria-pressed="true"] .reader-zodiac-glyph { color: #2a1a10; }
+.owner-shell .owner-chip:disabled { opacity: 0.5; cursor: default; }
+.owner-shell .owner-chip-add {
+  border-style: dashed;
+  border-color: rgba(255, 214, 150, 0.45);
+  color: var(--gl-accent);
+}
+.owner-shell .owner-reader-add-language {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.owner-shell .owner-reader-add-language .owner-button-quiet { width: auto; }
+
+/* Years reading: − the number + */
+.owner-shell .owner-stepper {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 120px) 56px;
+  align-items: center;
+  gap: 10px;
+}
+.owner-shell .owner-stepper-button {
+  display: grid;
+  place-items: center;
+  height: 52px;
+  padding: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 214, 150, 0.3);
+  background: rgba(255, 240, 214, 0.06);
+  color: #fffcf4;
+  font: 400 24px/1 var(--gl-sans);
+  cursor: pointer;
+}
+.owner-shell .owner-stepper-button:disabled { opacity: 0.4; cursor: default; }
+.owner-shell .owner-stepper-value { text-align: center; font-variant-numeric: tabular-nums; }
+
+/* The consent tick: the whole row is the target. */
+.owner-shell .owner-consent {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 8px 4px;
+  border-top: 1px solid rgba(255, 214, 150, 0.14);
+  color: #fffcf4;
+  font: 500 16px/1.4 var(--gl-sans);
+  cursor: pointer;
+}
+.owner-shell .owner-consent input {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  accent-color: #e6c48c;
+  cursor: pointer;
+}
+
+/* The price with its pound sign. */
+.owner-shell .owner-price-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.owner-shell .owner-price-field span { font: 300 26px/1 var(--gl-serif); color: var(--gl-accent); }
+.owner-shell .owner-price-field .owner-input { max-width: 180px; }
+
+/* Save at the end of the form, in the page's flow. */
+.owner-shell .owner-reader-save {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
 }

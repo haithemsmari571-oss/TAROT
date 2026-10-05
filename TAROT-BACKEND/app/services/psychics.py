@@ -74,7 +74,11 @@ def create_psychic(
     psychic_data: PsychicCreate,
     profile_picture: UploadFile,
     viewer: User | None = None,
+    profile: dict | None = None,
 ):
+    """POST /api/psychic/ (the CRM) and the owner's phone (services/owner_readers.py)
+    both create a reader here. profile: further users columns the phone sets in
+    the same insert (her ROUND54 profile, is_verified)."""
     profile_picture_path = _upload_profile_picture(profile_picture)
 
     password_hash = hash_password(psychic_data.password)
@@ -91,6 +95,7 @@ def create_psychic(
         online_from=psychic_data.online_from,
         online_to=psychic_data.online_to,
         is_listed=psychic_data.is_listed,
+        **(profile or {}),
     )
 
     db.add(psychic)
@@ -148,6 +153,12 @@ def _psychic_to_out(
         is_online=online.is_online,
         next_online_at=online.next_online_at,
         order=psychic.order,
+        years_experience=psychic.years_experience,
+        zodiac_sign=psychic.zodiac_sign,
+        languages=psychic.languages,
+        # Sensitive: sent only while she has agreed to show it (ROUND54). This
+        # is the one public reader shape (the roster, one reader, the CRM).
+        ethnicity=psychic.ethnicity if psychic.show_ethnicity else None,
     )
 
 

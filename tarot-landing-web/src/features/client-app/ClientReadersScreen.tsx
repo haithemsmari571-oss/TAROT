@@ -19,6 +19,7 @@ import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { pickReaders, ReaderDisc, readerName, useAppReaders } from "./appReaders";
 import { READERS_PATH } from "./clientAppPaths";
 import FavouriteHeart from "./FavouriteHeart";
+import { cardLanguagesLine } from "./readerProfile";
 import { useFavourites } from "./useFavourites";
 import { useGiftCredit } from "./useWelcomeCredit";
 import "./client-chats.css";
@@ -234,7 +235,7 @@ export default function ClientReadersScreen() {
           {shown.map(reader => (
             <div key={reader.id} className="client-readers-card">
               {/* The shared card names a reader by her username; here it gets the app's name (readerName.ts). */}
-              <PsychicCard psychic={{ ...reader, username: readerName(reader) }} welcomeCreditGbp={welcomeCreditGbp} onClick={() => navigate(`${READERS_PATH}/${reader.id}`)} />
+              <PsychicCard psychic={{ ...reader, username: readerName(reader) }} welcomeCreditGbp={welcomeCreditGbp} languagesLine={cardLanguagesLine(reader.languages)} onClick={() => navigate(`${READERS_PATH}/${reader.id}`)} />
               <FavouriteHeart readerId={reader.id} name={readerName(reader)} />
             </div>
           ))}

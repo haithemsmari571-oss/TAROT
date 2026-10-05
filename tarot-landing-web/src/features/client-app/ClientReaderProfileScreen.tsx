@@ -2,8 +2,9 @@
    It opens the per-message conversation with this reader, or finds the one
    she already has, and lands her in the room with the reader's opener already
    there and nothing charged. Her first paid message is the room's send. The
-   heart in the panel's corner marks the reader as a favourite. Under the
-   panel, her approved reviews (ClientReaderReviews.tsx). */
+   heart in the panel's corner marks the reader as a favourite. Under her
+   name, her profile (ReaderFacts.tsx). Under the panel, her approved
+   reviews (ClientReaderReviews.tsx). */
 import { useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { isAxiosError } from "axios";
@@ -17,6 +18,7 @@ import { READERS_PATH } from "./clientAppPaths";
 import ClientReaderReviews from "./ClientReaderReviews";
 import FavouriteHeart from "./FavouriteHeart";
 import { openConversation, threadPath } from "./readerIntent";
+import ReaderFacts from "./ReaderFacts";
 import { hasWelcomeCredit, useGiftCredit, useRefundAfterHours, welcomeCreditLine } from "./useWelcomeCredit";
 import "./client-chats.css";
 import "./client-readers.css";
@@ -97,6 +99,7 @@ function Profile({ reader }: { reader: Psychic }) {
       <FavouriteHeart readerId={reader.id} name={name} className="client-reader-heart" />
       <p className="eyebrow">{status}</p>
       <h1 className="ptitle">{name}</h1>
+      <ReaderFacts reader={reader} />
       <p className="psub">{sanitizeClaims(reader.bio)}</p>
       {categories.length > 0 && <div className="pills">{categories.map(category => <span key={category.id} className="pill">{category.title}</span>)}</div>}
       {price != null && <>

@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from typing import List, Optional
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Enum, Integer, Numeric, String, Time, true
+from sqlalchemy import JSON, CheckConstraint, Date, DateTime, Enum, Integer, Numeric, String, Time, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.gender import Gender
@@ -9,6 +9,9 @@ from app.enums.role import Role
 from app.enums.user_status import UserStatus
 from app.models.base import Base
 from app.services.client_code import generate_client_code
+
+# The longest ethnicity a reader's profile keeps (the column and the owner's form).
+ETHNICITY_MAX_LENGTH = 60
 
 
 class User(Base):
@@ -62,6 +65,18 @@ class User(Base):
     price_per_message: Mapped[float] = mapped_column(nullable=True)
     profile_picture_path: Mapped[str] = mapped_column(nullable=True)
     bio: Mapped[str] = mapped_column(nullable=True)
+    # A reader's profile (ROUND54), set from the owner's phone
+    # (routers/owner_readers.py); empty on every other account. Ethnicity is
+    # sensitive: clients see it only while show_ethnicity is true, because she
+    # agreed to show it, and services/psychics.py _psychic_to_out is the one
+    # place that decides.
+    ethnicity: Mapped[Optional[str]] = mapped_column(String(ETHNICITY_MAX_LENGTH), nullable=True)
+    show_ethnicity: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    years_experience: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # One of ZODIAC_SIGNS (enums/zodiac_sign.py), as the site writes the names.
+    zodiac_sign: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Language names in the owner's order, e.g. ["English", "French"].
+    languages: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # Captured (required) at signup for astrology features; nullable so the
     # pre-existing accounts that predate this field are unaffected.
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

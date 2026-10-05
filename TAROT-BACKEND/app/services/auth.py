@@ -448,6 +448,18 @@ async def forgot_password(db: Session, email: EmailStr) -> str:
     # Bind user to context for tracking
     bind_user_to_context(user.id)
 
+    # Still return success message for security reasons
+    # Don't let user know if email failed
+    await send_password_link(db, user)
+
+    return message
+
+
+async def send_password_link(db: Session, user: User) -> bool:
+    """Emails the account the site's reset link, with which she sets a new
+    password: forgot_password above, and a reader the owner has just created
+    from the phone (services/owner_readers.py), who sets her first one this
+    way. True when the email went out; a failure is logged, never raised."""
     reset_link = _generate_reset_link(db, user.id)
     mail_vars = {
         "reset_link": reset_link,
@@ -463,16 +475,14 @@ async def forgot_password(db: Session, email: EmailStr) -> str:
         )
 
         logger.info("password_reset_email_sent", user_id=user.id)
+        return True
     except Exception as e:
         logger.critical(
             "password_reset_email_failed",
             user_id=user.id,
             **error_fields(e),
         )
-        # Still return success message for security reasons
-        # Don't let user know if email failed
-
-    return message
+        return False
 
 
 def _generate_reset_link(db: Session, user_id: int):

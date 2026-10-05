@@ -148,6 +148,31 @@
 .client-app-shell .client-reader-profile .eyebrow { margin: 0; color: var(--gl-accent); }
 .client-app-shell .client-reader-profile .ptitle { margin-bottom: 0; font-family: var(--gl-serif); color: var(--gl-text); }
 
+/* Her profile under her name (ROUND54, ReaderFacts.tsx): sign, years
+   reading, languages, ethnicity, one centred line each, so a long list of
+   languages wraps inside its own line, in Inter like the price's label. */
+.client-app-shell .client-reader-facts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: center;
+  font: 400 13.5px/1.45 var(--gl-sans);
+  color: var(--gl-text);
+}
+.client-app-shell .client-reader-facts .reader-zodiac-glyph { color: var(--gl-accent); }
+
+/* The Readers card's languages line (PsychicCard.tsx languagesLine), under
+   the tags in the bio's face (glass.css .gl-spec). */
+.client-app-shell .client-readers-card .gl-langs {
+  margin: -8px 0 14px;
+  font: 400 12px/1.45 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
+
 /* The photo: a circle centred on the panel's top edge, half above, half below.
    The disc clips the picture round; the dot sits on the disc's lower right,
    outside the clip, in the chats avatar's values (client-chats.css:77-78). */

@@ -13,6 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.config import get_app_settings
+from app.enums.zodiac_sign import ZODIAC_SIGNS
 from app.logging_config import get_logger
 from app.models import ContentGenerationRun, DailyContent
 from app.services.ai import client as ai_client
@@ -21,10 +22,6 @@ from app.services.ai.defaults import DAILY_CONTENT_KEY, MAJOR_ARCANA
 
 logger = get_logger(__name__)
 
-ZODIAC_SIGNS = [
-    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
-]
 REQUIRED_FIELDS = ("interpretation", "manifestation", "ritual", "quote_line")
 
 
