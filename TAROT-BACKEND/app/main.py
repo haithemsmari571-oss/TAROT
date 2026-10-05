@@ -54,6 +54,7 @@ from app.routers.library_items import (
 )
 from app.routers.owner_messaging import router as owner_messaging_router
 from app.routers.owner_readers import router as owner_readers_router
+from app.routers.push import router as push_router
 
 # Configure logging
 configure_logging()
@@ -250,6 +251,7 @@ app.include_router(
     prefix="/api/admin",
     tags=["Admin - Owner Readers"],
 )
+app.include_router(push_router, prefix="/api/push", tags=["Push"])
 
 app.include_router(
     admin_zodiac_router,

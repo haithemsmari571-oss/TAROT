@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { NavLink, Outlet, useLocation, useMatch } from "react-router-dom";
+import { useAuth } from "@/features/auth/hooks";
+import { useKeepPushInStep, useOpenFromNotification } from "@/features/push/webPush";
 import HallStage from "../hall/HallStage";
+import { InstallSheet } from "./AppSheets";
 import ClientScreenBoundary from "./ClientScreenBoundary";
 import { registerAppServiceWorker } from "./offline/appServiceWorker";
 import { useInboxUnreadCount } from "./useInboxUnreadCount";
@@ -40,6 +43,11 @@ export default function ClientAppShell() {
 
   // The installed app's offline screen and kept build files (offline/sw.js).
   useEffect(() => registerAppServiceWorker(), []);
+  // Phone notifications (ROUND57): this browser kept for whoever is signed in,
+  // and a tapped notification opening its chat in this page.
+  const { isAuthenticated } = useAuth();
+  useKeepPushInStep("client", isAuthenticated);
+  useOpenFromNotification();
 
   /* The hall's sky and runtime live only while the conversation screen is
      showing. Mounted behind every tab, HallStage's frame loop kept drawing the
@@ -66,6 +74,8 @@ export default function ClientAppShell() {
           </NavLink>
         ))}
       </nav>
+      {/* Add to the home screen, suggested on arriving (ROUND57) */}
+      <InstallSheet />
     </div>
   );
 }

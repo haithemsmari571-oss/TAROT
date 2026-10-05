@@ -25,4 +25,5 @@ dependencies = [
     "anthropic>=0.116.0",
     "bleach>=6.4.0",
     "boto3>=1.43.78",
+    "cryptography>=46.0.4",
 ]

@@ -67,6 +67,9 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<ThreadMessage | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
+  /* Her messages the server has taken since the room opened (the echo of a
+     send); the notification ask follows one (AppSheets.tsx). */
+  const [sent, setSent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [balance, setBalance] = useState(initialBalance);
   const [price, setPrice] = useState(initialPrice);
@@ -114,6 +117,9 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
       pendingRef.current = null;
       setPending(null);
     };
+    /* In sight or not, told to the server on connect and on every change:
+       no phone notification for this chat while it is open in front of her. */
+    const tellViewing = () => socket.current?.sendViewing(document.visibilityState === "visible");
     const advanceReceipt = (id: number, status: string) => {
       receipts.current.set(id, latestStatus(status, receipts.current.get(id) ?? "SENT"));
       setMessages(current => current.map(message => message.id === id ? { ...message, status: latestStatus(message.status, status) } : message));
@@ -126,6 +132,7 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
         if (disposed) return;
         reconnectDelay = 1000;
         setConnected(true);
+        tellViewing();
         void loadLatest();
         markOpen();
       });
@@ -140,6 +147,7 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
           if (message.sender_id === userId && message.content === pendingRef.current?.content) {
             pendingRef.current = null;
             setPending(null);
+            setSent(count => count + 1);
           } else if (message.sender_id !== userId && !message.is_system) {
             setThinking(false);
             markOpen();
@@ -180,11 +188,13 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
     markOpen();
     connect();
     document.addEventListener("visibilitychange", markOpen);
+    document.addEventListener("visibilitychange", tellViewing);
     return () => {
       disposed = true;
       controller.abort();
       clearTimeout(retry);
       document.removeEventListener("visibilitychange", markOpen);
+      document.removeEventListener("visibilitychange", tellViewing);
       socket.current?.disconnect();
       socket.current = null;
     };
@@ -208,5 +218,5 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
     setMessages(current => mergeMessages(current, data.messages, receipts.current));
     setTotal(data.total);
   };
-  return { messages, loading, connected, thinking, draft, setDraft, pending, rejection, error, balance, price, send, loadOlder, hasOlder: messages.length < total };
+  return { messages, loading, connected, thinking, draft, setDraft, pending, rejection, error, balance, price, send, loadOlder, hasOlder: messages.length < total, sent };
 }

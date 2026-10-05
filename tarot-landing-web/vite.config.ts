@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Connect, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
-import { SERVICE_WORKER_FILE } from "./src/features/client-app/offline/appServiceWorker";
+import { APP_SCOPE, OPEN_FROM_NOTIFICATION, SERVICE_WORKER_FILE } from "./src/features/client-app/offline/appServiceWorker";
 import { isOwnerPath } from "./src/features/owner/ownerPaths";
+import { BRAND_NAME } from "./src/lib/company";
 
 /* The owner's phone admin has its own page (ROUND55): the same app as
    index.html, with the owner's install files in its static head, which is
@@ -36,9 +37,10 @@ function ownerPage(): Plugin {
 /* The installed app's service worker (ROUND31, B2). On the client build (not
    the SSR build that prerenders pages) it fills the template
    src/features/client-app/offline/sw.js with this build's release and the app
-   shell (the files index.html names under /assets/), and writes it to /sw.js.
-   Each build is a release: a new cache that replaces the last on the next
-   load. */
+   shell (the files index.html names under /assets/), the app's scope, the
+   word a tapped notification posts to an open page and the brand name
+   (ROUND57), and writes it to /sw.js. Each build is a release: a new cache that replaces the last on
+   the next load. */
 function appServiceWorker(): Plugin {
   let ssrBuild = false;
   return {
@@ -55,7 +57,10 @@ function appServiceWorker(): Plugin {
       const appShell = [...new Set(String(html.source).match(/\/assets\/[^"'\s>]+/g) ?? [])];
       const source = readFileSync(new URL("./src/features/client-app/offline/sw.js", import.meta.url), "utf8")
         .replace("__RELEASE__", JSON.stringify(new Date().toISOString()))
-        .replace("__APP_SHELL__", JSON.stringify(appShell));
+        .replace("__APP_SHELL__", JSON.stringify(appShell))
+        .replace("__APP_SCOPE__", JSON.stringify(APP_SCOPE))
+        .replace("__OPEN_FROM_NOTIFICATION__", JSON.stringify(OPEN_FROM_NOTIFICATION))
+        .replace("__BRAND_NAME__", JSON.stringify(BRAND_NAME));
       this.emitFile({ type: "asset", fileName: SERVICE_WORKER_FILE, source });
     },
   };

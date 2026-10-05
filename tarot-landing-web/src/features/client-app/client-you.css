@@ -377,15 +377,28 @@
   font: 400 19px/1.3 var(--gl-serif);
   color: var(--gl-text);
 }
-.client-app-shell .client-you-sheet-steps {
-  margin: 14px 0 0;
-  padding-left: 22px;
-  list-style: decimal outside;
-  font: 300 15px/1.55 var(--gl-sans);
-  color: var(--gl-text);
+/* The two steps are the shared list (AppSheets.tsx HomeScreenSteps,
+   client-sheets.css), set at this sheet's left edge as before. */
+.client-app-shell .client-you-sheet .av-sheet-steps { margin: 14px 0 0; max-width: none; }
+
+/* ── Phone notifications (ROUND57) ── */
+/* The switch row above, two lines tall: the label in the rows' serif, and
+   under it what the browser says, gold while on. A browser's no, or an iPhone
+   tab, adds its one line or button under the row. */
+.client-app-shell .client-you-notify { padding-top: 10px; padding-bottom: 10px; }
+.client-app-shell .client-you-notify-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
 }
-.client-app-shell .client-you-sheet-steps li + li { margin-top: 6px; }
-.client-app-shell .client-you-sheet-steps li::marker { color: var(--gl-accent); }
+.client-app-shell .client-you-notify-state { font: 300 13px/1.4 var(--gl-sans); color: var(--gl-text-dim); }
+.client-app-shell .client-you-notify[aria-checked="true"] .client-you-notify-state { color: var(--gl-accent); }
+.client-app-shell .client-you-notify-fix {
+  margin: 10px 0 0;
+  font: 300 13px/1.5 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
 
 /* ── Reply emails (ROUND20) ── */
 /* The Account card's switch row: the link rows' button form above (the

@@ -229,6 +229,7 @@ def soft_delete_own_account(db: Session, user: User) -> None:
     from app.enums.gender import Gender
     from app.logging_config import get_logger
     from app.models.chat import Chat
+    from app.models.push_subscription import PushSubscription
     from app.models.push_token import PushToken
     from app.services.offline_replies import forfeit_pending
     from app.services.stardust_rewards import forfeit_earned_stardust
@@ -263,6 +264,7 @@ def soft_delete_own_account(db: Session, user: User) -> None:
     user.status = UserStatus.SUSPENDED
 
     db.query(PushToken).filter(PushToken.user_id == user.id).delete()
+    db.query(PushSubscription).filter(PushSubscription.user_id == user.id).delete()
 
     db.commit()
     logger.info(

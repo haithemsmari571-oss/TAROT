@@ -1,0 +1,109 @@
+/* The app's suggestion sheets (AppSheets.tsx, ROUND57): the confirm sheet's
+   recipe (client-confirm-email.css), the You sheet at the foot of the screen
+   with the glass popover's surface (glass.css .gl-pop) and the hall dialog's
+   scrim (hall-room.css .hdlg). Not scoped to the shell's pages: the ask opens
+   in the room, whose reset (hall.css:17) zeroes every margin and padding, so
+   each rule carries two selectors' weight and sets its own. Fraunces for the
+   question, Inter for the rest, gold for the markers. */
+dialog.av-sheet {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100dvh - 24px);
+  margin: auto auto 0;
+  padding: 0;
+  border: 1px solid var(--gl-glass-edge);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  background: var(--gl-glass-2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow: var(--gl-inset), var(--gl-card-shadow);
+  color: var(--gl-text);
+  font-family: var(--gl-sans);
+}
+/* Focused itself on opening (AppSheets.tsx): no ring around the whole sheet. */
+dialog.av-sheet:focus { outline: none; }
+dialog.av-sheet::backdrop {
+  background: rgba(5, 5, 8, .34);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.av-sheet .av-sheet-body {
+  margin: 0;
+  padding: 28px 22px calc(20px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+}
+.av-sheet .av-sheet-title {
+  margin: 0 6px;
+  padding: 0;
+  font: 400 21px/1.3 var(--gl-serif);
+  color: var(--gl-text);
+}
+.av-sheet .av-sheet-line {
+  margin: 12px 0 0;
+  padding: 0;
+  font: 300 14px/1.5 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
+.av-sheet .av-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 22px 0 0;
+  padding: 0;
+}
+.av-sheet .av-sheet-yes {
+  margin: 0;
+  padding: 15px 24px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gl-btn-bg);
+  color: var(--gl-btn-fg);
+  font: 600 15px/1.2 var(--gl-sans);
+  letter-spacing: .02em;
+  cursor: pointer;
+}
+.av-sheet .av-sheet-yes:disabled { opacity: .7; cursor: wait; }
+.av-sheet .av-sheet-no {
+  margin: 0;
+  padding: 12px 24px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: var(--gl-text-dim);
+  font: 400 14px/1.2 var(--gl-sans);
+  cursor: pointer;
+}
+.av-sheet .av-sheet-yes:focus-visible,
+.av-sheet .av-sheet-no:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+
+/* Safari's two steps, numbered in gold, left-aligned under the centred title;
+   also inside the You tab's own sheet (client-you.css .client-you-sheet). */
+ol.av-sheet-steps {
+  margin: 14px auto 0;
+  padding: 0 0 0 22px;
+  max-width: 320px;
+  list-style: decimal outside;
+  text-align: left;
+  font: 300 15px/1.55 var(--gl-sans);
+  color: var(--gl-text);
+}
+ol.av-sheet-steps li { margin: 0; padding: 0; }
+ol.av-sheet-steps li + li { margin-top: 8px; }
+ol.av-sheet-steps li::marker { color: var(--gl-accent); }
+/* The Share symbol in Safari's own system blue, on a small light tile the
+   size of a line of text, as it looks in Safari's toolbar. */
+svg.av-share-icon {
+  display: inline-block;
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  margin: 0 0 0 4px;
+  padding: 3px;
+  vertical-align: -6px;
+  border-radius: 6px;
+  background: #fff;
+  color: #007aff;
+}

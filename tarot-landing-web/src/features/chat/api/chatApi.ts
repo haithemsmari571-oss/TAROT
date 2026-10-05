@@ -481,6 +481,14 @@ export class ChatWebSocket {
     }
   }
 
+  /* The app's conversation in sight or not (ROUND57, useThreadConnection.ts):
+     no phone notification is sent for a chat she has open in sight. */
+  sendViewing(visible: boolean) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "viewing", visible }));
+    }
+  }
+
   onMessage(callback: (message: any) => void) {
     this.onMessageCallback = callback;
   }

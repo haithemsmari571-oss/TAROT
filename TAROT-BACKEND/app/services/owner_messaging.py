@@ -66,9 +66,13 @@ def mode_name(mode):
 def notify_owner(chat_id, kind):
     """The one hook that tells the owner a conversation wants him: CLIENT_MESSAGE
     when a paid message of hers lands in an Automatic chat, SUGGESTION_READY when
-    a Hybrid chat's suggestion is stored. It only logs for now; ROUND53 sends the
-    phone notification from here."""
+    a Hybrid chat's suggestion is stored. His phones get the notification
+    (web_push.notify_owner, at most one per chat every two minutes); never
+    raises."""
+    from app.services.web_push import notify_owner as push_to_owner
+
     logger.info("owner_notify", chat_id=chat_id, kind=kind)
+    push_to_owner(chat_id, kind)
 
 
 def _lock_chat(db, chat_id):

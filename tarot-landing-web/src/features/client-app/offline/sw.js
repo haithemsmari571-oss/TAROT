@@ -15,12 +15,34 @@
 
    Each build is a release with its own cache. The browser checks /sw.js on
    every load; a new release's worker takes over at once and deletes every
-   older release's cache. */
+   older release's cache.
+
+   Phone notifications (ROUND57). The same file is registered twice: for the
+   app (scope /app/) and for the owner's phone admin (scope /owner/). Under
+   either it shows the notifications the server pushes and opens them on a
+   tap; the app shell and the offline screen belong to the app's scope alone,
+   so under /owner/ it answers no request and keeps nothing. */
 
 const RELEASE = __RELEASE__;
 const APP_SHELL = __APP_SHELL__;
+const APP_SCOPE = __APP_SCOPE__;
+const OPEN_FROM_NOTIFICATION = __OPEN_FROM_NOTIFICATION__;
 const CACHE_PREFIX = "av-app-";
 const CACHE = CACHE_PREFIX + RELEASE;
+
+/* Where this registration lives: "/app/" or "/owner/". Its pages are the
+   scope and the scope's own address without the slash (/owner is the owner's
+   home). */
+const AREA = new URL(self.registration.scope).pathname;
+const KEEPS_APP_SHELL = AREA === APP_SCOPE;
+function inArea(pathname) {
+  return pathname.startsWith(AREA) || pathname === AREA.slice(0, -1);
+}
+
+/* The picture beside a notification: each area's own icon, the 192 px one
+   its manifest names (public/manifest.webmanifest, public/owner.webmanifest). */
+const NOTIFICATION_ICON = KEEPS_APP_SHELL ? "/icons/icon-192.png" : "/icons/owner-192.png";
+const NOTIFICATION_TITLE = __BRAND_NAME__;
 
 const OFFLINE_LINE = "You're offline. Check your connection and try again.";
 const TRY_AGAIN = "Try again";
@@ -75,6 +97,10 @@ const OFFLINE_PAGE = `<!doctype html>
 </html>`;
 
 self.addEventListener("install", (event) => {
+  if (!KEEPS_APP_SHELL) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   event.waitUntil(
     caches.open(CACHE)
       .then((cache) => cache.addAll(APP_SHELL))
@@ -83,6 +109,10 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
+  if (!KEEPS_APP_SHELL) {
+    event.waitUntil(self.clients.claim());
+    return;
+  }
   event.waitUntil(
     caches.keys()
       .then((names) => Promise.all(
@@ -91,6 +121,63 @@ self.addEventListener("activate", (event) => {
           .map((name) => caches.delete(name)),
       ))
       .then(() => self.clients.claim()),
+  );
+});
+
+/* The open pages of this area, whether or not this worker controls them
+   (/owner itself is outside the /owner/ scope). */
+function areaWindows() {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true })
+    .then((windows) => windows.filter((page) => inArea(new URL(page.url).pathname)));
+}
+
+/* A push from the server: {title, body, url, tag}. One notification per
+   conversation (the tag), the newest replacing the last. Nothing is shown when
+   that conversation is already open in front of her; the server holds those
+   back too (services/web_push.py). */
+self.addEventListener("push", (event) => {
+  let message = {};
+  try {
+    message = event.data ? event.data.json() : {};
+  } catch {
+    message = {};
+  }
+  const target = message.url ? new URL(message.url, self.location.origin).pathname : null;
+  event.waitUntil(
+    areaWindows().then((windows) => {
+      const inSight = target && windows.some((page) => page.focused
+        && page.visibilityState === "visible" && new URL(page.url).pathname === target);
+      if (inSight) return undefined;
+      return self.registration.showNotification(message.title || NOTIFICATION_TITLE, {
+        body: message.body || "",
+        tag: message.tag,
+        icon: NOTIFICATION_ICON,
+        data: { url: message.url },
+      });
+    }),
+  );
+});
+
+/* A tap opens the notification's address inside this area: the page already
+   there comes to the front; else an open page of the area comes to the front
+   and moves there itself (useOpenFromNotification); else a new window. */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const asked = new URL((event.notification.data && event.notification.data.url) || AREA, self.location.origin);
+  const target = asked.origin === self.location.origin && inArea(asked.pathname) ? asked : new URL(AREA, self.location.origin);
+  const address = target.pathname + target.search;
+  event.waitUntil(
+    areaWindows().then((windows) => {
+      const there = windows.find((page) => new URL(page.url).pathname === target.pathname);
+      if (there) return there.focus();
+      const open = windows[0];
+      if (open) {
+        // It moves even when the browser will not bring it to the front.
+        const move = () => open.postMessage({ type: OPEN_FROM_NOTIFICATION, url: address });
+        return open.focus().then(move, move);
+      }
+      return self.clients.openWindow(address);
+    }),
   );
 });
 
@@ -109,6 +196,7 @@ function offlineScreen() {
 }
 
 self.addEventListener("fetch", (event) => {
+  if (!KEEPS_APP_SHELL) return;
   const request = event.request;
   if (request.method !== "GET") return;
   const url = new URL(request.url);

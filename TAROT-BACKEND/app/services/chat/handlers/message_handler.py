@@ -293,6 +293,14 @@ class MessageHandler(BaseEventHandler):
                 },
             )
 
+        # A reader's own reply from her socket (the CRM cockpit, a reader's
+        # panel): her browsers' phone notification, as for every other reply
+        # path (services/web_push.py). Per-message chats only; never raises.
+        if user.id == chat.psychic_id:
+            from app.services.web_push import notify_client_reply
+
+            notify_client_reply(chat, db_message)
+
         logger.debug(
             "message_broadcast_complete",
             chat_id=self.chat_id,

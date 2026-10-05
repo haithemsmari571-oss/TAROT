@@ -526,6 +526,12 @@ async def broadcast_persisted_ai_message(
         except Exception:  # noqa: BLE001 — push failure never breaks delivery
             pass
 
+    # Her browsers' phone notification (Web Push), unless she has this chat
+    # open in sight. Per-message chats only; never raises.
+    from app.services.web_push import notify_client_reply
+
+    notify_client_reply(chat, message)
+
 
 async def broadcast_ai_message(db: Session, chat: Chat, content: str) -> Message:
     """Persist and deliver one AI reader message through the existing path."""

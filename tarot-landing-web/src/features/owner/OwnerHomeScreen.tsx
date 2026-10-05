@@ -1,5 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/hooks";
+import { HomeScreenSteps } from "@/features/client-app/AppSheets";
+import { blockedFix, forgetPushHere, PUSH_COPY, usePush } from "@/features/push/webPush";
 import { Cover } from "@/features/sanctuary/cover";
 import type { OwnerLibraryItem } from "./ownerLibraryApi";
 import { kindLabel } from "./ownerMedia";
@@ -22,6 +24,78 @@ const COPY = {
   hidden: "hidden",
   signOut: "Sign out",
 } as const;
+
+/* Phone alerts on this phone (ROUND57, push/webPush.ts): a client's message,
+   a suggestion ready. The words under the switch are the client app's
+   (PUSH_COPY). */
+const ALERTS_COPY = {
+  title: "Alerts",
+  why: "An alert on this phone when a client writes or a suggestion is ready.",
+  turnOn: "Turn on alerts",
+  homeScreenOnly: `Alerts work only from the ${OWNER_APP_NAME} icon on your home screen.`,
+  homeScreenLine: `Only from the ${OWNER_APP_NAME} icon`,
+} as const;
+
+type OwnerPush = ReturnType<typeof usePush>;
+
+/* Under the title, from sign-in until alerts are on: why, and Turn on
+   alerts; on an iPhone in Safari, the home-screen icon is the only way, with
+   its two steps; a browser's no, with how to undo it. */
+function AlertsCard({ push }: { push: OwnerPush }) {
+  const { state } = push;
+  if (state === "on" || state === "off-server" || state === "checking") return null;
+  return (
+    <section className="owner-panel owner-alerts" aria-labelledby="owner-alerts-title" data-push-state={state}>
+      <h2 className="owner-section-title" id="owner-alerts-title">{ALERTS_COPY.title}</h2>
+      {state === "off" && (
+        <>
+          <p className="owner-note">{ALERTS_COPY.why}</p>
+          <button type="button" className="owner-button" onClick={() => { void push.turnOn(); }} disabled={push.busy}>{ALERTS_COPY.turnOn}</button>
+        </>
+      )}
+      {state === "home-screen-first" && (
+        <>
+          <p className="owner-note">{ALERTS_COPY.homeScreenOnly}</p>
+          <HomeScreenSteps />
+        </>
+      )}
+      {state === "blocked" && <p className="owner-note">{`${PUSH_COPY.blocked}. ${blockedFix(OWNER_APP_NAME)}`}</p>}
+      {state === "unsupported" && <p className="owner-note">{PUSH_COPY.unsupported}</p>}
+      {push.failed && <p className="owner-error" role="alert">{PUSH_COPY.failed}</p>}
+    </section>
+  );
+}
+
+/* Above Sign out, always: the Alerts switch and its state. */
+function AlertsSwitch({ push }: { push: OwnerPush }) {
+  const { state } = push;
+  if (state === "off-server" || state === "checking") return null;
+  const on = state === "on";
+  const line = {
+    on: PUSH_COPY.on,
+    off: PUSH_COPY.off,
+    blocked: PUSH_COPY.blocked,
+    "home-screen-first": ALERTS_COPY.homeScreenLine,
+    unsupported: PUSH_COPY.unsupported,
+  }[state];
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      className="owner-switch-row owner-alerts-switch"
+      onClick={() => { void (on ? push.turnOff() : push.turnOn()); }}
+      disabled={push.busy || (state !== "on" && state !== "off")}
+      data-push-state={state}
+    >
+      <span className="owner-switch-copy">
+        <span className="owner-switch-label">{ALERTS_COPY.title}</span>
+        <span className="owner-switch-line">{line}</span>
+      </span>
+      <span className="owner-switch" aria-hidden="true"><span className="owner-switch-knob" /></span>
+    </button>
+  );
+}
 
 /* Messages, above New post (ROUND53), with a gold count of the conversations
    that need him: a suggestion ready, or her waiting for a reply. */
@@ -53,15 +127,20 @@ function PostPicture({ item }: { item: OwnerLibraryItem }) {
   return <span className="owner-grid-art"><Cover item={browseItemOf(item)} /></span>;
 }
 
-/* Home of the owner's phone admin (ROUND51, ROUND53, ROUND54): Messages,
-   Readers, one big New post, then "Your posts" three to a row as on an
-   Instagram profile, and Sign out at the bottom. */
+/* Home of the owner's phone admin (ROUND51, ROUND53, ROUND54, ROUND57): the
+   Alerts card until alerts are on, Messages, Readers, one big New post, then
+   "Your posts" three to a row as on an Instagram profile, and the Alerts
+   switch and Sign out at the bottom. */
 export default function OwnerHomeScreen() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const posts = useOwnerPosts();
+  const push = usePush("owner");
 
-  const signOut = () => {
+  // This phone stops alerting first, while his session can still tell the
+  // server (push/webPush.ts).
+  const signOut = async () => {
+    await forgetPushHere("owner");
     logout();
     navigate(OWNER_SIGN_IN_PATH, { replace: true });
   };
@@ -69,6 +148,7 @@ export default function OwnerHomeScreen() {
   return (
     <main className="owner-screen owner-home">
       <h1 className="owner-title">{OWNER_APP_NAME}</h1>
+      <AlertsCard push={push} />
       <MessagesTile />
       <Link className="owner-panel owner-readers-tile" to={OWNER_READERS_PATH}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -112,7 +192,8 @@ export default function OwnerHomeScreen() {
           </ul>
         )}
       </section>
-      <button type="button" className="owner-button-quiet owner-sign-out" onClick={signOut}>
+      <AlertsSwitch push={push} />
+      <button type="button" className="owner-button-quiet owner-sign-out" onClick={() => { void signOut(); }}>
         {COPY.signOut}
       </button>
     </main>

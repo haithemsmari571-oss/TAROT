@@ -18,6 +18,7 @@ import { useTopUp } from "@/features/payment/context/TopUpContext";
 import axiosClient from "@/lib/axiosClient";
 import { formatGbp } from "@/lib/currency";
 import { readerName } from "./appReaders";
+import { NotifyAskSheet } from "./AppSheets";
 import { CHATS_PATH } from "./clientAppPaths";
 import ConfirmEmailSheet, { CONFIRM_EMAIL_COPY, EMAIL_NOT_CONFIRMED } from "./ConfirmEmailSheet";
 import { receiptOf, useThreadConnection } from "./useThreadConnection";
@@ -281,6 +282,8 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
         onOpenProfile={noProfileYet}
       />
       <ConfirmEmailSheet open={confirmEmail} onClose={() => setConfirmEmail(false)} />
+      {/* after a message she sent: phone notifications, asked (ROUND57) */}
+      <NotifyAskSheet readerName={readerName(reader)} sent={chat.sent} />
     </div>
   );
 }

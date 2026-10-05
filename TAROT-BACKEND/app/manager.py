@@ -11,6 +11,12 @@ class ConnectionManager:
         self.active_chats: dict[str, list[tuple[WebSocket, Optional[int]]]] = defaultdict(
             list
         )
+        # Sockets whose page said it is out of sight (ROUND57): the app's
+        # thread sends {"type": "viewing", "visible": false} when its tab or
+        # phone goes to the background, and true when it comes back. Keyed by
+        # id(): a Starlette WebSocket is a Mapping, so it cannot be hashed. A
+        # socket that never says anything counts as in sight.
+        self.hidden_sockets: set[int] = set()
 
     async def connect(
         self, websocket: WebSocket, chat_id: str, user_id: Optional[int] = None
@@ -18,6 +24,7 @@ class ConnectionManager:
         self.active_chats[chat_id].append((websocket, user_id))
 
     def disconnect(self, websocket: WebSocket, chat_id: str):
+        self.hidden_sockets.discard(id(websocket))
         conns = self.active_chats.get(chat_id)
         if not conns:
             return
@@ -32,6 +39,21 @@ class ConnectionManager:
         return {
             uid for (_, uid) in self.active_chats.get(chat_id, []) if uid is not None
         }
+
+    def set_visible(self, websocket: WebSocket, visible: bool) -> None:
+        if visible:
+            self.hidden_sockets.discard(id(websocket))
+        else:
+            self.hidden_sockets.add(id(websocket))
+
+    def is_viewing(self, chat_id: str, user_id: int) -> bool:
+        """Whether ``user_id`` has this conversation open in sight: one of her
+        sockets in the room whose page has not said it went out of sight. No
+        phone notification is sent for it then (services/web_push.py)."""
+        return any(
+            uid == user_id and id(ws) not in self.hidden_sockets
+            for (ws, uid) in self.active_chats.get(chat_id, [])
+        )
 
     async def send_to_chat(self, message: dict, chat_id: str):
         """Sends a message to everyone in a specific chat"""

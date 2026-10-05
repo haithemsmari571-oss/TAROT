@@ -1348,3 +1348,20 @@
   gap: 12px;
   margin-top: 4px;
 }
+
+/* ── Alerts (ROUND57) ── */
+/* The card under the title until alerts are on: the home tiles' glass, its
+   title, its one line and Turn on alerts, or the iPhone's two steps (the
+   client app's list, client-sheets.css). The switch row sits with Sign out at
+   the foot of the screen. */
+.owner-shell .owner-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+.owner-shell .owner-alerts .owner-section-title { margin: 0; }
+.owner-shell .owner-alerts .owner-note { text-align: left; }
+.owner-shell .owner-alerts .av-sheet-steps { margin: 0; max-width: none; }
+.owner-shell .owner-alerts-switch { margin-top: auto; }
+.owner-shell .owner-alerts-switch + .owner-sign-out { margin-top: 0; }

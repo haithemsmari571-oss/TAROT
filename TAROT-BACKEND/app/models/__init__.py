@@ -29,6 +29,7 @@ from .daily_pull import DailyPull
 from .ai_prompt import AiPrompt, AiPromptVersion
 from .content_generation_run import ContentGenerationRun
 from .push_token import PushToken
+from .push_subscription import PushSubscription
 from .favorite import FavoritePsychic
 from .ai_draft import AiDraft
 from .reading_session_state import ReadingSessionStateRow
@@ -71,6 +72,7 @@ __all__ = [
     "AiPromptVersion",
     "ContentGenerationRun",
     "PushToken",
+    "PushSubscription",
     "FavoritePsychic",
     "AiDraft",
     "ReadingSessionStateRow",

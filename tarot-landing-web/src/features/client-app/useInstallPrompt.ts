@@ -41,15 +41,16 @@ function subscribe(cb: () => void) {
 const heldOffer = () => offer;
 
 /* Opened from the home screen: the manifest's display mode, or Safari's own
-   flag on an iPhone. */
-function runsStandalone() {
+   flag on an iPhone. Also what phone notifications ask on an iPhone, where
+   only the home-screen app can receive them (push/webPush.ts). */
+export function runsStandalone() {
   return window.matchMedia("(display-mode: standalone)").matches
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
 /* An iPhone, iPad or iPod names itself; iPadOS in its desktop mode reads as
    a Mac with a touch screen. */
-function isIos() {
+export function isIos() {
   const ua = navigator.userAgent;
   return /iPhone|iPad|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
 }

@@ -10,7 +10,8 @@
    Add to your home screen (useInstallPrompt.ts). The
    Account card leads to the account screens, Favourites, Edit details and
    Change password, and shows the line one of them sends back; then the
-   switch for her reply emails; under its Log out, a quieter Delete account
+   switches for phone notifications (ROUND57) and her reply emails; under its
+   Log out, a quieter Delete account
    (ClientDeleteAccountScreen.tsx). At the foot, who runs the site
    (CompanyLegal, lib/company.ts). */
 import { useEffect, useRef, useState } from "react";
@@ -23,8 +24,11 @@ import { TransactionStatus, TransactionType, type Transaction } from "@/features
 import { useTopUp } from "@/features/payment/context/TopUpContext";
 import { usePayment } from "@/features/payment/hooks/usePayment";
 import { profileApi } from "@/features/profile/api/profileApi";
+import { blockedFix, forgetPushHere, PUSH_COPY, usePush } from "@/features/push/webPush";
+import { BRAND_NAME } from "@/lib/company";
 import { GUIDANCE_LINE } from "@/lib/copy";
 import { formatGbp } from "@/lib/currency";
+import { HomeScreenSteps } from "./AppSheets";
 import { readerName } from "./appReaders";
 import { YOU_DELETE_PATH, YOU_DETAILS_PATH, YOU_FAVOURITES_PATH, YOU_PASSWORD_PATH, YOU_PATH } from "./clientAppPaths";
 import { CompanyLegal, refusalText, type YouNotice } from "./ClientAccountForm";
@@ -97,13 +101,59 @@ const ACCOUNT_LINKS = [
 ] as const;
 
 /* The home-screen row and the sheet it opens on an iPhone, where no page can
-   open an install dialog, so the sheet names Safari's own two taps. The
-   sheet's title is the row's label. */
+   open an install dialog, so the sheet names Safari's own two taps
+   (HomeScreenSteps, AppSheets.tsx). The sheet's title is the row's label. */
 const INSTALL_COPY = {
   row: "Add to your home screen",
-  steps: ["Tap the Share button.", "Tap “Add to Home Screen”."],
   close: "Close",
 } as const;
+
+/* Phone notifications in this browser (ROUND57, push/webPush.ts): the
+   Account card's switch, with what the browser says under the label (the
+   words AV Admin's Alerts share, PUSH_COPY), and how to undo a browser's no.
+   Not shown at all while the server has push off. */
+const NOTIFY_COPY = {
+  label: "Notifications",
+  homeScreenFirst: `Add ${BRAND_NAME} to your home screen first`,
+  showMe: "Show me how",
+} as const;
+
+function NotificationsSwitch({ onShowSteps }: { onShowSteps: () => void }) {
+  const push = usePush("client");
+  const { state } = push;
+  if (state === "off-server" || state === "checking") return null;
+  const on = state === "on";
+  const line = {
+    on: PUSH_COPY.on,
+    off: PUSH_COPY.off,
+    blocked: PUSH_COPY.blocked,
+    "home-screen-first": NOTIFY_COPY.homeScreenFirst,
+    unsupported: PUSH_COPY.unsupported,
+  }[state];
+  const toggle = () => { void (on ? push.turnOff() : push.turnOn()); };
+  return (
+    <>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        className="client-you-link client-you-switch client-you-notify"
+        onClick={toggle}
+        disabled={push.busy || (state !== "on" && state !== "off")}
+        data-push-state={state}
+      >
+        <span className="client-you-notify-text">
+          {NOTIFY_COPY.label}
+          <span className="client-you-notify-state">{line}</span>
+        </span>
+        <span className="client-you-switch-track" aria-hidden="true"><span className="client-you-switch-thumb" /></span>
+      </button>
+      {state === "blocked" && <p className="client-you-notify-fix">{blockedFix(BRAND_NAME)}</p>}
+      {state === "home-screen-first" && <button type="button" className="client-you-pill" onClick={onShowSteps}>{NOTIFY_COPY.showMe}</button>}
+      {push.failed && <p className="client-you-error client-you-switch-error" role="alert">{PUSH_COPY.failed}</p>}
+    </>
+  );
+}
 
 /* One row of a card's list: the label, a count when there is one, and the
    chevron. The count is drawn as the tab bar's badge (client-app.css,
@@ -269,7 +319,10 @@ export default function ClientYouScreen() {
     if (notice) navigate(pathname, { replace: true, state: null });
   }, [notice, pathname, navigate]);
 
-  const signOut = () => {
+  // This browser stops ringing for her first, while her session can still
+  // tell the server (push/webPush.ts).
+  const signOut = async () => {
+    await forgetPushHere("client");
     logout();
     navigate("/login", { replace: true });
   };
@@ -353,9 +406,7 @@ export default function ClientYouScreen() {
         >
           <div className="client-you-sheet-body">
             <h2 id="client-you-sheet-title" className="client-you-sheet-title">{INSTALL_COPY.row}</h2>
-            <ol className="client-you-sheet-steps">
-              {INSTALL_COPY.steps.map(step => <li key={step}>{step}</li>)}
-            </ol>
+            <HomeScreenSteps />
             <form method="dialog">
               <button type="submit" className="client-you-pill">{INSTALL_COPY.close}</button>
             </form>
@@ -372,8 +423,9 @@ export default function ClientYouScreen() {
           <nav className="client-you-links" aria-label="Account settings">
             {ACCOUNT_LINKS.map(({ to, label }) => <YouLink key={to} to={to} label={label} />)}
           </nav>
+          <NotificationsSwitch onShowSteps={() => shareSteps.current?.showModal()} />
           <ReplyEmailsSwitch />
-          <button type="button" className="client-you-pill client-you-logout" onClick={signOut}>Log out</button>
+          <button type="button" className="client-you-pill client-you-logout" onClick={() => { void signOut(); }}>Log out</button>
           <Link to={YOU_DELETE_PATH} className="client-you-delete">Delete account</Link>
         </div>
       </section>

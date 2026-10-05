@@ -59,6 +59,13 @@ class EventDispatcher:
                     self.chat_id, self.user_id, self.typing_source_id, False
                 )
 
+            elif event_type == "viewing":
+                # The app's thread, in sight or not (ROUND57): no phone
+                # notification while she has the chat open in sight.
+                from app.manager import manager
+
+                manager.set_visible(self.websocket, event_data.get("visible") is not False)
+
             elif (
                 event_type == ChatEventType.BALANCE_WARNING
                 or event_type == "balance_warning"
