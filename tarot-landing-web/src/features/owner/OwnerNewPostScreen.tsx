@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { splitCaption } from "./ownerCaption";
 import { OwnerHomePreview, OwnerShortsPreview } from "./OwnerClientPreview";
@@ -26,7 +26,7 @@ import {
   OwnerShareBlock,
   OwnerVideoPreview,
 } from "./OwnerParts";
-import { APP_HOME_PATH, APP_SHORTS_PATH, OWNER_PATH, OWNER_SIGN_IN_PATH } from "./ownerPaths";
+import { OWNER_PATH, OWNER_SIGN_IN_PATH } from "./ownerPaths";
 import { OWNER_POSTS_QUERY_KEY } from "./ownerPosts";
 import { publishBusy, useOwnerPublish } from "./ownerPublish";
 import { useFilePreview } from "./useFilePreview";
@@ -64,7 +64,6 @@ const COPY = {
   coverNeeded: "Home shows a cover with every recording.",
   preview: "How clients see it",
   posted: { video: "Posted. It's in Shorts.", audio: "Posted. It's on Home." },
-  view: { video: "View in Shorts", audio: "View on Home" },
   postAnother: "Post another",
   discardHeading: "Discard this post?",
   discardLine: "What you chose and wrote here will be lost. Nothing has been posted.",
@@ -385,7 +384,6 @@ export default function OwnerNewPostScreen() {
         {posted && media ? (
           <div className="owner-posted">
             <p className="owner-done" role="status">{COPY.posted[media.medium]}</p>
-            <Link className="owner-button" to={isVideo ? APP_SHORTS_PATH : APP_HOME_PATH}>{COPY.view[media.medium]}</Link>
             <button type="button" className="owner-button-quiet" onClick={postAnother}>{COPY.postAnother}</button>
           </div>
         ) : (

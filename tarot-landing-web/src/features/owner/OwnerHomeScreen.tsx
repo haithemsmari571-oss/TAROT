@@ -3,12 +3,15 @@ import { useAuth } from "@/features/auth/hooks";
 import { Cover } from "@/features/sanctuary/cover";
 import type { OwnerLibraryItem } from "./ownerLibraryApi";
 import { kindLabel } from "./ownerMedia";
+import { useAttentionCount } from "./ownerMessages";
 import { OwnerPostBadges } from "./OwnerParts";
-import { OWNER_NEW_POST_PATH, OWNER_SIGN_IN_PATH, ownerPostPath } from "./ownerPaths";
+import { OWNER_MESSAGES_PATH, OWNER_NEW_POST_PATH, OWNER_SIGN_IN_PATH, ownerPostPath } from "./ownerPaths";
 import { browseItemOf, coverUrlOf, firstFrameUrl, useOwnerPosts, videoUrlOf } from "./ownerPosts";
 import { OWNER_APP_NAME } from "./ownerSession";
 
 const COPY = {
+  messages: "Messages",
+  needYou: (count: number) => `${count} ${count === 1 ? "conversation needs" : "conversations need"} you`,
   newPost: "New post",
   yourPosts: "Your posts",
   loading: "Loading your posts…",
@@ -16,9 +19,28 @@ const COPY = {
   tryAgain: "Try again",
   empty: "Nothing posted yet.",
   hidden: "hidden",
-  messagesSoon: "Messages, coming soon",
   signOut: "Sign out",
 } as const;
+
+/* Messages, above New post (ROUND53), with a gold count of the conversations
+   that need him: a suggestion ready, or her waiting for a reply. */
+function MessagesTile() {
+  const attention = useAttentionCount();
+  const count = attention.data ?? 0;
+  return (
+    <Link
+      className="owner-panel owner-messages-tile"
+      to={OWNER_MESSAGES_PATH}
+      aria-label={count > 0 ? `${COPY.messages}, ${COPY.needYou(count)}` : COPY.messages}
+    >
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M20 12.5a7.5 7.5 0 0 1-11.1 6.6L4 20l1-4.4A7.5 7.5 0 1 1 20 12.5Z" />
+      </svg>
+      <span className="owner-messages-label">{COPY.messages}</span>
+      {count > 0 && <span className="owner-count-badge" aria-hidden="true">{count}</span>}
+    </Link>
+  );
+}
 
 /* A post's square picture: its cover, else a video's opening frame, else the
    art Home draws for a recording without a cover. */
@@ -30,9 +52,9 @@ function PostPicture({ item }: { item: OwnerLibraryItem }) {
   return <span className="owner-grid-art"><Cover item={browseItemOf(item)} /></span>;
 }
 
-/* Home of the owner's phone admin (ROUND51): one big New post, then "Your
-   posts" three to a row as on an Instagram profile, a quiet line for what
-   comes next, and Sign out at the bottom. */
+/* Home of the owner's phone admin (ROUND51, ROUND53): Messages, one big New
+   post, then "Your posts" three to a row as on an Instagram profile, and Sign
+   out at the bottom. */
 export default function OwnerHomeScreen() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -46,6 +68,7 @@ export default function OwnerHomeScreen() {
   return (
     <main className="owner-screen owner-home">
       <h1 className="owner-title">{OWNER_APP_NAME}</h1>
+      <MessagesTile />
       <Link className="owner-button owner-new-post" to={OWNER_NEW_POST_PATH}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
@@ -80,7 +103,6 @@ export default function OwnerHomeScreen() {
           </ul>
         )}
       </section>
-      <p className="owner-quiet">{COPY.messagesSoon}</p>
       <button type="button" className="owner-button-quiet owner-sign-out" onClick={signOut}>
         {COPY.signOut}
       </button>

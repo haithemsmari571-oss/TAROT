@@ -95,6 +95,7 @@
   margin: 6px 0 0;
   font: 300 14px/1.55 var(--gl-sans);
   color: var(--gl-text-dim);
+  white-space: pre-line;
 }
 
 /* The sound switch: the room's back control (hall-room.css:47-52), its

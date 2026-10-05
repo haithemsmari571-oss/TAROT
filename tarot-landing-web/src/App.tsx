@@ -14,7 +14,7 @@ import PageSpace from "./components/PageSpace";
 import { crmDestinationForAdminPath } from "./admin-crm-routes";
 import RedirectSignedInClient, { type ClientAppRedirect } from "./features/client-app/RedirectSignedInClient";
 import { CHATS_PATH, HOME_PATH, READERS_PATH, YOU_PATH } from "./features/client-app/clientAppPaths";
-import { OWNER_NEW_POST_PATH, OWNER_PATH, OWNER_POST_PATH, OWNER_SIGN_IN_PATH } from "./features/owner/ownerPaths";
+import { OWNER_MESSAGES_PATH, OWNER_NEW_POST_PATH, OWNER_PATH, OWNER_POST_PATH, OWNER_SIGN_IN_PATH, OWNER_THREAD_PATH } from "./features/owner/ownerPaths";
 
 export { crmDestinationForAdminPath } from "./admin-crm-routes";
 
@@ -40,12 +40,14 @@ const ClientHelpScreen = lazy(() => import("./features/client-app/ClientHelpScre
 const ClientHomeScreen = lazy(() => import("./features/client-app/ClientHomeScreen"));
 const ClientArticleScreen = lazy(() => import("./features/client-app/ClientArticleScreen"));
 const ClientShortsScreen = lazy(() => import("./features/client-app/ClientShortsScreen"));
-// The owner's phone admin (ROUND50); posting is one flow (ROUND51).
+// The owner's phone admin (ROUND50); posting is one flow (ROUND51); Messages (ROUND53).
 const OwnerShell = lazy(() => import("./features/owner/OwnerShell"));
 const OwnerSignInScreen = lazy(() => import("./features/owner/OwnerSignInScreen"));
 const OwnerHomeScreen = lazy(() => import("./features/owner/OwnerHomeScreen"));
 const OwnerNewPostScreen = lazy(() => import("./features/owner/OwnerNewPostScreen"));
 const OwnerPostScreen = lazy(() => import("./features/owner/OwnerPostScreen"));
+const OwnerInboxScreen = lazy(() => import("./features/owner/OwnerInboxScreen"));
+const OwnerThreadScreen = lazy(() => import("./features/owner/OwnerThreadScreen"));
 
 // --- CUSTOM HOOK ---
 function useScrollToTop() {
@@ -192,6 +194,8 @@ export default function App() {
         <Route path={OWNER_SIGN_IN_PATH} element={<Suspense fallback={null}><OwnerSignInScreen /></Suspense>} />
         <Route path={OWNER_NEW_POST_PATH} element={<Suspense fallback={null}><OwnerNewPostScreen /></Suspense>} />
         <Route path={OWNER_POST_PATH} element={<Suspense fallback={null}><OwnerPostScreen /></Suspense>} />
+        <Route path={OWNER_MESSAGES_PATH} element={<Suspense fallback={null}><OwnerInboxScreen /></Suspense>} />
+        <Route path={OWNER_THREAD_PATH} element={<Suspense fallback={null}><OwnerThreadScreen /></Suspense>} />
       </Route>
 
       {/* Public Layout Routes (Landing pages without sidebar) */}

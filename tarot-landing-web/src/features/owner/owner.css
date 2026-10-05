@@ -142,7 +142,7 @@
   box-shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.9), 0 0 34px -10px var(--gl-accent);
 }
 .owner-shell .owner-button:disabled { opacity: 0.45; cursor: default; }
-/* A link drawn as the main button (New post, View in Shorts). */
+/* A link drawn as the main button (New post). */
 .owner-shell a.owner-button {
   display: flex;
   align-items: center;
@@ -706,4 +706,413 @@
   height: 100%;
   background: linear-gradient(90deg, #ffe9b8, #e8c88b);
   transition: width 0.3s;
+}
+
+/* ── Messages (ROUND53) ── */
+.owner-shell .owner-messages-tile:focus-visible,
+.owner-shell .owner-inbox-row:focus-visible,
+.owner-shell .owner-thread-back:focus-visible,
+.owner-shell .owner-mode-option:focus-visible,
+.owner-shell .owner-new-message:focus-visible {
+  outline: 2px solid var(--gl-accent);
+  outline-offset: 3px;
+}
+
+/* Home: the Messages tile above New post, its gold count on the right. */
+.owner-shell .owner-messages-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  padding: 16px 20px;
+  color: #fffcf4;
+  text-decoration: none;
+}
+.owner-shell .owner-messages-tile svg { flex: none; color: var(--gl-accent); }
+.owner-shell .owner-messages-label { font: 300 26px/1.15 var(--gl-serif); }
+.owner-shell .owner-count-badge {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: linear-gradient(140deg, #ffecc4, #e6c48c);
+  color: #2a1a10;
+  font: 600 15px/1 var(--gl-sans);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 24px -6px var(--gl-accent);
+}
+
+/* The pull at the top of a Messages screen. */
+.owner-shell .owner-pull {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: -10px;
+  color: var(--gl-accent);
+  font: 500 13px/1.4 var(--gl-sans);
+  letter-spacing: 0.08em;
+}
+.owner-shell .owner-pull span { padding-bottom: 6px; }
+
+/* A reader's picture in a round gold-edged frame, or her first letter. */
+.owner-shell .owner-reader-picture {
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 214, 150, 0.32);
+  background: rgba(8, 4, 18, 0.55);
+}
+.owner-shell .owner-reader-picture.is-row { width: 48px; height: 48px; }
+.owner-shell .owner-reader-picture.is-head { width: 44px; height: 44px; }
+.owner-shell .owner-reader-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.owner-shell .owner-reader-initial { font: 400 20px/1 var(--gl-serif); color: var(--gl-accent); }
+
+.owner-shell .owner-mode-chip {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.22);
+  color: var(--gl-text-dim);
+  font: 500 10.5px/1.4 var(--gl-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.owner-shell .owner-mode-chip.is-hybrid {
+  border-color: rgba(255, 214, 150, 0.5);
+  color: var(--gl-accent);
+}
+
+/* The inbox: one frosted panel, a row per conversation. */
+.owner-shell .owner-inbox-list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  overflow: hidden;
+}
+.owner-shell .owner-inbox-list li + li { border-top: 1px solid rgba(255, 214, 150, 0.1); }
+.owner-shell .owner-inbox-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 84px;
+  padding: 12px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.owner-shell .owner-inbox-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+/* A long client name gives way; "· with Reader" always shows. */
+.owner-shell .owner-inbox-names {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.owner-shell .owner-inbox-client,
+.owner-shell .owner-inbox-last {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.owner-shell .owner-inbox-client { font: 400 17px/1.25 var(--gl-serif); color: #fffcf4; }
+.owner-shell .owner-inbox-reader {
+  flex: none;
+  white-space: pre;
+  font: 400 14px/1.25 var(--gl-sans);
+  color: var(--gl-text-dim);
+}
+.owner-shell .owner-inbox-last { font: 400 14px/1.35 var(--gl-sans); color: var(--gl-text-dim); }
+.owner-shell .owner-inbox-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  text-align: right;
+}
+.owner-shell .owner-inbox-time {
+  color: var(--gl-text-faint);
+  font: 400 12.5px/1.3 var(--gl-sans);
+  white-space: nowrap;
+}
+.owner-shell .owner-inbox-status {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: 600 11.5px/1.3 var(--gl-sans);
+  white-space: nowrap;
+}
+.owner-shell .owner-inbox-status.is-suggestion {
+  background: linear-gradient(140deg, #ffecc4, #e6c48c);
+  color: #2a1a10;
+  box-shadow: 0 0 20px -8px var(--gl-accent);
+}
+.owner-shell .owner-inbox-status.is-waiting {
+  border: 1px solid rgba(255, 214, 150, 0.4);
+  color: #fffcf4;
+}
+.owner-shell .owner-inbox-refund {
+  color: var(--gl-accent);
+  font: 400 12px/1.3 var(--gl-sans);
+  white-space: nowrap;
+}
+
+/* One conversation. The header stays at the top while the page scrolls; the
+   bottom area is in normal flow, so the phone's keyboard pushes the page and
+   never covers it. */
+.owner-shell .owner-thread { gap: 14px; }
+.owner-shell .owner-thread-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin:
+    calc(-20px - env(safe-area-inset-top, 0px))
+    calc(-18px - env(safe-area-inset-right, 0px))
+    0
+    calc(-18px - env(safe-area-inset-left, 0px));
+  padding:
+    calc(8px + env(safe-area-inset-top, 0px))
+    calc(18px + env(safe-area-inset-right, 0px))
+    8px
+    calc(10px + env(safe-area-inset-left, 0px));
+  background: rgba(18, 12, 24, 0.72);
+  border-bottom: 1px solid rgba(255, 214, 150, 0.14);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+}
+.owner-shell .owner-thread-back {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: var(--gl-text-dim);
+}
+.owner-shell .owner-thread-names {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.owner-shell .owner-thread-client {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 400 21px/1.2 var(--gl-serif);
+  color: #fffcf4;
+}
+.owner-shell .owner-thread-reader { font: 400 13.5px/1.3 var(--gl-sans); color: var(--gl-text-dim); }
+
+/* Hybrid | Automatic: two halves of one pill; the chosen one is gold. */
+.owner-shell .owner-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.22);
+  background: rgba(8, 4, 18, 0.5);
+}
+.owner-shell .owner-mode-option {
+  min-height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gl-text-dim);
+  font: 500 15px/1.2 var(--gl-sans);
+  cursor: pointer;
+}
+.owner-shell .owner-mode-option[aria-checked="true"] {
+  background: linear-gradient(140deg, #ffecc4, #e6c48c);
+  color: #2a1a10;
+  font-weight: 600;
+  box-shadow: 0 0 24px -10px var(--gl-accent);
+}
+.owner-shell .owner-mode-option:disabled { cursor: default; }
+
+.owner-shell .owner-thread-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.owner-shell .owner-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 84%;
+}
+.owner-shell .owner-msg.is-client { align-self: flex-start; align-items: flex-start; }
+.owner-shell .owner-msg.is-reader { align-self: flex-end; align-items: flex-end; }
+.owner-shell .owner-msg.is-system {
+  align-self: center;
+  max-width: 90%;
+  color: var(--gl-text-faint);
+  font: 400 13px/1.45 var(--gl-sans);
+  text-align: center;
+}
+.owner-shell .owner-msg.is-system p { margin: 0; }
+.owner-shell .owner-bubble {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 20px;
+  font: 400 16px/1.45 var(--gl-sans);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.owner-shell .owner-msg.is-client .owner-bubble {
+  border: 1px solid rgba(255, 214, 150, 0.16);
+  border-bottom-left-radius: 6px;
+  background: linear-gradient(165deg, rgba(30, 18, 48, 0.78), rgba(12, 6, 24, 0.66));
+  color: #f6efe2;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.owner-shell .owner-msg.is-reader .owner-bubble {
+  border-bottom-right-radius: 6px;
+  background: linear-gradient(140deg, rgba(255, 236, 196, 0.96), rgba(230, 196, 140, 0.94));
+  color: #2a1a10;
+}
+.owner-shell .owner-msg-time {
+  padding: 0 6px;
+  color: var(--gl-text-faint);
+  font: 400 12px/1.3 var(--gl-sans);
+}
+
+/* "New message" while he reads further up: it rides the bottom of the screen
+   until the bottom area is in view. */
+.owner-shell .owner-new-message {
+  position: sticky;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  align-self: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.45);
+  background: rgba(18, 12, 24, 0.88);
+  color: #fffcf4;
+  font: 500 14px/1 var(--gl-sans);
+  cursor: pointer;
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9), 0 0 24px -12px var(--gl-accent);
+}
+
+.owner-shell .owner-refund-line { margin: 0; font-size: 14px; }
+.owner-shell .owner-thread-automatic {
+  margin: 0;
+  padding: 16px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 214, 150, 0.14);
+}
+
+/* The bottom area: the Suggestion, the writing line, or his own box. */
+.owner-shell .owner-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.owner-shell .owner-composer-title {
+  margin: 0;
+  font: 300 22px/1.2 var(--gl-serif);
+  color: #fffcf4;
+}
+.owner-shell .owner-reply-box {
+  min-height: 52px;
+  font-size: 16px;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.owner-shell .owner-composer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+/* Narrower side padding so "New suggestion" stays on one line at 390. */
+.owner-shell .owner-composer-row .owner-button-quiet { padding: 12px 8px; }
+.owner-shell .owner-button-faint {
+  border-color: rgba(255, 214, 150, 0.12);
+  background: transparent;
+  color: var(--gl-text-dim);
+}
+
+/* "Writing a suggestion…", a soft gold light passing over the words. */
+.owner-shell .owner-writing {
+  margin: 0;
+  padding: 16px 4px;
+  text-align: center;
+  font: 400 16px/1.4 var(--gl-sans);
+  color: transparent;
+  background: linear-gradient(90deg, rgba(244, 239, 230, 0.5) 30%, #ffecc4 50%, rgba(244, 239, 230, 0.5) 70%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: owner-shimmer 2.4s linear infinite;
+}
+@keyframes owner-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .owner-shell .owner-writing { animation: none; color: var(--gl-text-dim); background: none; }
+}
+
+/* The confirm sheet, risen from the bottom over a dimmed page. */
+.owner-shell .owner-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding:
+    12px
+    calc(12px + env(safe-area-inset-right, 0px))
+    calc(12px + env(safe-area-inset-bottom, 0px))
+    calc(12px + env(safe-area-inset-left, 0px));
+  background: rgba(6, 3, 12, 0.62);
+}
+.owner-shell .owner-sheet {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 18px 18px;
+  animation: owner-sheet-rise 0.24s ease-out;
+}
+.owner-shell .owner-sheet-line {
+  margin: 0 0 6px;
+  font: 300 22px/1.3 var(--gl-serif);
+  color: #fffcf4;
+  text-align: center;
+}
+@keyframes owner-sheet-rise {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .owner-shell .owner-sheet { animation: none; }
 }

@@ -109,6 +109,7 @@
   margin-top: 6px;
   font: 300 14px/1.55 var(--gl-sans);
   color: var(--gl-text-dim);
+  white-space: pre-line;
 }
 
 /* Listen and Read: the You tab's pill (client-you.css, .client-you-pill),

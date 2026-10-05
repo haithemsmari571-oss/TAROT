@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
+import { formatHomeDuration } from "@/features/client-app/homeDuration";
 import { dayOf } from "@/features/client-app/ukTime";
 import type { SanctuaryBrowseItem } from "@/features/sanctuary/api/libraryItemsApi";
-import { Cover, formatDuration } from "@/features/sanctuary/cover";
+import { Cover } from "@/features/sanctuary/cover";
 import { sanitizeClaims } from "@/lib/copy";
 import "@/features/client-app/client-home.css";
 import "@/features/client-app/client-shorts.css";
@@ -94,7 +95,7 @@ export function OwnerHomePreview({
     interaction: "listen",
     source: "library",
   };
-  const duration = formatDuration(durationSeconds);
+  const duration = formatHomeDuration(durationSeconds);
   return (
     <div className="client-app-shell owner-client-preview owner-client-preview-home">
       <div className="client-home-post">

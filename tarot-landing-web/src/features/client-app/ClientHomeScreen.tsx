@@ -8,11 +8,12 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { ARTICLE_KEY_PREFIX, type SanctuaryBrowseItem } from "@/features/sanctuary/api/libraryItemsApi";
-import { Cover, formatDuration } from "@/features/sanctuary/cover";
+import { Cover } from "@/features/sanctuary/cover";
 import { useLibraryItems } from "@/features/sanctuary/hooks/useLibraryItems";
 import { useSanctuaryPlayer } from "@/features/sanctuary/SanctuaryPlayerProvider";
 import { sanitizeClaims } from "@/lib/copy";
 import { HOME_PATH } from "./clientAppPaths";
+import { formatHomeDuration } from "./homeDuration";
 import { dayOf } from "./ukTime";
 import "./client-chats.css";
 import "./client-home.css";
@@ -37,7 +38,7 @@ const matches = (item: SanctuaryBrowseItem, query: string) =>
   [item.title, item.description, item.type].some(field => fold(field).includes(query));
 
 function Post({ item, onActivate }: { item: SanctuaryBrowseItem; onActivate: (item: SanctuaryBrowseItem) => void }) {
-  const duration = formatDuration(item.durationSeconds);
+  const duration = formatHomeDuration(item.durationSeconds);
   const verb = item.audioUrl ? "Listen" : "Read";
   return (
     <li>
