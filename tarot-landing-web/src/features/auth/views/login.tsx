@@ -6,6 +6,7 @@ import { readerIdFrom, withReader } from "@/features/client-app/readerIntent";
 import AuthBackground from "../components/AuthBackground";
 import ShowPasswordButton from "../components/ShowPasswordButton";
 import { useGlassTheme } from "../../../lib/glassTheme";
+import { cleanEmail, emailProblem } from "../emailEntry";
 import { useLogin } from "../hooks";
 import { INCORRECT_CREDENTIALS, loginRefusal } from "../signInRefusal";
 import { WEBSITE_SIGN_IN_REFUSED, storedSessionWasRefused } from "../websiteSignIn";
@@ -25,9 +26,10 @@ const labelStyle: React.CSSProperties = {
   margin: "0 2px 8px",
 };
 
+// 16px: iPhone Safari zooms the whole page into a box with smaller text (ROUND64).
 const inputStyle: React.CSSProperties = {
   padding: "13px 18px",
-  fontSize: 14,
+  fontSize: 16,
 };
 
 const errorBoxStyle: React.CSSProperties = {
@@ -49,6 +51,7 @@ const errorTextStyle: React.CSSProperties = {
 const EMAIL_ID = "signin-email";
 const PASSWORD_ID = "signin-password";
 const ERROR_ID = "signin-error";
+const ENTER_PASSWORD = "Please enter your password.";
 
 /** The fields a refusal is about: both for a wrong email or password, the
     email for an address the server cannot read (422), none otherwise. */
@@ -71,8 +74,6 @@ const LoginPage = () => {
   const [searchParams] = useSearchParams();
   // The reader she chose as a guest, carried on to sign-up (readerIntent.ts).
   const readerId = readerIdFrom(searchParams);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showVerifiedMessage, setShowVerifiedMessage] = useState(false);
   // A reader's or admin's stored session this page load ended (main.tsx) gets
   // the same refusal, until she tries to sign in.
@@ -80,10 +81,14 @@ const LoginPage = () => {
   const { mutate: login, isPending, error } = useLogin();
   const [showPassword, setShowPassword] = useState(false);
   const emailField = useRef<HTMLInputElement>(null);
+  const passwordField = useRef<HTMLInputElement>(null);
+  // The page's own refusal of what she entered (ROUND64), and the box it is about.
+  const [entryError, setEntryError] = useState<{ message: string; id: string } | null>(null);
 
   // The fields the refusal on show is about are tied to it and marked invalid;
   // the email, first of them, takes focus.
-  const badFields = refusedFieldIds(error);
+  const badFields = entryError ? [entryError.id] : refusedFieldIds(error);
+  const refusal = entryError ? entryError.message : error ? loginRefusal(error) : null;
   const errorFor = (id: string) =>
     badFields.includes(id) ? { "aria-invalid": true, "aria-describedby": ERROR_ID } : {};
 
@@ -100,9 +105,31 @@ const LoginPage = () => {
     }
   }, [verified]);
 
-  const handleLogin = async (e) => {
+  const refuse = (message: string, id: typeof EMAIL_ID | typeof PASSWORD_ID) => {
+    setEntryError({ message, id });
+    (id === EMAIL_ID ? emailField : passwordField).current?.focus();
+  };
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSessionRefused(false);
+    // Read from the boxes themselves, so what she sees is what is checked and
+    // sent (ROUND64). The email is cleaned; the password is sent as it is.
+    const email = cleanEmail(emailField.current?.value ?? "");
+    const password = passwordField.current?.value ?? "";
+
+    const emailRefusal = emailProblem(email);
+    if (emailRefusal) {
+      refuse(emailRefusal, EMAIL_ID);
+      return;
+    }
+
+    if (!password) {
+      refuse(ENTER_PASSWORD, PASSWORD_ID);
+      return;
+    }
+
+    setEntryError(null);
     await login({ email, password });
   };
 
@@ -151,7 +178,8 @@ const LoginPage = () => {
             </div>
           )}
 
-          <form className="space-y-5" onSubmit={handleLogin}>
+          {/* noValidate: the page checks the boxes in its own words, never Safari's bubble (ROUND64). */}
+          <form className="space-y-5" onSubmit={handleLogin} noValidate>
             <div>
               <label htmlFor={EMAIL_ID} style={labelStyle}>Email</label>
               <div className="relative">
@@ -167,11 +195,13 @@ const LoginPage = () => {
                   type="email"
                   name="email"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
                   placeholder="you@email.com"
                   className="gl-pop-input"
                   style={{ ...inputStyle, paddingLeft: 46 }}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   {...errorFor(EMAIL_ID)}
                 />
               </div>
@@ -197,14 +227,13 @@ const LoginPage = () => {
                 <input
                   required
                   id={PASSWORD_ID}
+                  ref={passwordField}
                   type={showPassword ? "text" : "password"}
                   name="password"
                   autoComplete="current-password"
                   placeholder="••••••••••••"
                   className="gl-pop-input"
                   style={{ ...inputStyle, paddingLeft: 46, paddingRight: 46 }}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
                   {...errorFor(PASSWORD_ID)}
                 />
                 <ShowPasswordButton shown={showPassword} onToggle={() => setShowPassword((s) => !s)} controls={PASSWORD_ID} />
@@ -212,10 +241,10 @@ const LoginPage = () => {
             </div>
 
             {/* role="alert": read out the moment it appears (ROUND35 A3). */}
-            {error ? (
+            {refusal ? (
               <div role="alert" style={errorBoxStyle}>
                 <p id={ERROR_ID} style={errorTextStyle}>
-                  {loginRefusal(error)}
+                  {refusal}
                 </p>
               </div>
             ) : (

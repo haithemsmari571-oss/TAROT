@@ -12,6 +12,7 @@ import { GUIDANCE_LINE } from "../../../lib/copy";
 import { formatGbp } from "../../../lib/currency";
 import { useGlassTheme } from "../../../lib/glassTheme";
 import { FIRST_READING_ON_US, hasWelcomeCredit, useWelcomeCredit } from "../../client-app/useWelcomeCredit";
+import { cleanEmail, emailProblem } from "../emailEntry";
 import { useLogin, useRegister } from "../hooks";
 import "../../../styles/glass.css";
 
@@ -29,10 +30,15 @@ const labelStyle: React.CSSProperties = {
   margin: "0 2px 8px",
 };
 
+// 16px: iPhone Safari zooms the whole page into a box with smaller text (ROUND64).
 const inputStyle: React.CSSProperties = {
   padding: "13px 18px",
-  fontSize: 14,
+  fontSize: 16,
 };
+
+// The gender choices are buttons, which Safari never zooms into: they keep
+// 14px, at which "Prefer not to say" still fits one line on a 390px phone.
+const choiceStyle: React.CSSProperties = { ...inputStyle, fontSize: 14 };
 
 const errorBoxStyle: React.CSSProperties = {
   border: "1px solid rgba(193, 68, 58, 0.45)",
@@ -80,7 +86,6 @@ const FIELD_ID = {
   dob: "signup-dob",
   gender: "signup-gender",
   password: "signup-password",
-  confirm: "signup-confirm",
 } as const;
 type SignUpField = keyof typeof FIELD_ID;
 const ERROR_ID = "signup-error";
@@ -133,22 +138,14 @@ function isUnderMinimumAge(dateOfBirth: string, now = new Date()): boolean {
 
 const RegisterPage = () => {
   const { theme } = useGlassTheme(); // stored mood on hard loads + date-picker scheme
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
   // No pre-selection. A default here would quietly answer for her, which is the whole
   // problem this field exists to fix.
   const [gender, setGender] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  // The field a check on this page refused, and whether each password is shown.
+  // The field a check on this page refused, and whether the password is shown.
   const [badField, setBadField] = useState<SignUpField | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const fields = useRef<Partial<Record<SignUpField, HTMLInputElement | HTMLButtonElement | null>>>({});
-  // Her own tick, never pre-ticked; the form cannot be sent without it.
-  const [acceptTerms, setAcceptTerms] = useState(false);
   // Today, "YYYY-MM-DD" — caps the date picker so a future DOB can't be picked.
   const today = new Date().toISOString().split("T")[0];
   const { mutate: register, isPending, error } = useRegister();
@@ -179,14 +176,36 @@ const RegisterPage = () => {
     fields.current[field]?.focus();
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPasswordError("");
     setBadField(null);
 
-    if (password !== confirmPassword) {
-      refuse("Passwords do not match", "confirm");
-      return;
+    // Read from the boxes themselves, so what she sees is what is checked and
+    // sent (ROUND64). The email is cleaned; nothing else is changed.
+    const form = e.currentTarget;
+    const entered = new FormData(form);
+    const username = String(entered.get("username") ?? "");
+    const email = cleanEmail(String(entered.get("email") ?? ""));
+    const dateOfBirth = String(entered.get("date_of_birth") ?? "");
+    const password = String(entered.get("password") ?? "");
+    const acceptTerms = entered.has("accept_terms");
+
+    // The form is noValidate for the email box: the page checks it in its own
+    // words. Safari still checks every other box, in page order, as before: an
+    // empty Username, Date of birth or Password, a date after today, and the
+    // Terms box (her own tick, never pre-ticked).
+    for (const box of Array.from(form.querySelectorAll("input"))) {
+      if (box === fields.current.email) {
+        const emailRefusal = emailProblem(email);
+        if (emailRefusal) {
+          refuse(emailRefusal, "email");
+          return;
+        }
+      } else if (!box.validity.valid) {
+        box.reportValidity();
+        return;
+      }
     }
 
     if (password.length < 6) {
@@ -257,7 +276,8 @@ const RegisterPage = () => {
             )}
           </header>
 
-          <form className="space-y-4" onSubmit={handleRegister}>
+          {/* noValidate: the email box is checked in the page's own words (ROUND64). */}
+          <form className="space-y-4" onSubmit={handleRegister} noValidate>
             <div>
               <label htmlFor={FIELD_ID.username} style={labelStyle}>Username</label>
               <div className="relative">
@@ -271,12 +291,11 @@ const RegisterPage = () => {
                   id={FIELD_ID.username}
                   ref={(el) => { fields.current.username = el; }}
                   type="text"
+                  name="username"
                   autoComplete="nickname"
                   placeholder="Your name"
                   className="gl-pop-input"
                   style={{ ...inputStyle, paddingLeft: 46 }}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
                   {...errorFor("username")}
                 />
               </div>
@@ -295,12 +314,17 @@ const RegisterPage = () => {
                   id={FIELD_ID.email}
                   ref={(el) => { fields.current.email = el; }}
                   type="email"
-                  autoComplete="email"
+                  name="email"
+                  // The email is the account's name: the iPhone saves the
+                  // password under it, and fills it in on sign-in (ROUND64).
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
                   placeholder="you@email.com"
                   className="gl-pop-input"
                   style={{ ...inputStyle, paddingLeft: 46 }}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   {...errorFor("email")}
                 />
               </div>
@@ -324,12 +348,11 @@ const RegisterPage = () => {
                   id={FIELD_ID.dob}
                   ref={(el) => { fields.current.dob = el; }}
                   type="date"
+                  name="date_of_birth"
                   autoComplete="bday"
                   max={today}
                   className="gl-pop-input"
                   style={{ ...inputStyle, paddingLeft: 46, colorScheme: theme }}
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
                   {...errorFor("dob")}
                 />
               </div>
@@ -367,7 +390,7 @@ const RegisterPage = () => {
                       aria-pressed={selected}
                       className="gl-pop-input"
                       style={{
-                        ...inputStyle,
+                        ...choiceStyle,
                         textAlign: "center",
                         cursor: "pointer",
                         borderColor: selected ? "var(--gl-accent)" : undefined,
@@ -382,44 +405,26 @@ const RegisterPage = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor={FIELD_ID.password} style={labelStyle}>Password</label>
-                <div className="relative">
-                  <input
-                    required
-                    id={FIELD_ID.password}
-                    ref={(el) => { fields.current.password = el; }}
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    placeholder="••••••"
-                    className="gl-pop-input"
-                    style={{ ...inputStyle, paddingRight: 46 }}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    {...errorFor("password")}
-                  />
-                  <ShowPasswordButton shown={showPassword} onToggle={() => setShowPassword((s) => !s)} controls={FIELD_ID.password} />
-                </div>
-              </div>
-              <div>
-                <label htmlFor={FIELD_ID.confirm} style={labelStyle}>Confirm password</label>
-                <div className="relative">
-                  <input
-                    required
-                    id={FIELD_ID.confirm}
-                    ref={(el) => { fields.current.confirm = el; }}
-                    type={showConfirm ? "text" : "password"}
-                    autoComplete="new-password"
-                    placeholder="••••••"
-                    className="gl-pop-input"
-                    style={{ ...inputStyle, paddingRight: 46 }}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    {...errorFor("confirm")}
-                  />
-                  <ShowPasswordButton shown={showConfirm} onToggle={() => setShowConfirm((s) => !s)} controls={FIELD_ID.confirm} />
-                </div>
+            {/* One password box (ROUND64): the eye shows exactly what becomes her password. */}
+            <div>
+              <label htmlFor={FIELD_ID.password} style={labelStyle}>Password</label>
+              <div className="relative">
+                <input
+                  required
+                  id={FIELD_ID.password}
+                  ref={(el) => { fields.current.password = el; }}
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="••••••"
+                  className="gl-pop-input"
+                  style={{ ...inputStyle, paddingRight: 46 }}
+                  {...errorFor("password")}
+                />
+                <ShowPasswordButton shown={showPassword} onToggle={() => setShowPassword((s) => !s)} controls={FIELD_ID.password} />
               </div>
             </div>
 
@@ -432,14 +437,14 @@ const RegisterPage = () => {
               </div>
             )}
 
-            {/* Required: the browser will not send the form until she ticks it.
+            {/* Required: the page will not send the form until she ticks it
+                (handleRegister asks Safari to say so).
                 The pages open in a new tab so nothing she typed is lost. */}
             <label className="flex items-start gap-2.5" style={{ ...agreeStyle, cursor: "pointer" }}>
               <input
                 required
                 type="checkbox"
-                checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
+                name="accept_terms"
                 style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0, accentColor: "var(--gl-accent)" }}
               />
               <span style={{ fontFamily: "inherit" }}>
