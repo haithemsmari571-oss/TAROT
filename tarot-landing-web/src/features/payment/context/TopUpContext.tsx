@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Icon } from "@iconify/react";
 import { isAxiosError } from "axios";
+import { withTopUpBand } from "@/features/analytics/analytics";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
 import { PER_MESSAGE_COPY } from "@/features/chat/perMessage";
 import ConfirmEmailSheet, { EMAIL_NOT_CONFIRMED } from "@/features/client-app/ConfirmEmailSheet";
@@ -149,10 +150,11 @@ function StardustGliderModal({
         await options.onBeforeCheckout?.();
         const returnUrl =
           options.returnUrl ?? `${window.location.pathname}?topup=1`;
-        // Redirects to Stripe; nothing runs after this on success.
+        // Redirects to Stripe; nothing runs after this on success. The return
+        // carries the amount's band for the visitor statistics (analytics.ts).
         await createStardustCheckoutSession({
           amount_usd: amountUsd,
-          return_url: returnUrl,
+          return_url: withTopUpBand(returnUrl, amountUsd),
         });
       } catch (failure) {
         setBusy(false);

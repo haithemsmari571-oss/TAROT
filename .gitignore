@@ -14,6 +14,8 @@ dist-ssr/
 # Environment
 .env
 .env.*.local
+# Umami's secrets on the server (scripts/umami/make-secrets.sh)
+.env.umami
 
 # Database
 *.db

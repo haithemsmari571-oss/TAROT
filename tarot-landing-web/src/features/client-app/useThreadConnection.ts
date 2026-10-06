@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { trackEvent } from "@/features/analytics/analytics";
 import { useAuth } from "@/features/auth/hooks";
 import { ChatWebSocket } from "@/features/chat/api/chatApi";
 import axiosClient from "@/lib/axiosClient";
@@ -33,6 +34,8 @@ interface Frame extends FrameData {
   created_at?: string;
   status?: string;
   is_system?: boolean;
+  /** on the echo of her message: it is the first she has ever sent */
+  first_message?: boolean;
 }
 
 export function receiptOf(status: string): Receipt {
@@ -148,6 +151,9 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
             pendingRef.current = null;
             setPending(null);
             setSent(count => count + 1);
+            // Her first message ever, in any thread, as the server counts it
+            // (message_handler.py); only the tab that sent it gets here.
+            if (frame.first_message === true) trackEvent("first_message_sent");
           } else if (message.sender_id !== userId && !message.is_system) {
             setThinking(false);
             markOpen();

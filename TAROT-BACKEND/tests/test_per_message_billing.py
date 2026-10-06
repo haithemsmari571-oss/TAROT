@@ -597,3 +597,69 @@ def test_the_schemas_accept_none_and_a_real_price_and_reject_zero_or_negative():
             AdminUserCreate(price_per_message=bad, **user_common)
         with pytest.raises(ValidationError):
             AdminUserUpdate(price_per_message=bad)
+
+
+# -- 12. Her first message ever is flagged on its echo (visitor statistics) ---
+class _RecordingManager(_FakeManager):
+    """Keeps every frame broadcast to a chat."""
+
+    def __init__(self):
+        self.broadcasts = []
+
+    async def send_to_chat(self, message=None, chat_id=None):
+        self.broadcasts.append(message)
+
+
+def _record_broadcasts(monkeypatch):
+    import app.routers.chats as chats_router
+
+    manager = _RecordingManager()
+    monkeypatch.setattr(chats_router, "manager", manager)
+    return manager
+
+
+def _echoes(manager):
+    return [frame for frame in manager.broadcasts if frame and frame.get("type") == "message"]
+
+
+def test_only_her_first_message_ever_is_flagged_on_its_echo(db, make_user, monkeypatch):
+    """The echo of a client's first message, in any thread, carries
+    first_message: True, after the reader's opener and after a refused send;
+    her next message, in another thread, carries nothing. The app counts the
+    first once (tarot-landing-web analytics.ts, first_message_sent)."""
+    _mode(monkeypatch, "per_message")
+    _stub_delivery(monkeypatch)
+    manager = _record_broadcasts(monkeypatch)
+    client, psychic = _people(db, make_user, balance=0.0, price=2.0)
+    client.is_verified = True  # her second message waits for a confirmed email otherwise
+    other_reader = make_user(role=Role.PSYCHIC)
+    other_reader.price_per_message = 2.0
+    db.commit()
+    chat = _chat(db, client, psychic)
+    db.add(Message(chat_id=chat.id, sender_id=psychic.id, content="Hello, I am here."))
+    db.commit()
+
+    refused = _send(db, chat, client, "too poor")
+    assert [f for f in refused.sent if f.get("event") == "message_rejected"]
+    client.balance = 10.0
+    db.commit()
+    _send(db, chat, client, "first")
+    _send(db, _chat(db, client, other_reader), client, "second")
+
+    echoes = _echoes(manager)
+    assert [echo["content"] for echo in echoes] == ["first", "second"]
+    assert echoes[0]["first_message"] is True
+    assert "first_message" not in echoes[1]
+
+
+def test_per_minute_mode_never_flags_first_message(db, make_user, monkeypatch):
+    """The per-minute send is untouched: its echo carries no first_message."""
+    _stub_delivery(monkeypatch)
+    manager = _record_broadcasts(monkeypatch)
+    client, psychic = _people(db, make_user, balance=10.0, price=2.0)
+
+    _send(db, _chat(db, client, psychic, status=ChatStatus.ACTIVE), client)
+
+    echoes = _echoes(manager)
+    assert len(echoes) == 1
+    assert "first_message" not in echoes[0]

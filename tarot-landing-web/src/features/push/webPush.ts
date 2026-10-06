@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axiosClient from "@/lib/axiosClient";
+import { trackEvent } from "@/features/analytics/analytics";
 import {
   APP_SCOPE,
   OPEN_FROM_NOTIFICATION,
@@ -237,6 +238,9 @@ export function usePush(app: PushApp) {
       if (answer !== "granted") return answer === "denied" ? "blocked" : "off";
       await subscribe(app, publicKey);
       setSubscribed(true);
+      // On for her, and the server holds this browser (analytics.ts); the
+      // owner's admin is never counted.
+      if (app === "client") trackEvent("notifications_enabled");
       return "on";
     } catch {
       setFailed(true);

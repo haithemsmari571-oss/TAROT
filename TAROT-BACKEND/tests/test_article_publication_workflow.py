@@ -332,3 +332,25 @@ def test_article_cover_upload_validates_real_images_and_uses_safe_filename(db, m
     assert body["path"].endswith(".webp")
     assert ".." not in body["filename"] and "unsafe" not in body["filename"]
     assert (tmp_path / body["filename"]).is_file()
+
+
+def test_article_pages_load_the_cookie_free_visit_counter_once(db, make_user):
+    """The backend's own article pages carry the site's Umami tag (ROUND61), as
+    the app does: the site's own script, Do Not Track respected, the query
+    dropped, the live hosts only."""
+    from app.routers.public_seo import ANALYTICS_TAG
+
+    client = client_for(db, make_user(role=Role.SUPERADMIN))
+    _create_and_publish(client, slug="synthetic-visit-counter", title="Visit Counter")
+
+    for address in ("/articles/", "/articles/synthetic-visit-counter/"):
+        page = client.get(address)
+        assert page.status_code == 200
+        assert page.text.count(ANALYTICS_TAG) == 1
+    for attribute in (
+        'src="/av/s.js"',
+        'data-do-not-track="true"',
+        'data-exclude-search="true"',
+        'data-domains="askvalentina.co.uk,www.askvalentina.co.uk"',
+    ):
+        assert attribute in ANALYTICS_TAG

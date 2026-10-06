@@ -42,6 +42,9 @@ services:
       - "443:443"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      # certbot's challenge folder on the server, for the statistics' dashboard
+      # name, visits.askvalentina.co.uk (nginx.conf; scripts/umami/README.md).
+      - /var/www/certbot:/var/www/certbot:ro
     restart: unless-stopped
     depends_on:
       - backend

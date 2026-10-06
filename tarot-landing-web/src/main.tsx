@@ -17,12 +17,17 @@ import { CelebrationProvider } from './features/celebrations/CelebrationProvider
 import { SanctuaryPlayerProvider } from './features/sanctuary/SanctuaryPlayerProvider'
 // Holds the browser's install offer from the first moment, for the app's
 // home-screen row: it fires before the lazy app shell has loaded.
-import './features/client-app/useInstallPrompt'
+import { runsStandalone } from './features/client-app/useInstallPrompt'
 import { endRefusedStoredSession } from './features/auth/websiteSignIn'
+import { startAnalytics } from './features/analytics/analytics'
 
 // A reader's or admin's stored session ends here, before any route renders,
 // and the page opens on /login with the sign-in page's refusal.
 endRefusedStoredSession()
+
+// Visitor statistics, cookie-free (ROUND61): before the router reads the
+// address, which may carry a top-up's band back from Stripe.
+startAnalytics(runsStandalone())
 
 const queryClient = new QueryClient(
   {defaultOptions: {

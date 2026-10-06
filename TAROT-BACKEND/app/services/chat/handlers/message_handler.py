@@ -219,6 +219,14 @@ class MessageHandler(BaseEventHandler):
             if db_message.created_at
             else message_data["timestamp"]
         )
+        if per_message_charge is not None:
+            from app.services.email_confirmation import messages_sent_before
+
+            # Her first message ever, in any thread: the app that sent it
+            # counts it once, cookie-free (tarot-landing-web
+            # src/features/analytics/analytics.ts). Nothing else reads it.
+            if messages_sent_before(self.db, user, db_message) == 0:
+                message_data["first_message"] = True
 
         # ── Read-receipt status from live presence ──
         # READ if the recipient currently has this conversation open, DELIVERED

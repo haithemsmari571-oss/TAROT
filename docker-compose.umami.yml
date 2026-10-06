@@ -1,0 +1,76 @@
+# Cookie-free visitor statistics (ROUND61): Umami, its official image pinned to
+# one version, on the same server as the site, as docker-compose.atlas.yml sits
+# beside it. A compose project of its own ("name" below), so the site's deploy
+# (deploy.yml, deploy.sh) never starts, stops or rebuilds it, and it never
+# touches the site's containers.
+#
+# scripts/umami/start.sh starts it, after making its own database and user in
+# the site's postgres container (never the site's database). Its secrets come
+# from .env.umami, written once by scripts/umami/make-secrets.sh (never printed,
+# never committed). scripts/umami/README.md has the steps.
+#
+# The site's nginx (tarot-landing-web/nginx.conf) reaches it by name on the
+# site's network:
+#   https://askvalentina.co.uk/av/s.js    the tracker (Umami's /script.js)
+#   https://askvalentina.co.uk/av/e       where the tracker sends (/api/send)
+#   https://visits.askvalentina.co.uk/    the dashboard, behind Umami's login
+name: askvalentina-umami
+
+services:
+  umami:
+    image: ghcr.io/umami-software/umami:3.4.0@sha256:85909afc45bdcda1917394594a087421fdbb05610fded0fa9f6fb861abb2f367
+    container_name: tarot-umami
+    restart: unless-stopped
+    init: true
+    environment:
+      # The user and database scripts/umami/start.sh makes, on the site's
+      # postgres ("postgres" on the site's network).
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:?run scripts/umami/make-secrets.sh first}@postgres:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?run scripts/umami/make-secrets.sh first}
+      TWO_FACTOR_ENCRYPTION_KEY: ${UMAMI_TWO_FACTOR_KEY:?run scripts/umami/make-secrets.sh first}
+      # The tracker sends to its own folder plus this, so /av/s.js sends to
+      # /av/e (nginx.conf). Umami writes it into its tracker when it starts.
+      COLLECT_API_ENDPOINT: /e
+      # nginx sets X-Real-IP to the visitor's address and passes on nothing the
+      # browser claims. Umami reads it for the country and the day's visit
+      # count, and never stores it.
+      CLIENT_IP_HEADER: x-real-ip
+      # Nothing leaves for umami.is: no usage report, no update check.
+      DISABLE_TELEMETRY: "1"
+      DISABLE_UPDATES: "1"
+      # Node keeps its heap well inside the memory limit below.
+      NODE_OPTIONS: --max-old-space-size=256
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    # It can never starve the site: at most 512 MB and half a CPU, the lowest
+    # share of the CPU when the backend is busy, and the first container the
+    # kernel stops if the server runs out of memory. Its queries on the shared
+    # postgres are capped too (start.sh: 10 connections, 60 seconds each).
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.5
+    cpu_shares: 256
+    pids_limit: 200
+    oom_score_adj: 500
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # On the server itself only (127.0.0.1), never the internet: the dashboard
+    # through an SSH tunnel until visits.askvalentina.co.uk is ready.
+    ports:
+      - "127.0.0.1:3031:3000"
+    networks:
+      - site
+
+networks:
+  site:
+    external: true
+    # The site's own network (as docker-compose.atlas.yml joins it). A copy run
+    # elsewhere names its own: SITE_NETWORK=<project>_default.
+    name: ${SITE_NETWORK:-tarot_default}

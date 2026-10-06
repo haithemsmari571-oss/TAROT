@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { trackEvent } from "@/features/analytics/analytics";
 import { paymentApi } from "../api/paymentApi";
 import type { CreateCheckoutSessionRequest, UnitPriceResponse, CreateStardustCheckoutSessionRequest } from "../types/payment.types";
 import type {
@@ -35,6 +36,9 @@ export const usePayment = () => {
     setError(null);
     try {
       const response = await paymentApi.createStardustCheckoutSession(request);
+      // The checkout is open and she leaves for it now (analytics.ts); the
+      // tracker's request outlives the page.
+      trackEvent("topup_started");
       // Redirect to Stripe checkout
       window.location.href = response.url;
     } catch (err: unknown) {
