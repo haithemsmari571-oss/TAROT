@@ -2,7 +2,7 @@
 moment; Ask Valentina is for over-18s, from her date of birth.
 
 - POST /api/auth/sign-up needs accept_terms true, and stores terms_accepted_at.
-- A date of birth under 18 is refused with "You must be 18 or over", as the
+- A date of birth under 18 is refused with "Ask Valentina is for adults 18 and over.", as the
   {message} the sign-up page reads.
 - PATCH /api/profile/me cannot set her date of birth under 18, or blank it.
 
@@ -27,7 +27,7 @@ from app.schemas.auth import UserSignup
 from app.schemas.user import MINIMUM_AGE, UNDER_MINIMUM_AGE, is_under_minimum_age
 from app.services import auth as auth_service
 
-UNDER_AGE = "You must be 18 or over"
+UNDER_AGE = "Ask Valentina is for adults 18 and over."
 
 
 def _birthday(years_ago: int, today: date | None = None) -> date:

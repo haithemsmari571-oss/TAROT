@@ -724,3 +724,63 @@ def test_conversation_with_an_unknown_reader_is_404(sqlite, monkeypatch):
 
     assert resp.status_code == 404, resp.text
     assert _rows(db) == (0, 0, 0, 0)
+
+
+# -- ROUND60: a hidden reader takes no new conversation; one already open keeps working
+def _hide(db, psychic):
+    """AV Admin's Hidden switch: the flag the roster reads."""
+    psychic.is_listed = False
+    db.commit()
+
+
+def test_conversation_with_a_hidden_reader_is_refused_410(sqlite, monkeypatch):
+    from app.services.per_message_start import READER_NO_LONGER_AVAILABLE
+
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    client, psychic = _people(db, balance=10.0)
+    _hide(db, psychic)
+    http = _client(db, client, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+
+    assert resp.status_code == 410, resp.text
+    assert resp.json() == {"detail": READER_NO_LONGER_AVAILABLE}
+    assert _rows(db) == (0, 0, 0, 0)
+
+
+def test_request_with_a_hidden_reader_is_refused_410_and_charges_nothing(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
+    client, psychic = _people(db, balance=10.0)
+    _hide(db, psychic)
+    http = _client(db, client, SessionManager(), monkeypatch)
+
+    resp = http.post("/api/chat/request", json={"psychic_id": psychic.id, "message": "hello"})
+
+    assert resp.status_code == 410, resp.text
+    assert _rows(db) == (0, 0, 0, 0)
+    db.refresh(client)
+    assert float(client.balance) == 10.0
+    assert calls == {"enqueue": [], "stage": []}
+
+
+def test_a_thread_opened_before_the_reader_was_hidden_keeps_working(sqlite, monkeypatch):
+    db, _ = sqlite
+    _mode(monkeypatch, "per_message")
+    calls = _quiet_reply_side_effects(monkeypatch)
+    client, psychic = _people(db, balance=10.0)
+    http = _client(db, client, SessionManager(), monkeypatch)
+    first = http.post("/api/chat/conversation", json={"psychic_id": psychic.id}).json()
+    _hide(db, psychic)
+
+    again = http.post("/api/chat/conversation", json={"psychic_id": psychic.id})
+    sent = http.post("/api/chat/request", json={"psychic_id": psychic.id, "message": "still there?"})
+
+    assert again.status_code == 200, again.text
+    assert again.json()["chat_id"] == first["chat_id"]
+    assert sent.status_code == 201, sent.text
+    assert sent.json()["chat_id"] == first["chat_id"]
+    assert len(_msg_fee_debits(db)) == 1
+    assert calls["enqueue"] == [(first["chat_id"], sent.json()["message_id"])]

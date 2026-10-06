@@ -131,6 +131,14 @@ function StardustGliderModal({
     };
   }, []);
 
+  // On a phone the line sits under the glider, below the fold (ROUND58 at
+  // 390x844): it is brought into view when it appears, so Buy never fails
+  // in silence.
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
+
   const handlePurchase = useCallback(
     async (amountUsd: number) => {
       if (busy) return;
@@ -202,7 +210,12 @@ function StardustGliderModal({
         )}
 
         {error && (
-          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-sm text-red-400">
+          <div
+            ref={errorRef}
+            role="alert"
+            style={{ scrollMarginBottom: 16 }}
+            className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-sm text-red-400"
+          >
             {error}
           </div>
         )}

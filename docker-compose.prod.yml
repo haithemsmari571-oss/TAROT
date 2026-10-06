@@ -51,3 +51,8 @@ services:
 
   stripe-cli:
     ports: []
+    # Stripe's test-mode forwarder is for a developer's machine only: on the
+    # server it would hand test payments to the live backend. In the "dev"
+    # profile, no production command starts it (deploy.sh, the deploy
+    # workflow). Local dev, on docker-compose.yml alone, still starts it.
+    profiles: ["dev"]

@@ -24,6 +24,8 @@ import "./client-chats.css";
 import "./client-readers.css";
 import "./client-favourites.css";
 
+const BACK_TO_READERS = "Back to readers";
+
 export default function ClientReaderProfileScreen() {
   const { psychicId: rawId } = useParams();
   const id = Number(rawId);
@@ -33,11 +35,21 @@ export default function ClientReaderProfileScreen() {
     <Column>
       <div className="client-chats-empty">
         <p role="alert">This reader could not be loaded.</p>
-        <Link to={READERS_PATH}>Back to readers</Link>
+        <Link to={READERS_PATH}>{BACK_TO_READERS}</Link>
       </div>
     </Column>
   );
   if (!reader.data) return <Column><p className="client-chats-notice" role="status">Loading…</p></Column>;
+  // A reader the owner has hidden takes no new conversation (the server
+  // refuses one with 410); a thread she already has stays in her Chats.
+  if (reader.data.is_listed === false) return (
+    <Column>
+      <div className="client-chats-empty">
+        <p role="status">{PER_MESSAGE_COPY.readerGone}</p>
+        <Link to={READERS_PATH}>{BACK_TO_READERS}</Link>
+      </div>
+    </Column>
+  );
   return <Column><Profile reader={reader.data} /><ClientReaderReviews reader={reader.data} /></Column>;
 }
 
@@ -54,7 +66,7 @@ function Column({ children }: { children: ReactNode }) {
   return (
     <section className="client-reader-profile" aria-label="Reader profile">
       <div className="client-reader-profile-top">
-        <button type="button" className="client-reader-back" aria-label="Back to readers" onClick={back}>‹</button>
+        <button type="button" className="client-reader-back" aria-label={BACK_TO_READERS} onClick={back}>‹</button>
       </div>
       {children}
     </section>
@@ -82,7 +94,9 @@ function Profile({ reader }: { reader: Psychic }) {
       const opened = await openConversation(reader.id);
       navigate(threadPath(opened.chat_id));
     } catch (error) {
-      setRefusal(isAxiosError(error) && error.response?.status === 402 ? PER_MESSAGE_COPY.readerUnavailable : PER_MESSAGE_COPY.openFailed);
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      setRefusal(status === 410 ? PER_MESSAGE_COPY.readerGone
+        : status === 402 ? PER_MESSAGE_COPY.readerUnavailable : PER_MESSAGE_COPY.openFailed);
       setOpening(false);
     }
   };

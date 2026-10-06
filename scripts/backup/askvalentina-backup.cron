@@ -1,0 +1,8 @@
+# Ask Valentina: the nightly database backup (backup_db.sh beside this file).
+# Installed on the server as /etc/cron.d/askvalentina-backup. Cron runs it every
+# hour at minute 15 and the script goes on only at 3 o'clock UK time, so the
+# backup is taken at 03:15 UK time every night, in winter and in summer time.
+# Its own log: /root/backups/backup.log; its last result: /root/backups/LAST_RESULT.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 * * * * root /bin/bash /root/TAROT/scripts/backup/backup_db.sh --nightly >/dev/null 2>&1

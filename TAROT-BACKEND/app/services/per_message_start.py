@@ -26,6 +26,9 @@ from app.services.stardust_rewards import get_spendable_stardust
 
 
 AUTOMATIC_READER_OPENER = "Hello, I'm here with you."
+# A hidden reader (AV Admin's Hidden switch, is_listed false) takes no new
+# conversation: 410 with these words. One already open keeps working.
+READER_NO_LONGER_AVAILABLE = "This reader is no longer available."
 
 
 def _prepare_joined_session(db: Session, chat: Chat) -> ChatSession:
@@ -102,9 +105,9 @@ def find_or_open_conversation(
 
     The caller holds the client's row lock. An existing conversation comes
     back as it is, whatever its response mode, with no session and no opener:
-    nothing on it changes here. A new one is created ACTIVE and automatic, with
-    its clockless joined session and the reader's opener, flushed and not
-    committed.
+    nothing on it changes here, hidden reader or not. A new one is created
+    ACTIVE and automatic, with its clockless joined session and the reader's
+    opener, flushed and not committed; a hidden reader refuses it with 410.
     """
     chat = (
         db.query(Chat)
@@ -114,6 +117,8 @@ def find_or_open_conversation(
     )
     if chat is not None:
         return chat, None, None
+    if not reader.is_listed:
+        raise HTTPException(status_code=410, detail=READER_NO_LONGER_AVAILABLE)
 
     chat = Chat(
         user_id=client.id,

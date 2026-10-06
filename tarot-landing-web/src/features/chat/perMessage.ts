@@ -35,6 +35,9 @@ export const PER_MESSAGE_COPY = {
   paymentReceived: "Payment received. Your Stardust is in the room.",
   /** POST /chat/conversation failed for any reason other than READER_UNAVAILABLE */
   openFailed: "This conversation could not be opened. Try again.",
+  /** a hidden reader's profile, and POST /chat/conversation's 410 for her
+      (TAROT-BACKEND per_message_start.py READER_NO_LONGER_AVAILABLE) */
+  readerGone: "This reader is no longer available.",
 } as const;
 
 /** Where Stripe Checkout returns after a per-message top-up: this room, with a

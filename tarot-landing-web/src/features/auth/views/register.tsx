@@ -120,7 +120,7 @@ const guidanceStyle: React.CSSProperties = {
 // Ask Valentina is for adults. The server refuses the same date in the same
 // words (TAROT-BACKEND app/schemas/user.py MINIMUM_AGE, UNDER_MINIMUM_AGE).
 const MINIMUM_AGE = 18;
-const UNDER_MINIMUM_AGE = `You must be ${MINIMUM_AGE} or over`;
+const UNDER_MINIMUM_AGE = `Ask Valentina is for adults ${MINIMUM_AGE} and over.`;
 // Under the heading when she arrives from a reader's START READING (ROUND38).
 const startWithReader = (name: string) => `Create your account to start your reading with ${name}.`;
 

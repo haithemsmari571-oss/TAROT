@@ -9,9 +9,9 @@ from app.enums.user_status import UserStatus
 
 # Ask Valentina is for adults. Sign-up (services/auth.py sign_up) and her own
 # profile edits (UserProfileUpdate below) refuse a date of birth under this age,
-# in these words.
+# in these words (the owner's, ROUND60).
 MINIMUM_AGE = 18
-UNDER_MINIMUM_AGE = f"You must be {MINIMUM_AGE} or over"
+UNDER_MINIMUM_AGE = f"Ask Valentina is for adults {MINIMUM_AGE} and over."
 
 
 def is_under_minimum_age(date_of_birth: date, today: date | None = None) -> bool:

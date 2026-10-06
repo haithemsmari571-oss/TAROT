@@ -210,6 +210,11 @@ def update_user_admin(db: Session, user_id: int, user_data: AdminUserUpdate) -> 
     return user
 
 
+def closed_account_email(user_id: int) -> str:
+    """The address a closed account is left with (soft_delete_own_account), which frees the real one."""
+    return f"deleted-{user_id}@deleted.askvalentina.co.uk"
+
+
 def soft_delete_own_account(db: Session, user: User) -> None:
     """Self-service account deletion: soft delete + anonymize.
 
@@ -250,7 +255,7 @@ def soft_delete_own_account(db: Session, user: User) -> None:
         Chat.user_id == user.id, Chat.status == ChatStatus.REQUESTED
     ).update({Chat.status: ChatStatus.ENDED})
 
-    user.email = f"deleted-{user.id}@deleted.askvalentina.co.uk"
+    user.email = closed_account_email(user.id)
     user.username = f"deleted-user-{user.id}"
     user.password_hash = hash_password(secrets.token_urlsafe(32))
     user.date_of_birth = None

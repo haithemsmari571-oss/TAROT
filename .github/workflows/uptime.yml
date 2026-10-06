@@ -1,0 +1,66 @@
+name: Uptime check
+
+# Every 15 minutes GitHub asks the live site three questions: does the home
+# page answer, does the app answer, and does the backend answer with its
+# database (GET /api/health)? Each gets 10 seconds and two retries. If any of
+# them still fails, this run fails and GitHub emails the repository owner
+# ("Run failed: Uptime check"). No secrets: these are public addresses.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: uptime-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Site, app and backend answer within 10 seconds
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HOME_URL: https://askvalentina.co.uk/
+      APP_URL: https://askvalentina.co.uk/app
+      HEALTH_URL: https://askvalentina.co.uk/api/health
+      HEALTH_OK: '"status":"ok"'
+      TIMEOUT_SECONDS: "10"
+      RETRIES: "2"
+      RETRY_PAUSE_SECONDS: "20"
+    steps:
+      - name: Check
+        shell: bash
+        run: |
+          set -u
+          # One address: up to 1 + RETRIES tries of TIMEOUT_SECONDS each. It is
+          # up on an answer 200 within the time (and, for the health check, its
+          # {"status":"ok"}); otherwise it waits and tries again.
+          check() {
+            local label="$1" url="$2" expect="$3" try result code seconds reason
+            local body err
+            body="$(mktemp)"
+            err="$(mktemp)"
+            for try in $(seq 1 $((RETRIES + 1))); do
+              result="$(curl --silent --show-error --location --output "$body" \
+                --max-time "$TIMEOUT_SECONDS" --write-out '%{http_code} %{time_total}' "$url" 2>"$err")" || true
+              code="${result%% *}"
+              seconds="${result#* }"
+              if [ "$code" = "200" ] && { [ -z "$expect" ] || grep -qF -- "$expect" "$body"; }; then
+                echo "UP    $label  $url  answered 200 in ${seconds}s (try $try)"
+                return 0
+              fi
+              reason="$(head -c 200 "$err")"
+              if [ "$code" = "200" ]; then reason="but without $expect"; fi
+              echo "DOWN  $label  $url  try $try: answer ${code:-none} after ${seconds:-?}s ${reason}"
+              if [ "$try" -le "$RETRIES" ]; then sleep "$RETRY_PAUSE_SECONDS"; fi
+            done
+            echo "::error title=$label is down::$url failed $((RETRIES + 1)) tries (wanted: 200${expect:+ with $expect} within ${TIMEOUT_SECONDS}s)"
+            return 1
+          }
+          down=0
+          check "Home page" "$HOME_URL" "" || down=1
+          check "App" "$APP_URL" "" || down=1
+          check "Backend and database" "$HEALTH_URL" "$HEALTH_OK" || down=1
+          exit "$down"

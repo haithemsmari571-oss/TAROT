@@ -41,6 +41,8 @@ export interface Psychic {
   languages?: string[] | null;
   /** her countries as ISO codes, "MA" or "GB,RO" (ROUND56, client-app/countries.ts); null when not filled in */
   ethnicity?: string | null;
+  /** false once the owner hides her (AV Admin): she takes no new conversation (ROUND60) */
+  is_listed?: boolean;
 }
 
 export interface PsychicCreate {
