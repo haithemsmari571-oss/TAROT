@@ -76,6 +76,10 @@ class AppSettings(BaseSettings):
     # 24h. Production sets its own value via env; this default is deliberately
     # sane (not 9999) so a long-lived token can never ship by omission.
     JWT_TOKEN_EXPIRE_MINUTES: int = 1440
+    # The refresh token's life. Every refresh issues a new one, so she stays
+    # signed in as long as she opens the site once within this many days
+    # (ROUND66): a year from her last visit.
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 365
 
     APP_BASE_URL: str = "https://askvalentina.co.uk/api"
     FRONT_BASE_URL: str = "https://askvalentina.co.uk/"

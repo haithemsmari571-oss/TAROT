@@ -261,6 +261,7 @@ const checkComeback = (ok: boolean, what: string) => {
     checkComeback(!rule.refreshRefused(answered(status, "<html>Bad Gateway</html>")), `a ${status}: not a refusal, the session is kept`);
   }
   checkComeback(!rule.refreshRefused({ isAxiosError: true, message: "Network Error", code: "ERR_NETWORK" }), "no answer at all: not a refusal");
+  checkComeback(!rule.refreshRefused({ isAxiosError: true, message: "timeout of 10000ms exceeded", code: "ECONNABORTED" }), "a timeout: not a refusal (ROUND66, the 401 handler too)");
   checkComeback(!rule.refreshRefused(new Error("No refresh token stored")), "an error that is not the server's: not a refusal");
 }
 

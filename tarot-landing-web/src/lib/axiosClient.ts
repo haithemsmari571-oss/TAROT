@@ -8,6 +8,7 @@ import {
   isTokenExpired
 } from "@/features/auth/utils";
 import { OWNER_SIGN_IN_PATH, isOwnerPath } from "@/features/owner/ownerPaths";
+import { refreshRefused } from "@/features/auth/websiteSignIn";
 
 /* Where a session that cannot be refreshed signs in again: on the owner's
    pages, the owner's own sign-in, so AV Admin never leaves /owner for the
@@ -45,6 +46,31 @@ if (PROD_WRITE_GUARD) {
   );
 }
 
+/* Who hears of a new access token (ROUND66): AuthContext, whose token the
+   notification socket and the room's socket connect with, so they reconnect
+   with the new one instead of the one that ran out. */
+type SessionListener = (accessToken: string) => void;
+const sessionListeners = new Set<SessionListener>();
+
+export function onSessionTokens(listener: SessionListener): () => void {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
+}
+
+/* Keeps tokens the server just issued: a refresh, or a password change, which
+   ends every other device's sign-in and hands this one new tokens. The server
+   sends a new refresh token each time (a year from now), so it is kept too. */
+export function storeSessionTokens(tokens: { access_token: string; refresh_token?: string }): string {
+  saveToken(tokens.access_token);
+  if (tokens.refresh_token) {
+    saveRefreshToken(tokens.refresh_token);
+  }
+  sessionListeners.forEach((listener) => listener(tokens.access_token));
+  return tokens.access_token;
+}
+
 /* One refresh at a time, shared by the 401 handler below and AuthContext's
    start (ROUND65): whoever asks while one is running gets the same answer, so
    the server sees a single POST. Resolves with the new access token, already
@@ -63,14 +89,8 @@ export function refreshSession(): Promise<string> {
       { refresh_token: refreshToken }
     );
 
-    const { access_token, refresh_token: new_refresh_token } = response.data;
     console.log("Token refresh successful");
-
-    saveToken(access_token);
-    if (new_refresh_token) {
-      saveRefreshToken(new_refresh_token);
-    }
-    return access_token as string;
+    return storeSessionTokens(response.data);
   })().finally(() => {
     refreshing = null;
   });
@@ -161,7 +181,12 @@ axiosClient.interceptors.response.use(
         return axiosClient(originalRequest);
       } catch (refreshError: any) {
         console.error("Token refresh failed:", refreshError?.response?.status, refreshError?.response?.data);
-        // Refresh failed, clear tokens and redirect
+        // No answer, a timeout or a 5xx is no refusal (ROUND66): the tokens
+        // stay, this call fails, and the next 401 asks again.
+        if (!refreshRefused(refreshError)) {
+          return Promise.reject(refreshError);
+        }
+        // The server refused the refresh: clear tokens and redirect
         clearTokens();
         const signInPath = signInPathHere();
         if (window.location.pathname !== signInPath) {

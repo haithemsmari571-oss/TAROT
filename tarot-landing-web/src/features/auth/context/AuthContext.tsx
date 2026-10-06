@@ -11,7 +11,7 @@ import {
 } from "../utils";
 import type { User, AuthContextType } from "../types";
 import { getCurrentUser } from "../api";
-import { refreshSession } from "@/lib/axiosClient";
+import { onSessionTokens, refreshSession } from "@/lib/axiosClient";
 import { fillStoredUser, refreshRefused, storedSessionStart, tokenSignsInHere } from "../websiteSignIn";
 
 export const AuthContext = createContext<AuthContextType | undefined>(
@@ -96,6 +96,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     initAuth();
   }, []);
+
+  // A token refreshed during use, or handed over by a password change, becomes
+  // the session's token (ROUND66), so the notification socket and the room's
+  // socket reconnect with it. A signed-out page stays signed out.
+  useEffect(
+    () => onSessionTokens((fresh) => setToken((current) => (current ? fresh : current))),
+    [],
+  );
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {

@@ -36,7 +36,7 @@ def get_current_user(
     token = credentials.credentials
     try:
         # decode_access_token also rejects a refresh token (type != "access"):
-        # the 7-day refresh token is for /refresh-token only, never a bearer.
+        # the refresh token is for /refresh-token only, never a bearer.
         payload = decode_access_token(token)
         user_id: str = payload.get("sub")
 

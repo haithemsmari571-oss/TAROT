@@ -15,6 +15,11 @@ settings = get_app_settings()
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 
+# The refresh token's copy of users.session_version. /refresh-token refuses a
+# token whose copy differs from the row's; a token made before the claim
+# existed counts as version 0 (services/auth.py refresh_access_token).
+SESSION_VERSION_CLAIM = "sv"
+
 
 def hash_password(password: str) -> str:
     return password_hash.hash(password)
@@ -45,8 +50,7 @@ def create_refresh_token(data: dict) -> str:
     Refresh tokens are used to obtain new access tokens without re-authentication.
     """
     to_encode = data.copy()
-    # Refresh tokens typically last 7 days
-    expire = datetime.now(timezone.utc) + timedelta(days=7)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": REFRESH_TOKEN_TYPE})
     encoded_jwt = jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM

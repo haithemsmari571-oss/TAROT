@@ -1,4 +1,4 @@
-"""Verification of the eleven Production Lock Version 21 files."""
+"""Verification of the eleven Production Lock Version 22 files."""
 
 from __future__ import annotations
 
@@ -9,6 +9,10 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 LOCKED_SHA256 = {
+    # Production Lock Version 22: config.py adds ONE setting, REFRESH_TOKEN_EXPIRE_DAYS
+    # (365), the refresh token's life (ROUND66). No reading setting or prompt changed;
+    # the other ten files are byte-identical to Version 21.
+    #
     # Production Lock Version 21: sanitize_delivery_text strips STRAY_MODEL_TOKENS;
     # no prompt or setting changed; the other ten files are byte-identical.
     #
@@ -111,7 +115,7 @@ LOCKED_SHA256 = {
     #                     That is how "sitting with you For weeks" reached clients.
     #
     # Versions 1-11 stay preserved in Second Brain.
-    "app/config.py": "621AB919B6B1BEB7DD2AA3095827751B8D484B24767CBBCCED882E9CB0A93585",
+    "app/config.py": "28F76A2F98DB7E8CFA0B948AA3F22AEB882808E734BA1C729D17882304EA7C9D",
     "app/services/ai/client.py": "35E42B59265880441751DE0F53A7637A032B51D60A1D9B64A12AAD20865658CB",
     "app/services/ai/reading_pipeline.py": "DA5652389C0330BF53F522389487AD6F259C4C19052C1116F76188B0FCBCD985",
     "app/services/ai/reading_duo.py": "33CCA0B8405E0E9872E71C7218C0A31202135554682F329E3E0AD06B6ED6AE2A",

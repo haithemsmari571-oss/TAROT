@@ -77,9 +77,11 @@ export function storedSessionStart(token: string | null, hasUser: boolean, hasRe
 }
 
 /* Whether the server refused that refresh: it answered 4xx (the refresh
-   token expired, unreadable, or its account gone: 400 or 404). Only then is
-   she signed out. No answer, or a 5xx while the server restarts, is no
-   refusal: the stored session is kept and the next call tries again. */
+   token expired or unreadable, her password changed since, or her account
+   suspended, closed or gone: 400, or 404 from an older server). Only then is
+   she signed out, on start (AuthContext.tsx) and during use (axiosClient.ts's
+   401 handler). No answer, a timeout, or a 5xx while the server restarts, is
+   no refusal: the stored session is kept and the next call tries again. */
 export function refreshRefused(error: unknown): boolean {
   const status = isAxiosError(error) ? error.response?.status : undefined;
   return status !== undefined && status >= 400 && status < 500;

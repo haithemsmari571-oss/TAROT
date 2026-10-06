@@ -12,6 +12,7 @@ from app.config import get_app_settings
 from app.enums.email_template_key import MailTemplateKey
 from app.enums.role import Role
 from app.enums.transaction_type import TransactionType
+from app.enums.user_status import UserStatus
 from app.exceptions.auth import AccountNotVerified, BadCredentials, InvalidResetLink
 from app.exceptions.email import EmailServiceUnavailable
 from app.exceptions.users import (
@@ -34,6 +35,8 @@ from app.schemas.user import UserRead, is_under_minimum_age
 from app.services.email import send_email
 from app.services.settings import get_setting_value
 from app.utils.security import (
+    REFRESH_TOKEN_TYPE,
+    SESSION_VERSION_CLAIM,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -384,9 +387,7 @@ def sign_in(db: Session, user_data: UserLogin) -> dict:
     # Bind user to request context for tracking
     bind_user_to_context(user.id)
 
-    token_data = {"sub": str(user.id), "role": user.role.value}
-    access_token = create_access_token(data=token_data)
-    refresh_token = create_refresh_token(data=token_data)
+    tokens = session_tokens(user)
 
     logger.info(
         "tokens_generated",
@@ -394,11 +395,28 @@ def sign_in(db: Session, user_data: UserLogin) -> dict:
         role=user.role.value,
     )
 
+    return tokens
+
+
+def session_tokens(user: User) -> dict:
+    """A new access token and a new refresh token for this account: at
+    sign-in, at every refresh and after a password change. The refresh token
+    lasts REFRESH_TOKEN_EXPIRE_DAYS from now and carries the account's
+    session_version (ROUND66)."""
+    token_data = {"sub": str(user.id), "role": user.role.value}
     return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
+        "access_token": create_access_token(data=token_data),
+        "refresh_token": create_refresh_token(
+            data={**token_data, SESSION_VERSION_CLAIM: user.session_version}
+        ),
         "token_type": "bearer",
     }
+
+
+def end_other_sessions(user: User) -> None:
+    """Every refresh token issued before this is refused from now on (the
+    caller commits). A device keeps its sign-in only with tokens made after."""
+    user.session_version = (user.session_version or 0) + 1
 
 
 async def resend_verify_link(db: Session, email: str):
@@ -525,6 +543,8 @@ def reset_password(db: Session, reset_data: ResetPasswordReq):
     password_hash = hash_password(reset_data.new_password)
 
     user.password_hash = password_hash
+    # Every device signed in before the reset is signed out (ROUND66).
+    end_other_sessions(user)
     # Using one reset link cancels every other open reset link of the account
     # (ROUND32, decision 3), in the same commit as the new password.
     cancelled = _cancel_open_link_tokens(db, user.id, RESET_PASSWORD_PURPOSE)
@@ -535,27 +555,37 @@ def reset_password(db: Session, reset_data: ResetPasswordReq):
     return _user_to_out(user)
 
 
+# The one answer to a refresh refused because the session is over: the token
+# expired, the password was changed or reset since it was made, or the account
+# is suspended, closed or gone (ROUND66). The website signs her out on it
+# (websiteSignIn.ts refreshRefused), and it never says which.
+REFRESH_REFUSED = "Refresh token has expired. Please sign in again."
+
+
 def refresh_access_token(db: Session, refresh_token: str) -> dict:
     """
-    Generate a new access token using a valid refresh token.
+    Generate a new access token and a new refresh token from a valid refresh
+    token. The new refresh token lasts REFRESH_TOKEN_EXPIRE_DAYS from now, so
+    every visit restarts it (ROUND66).
 
     Args:
         db: Database session
         refresh_token: Valid refresh token
 
     Returns:
-        dict: New access token and the same refresh token
+        dict: New access token and new refresh token
 
     Raises:
-        BadCredentials: If refresh token is invalid or expired
-        UserNotFoundError: If user no longer exists
+        BadCredentials: If the refresh token is invalid or expired, was made
+            before the account's last password change or reset, or its account
+            is suspended, closed or gone
     """
     try:
         # Decode and validate the refresh token
         payload = decode_token(refresh_token)
 
         # Check if it's actually a refresh token
-        if payload.get("type") != "refresh":
+        if payload.get("type") != REFRESH_TOKEN_TYPE:
             logger.warning("token_type_mismatch", token_type=payload.get("type"))
             raise BadCredentials("Invalid token type")
 
@@ -568,14 +598,24 @@ def refresh_access_token(db: Session, refresh_token: str) -> dict:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             logger.warning("refresh_token_user_not_found", user_id=user_id)
-            raise UserNotFoundError()
+            raise BadCredentials(REFRESH_REFUSED)
+
+        # Suspended covers an admin suspension and a closed (self-deleted)
+        # account, as get_current_user reads it.
+        if user.status == UserStatus.SUSPENDED:
+            logger.warning("refresh_token_account_suspended", user_id=user.id)
+            raise BadCredentials(REFRESH_REFUSED)
+
+        # A token made before session_version existed carries none: it counts
+        # as 0, the version every account started with, so it keeps working.
+        if payload.get(SESSION_VERSION_CLAIM, 0) != user.session_version:
+            logger.warning("refresh_token_session_ended", user_id=user.id)
+            raise BadCredentials(REFRESH_REFUSED)
 
         # Bind user to context for tracking
         bind_user_to_context(user.id)
 
-        # Generate new access token
-        token_data = {"sub": str(user.id), "role": user.role.value}
-        new_access_token = create_access_token(data=token_data)
+        tokens = session_tokens(user)
 
         logger.info(
             "access_token_refreshed",
@@ -583,19 +623,15 @@ def refresh_access_token(db: Session, refresh_token: str) -> dict:
             role=user.role.value,
         )
 
-        return {
-            "access_token": new_access_token,
-            "refresh_token": refresh_token,  # Return the same refresh token
-            "token_type": "bearer",
-        }
+        return tokens
 
     except jwt.ExpiredSignatureError:
         logger.warning("refresh_token_expired")
-        raise BadCredentials("Refresh token has expired. Please sign in again.")
+        raise BadCredentials(REFRESH_REFUSED)
     except jwt.InvalidTokenError as e:
         logger.warning("refresh_token_invalid", **error_fields(e))
         raise BadCredentials("Invalid refresh token")
-    except (BadCredentials, UserNotFoundError):
+    except BadCredentials:
         raise
     except Exception as e:
         logger.error(
@@ -608,15 +644,19 @@ def refresh_access_token(db: Session, refresh_token: str) -> dict:
 
 def change_password(
     db: Session, user: User, current_password: str, new_password: str
-) -> None:
+) -> dict:
     """
-    Change user password.
+    Change user password. Every other device's sign-in ends (ROUND66); the
+    device that changed it keeps its own with the new tokens returned.
 
     Args:
         db: Database session
         user: Current user
         current_password: User's current password
         new_password: New password to set
+
+    Returns:
+        dict: A new access token and a new refresh token (session_tokens)
 
     Raises:
         BadCredentials: If current password is incorrect
@@ -634,12 +674,15 @@ def change_password(
 
     # Update password
     user.password_hash = new_password_hash
+    end_other_sessions(user)
     db.commit()
 
     logger.info(
         "password_changed_successfully",
         user_id=user.id,
     )
+
+    return session_tokens(user)
 
 
 def _user_to_out(user: User) -> UserRead:

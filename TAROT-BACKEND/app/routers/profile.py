@@ -201,11 +201,14 @@ def change_user_password(
     **Raises:**
     - 401: If current password is incorrect
     """
-    change_password(
+    # Every other device is signed out (services/auth.py end_other_sessions);
+    # this one keeps its sign-in with the new tokens in the answer.
+    tokens = change_password(
         db, user, password_data.current_password, password_data.new_password
     )
     return JSONResponse(
-        content={"message": "Password changed successfully"}, status_code=200
+        content={"message": "Password changed successfully", **tokens},
+        status_code=200,
     )
 
 

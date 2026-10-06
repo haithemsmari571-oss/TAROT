@@ -110,6 +110,13 @@ class User(Base):
         Enum(UserStatus), default=UserStatus.ACTIVE
     )
 
+    # Copied into every refresh token (security.SESSION_VERSION_CLAIM). A
+    # password change or reset adds one, so every refresh token issued before
+    # it is refused and those sessions end (services/auth.py).
+    session_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+
     @property
     def total_balance(self) -> float:
         """Total spendable points = free credit + paid balance. Use this for

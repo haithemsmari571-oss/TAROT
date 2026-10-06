@@ -1,4 +1,4 @@
-import axiosClient from "@/lib/axiosClient";
+import axiosClient, { storeSessionTokens } from "@/lib/axiosClient";
 import type {
   UserProfile,
   UpdateProfileRequest,
@@ -39,10 +39,14 @@ export const profileApi = {
   },
 
   /**
-   * Change password
+   * Change password. The server ends every other device's sign-in and answers
+   * with new tokens for this one, which are kept so she stays signed in here.
    */
   changePassword: async (data: ChangePasswordRequest): Promise<void> => {
-    await axiosClient.post("/profile/me/change-password", data);
+    const response = await axiosClient.post("/profile/me/change-password", data);
+    if (response.data?.access_token) {
+      storeSessionTokens(response.data);
+    }
   },
 
   /**
