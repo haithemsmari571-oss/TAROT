@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { UserRole, type User } from "./types/auth.types";
 import { clearTokens, decodeToken, getToken, isTokenExpired, saveUser } from "./utils/tokenStorage";
 
@@ -60,13 +61,28 @@ export function storedSessionWasRefused(): boolean {
    page, which signed the superadmin out of the CRM. It is now kept when it
    signs in here and has not expired, and AuthContext.tsx reads the user from
    /profile/me. A reader's or admin's session never gets this far:
-   endRefusedStoredSession has already ended it. */
-export type StoredSessionStart = "none" | "restore" | "fill-user" | "clear";
+   endRefusedStoredSession has already ended it.
 
-export function storedSessionStart(token: string | null, hasUser: boolean): StoredSessionStart {
+   A website sign-in (the user stored beside the tokens) whose access token
+   ran out while its refresh token is still kept is refreshed before anything
+   is decided (ROUND65): she comes back a day later and is still signed in.
+   The CRM's form, with no user, is cleared when expired, as before. */
+export type StoredSessionStart = "none" | "restore" | "fill-user" | "refresh" | "clear";
+
+export function storedSessionStart(token: string | null, hasUser: boolean, hasRefreshToken = false): StoredSessionStart {
   if (!token) return "none";
-  if (isTokenExpired(token) || !tokenSignsInHere(token)) return "clear";
+  if (!tokenSignsInHere(token)) return "clear";
+  if (isTokenExpired(token)) return hasUser && hasRefreshToken ? "refresh" : "clear";
   return hasUser ? "restore" : "fill-user";
+}
+
+/* Whether the server refused that refresh: it answered 4xx (the refresh
+   token expired, unreadable, or its account gone: 400 or 404). Only then is
+   she signed out. No answer, or a 5xx while the server restarts, is no
+   refusal: the stored session is kept and the next call tries again. */
+export function refreshRefused(error: unknown): boolean {
+  const status = isAxiosError(error) ? error.response?.status : undefined;
+  return status !== undefined && status >= 400 && status < 500;
 }
 
 /* Keeps the user the server names beside the tokens, as the website's own

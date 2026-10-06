@@ -168,6 +168,12 @@ const crmSession = (role: string) => ({ [TOKEN_KEY]: jwtFor(role), [REFRESH_TOKE
   checkUser(rule.storedSessionStart(jwtFor(UserRole.PSYCHIC), false) === "clear" && rule.storedSessionStart(jwtFor(UserRole.ADMIN), false) === "clear", "a reader's or admin's token-only session is never kept");
   checkUser(rule.storedSessionStart("not-a-jwt", false) === "clear", "an unreadable token is cleared, as before");
   checkUser(rule.storedSessionStart(null, false) === "none" && rule.storedSessionStart(null, true) === "none", "no token: nothing to do");
+  // ROUND65: a website sign-in that comes back after its access token ran out.
+  checkUser(rule.storedSessionStart(expiredJwtFor(UserRole.USER), true, true) === "refresh" && rule.storedSessionStart(expiredJwtFor(UserRole.SUPERADMIN), true, true) === "refresh", "an expired session with its user and a refresh token is refreshed before anything is decided");
+  checkUser(rule.storedSessionStart(expiredJwtFor(UserRole.USER), true, false) === "clear", "an expired session with no refresh token is cleared, as before");
+  checkUser(rule.storedSessionStart(expiredJwtFor(UserRole.SUPERADMIN), false, true) === "clear", "the CRM's form, expired, is cleared as before, even with its refresh token");
+  checkUser(rule.storedSessionStart(jwtFor(UserRole.USER), true, true) === "restore" && rule.storedSessionStart(jwtFor(UserRole.SUPERADMIN), false, true) === "fill-user", "a session still valid is restored or filled, with no refresh");
+  checkUser(rule.storedSessionStart(expiredJwtFor(UserRole.PSYCHIC), true, true) === "clear" && rule.storedSessionStart(expiredJwtFor(UserRole.ADMIN), true, true) === "clear", "a reader's or admin's expired session is never refreshed");
 }
 
 // On a real page load a reader's or admin's CRM-form session never reaches it:
@@ -237,3 +243,25 @@ checkRefusal(loginRefusal(answered(429, "")), SIGN_IN_UNAVAILABLE, "a refusal wi
 checkRefusal(loginRefusal(new WebsiteSignInRefused()), WEBSITE_SIGN_IN_REFUSED, "a reader or admin account: the website's refusal");
 
 console.log(`sign-in error line: ${refusalChecks} checks passed`);
+
+/* What a failed refresh on start means (ROUND65; refreshRefused, used by
+   AuthContext.tsx): only the server's 4xx answer signs her out. No answer, or
+   a 5xx while the server restarts, keeps the stored session. */
+let comebackChecks = 0;
+const checkComeback = (ok: boolean, what: string) => {
+  assert.ok(ok, what);
+  comebackChecks += 1;
+};
+{
+  const { rule } = await openSite("/app/home", {});
+  checkComeback(rule.refreshRefused(answered(400, { message: "Refresh token has expired. Please sign in again." })), "a 400 (expired or invalid refresh token): refused");
+  checkComeback(rule.refreshRefused(answered(404, { message: "User not found" })), "a 404 (the account is gone): refused");
+  checkComeback(rule.refreshRefused(answered(401, "")), "a 401: refused");
+  for (const status of [500, 502, 503, 504]) {
+    checkComeback(!rule.refreshRefused(answered(status, "<html>Bad Gateway</html>")), `a ${status}: not a refusal, the session is kept`);
+  }
+  checkComeback(!rule.refreshRefused({ isAxiosError: true, message: "Network Error", code: "ERR_NETWORK" }), "no answer at all: not a refusal");
+  checkComeback(!rule.refreshRefused(new Error("No refresh token stored")), "an error that is not the server's: not a refusal");
+}
+
+console.log(`coming back after the access token ran out: ${comebackChecks} checks passed`);

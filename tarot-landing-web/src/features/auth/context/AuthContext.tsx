@@ -7,10 +7,12 @@ import {
   getUser,
   saveUser,
   saveRefreshToken,
+  getRefreshToken,
 } from "../utils";
 import type { User, AuthContextType } from "../types";
 import { getCurrentUser } from "../api";
-import { fillStoredUser, storedSessionStart, tokenSignsInHere } from "../websiteSignIn";
+import { refreshSession } from "@/lib/axiosClient";
+import { fillStoredUser, refreshRefused, storedSessionStart, tokenSignsInHere } from "../websiteSignIn";
 
 export const AuthContext = createContext<AuthContextType | undefined>(
   undefined,
@@ -31,6 +33,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const storedUser = getUser();
 
       if (storedToken && storedUser) {
+        // She comes back after the access token ran out: ask the server for a
+        // new one first, through the axios client's one shared refresh, and
+        // keep the page loading meanwhile (websiteSignIn.ts storedSessionStart).
+        if (storedSessionStart(storedToken, true, !!getRefreshToken()) === "refresh") {
+          console.log("Token expired on init, refreshing the session");
+          refreshSession()
+            .then((freshToken) => {
+              setToken(freshToken);
+              setUser(storedUser);
+            })
+            .catch((error) => {
+              if (refreshRefused(error)) {
+                console.log("Refresh refused on init, clearing auth");
+                clearTokens();
+                setToken(null);
+                setUser(null);
+              } else {
+                // No answer or a 5xx: not a refusal. The session stays and
+                // the next call refreshes it (axiosClient.ts).
+                console.log("Server unreachable on init, keeping the stored session");
+                setToken(storedToken);
+                setUser(storedUser);
+              }
+            })
+            .finally(() => setIsLoading(false));
+          return;
+        }
         if (isTokenExpired(storedToken)) {
           console.log("Token expired on init, clearing auth");
           clearTokens();
