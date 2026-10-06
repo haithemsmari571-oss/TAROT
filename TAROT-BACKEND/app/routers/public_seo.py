@@ -1,5 +1,6 @@
 """Server-readable public editorial pages and the dynamic sitemap."""
 
+from datetime import datetime, timezone
 from html import escape
 import json
 from urllib.parse import quote, urlencode
@@ -11,7 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.database.client import get_db
 from app.models.article import Article, ArticleSlugRedirect, ArticleVersion
+from app.models.library_item import LibraryItem
 from app.services.article_content import estimated_reading_minutes, render_article_body
+from app.services.library_items import cover_url, get_public_by_key, list_public_reels, video_url
 from app.services.psychics import get_psychics
 
 router = APIRouter()
@@ -330,6 +333,282 @@ def article_page(slug: str, db: Session = Depends(get_db)):
     )
 
 
+# Valentina's reels for every visitor (ROUND67): the videos the app's Shorts tab
+# plays (GET /api/library-items/reels, the same query), one page for all of
+# them and one per reel, each video with its caption and the words spoken in it.
+REELS_PATH = "/reels/"
+# Reels shown under the one being watched.
+MORE_REELS = 6
+# The reading button under every reel. Its words are the Shorts tab's
+# (tarot-landing-web/src/features/client-app/ClientShortsScreen.tsx,
+# GET_YOUR_READING). It points where the site's reading buttons point: sign-up
+# for a visitor (the navbar's "/register"), the app's readers list for a
+# signed-in client (READERS_PATH, src/features/client-app/clientAppPaths.ts),
+# the public list for any other signed-in account. The page reads the sign-in
+# the app keeps in localStorage (src/features/auth/utils/tokenStorage.ts).
+GET_YOUR_READING = "Get your reading"
+SIGN_UP_PATH = "/register"
+CLIENT_READERS_PATH = "/app/readers"
+PUBLIC_READERS_PATH = "/psychics-browse"
+READING_LINK_SCRIPT = (
+    "<script>(function(){try{if(!localStorage.getItem('auth_token'))return;"
+    "var user=JSON.parse(localStorage.getItem('auth_user')||'null');"
+    f"var to=user&&user.role==='USER'?'{CLIENT_READERS_PATH}':'{PUBLIC_READERS_PATH}';"
+    "document.querySelectorAll('a[data-reading-link]').forEach(function(a){a.href=to;});"
+    "}catch(e){}})();</script>"
+)
+# On the page of all reels only the poster loads; a tap puts the video in its
+# place and starts it, with sound, because the visitor asked. Any reel that
+# starts pauses the others.
+REEL_PLAY_SCRIPT = (
+    "<script>(function(){document.addEventListener('click',function(e){"
+    "var b=e.target.closest&&e.target.closest('button[data-reel-play]');if(!b)return;"
+    "var v=document.createElement('video');v.className='reel-video';v.controls=true;"
+    "v.playsInline=true;v.setAttribute('playsinline','');"
+    "if(b.dataset.poster)v.poster=b.dataset.poster;v.src=b.dataset.src;b.replaceWith(v);"
+    "var p=v.play();if(p&&p.catch)p.catch(function(){});});"
+    "document.addEventListener('play',function(e){document.querySelectorAll('video')"
+    ".forEach(function(o){if(o!==e.target)o.pause();});},true);})();</script>"
+)
+PLAY_ICON = (
+    '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    '<path d="M8 5.5v13l10.5-6.5L8 5.5Z"/></svg>'
+)
+REELS_CSS = """
+.reels-hero{max-width:760px;padding:8px 0 34px}.reels-hero h1{margin:10px 0 16px}.reels-hero p{margin:0;color:#c6bfb7;font-size:18px}
+.reels-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 20px}
+.reel-card{display:flex;flex-direction:column;overflow:hidden;border:1px solid #ffffff13;border-radius:21px;background:linear-gradient(145deg,#141419,#0f0f14)}
+.reel-stage{position:relative;aspect-ratio:9/16;overflow:hidden;background:radial-gradient(circle at 30% 20%,#79512b88,transparent 42%),#15151b}
+.reel-play{position:absolute;inset:0;display:block;width:100%;height:100%;padding:0;border:0;background:none;color:inherit;cursor:pointer}
+.reel-play img,.reel-stage video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+.reel-stage video{background:#000;object-fit:contain}
+.reel-play-icon{position:absolute;top:50%;left:50%;display:grid;place-items:center;width:64px;height:64px;transform:translate(-50%,-50%);border:1px solid #ffffff40;border-radius:50%;background:#09090db3;color:#f7f1e8;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.reel-play-icon svg{margin-left:3px}
+.reel-length{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:999px;background:#09090dcc;color:#f7f1e8;font-size:12px}
+.reel-text{display:flex;flex:1;flex-direction:column;gap:12px;padding:20px 20px 22px}
+.reel-date{color:#817b74;font-size:12px}
+.reel-title{margin:0;font:500 24px/1.15 Georgia}.reel-title a{text-decoration:none}.reel-title a:hover{color:#f0d486}
+.reel-caption{margin:0;color:#c8c1b8;font-size:15px;line-height:1.65;white-space:pre-line}
+.reel-reading{display:inline-block;align-self:flex-start;margin-top:2px}
+.reel-transcript{border-top:1px solid #ffffff13;padding-top:12px;color:#aaa39a;font-size:14px}
+.reel-transcript summary{cursor:pointer;color:#e1c779;font-size:13px;font-weight:800}
+.reel-transcript p{margin:10px 0 0;white-space:pre-line}
+.reel-watch{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:48px;align-items:start}
+.reel-watch .reel-stage{width:min(100%,calc(80vh * 9 / 16));margin:0 auto;border:1px solid #ffffff13;border-radius:24px;box-shadow:0 30px 80px #0008}
+.reel-watch h1{margin:8px 0 18px;font-size:clamp(34px,4.4vw,54px);line-height:1.05;letter-spacing:-.03em}
+.reel-watch .reel-caption{color:#d7d1ca;font:19px/1.65 Georgia}
+.reel-watch .reel-reading{margin:26px 0 8px}
+.reel-words{margin-top:40px;padding-top:26px;border-top:1px solid #ffffff13}
+.reel-words h2{margin:4px 0 12px;font:500 28px/1.15 Georgia}.reel-words p{margin:0;color:#c8c1b8;font:17px/1.85 Georgia;white-space:pre-line}
+.more-reels .reels-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.more-reels .reel-card a{text-decoration:none}.more-reels .reel-stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.more-reels .reel-text{padding:12px 12px 14px}.more-reels .reel-title{font-size:16px}
+@media(max-width:850px){.reels-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.more-reels .reels-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.reel-watch{grid-template-columns:1fr;gap:30px}}
+@media(max-width:600px){.reels-grid{grid-template-columns:1fr}.more-reels .reels-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.reel-watch .reel-caption{font-size:17px}}
+"""
+
+
+def _reel_path(key: str) -> str:
+    return f"{REELS_PATH}{quote(key)}/"
+
+
+def _absolute(url: str | None) -> str | None:
+    """Storage URLs are absolute (R2_PUBLIC_BASE_URL); a relative one is the site's."""
+    if url and url.startswith("/"):
+        return f"{SITE}{url}"
+    return url
+
+
+def _day(moment: datetime) -> str:
+    return moment.date().strftime("%d %b %Y").lstrip("0")
+
+
+def _aware(moment: datetime) -> datetime:
+    """Stored times are UTC; search engines want the zone written out."""
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def _clock(seconds: float) -> str:
+    total = max(1, round(seconds))
+    return f"{total // 60}:{total % 60:02d}"
+
+
+def _iso_duration(seconds: float) -> str:
+    total = max(1, round(seconds))
+    minutes, rest = divmod(total, 60)
+    return f"PT{minutes}M{rest}S" if minutes else f"PT{rest}S"
+
+
+def _summary(item: LibraryItem) -> str:
+    """The reel's caption on one line, short enough for a search result."""
+    text = " ".join(f"{item.title} {item.description or ''}".split())
+    return text if len(text) <= 155 else text[:154].rsplit(" ", 1)[0] + "…"
+
+
+def _video_object(item: LibraryItem) -> dict:
+    page = f"{SITE}{_reel_path(item.key)}"
+    block = {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        "name": item.title,
+        "description": " ".join(f"{item.title} {item.description or ''}".split()),
+        "uploadDate": _aware(item.published_at).isoformat(),
+        "duration": _iso_duration(item.duration_seconds),
+        "contentUrl": _absolute(video_url(item)),
+        "url": page,
+        "mainEntityOfPage": page,
+    }
+    poster = _absolute(cover_url(item))
+    if poster:
+        block["thumbnailUrl"] = [poster]
+    if item.transcript:
+        block["transcript"] = item.transcript
+    return block
+
+
+def _reading_link() -> str:
+    return f'<a class="more-link reel-reading" href="{SIGN_UP_PATH}" data-reading-link>{escape(GET_YOUR_READING)}</a>'
+
+
+def _caption(item: LibraryItem) -> str:
+    return f'<p class="reel-caption">{escape(item.description)}</p>' if item.description else ""
+
+
+def _reel_card(item: LibraryItem) -> str:
+    title = escape(item.title)
+    poster = cover_url(item)
+    picture = (
+        f'<img src="{escape(poster, quote=True)}" alt="" loading="lazy" decoding="async">'
+        if poster else ""
+    )
+    poster_data = f' data-poster="{escape(poster, quote=True)}"' if poster else ""
+    transcript = (
+        f'<details class="reel-transcript"><summary>Transcript</summary><p>{escape(item.transcript)}</p></details>'
+        if item.transcript else ""
+    )
+    return (
+        f'<article class="reel-card" id="{escape(item.key, quote=True)}">'
+        f'<div class="reel-stage"><button type="button" class="reel-play" data-reel-play '
+        f'data-src="{escape(video_url(item), quote=True)}"{poster_data} aria-label="Play: {escape(item.title, quote=True)}">'
+        f'{picture}<span class="reel-play-icon">{PLAY_ICON}</span>'
+        f'<span class="reel-length">{_clock(item.duration_seconds)}</span></button></div>'
+        f'<div class="reel-text"><time class="reel-date" datetime="{item.published_at.date().isoformat()}">{_day(item.published_at)}</time>'
+        f'<h2 class="reel-title"><a href="{_reel_path(item.key)}">{title}</a></h2>'
+        f"{_caption(item)}{_reading_link()}{transcript}</div></article>"
+    )
+
+
+@router.get("/reels/", response_class=HTMLResponse)
+def reels_page(db: Session = Depends(get_db)):
+    reels = list_public_reels(db)
+    crumbs = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": f"{SITE}/"},
+            {"@type": "ListItem", "position": 2, "name": "Reels", "item": f"{SITE}{REELS_PATH}"},
+        ],
+    }
+    listing = {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": index, "item": _video_object(item)}
+            for index, item in enumerate(reels, start=1)
+        ],
+    }
+    cards = "".join(_reel_card(item) for item in reels)
+    body = (
+        '<main><div class="crumbs"><a href="/">Home</a><span>/</span><span>Reels</span></div>'
+        '<header class="reels-hero"><span class="eyebrow">Ask Valentina</span><h1>Reels</h1>'
+        "<p>Short videos from Valentina on love, the signs and the cards, each with its words written out.</p></header>"
+        + (
+            f'<section class="reels-grid" aria-label="Reels">{cards}</section>'
+            if reels else
+            '<section class="empty"><h2>No reels yet.</h2><p>Valentina&#x27;s first reels are on their way.</p></section>'
+        )
+        + f"</main>{READING_LINK_SCRIPT}{REEL_PLAY_SCRIPT}"
+    )
+    first_poster = _absolute(cover_url(reels[0])) if reels else None
+    return _document(
+        _head(
+            "Reels | Ask Valentina",
+            "Short videos from Valentina on love, astrology and tarot, each with its words written out.",
+            f"{SITE}{REELS_PATH}",
+            image=first_poster,
+            kind="website",
+            robots="index,follow" if reels else "noindex,follow",
+            json_ld=[crumbs, listing] if reels else [crumbs],
+        )
+        + f"<style>{REELS_CSS}</style>",
+        body,
+    )
+
+
+@router.get("/reels/{key}/", response_class=HTMLResponse)
+def reel_page(key: str, db: Session = Depends(get_db)):
+    item = get_public_by_key(db, key)
+    if item is None or item.video_file_path is None:
+        raise HTTPException(404, "Reel not found.")
+    page = f"{SITE}{_reel_path(item.key)}"
+    poster = cover_url(item)
+    others = [reel for reel in list_public_reels(db) if reel.id != item.id]
+    # The reels posted before this one, then the newest, so every page links on.
+    older = [reel for reel in others if (reel.published_at, reel.id) < (item.published_at, item.id)]
+    more = (older + [reel for reel in others if reel not in older])[:MORE_REELS]
+    crumbs = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": f"{SITE}/"},
+            {"@type": "ListItem", "position": 2, "name": "Reels", "item": f"{SITE}{REELS_PATH}"},
+            {"@type": "ListItem", "position": 3, "name": item.title, "item": page},
+        ],
+    }
+    size = (
+        f' width="{item.video_width}" height="{item.video_height}"'
+        if item.video_width and item.video_height else ""
+    )
+    poster_attribute = f' poster="{escape(poster, quote=True)}"' if poster else ""
+    words = (
+        f'<section class="reel-words"><span class="eyebrow">Transcript</span>'
+        f"<h2>What is said in this reel</h2><p>{escape(item.transcript)}</p></section>"
+        if item.transcript else ""
+    )
+    more_cards = "".join(
+        f'<article class="reel-card"><a href="{_reel_path(reel.key)}"><div class="reel-stage">'
+        + (f'<img src="{escape(cover_url(reel), quote=True)}" alt="" loading="lazy" decoding="async">' if cover_url(reel) else "")
+        + f'</div><div class="reel-text"><h3 class="reel-title">{escape(reel.title)}</h3></div></a></article>'
+        for reel in more
+    )
+    body = (
+        '<main><div class="crumbs"><a href="/">Home</a><span>/</span><a href="/reels/">Reels</a>'
+        f"<span>/</span><span>{escape(item.title)}</span></div>"
+        '<article class="reel-watch"><div class="reel-stage">'
+        f'<video controls playsinline preload="none"{poster_attribute}{size} src="{escape(video_url(item), quote=True)}"></video>'
+        f'</div><div><time class="reel-date" datetime="{item.published_at.date().isoformat()}">{_day(item.published_at)}</time>'
+        f"<h1>{escape(item.title)}</h1>{_caption(item)}{_reading_link()}{words}</div></article>"
+        + (
+            '<section class="related more-reels"><div class="section-heading"><span>Keep watching</span>'
+            f'<h2>More reels</h2></div><div class="reels-grid">{more_cards}</div></section>'
+            if more_cards else ""
+        )
+        + f"</main>{READING_LINK_SCRIPT}"
+    )
+    return _document(
+        _head(
+            f"{item.title} | Ask Valentina",
+            _summary(item),
+            page,
+            image=_absolute(poster),
+            kind="video.other",
+            json_ld=[_video_object(item), crumbs],
+        )
+        + f"<style>{REELS_CSS}</style>",
+        body,
+    )
+
+
 @router.get("/sitemap.xml")
 def dynamic_sitemap(db: Session = Depends(get_db)):
     slugs = [
@@ -353,8 +632,12 @@ def dynamic_sitemap(db: Session = Depends(get_db)):
     ]
     # Every reader the public list shows (listed readers only), in its order.
     reader_paths = [READER_PATH.format(id=reader.id) for reader in get_psychics(db, [])["items"]]
+    # The reels pages, when there is a reel to show (an empty page is noindex).
+    reel_keys = [item.key for item in list_public_reels(db)]
+    reel_paths = [REELS_PATH, *(_reel_path(key) for key in reel_keys)] if reel_keys else []
     urls = [f"{SITE}{path}" for path in [*FIXED_PATHS, *reader_paths, *category_paths]]
     urls += [f"{SITE}/articles/{slug}/" for slug in slugs]
+    urls += [f"{SITE}{path}" for path in reel_paths]
     unique = list(dict.fromkeys(urls))
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?><urlset '

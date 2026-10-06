@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.models.library_item import LibraryItem
 from app.schemas.library_item import (
+    LIBRARY_ITEM_KEY_PATTERN,
     MAX_LIBRARY_AUDIO_SIZE_BYTES,
+    MAX_LIBRARY_ITEM_KEY_LENGTH,
     MAX_LIBRARY_ITEM_TITLE_LENGTH,
     MAX_LIBRARY_ITEM_TYPE_LENGTH,
     MAX_LIBRARY_VIDEO_SIZE_BYTES,
@@ -48,6 +50,7 @@ MAX_LIBRARY_COVER_PIXELS = 24_000_000
 ALLOWED_LIBRARY_COVER_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 _SLUG = re.compile(r"[^a-z0-9]+")
+_CHOSEN_KEY = re.compile(LIBRARY_ITEM_KEY_PATTERN)
 
 
 def _object_key_pattern(kind: str, allowed_types: dict[str, str]) -> re.Pattern[str]:
@@ -98,6 +101,20 @@ def make_key(db: Session, title: str) -> str:
     while db.query(LibraryItem).filter(LibraryItem.key == key).first() is not None:
         key = f"{base}-{suffix}"
         suffix += 1
+    return key
+
+
+def _chosen_key(db: Session, key: str) -> str:
+    """A key the caller picked instead of one made from the title. An importer
+    passes its own stable id, so a second run finds the item it already made."""
+    key = key.strip()
+    if len(key) > MAX_LIBRARY_ITEM_KEY_LENGTH or not _CHOSEN_KEY.fullmatch(key):
+        raise LibraryItemError(
+            400,
+            f"Give the item a key of lowercase letters, digits and dashes, up to {MAX_LIBRARY_ITEM_KEY_LENGTH} characters.",
+        )
+    if db.query(LibraryItem).filter(LibraryItem.key == key).first() is not None:
+        raise LibraryItemError(409, "An item with that key already exists.")
     return key
 
 
@@ -324,16 +341,20 @@ def create_video_item(
     sort_order: int,
     enabled: bool,
     published_at: datetime | None,
+    key: str | None = None,
+    transcript: str | None = None,
 ) -> LibraryItem:
     type_value, title = _validate_text(type_value, title)
+    item_key = _chosen_key(db, key) if key is not None else make_key(db, title)
     _ensure_video_key_unused(db, video.object_key)
     _verify_video_object(video)
 
     item = LibraryItem(
-        key=make_key(db, title),
+        key=item_key,
         type=type_value,
         title=title,
         description=(description or "").strip() or None,
+        transcript=(transcript or "").strip() or None,
         video_file_path=video.object_key,
         video_content_type=video.content_type,
         video_size_bytes=video.size_bytes,

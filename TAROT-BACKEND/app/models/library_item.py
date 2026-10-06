@@ -48,6 +48,8 @@ class LibraryItem(Base):
     type: Mapped[str] = mapped_column(String(80), nullable=False)
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The words spoken in a video, printed under it on the public reels page.
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     audio_file_path: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     audio_content_type: Mapped[str | None] = mapped_column(String(32), nullable=True)

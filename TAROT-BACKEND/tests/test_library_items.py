@@ -1005,3 +1005,99 @@ def test_create_routes_answer_503_and_write_nothing_when_storage_is_unreachable(
         assert response.status_code == 503
         assert response.json() == {"detail": "Storage could not be reached. Try again."}
     assert db.query(LibraryItem).count() == 0
+
+
+def _granted_video_form(client: TestClient, storage: FakeStorage, title: str) -> dict:
+    claim = _video_claim(original_filename=f"{title}.mp4")
+    grant = client.post("/api/admin/library-items/video-upload-url", json=claim).json()
+    storage.complete_direct_upload(grant["object_key"], claim)
+    return {**_video_form(grant, claim), "title": title}
+
+
+def test_video_create_takes_an_importers_key_and_the_spoken_words(db, make_user, fake_storage):
+    """ROUND67: the Instagram import names each reel "ig-<id>", so a second run
+    finds it, and stores what is said in the video for the public reels page."""
+    client = _client(db, make_user(role=Role.SUPERADMIN))
+
+    created = client.post(
+        "/api/admin/library-items/video",
+        data={
+            **_granted_video_form(client, fake_storage, "Capricorn"),
+            "key": "ig-18159328681457438",
+            "transcript": "  Capricorn does not look at your money first.\n",
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["key"] == "ig-18159328681457438"
+    assert body["transcript"] == "Capricorn does not look at your money first."
+
+    again = client.post(
+        "/api/admin/library-items/video",
+        data={**_granted_video_form(client, fake_storage, "Capricorn again"), "key": "ig-18159328681457438"},
+    )
+    assert again.status_code == 409
+    assert again.json() == {"detail": "An item with that key already exists."}
+
+    for bad in ("IG-1", "ig 1", "-ig-1", "ig--1", "ig-1-", "a" * 65):
+        refused = client.post(
+            "/api/admin/library-items/video",
+            data={**_granted_video_form(client, fake_storage, "Bad key"), "key": bad},
+        )
+        assert refused.status_code == 400, bad
+        assert refused.json() == {
+            "detail": "Give the item a key of lowercase letters, digits and dashes, up to 64 characters."
+        }
+    assert db.query(LibraryItem).count() == 1
+
+    # Without a key nothing changes: the key is made from the title, and an
+    # empty transcript is stored as none.
+    plain = client.post(
+        "/api/admin/library-items/video",
+        data={**_granted_video_form(client, fake_storage, "Plain Reel"), "transcript": "   "},
+    )
+    assert plain.status_code == 201, plain.text
+    assert plain.json()["key"] == "plain-reel"
+    assert plain.json()["transcript"] is None
+    # The transcript is not part of the reels shelf's public answer.
+    assert "transcript" not in client.get("/api/library-items/reels").text
+
+
+def test_transcript_migration_adds_and_drops_one_nullable_column(monkeypatch):
+    versions = Path(__file__).parents[1] / "alembic" / "versions"
+
+    def load(name):
+        spec = spec_from_file_location(name, versions / f"{name}.py")
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    base = load("e2f3a4b5c6d7_add_library_items")
+    transcript = load("eb861e419d14_add_library_item_transcript")
+    assert transcript.down_revision == "f7f439445b4b"
+
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        operations = Operations(MigrationContext.configure(connection))
+        monkeypatch.setattr(base, "op", operations)
+        monkeypatch.setattr(transcript, "op", operations)
+        base.upgrade()
+        connection.execute(
+            text(
+                "INSERT INTO library_items (key, type, title, audio_file_path, audio_content_type, "
+                "audio_size_bytes, audio_sha256, duration_seconds) "
+                "VALUES ('tone', 'meditation', 'Tone', 'library/audio/t.mp3', 'audio/mpeg', 10, :sha, 6)"
+            ),
+            {"sha": "a" * 64},
+        )
+
+        transcript.upgrade()
+        column = {c["name"]: c for c in inspect(connection).get_columns("library_items")}["transcript"]
+        assert column["nullable"] is True
+        assert connection.execute(text("SELECT transcript FROM library_items")).scalar() is None
+
+        transcript.downgrade()
+        assert "transcript" not in {c["name"] for c in inspect(connection).get_columns("library_items")}
+        assert connection.execute(text("SELECT key FROM library_items")).scalars().all() == ["tone"]
+        transcript.upgrade()
+    engine.dispose()

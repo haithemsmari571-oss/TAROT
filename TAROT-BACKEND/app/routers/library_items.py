@@ -56,6 +56,7 @@ def _admin_view(item: LibraryItem) -> LibraryItemAdmin:
         type=item.type,
         title=item.title,
         description=item.description,
+        transcript=item.transcript,
         audio_file_path=item.audio_file_path,
         audio_url=audio_url(item),
         audio_content_type=item.audio_content_type,
@@ -239,6 +240,10 @@ async def admin_create_video_item(
     sort_order: int = Form(0),
     enabled: bool = Form(True),
     published_at: datetime | None = Form(default=None),
+    # Optional: an importer's own stable key (made from the title when absent)
+    # and the words spoken in the video, for the public reels page.
+    key: str | None = Form(default=None),
+    transcript: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     video = _video_reference(
@@ -263,6 +268,8 @@ async def admin_create_video_item(
             sort_order=sort_order,
             enabled=enabled,
             published_at=published_at,
+            key=key,
+            transcript=transcript,
         )
     except LibraryItemError as exc:
         _raise_library_error(exc)

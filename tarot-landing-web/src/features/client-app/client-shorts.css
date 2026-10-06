@@ -98,6 +98,16 @@
   white-space: pre-line;
 }
 
+/* The reading button under the caption: the glass solid button
+   (styles/glass.css, .gl-btn-solid) as a link. The caption lets taps through
+   to the stage, which pauses the reel; the button takes its own. */
+.client-app-shell .client-shorts-reading {
+  display: inline-block;
+  margin-top: 12px;
+  pointer-events: auto;
+  text-decoration: none;
+}
+
 /* The sound switch: the room's back control (hall-room.css:47-52), its
    size and border, in the glass tokens. That rule is scoped to
    html[data-hall="room"], and this screen never sets the flag. */

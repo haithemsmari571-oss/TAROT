@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 MAX_LIBRARY_ITEM_TYPE_LENGTH = 80
 MAX_LIBRARY_ITEM_TITLE_LENGTH = 100
+# A key chosen at creation (an importer's stable id, such as "ig-<instagram id>")
+# has the shape make_key gives a title: lowercase words joined by dashes, and
+# fits the key column (models/library_item.py, String(64)).
+MAX_LIBRARY_ITEM_KEY_LENGTH = 64
+LIBRARY_ITEM_KEY_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 MAX_LIBRARY_AUDIO_SIZE_BYTES = 2_147_483_647
 MAX_LIBRARY_VIDEO_SIZE_BYTES = 300 * 1024 * 1024
 
@@ -122,6 +127,7 @@ class LibraryItemAdmin(BaseModel):
     type: str
     title: str
     description: str | None
+    transcript: str | None
     audio_file_path: str | None
     audio_url: str | None
     audio_content_type: str | None

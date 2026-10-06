@@ -4,15 +4,26 @@
    view plays from its start; every other reel waits paused at 0. Sound is one
    switch for every reel, off until the client turns it on. */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getReels, resolveLibraryMediaUrl, type ReelItem } from "@/features/sanctuary/api/libraryItemsApi";
 import { useSanctuaryPlayer } from "@/features/sanctuary/SanctuaryPlayerProvider";
 import { sanitizeClaims } from "@/lib/copy";
+import { READERS_PATH } from "./clientAppPaths";
 import "./client-chats.css";
 import "./client-shorts.css";
 
 /* How much of a slide must be in view before its reel is the one playing. */
 const ACTIVE_RATIO = 0.6;
+
+/* Only the reels this close to the one in view are given their poster and
+   their video, so a long shelf costs a phone no more than a short one. Without
+   an address a reel loads nothing, whatever the browser does with preload. */
+const NEAR_REELS = 2;
+
+/* The reading button under every reel. The public reels page carries the same
+   words (TAROT-BACKEND/app/routers/public_seo.py, GET_YOUR_READING). */
+const GET_YOUR_READING = "Get your reading";
 
 /* The sound switch outlives the screen for the rest of the session, so leaving
    the tab and coming back keeps the client's choice. */
@@ -31,6 +42,7 @@ interface ReelProps {
   reel: ReelItem;
   index: number;
   active: boolean;
+  near: boolean;
   paused: boolean;
   muted: boolean;
   onToggleSound: () => void;
@@ -39,7 +51,7 @@ interface ReelProps {
   onPlaying: () => void;
 }
 
-function Reel({ reel, index, active, paused, muted, onToggleSound, onTogglePause, onSoundRefused, onPlaying }: ReelProps) {
+function Reel({ reel, index, active, near, paused, muted, onToggleSound, onTogglePause, onSoundRefused, onPlaying }: ReelProps) {
   const video = useRef<HTMLVideoElement>(null);
   const progress = useRef<HTMLSpanElement>(null);
 
@@ -94,8 +106,8 @@ function Reel({ reel, index, active, paused, muted, onToggleSound, onTogglePause
         <video
           ref={video}
           className="client-shorts-video"
-          src={resolveLibraryMediaUrl(reel.video_url) ?? undefined}
-          poster={posterUrl ?? undefined}
+          src={near ? resolveLibraryMediaUrl(reel.video_url) ?? undefined : undefined}
+          poster={near ? posterUrl ?? undefined : undefined}
           width={reel.video_width ?? undefined}
           height={reel.video_height ?? undefined}
           playsInline
@@ -109,6 +121,9 @@ function Reel({ reel, index, active, paused, muted, onToggleSound, onTogglePause
         <div className="client-shorts-caption">
           <p className="client-shorts-title">{reel.title}</p>
           {reel.description && <p className="client-shorts-description">{sanitizeClaims(reel.description)}</p>}
+          <Link to={READERS_PATH} className="gl-btn-solid client-shorts-reading" onClick={event => event.stopPropagation()}>
+            {GET_YOUR_READING}
+          </Link>
         </div>
         <button
           type="button"
@@ -176,6 +191,7 @@ function Reels({ reels }: { reels: ReelItem[] }) {
           reel={reel}
           index={index}
           active={index === active}
+          near={Math.abs(index - active) <= NEAR_REELS}
           paused={pausedIndex === index}
           muted={muted}
           onToggleSound={() => setMuted(!muted)}
