@@ -7,7 +7,7 @@
    Nothing here throws at a screen. With no service worker (the dev server, a
    failed registration), no key on the server, or a browser that cannot do it,
    the state says so and push is simply off. */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axiosClient from "@/lib/axiosClient";
@@ -181,15 +181,31 @@ export function useOpenFromNotification() {
   }, [navigate]);
 }
 
+/* Every screen reading this browser reads it again together: notifications
+   turned on or off in one place (the You tab's switch, a sheet, the app's
+   pill) change every other at once. Also called whenever she comes back to
+   the app (client-app/useAppAsks.ts), since the browser's settings may have
+   changed meanwhile. */
+let pushVersion = 0;
+const pushReaders = new Set<() => void>();
+export function readPushAgain() {
+  pushVersion += 1;
+  pushReaders.forEach((read) => read());
+}
+function onPushChange(read: () => void) {
+  pushReaders.add(read);
+  return () => { pushReaders.delete(read); };
+}
+
 /* The state of notifications in this browser for one app, read honestly from
    the browser and the server, with the two actions. turnOn must run in a tap:
    it opens the browser's own question. */
 export function usePush(app: PushApp) {
   const key = usePushKey();
+  const version = useSyncExternalStore(onPushChange, () => pushVersion);
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
-  const [permission, setPermission] = useState<NotificationPermission | null>(
-    () => ("Notification" in window ? Notification.permission : null),
-  );
+  // Read on every render: the browser's own answer is the one source.
+  const permission: NotificationPermission | null = "Notification" in window ? Notification.permission : null;
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const support = pushSupport();
@@ -201,7 +217,7 @@ export function usePush(app: PushApp) {
       .then((subscription) => { if (live) setSubscribed(!!subscription); })
       .catch(() => { if (live) setSubscribed(false); });
     return () => { live = false; };
-  }, [app, support]);
+  }, [app, support, version]);
 
   let state: PushState;
   if (key.isPending) state = "checking";
@@ -218,7 +234,6 @@ export function usePush(app: PushApp) {
     setFailed(false);
     try {
       const answer = await Notification.requestPermission();
-      setPermission(answer);
       if (answer !== "granted") return answer === "denied" ? "blocked" : "off";
       await subscribe(app, publicKey);
       setSubscribed(true);
@@ -228,6 +243,7 @@ export function usePush(app: PushApp) {
       return "off";
     } finally {
       setBusy(false);
+      readPushAgain();
     }
   }, [app, publicKey]);
 
@@ -237,6 +253,7 @@ export function usePush(app: PushApp) {
     await forgetPushHere(app);
     setSubscribed(false);
     setBusy(false);
+    readPushAgain();
   }, [app]);
 
   /* permission "default": she has never answered the browser's own question here. */

@@ -12,6 +12,7 @@ import { Cover } from "@/features/sanctuary/cover";
 import { useLibraryItems } from "@/features/sanctuary/hooks/useLibraryItems";
 import { useSanctuaryPlayer } from "@/features/sanctuary/SanctuaryPlayerProvider";
 import { sanitizeClaims } from "@/lib/copy";
+import { AppPill } from "./AppSheets";
 import { HOME_PATH } from "./clientAppPaths";
 import { formatHomeDuration } from "./homeDuration";
 import { dayOf } from "./ukTime";
@@ -103,9 +104,10 @@ export default function ClientHomeScreen() {
 
   return (
     <section className="client-home" aria-label="Home">
-      <header className="client-chats-header">
+      <header className="client-chats-header av-pill-header">
         <p className="client-chats-eyebrow">From Valentina</p>
         <h1 className="client-chats-title">Home</h1>
+        <AppPill />
       </header>
       {loading && <p className="client-chats-notice" role="status">Loading…</p>}
       {!loading && error && <p className="client-chats-notice" role="alert">Could not load posts. <button onClick={refetch}>Try again</button></p>}

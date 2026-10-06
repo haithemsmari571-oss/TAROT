@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useBillingMode } from "@/features/billing-mode/BillingModeContext";
+import { AppPill } from "./AppSheets";
 import { readerDisplayName } from "./readerName";
 import { useClientInbox, type InboxConversation } from "./useClientInbox";
 import { ukClock } from "./ukTime";
@@ -95,9 +96,10 @@ function ClientChatsList() {
 
   return (
     <section className="client-chats" aria-label="Chats">
-      <header className="client-chats-header">
+      <header className="client-chats-header av-pill-header">
         <p className="client-chats-eyebrow">Your readings</p>
         <h1 className="client-chats-title">Chats</h1>
+        <AppPill />
       </header>
       <div className={`client-chats-scroll${empty ? " is-empty" : ""}`} ref={scroller}>
         {empty ? <div className="client-chats-empty">

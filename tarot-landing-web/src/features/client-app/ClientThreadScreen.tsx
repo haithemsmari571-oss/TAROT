@@ -18,9 +18,9 @@ import { useTopUp } from "@/features/payment/context/TopUpContext";
 import axiosClient from "@/lib/axiosClient";
 import { formatGbp } from "@/lib/currency";
 import { readerName } from "./appReaders";
-import { NotifyAskSheet } from "./AppSheets";
 import { CHATS_PATH } from "./clientAppPaths";
 import ConfirmEmailSheet, { CONFIRM_EMAIL_COPY, EMAIL_NOT_CONFIRMED } from "./ConfirmEmailSheet";
+import { useRoomAsks } from "./useAppAsks";
 import { receiptOf, useThreadConnection } from "./useThreadConnection";
 import { clockAt, dayOf } from "./ukTime";
 import "./client-chats.css";
@@ -238,12 +238,15 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
   /* Until her first paid message in this conversation: the whole thread is
      loaded, nothing of hers is in it and nothing is on its way. Any refusal or
      error takes the line's place. */
-  const beforeFirstMessage = !chat.loading && !chat.hasOlder && !chat.pending
-    && !chat.messages.some(message => message.sender_id === user?.id);
+  const wroteHere = chat.messages.some(message => message.sender_id === user?.id);
+  const beforeFirstMessage = !chat.loading && !chat.hasOlder && !chat.pending && !wroteHere;
   const promise = beforeFirstMessage && chat.price != null && typeof details.refund_after_hours === "number"
     ? PER_MESSAGE_COPY.refundPromise(chat.price, details.refund_after_hours)
     : null;
   const notice = refusal ?? chat.error ?? (olderError ? "Could not load older messages. Try again." : null) ?? promise;
+  /* The app's asks (AppSheets.tsx): after her first message of a visit, with
+     this reader's name, and never while her draft has text in it. */
+  useRoomAsks(readerName(reader), wroteHere, chat.sent, chat.draft);
 
   return (
     <div className="client-room" ref={seat}>
@@ -282,8 +285,6 @@ function Room({ details, reader }: { details: ThreadDetails; reader: ThreadReade
         onOpenProfile={noProfileYet}
       />
       <ConfirmEmailSheet open={confirmEmail} onClose={() => setConfirmEmail(false)} />
-      {/* after a message she sent: phone notifications, asked (ROUND57) */}
-      <NotifyAskSheet readerName={readerName(reader)} sent={chat.sent} />
     </div>
   );
 }

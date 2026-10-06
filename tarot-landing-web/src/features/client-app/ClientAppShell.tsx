@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useMatch } from "react-router-dom";
 import { useAuth } from "@/features/auth/hooks";
 import { useKeepPushInStep, useOpenFromNotification } from "@/features/push/webPush";
 import HallStage from "../hall/HallStage";
-import { InstallSheet } from "./AppSheets";
+import { AppAsks } from "./AppSheets";
 import ClientScreenBoundary from "./ClientScreenBoundary";
 import { registerAppServiceWorker } from "./offline/appServiceWorker";
 import { useInboxUnreadCount } from "./useInboxUnreadCount";
@@ -74,8 +74,8 @@ export default function ClientAppShell() {
           </NavLink>
         ))}
       </nav>
-      {/* Add to the home screen, suggested on arriving (ROUND57) */}
-      <InstallSheet />
+      {/* The home screen and notifications, asked on every visit (ROUND59) */}
+      <AppAsks />
     </div>
   );
 }

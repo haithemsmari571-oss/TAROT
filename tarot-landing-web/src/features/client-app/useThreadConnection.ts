@@ -68,7 +68,7 @@ export function useThreadConnection(chatId: number, initialBalance: number, init
   const [pending, setPending] = useState<ThreadMessage | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
   /* Her messages the server has taken since the room opened (the echo of a
-     send); the notification ask follows one (AppSheets.tsx). */
+     send); the app's asks follow the first (useAppAsks.ts useRoomAsks). */
   const [sent, setSent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [balance, setBalance] = useState(initialBalance);

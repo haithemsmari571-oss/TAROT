@@ -30,6 +30,12 @@ interface InboxPage {
   has_more: boolean;
 }
 
+/* One page of GET /chat/inbox, newest activity first: the Chats list's pages,
+   and the sheets' look for the reader she last wrote to (AppSheets.tsx). */
+export async function getInboxPage(offset: number, signal?: AbortSignal): Promise<InboxPage> {
+  return (await axiosClient.get<InboxPage>("/chat/inbox", { params: { offset, limit: 20 }, signal })).data;
+}
+
 export function useClientInbox() {
   const { user } = useAuth();
   const { billingMode } = useBillingMode();
@@ -40,7 +46,7 @@ export function useClientInbox() {
     enabled: !!user && billingMode !== "per_minute",
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
-      const { data } = await axiosClient.get<InboxPage>("/chat/inbox", { params: { offset: pageParam, limit: 20 }, signal });
+      const data = await getInboxPage(pageParam, signal);
       // When this page is the entire inbox, its exact conversation count also
       // keeps the tab badge current without waiting for the badge's next poll.
       if (pageParam === 0 && !data.has_more) {

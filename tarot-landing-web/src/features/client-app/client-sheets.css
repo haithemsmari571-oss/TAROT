@@ -1,10 +1,10 @@
-/* The app's suggestion sheets (AppSheets.tsx, ROUND57): the confirm sheet's
+/* The app's asks (AppSheets.tsx, ROUND57 and ROUND59): the confirm sheet's
    recipe (client-confirm-email.css), the You sheet at the foot of the screen
    with the glass popover's surface (glass.css .gl-pop) and the hall dialog's
-   scrim (hall-room.css .hdlg). Not scoped to the shell's pages: the ask opens
-   in the room, whose reset (hall.css:17) zeroes every margin and padding, so
-   each rule carries two selectors' weight and sets its own. Fraunces for the
-   question, Inter for the rest, gold for the markers. */
+   scrim (hall-room.css .hdlg). Not scoped to the shell's pages: a sheet also
+   opens over the room, whose reset (hall.css:17) zeroes every margin and
+   padding, so each rule carries two selectors' weight and sets its own.
+   Fraunces for the question, Inter for the rest, gold for the markers. */
 dialog.av-sheet {
   box-sizing: border-box;
   width: 100%;
@@ -107,3 +107,146 @@ svg.av-share-icon {
   background: #fff;
   color: #007aff;
 }
+
+/* ── The iPhone and iPad guide (ROUND59): large type, each step with what
+   Safari shows, and an arrow at Safari's Share button ── */
+dialog.av-sheet[data-guide] .av-sheet-title { font-size: 24px; line-height: 1.25; }
+.av-sheet ol.av-guide {
+  margin: 22px auto 0;
+  padding: 0;
+  max-width: 360px;
+  list-style: none;
+  counter-reset: av-guide;
+  text-align: left;
+}
+.av-sheet ol.av-guide li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 10px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  counter-increment: av-guide;
+}
+.av-sheet ol.av-guide li + li { margin-top: 20px; }
+.av-sheet ol.av-guide li::before {
+  content: counter(av-guide);
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--gl-accent);
+  border-radius: 50%;
+  color: var(--gl-accent);
+  font: 600 18px/1 var(--gl-sans);
+}
+.av-sheet .av-guide-text {
+  margin: 0;
+  padding: 0;
+  font: 400 20px/1.35 var(--gl-sans);
+  color: var(--gl-text);
+}
+.av-sheet .av-guide-picture {
+  grid-column: 2;
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+}
+/* The Share symbol as large as Safari's toolbar button. */
+.av-sheet .av-guide-picture svg.av-share-icon {
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 8px;
+  vertical-align: middle;
+  border-radius: 12px;
+}
+/* Safari's menu row, black on white as it looks there. */
+.av-sheet .av-guide-menu-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 230px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fff;
+  color: #000;
+  font: 400 18px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--gl-sans);
+}
+.av-sheet .av-guide-menu-row svg.av-add-home-icon { flex: none; width: 24px; height: 24px; }
+
+.av-sheet .av-guide-arrow {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 0;
+  padding: 0;
+  color: var(--gl-accent);
+  animation: av-guide-bob 1.1s ease-in-out infinite;
+}
+@keyframes av-guide-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(9px); }
+}
+/* An iPad: Safari's Share button is in the bar along the top, on the right,
+   so the sheet hangs from the top right and its arrow points up at it. */
+dialog.av-sheet[data-share-place="top-right"] {
+  margin: 0 12px auto auto;
+  max-width: 420px;
+  border: 1px solid var(--gl-glass-edge);
+  border-top: 0;
+  border-radius: 0 0 18px 18px;
+}
+dialog.av-sheet[data-share-place="top-right"] .av-sheet-body { padding-top: 10px; }
+dialog.av-sheet[data-share-place="top-right"] .av-guide-arrow {
+  justify-content: flex-end;
+  margin: 0 0 6px;
+  padding: 0 44px 0 0;
+  animation-name: av-guide-bob-up;
+}
+dialog.av-sheet[data-share-place="top-right"] .av-guide-arrow svg { transform: rotate(180deg); }
+@keyframes av-guide-bob-up {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .av-sheet .av-guide-arrow { animation: none; }
+}
+
+/* ── The app pill (ROUND59), at the top of Home and Chats beside the title,
+   in the header's own flow so it never covers the page ── */
+.client-app-shell .av-pill-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: center;
+}
+.client-app-shell .av-pill-header > * { grid-column: 1; }
+.client-app-shell .av-pill-header > .av-app-pill { grid-column: 2; grid-row: 1 / span 2; }
+.client-app-shell .av-app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 14px 8px 12px;
+  min-height: 36px;
+  border: 1px solid var(--gl-accent-dim);
+  border-radius: 999px;
+  background: var(--gl-glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  box-shadow: var(--gl-inset);
+  color: var(--gl-accent);
+  font: 600 13px/1 var(--gl-sans);
+  letter-spacing: .03em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.client-app-shell .av-app-pill:hover { border-color: var(--gl-accent); }
+.client-app-shell .av-app-pill:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }
+.client-app-shell .av-app-pill:disabled { opacity: .7; cursor: wait; }
+.client-app-shell .av-app-pill svg { flex: none; }

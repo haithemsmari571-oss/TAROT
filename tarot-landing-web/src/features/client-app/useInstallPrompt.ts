@@ -1,5 +1,6 @@
-/* What the You tab's "Add to your home screen" row (ClientYouScreen.tsx) can
-   do in this browser.
+/* What adding the app to the home screen can do in this browser: for the You
+   tab's "Add to your home screen" row (ClientYouScreen.tsx), and for the
+   visit's install sheet and the app pill (AppSheets.tsx, ROUND59).
 
    Chrome (Android and desktop) fires beforeinstallprompt once a page load,
    when the manifest (public/manifest.webmanifest, linked in index.html) makes
@@ -8,19 +9,23 @@
    when this module first loads, and the site's entry (main.tsx) imports it:
    Chrome fires the event under a second after the page opens, before the
    lazy app shell has arrived. The offer is then kept however long she takes
-   to reach the You tab. preventDefault keeps Chrome's own install bar away,
-   on every page: the row is the one hint.
+   to reach a sheet or the row. preventDefault keeps Chrome's own install bar
+   away, on every page: the app's own sheet, pill and row are the hints.
 
    Safari fires no such event. On an iPhone or iPad the row opens the two
    Share steps instead. Anywhere else with no offer, and whenever the app
    already runs from the home screen, there is no row. */
 import { useSyncExternalStore } from "react";
+import { iosDevice } from "./appAsks";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
 let offer: BeforeInstallPromptEvent | null = null;
+/* This page load has had an offer, even if it is spent now: the app may
+   still not be on the home screen (appAsks.ts pillFinished). */
+let offered = false;
 const subscribers = new Set<() => void>();
 function hold(next: BeforeInstallPromptEvent | null) {
   offer = next;
@@ -29,6 +34,7 @@ function hold(next: BeforeInstallPromptEvent | null) {
 
 window.addEventListener("beforeinstallprompt", event => {
   event.preventDefault();
+  offered = true;
   hold(event as BeforeInstallPromptEvent);
 });
 // Installed, from the row or from the browser's own menu: the offer is spent.
@@ -48,11 +54,9 @@ export function runsStandalone() {
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
-/* An iPhone, iPad or iPod names itself; iPadOS in its desktop mode reads as
-   a Mac with a touch screen. */
+/* An iPhone, iPad or iPod (appAsks.ts iosDevice). */
 export function isIos() {
-  const ua = navigator.userAgent;
-  return /iPhone|iPad|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
+  return iosDevice(navigator.userAgent, navigator.maxTouchPoints) !== null;
 }
 
 /** "prompt": the browser's install dialog. "share-steps": the iPhone sheet. null: no row. */
@@ -67,5 +71,5 @@ export function useInstallPrompt() {
     hold(null);
     held.prompt().catch(() => { /* already spent: the row has gone with it */ });
   };
-  return { route, prompt };
+  return { route, prompt, offered };
 }

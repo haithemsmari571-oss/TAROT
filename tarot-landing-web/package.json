@@ -17,7 +17,8 @@
     "test:app-service-worker": "node scripts/test-app-service-worker.mts",
     "test:reader-name": "node scripts/test-reader-name.mts",
     "test:countries": "node scripts/test-countries.mts",
-    "test:offline-icons": "node scripts/test-offline-icons.mts"
+    "test:offline-icons": "node scripts/test-offline-icons.mts",
+    "test:app-asks": "node scripts/test-app-asks.mts"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
