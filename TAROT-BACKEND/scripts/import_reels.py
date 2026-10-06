@@ -13,6 +13,10 @@ on the site does what the owner's New post screen does
      its Instagram date (routers/library_items.py POST /video),
   4. adds its cover picture and shows it, in one step (PATCH).
 
+The caption and the spoken words go up without Instagram's request to comment
+or follow (ROUND67, ROUND68). Of a video posted twice, only the newer post goes
+up (REPEATED_VIDEOS, ROUND68).
+
 Each reel's key is "ig-" and its Instagram id. A second run therefore finds
 what is already on the site and skips it, and a run that stopped half way
 carries on: a reel registered but never shown (hidden and without a cover) gets
@@ -21,7 +25,7 @@ hidden.
 
 Commands, from the checkout's folder:
 
-    python TAROT-BACKEND\\scripts\\import_reels.py preview   (no sign-in: every title and caption as the site shows it)
+    python TAROT-BACKEND\\scripts\\import_reels.py preview   (no sign-in: every title, caption and transcript as the site shows it)
     python TAROT-BACKEND\\scripts\\import_reels.py check     (signs in, checks storage, counts what is there)
     python TAROT-BACKEND\\scripts\\import_reels.py import    (puts every missing video on the site)
 
@@ -65,44 +69,103 @@ MAX_TITLE_LENGTH = 100
 # same day in the UK and in America, and the reels of one day a second apart
 # in posts.json's order (newest first), so the site keeps Instagram's order.
 POST_HOUR_UTC = 12
+# Two videos were posted twice on Instagram. Only the newer post of each pair
+# goes on the site (ROUND68); the older is left out by its Instagram id. The
+# value is the newer post's id.
+REPEATED_VIDEOS = {
+    "18147999400396298": "17979708143883411",  # "Hard truth: your partner isn't here to save you…", 15 and 17 August 2025
+    "17888360835203693": "18322485079237410",  # "6 Reminders to Live with Inner Peace and Harmony", 17 and 27 August 2025
+}
 HASH_CHUNK_BYTES = 4 * 1024 * 1024
 USER_AGENT = "AskValentina-reel-import/1"
 API_TIMEOUT_SECONDS = 60
 UPLOAD_TIMEOUT_SECONDS = 600
 
 
-# ── Title and caption: decision 2 of ROUND67 ─────────────────────────────────
+# ── Title, caption and transcript: decision 2 of ROUND67, and ROUND68 ────────
 #
 # The caption keeps every word except Instagram's call to action: the sentences
 # that ask people to comment, follow, like, message, save or share on
 # Instagram, the dated Instagram-only free reading offers, and the promise that
 # answers a comment ("I will read for you", "The first one is free") when it
 # directly follows such a sentence. The site's own "Get your reading" button
-# takes their place.
+# takes their place. ROUND68 takes the same request out of the transcript, the
+# words spoken in the reel, as the speech-to-text in posts.json wrote them.
 
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])(?<!\bvs\.)\s+")
 _SENTENCE_END = re.compile(r"(?<!\bvs)[.!?](?=\s|$)")
+# How the speech-to-text wrote a spoken "comment".
+_MISHEARD_COMMENT = r"\b(?:common|carmen) valentin|\bcome in only one number\b"
 _CALL_TO_ACTION = re.compile(
-    r"\bcomments?\b|\bfollow\b|\blike (?:the|this) video\b|\blike first\b|\bDM\b|"
+    # "follow" is a request where a clause starts with it ("Follow me",
+    # "and follow us"), not in "heartbreak doesn't follow logic".
+    r"\bcomments?\b|(?:^|[,+:]|\band\b)\W*follow\b|\blike (?:the|this) video\b|\blike first\b|\bDM\b|"
     r"\bsave this\b|\bshare (?:it|this|with)\b|\bsend it to\b|"
-    r"\bdrop (?:it|your sign|a comment)\b|\bopening space for free\b|\boffering free\b|"
-    r"\bto claim yours\b|@\w",
+    r"\bdrop (?:it|your sign|a comment)\b|\bopening space\b|\boffering free\b|"
+    r"\bto claim yours\b|@\w|" + _MISHEARD_COMMENT,
     re.IGNORECASE,
 )
 # A sentence about commenting rather than a request to comment.
 _ABOUT_COMMENTING = re.compile(r"^\W*when you comment\b", re.IGNORECASE)
 _ANSWER_TO_A_COMMENT = re.compile(
-    r"^\W*(?:I will (?:read|reach|tell)\b|I(?:’|')ll (?:read|reach|tell)\b|"
-    r"(?:the|your) first (?:one|reading) is free\b|come back tomorrow\b|"
-    r"that is all the universe needs\b|let(?:’|')s uncover\b)",
+    r"^\W*(?:(?:and )?I(?: will|(?:’|')ll)(?: also)? (?:read|reach|tell|give|text|show)\b|"
+    r"(?:then )?tell me\b|(?:the|your) first (?:one|reading) is free\b|come back tomorrow\b|"
+    r"that is all the universe needs\b|let(?:’|')s (?:uncover|see)\b|and where\b|the one that found you\b)",
     re.IGNORECASE,
 )
+# Where the speech-to-text ran the request into the sentence before it, the
+# words before the request stay: "…kept walking from now until September
+# 15th, I'm offering free love readings" and "Look, the first half revealed
+# you, comment I received this…". A comment request's own condition ("If you
+# are a Scorpio, comment Valentina") goes with it.
+_OFFER_INSIDE = re.compile(
+    r"\s+(?=from now until\b[^.!?]*?\b(?:opening space|offering free)\b)|"
+    r"(?<!\bnow)\s+(?=until\b[^.!?]*?\b(?:opening space|offering free)\b)",
+    re.IGNORECASE,
+)
+_COMMENT_INSIDE = re.compile(r",\s+(?=comment\b|carmen valentin)", re.IGNORECASE)
+_CONDITION = re.compile(r"^\W*(?:if|whether)\b", re.IGNORECASE)
+# The same condition when the speech-to-text ended a sentence before the
+# request: "If you are a Sagittarius or if a Sagittarius left… . Comment…", or
+# "…you repeat it and if you're done repeating the same love story. I'm opening
+# space…". "If you are carrying something…, come find me." stays.
+_CONDITION_BEFORE = re.compile(
+    r"^\W*(?:if|whether) you are an? .*$|\s+and\s+(?:listen,\s*)?if you(?:r|(?:’|')re| are)\b[^.!?]*[.!?]?$",
+    re.IGNORECASE,
+)
+_HAS_WORD = re.compile(r"[^\W_]")
 # A line left with only bullets or dots (the spacers once between the hashtags).
 _HAS_CONTENT = re.compile(r"[^\s•·.\-–—]")
 
 
 def _is_call_to_action(sentence: str) -> bool:
     return bool(_CALL_TO_ACTION.search(sentence)) and not _ABOUT_COMMENTING.match(sentence)
+
+
+def _words_before_the_request(sentence: str) -> str:
+    """The words a request was run into, with the sentence's own end, or ''."""
+    offer = _OFFER_INSIDE.search(sentence)
+    comment = None if offer or _CONDITION.match(sentence) else _COMMENT_INSIDE.search(sentence)
+    cut = offer or comment
+    if cut is None:
+        return ""
+    words = sentence[: cut.start()].rstrip(" ,")
+    if not _HAS_WORD.search(words) or _is_call_to_action(words):
+        return ""
+    return words + _end_of(sentence)
+
+
+def _without_a_condition_before(sentence: str) -> str:
+    """The sentence before a request without the request's condition, or ''."""
+    condition = _CONDITION_BEFORE.search(sentence)
+    if condition is None:
+        return sentence
+    return sentence[: condition.start()] + _end_of(sentence) if condition.start() else ""
+
+
+def _end_of(sentence: str) -> str:
+    end = sentence.rstrip()[-1]
+    return end if end in ".!?" else ""
 
 
 def remove_calls_to_action(text: str) -> str:
@@ -119,7 +182,13 @@ def remove_calls_to_action(text: str) -> str:
             if not sentence:
                 continue
             if _is_call_to_action(sentence):
+                if kept and not after_call:
+                    kept[-1] = _without_a_condition_before(kept[-1])
+                    if not kept[-1]:
+                        kept.pop()
                 after_call = True
+                if words := _words_before_the_request(sentence):
+                    kept.append(words)
                 continue
             if after_call and _ANSWER_TO_A_COMMENT.match(sentence):
                 continue
@@ -165,6 +234,10 @@ def reel_description(caption: str, opening: str) -> str | None:
     return remove_calls_to_action(text) or None
 
 
+def reel_transcript(spoken_text: str | None) -> str | None:
+    return remove_calls_to_action(spoken_text or "") or None
+
+
 # ── The export folder ────────────────────────────────────────────────────────
 
 
@@ -182,14 +255,15 @@ class Reel:
     height: int | None
     caption: str
     instagram_title: str
+    spoken_text: str
     listed_duration: float | None
 
 
 def load_reels(folder: Path) -> list[Reel]:
     """The export's videos, newest first, as posts.json lists them. Photos are
-    left out (decision 4)."""
+    left out (decision 4), and so is the older post of a repeated video."""
     posts = json.loads((folder / "posts.json").read_text(encoding="utf-8"))
-    videos = [post for post in posts if post.get("type") == "video"]
+    videos = [post for post in posts if post.get("type") == "video" and str(post["id"]) not in REPEATED_VIDEOS]
     reels = []
     seconds_into_day: dict[str, int] = {}
     for post in videos:
@@ -205,7 +279,7 @@ def load_reels(folder: Path) -> list[Reel]:
                 instagram_id=str(post["id"]),
                 title=title,
                 description=reel_description(caption, opening),
-                transcript=(post.get("spoken_text") or "").strip() or None,
+                transcript=reel_transcript(post.get("spoken_text")),
                 published_at=published - timedelta(seconds=offset),
                 video=folder / post["file"],
                 poster=folder / post["poster"],
@@ -213,6 +287,7 @@ def load_reels(folder: Path) -> list[Reel]:
                 height=post.get("height"),
                 caption=caption,
                 instagram_title=post.get("title") or "",
+                spoken_text=(post.get("spoken_text") or "").strip(),
                 listed_duration=post.get("duration_s"),
             )
         )
@@ -465,19 +540,37 @@ def _words(text: str) -> str:
     return " ".join(text.split())
 
 
+def left_out() -> str:
+    pairs = ", ".join(f"{KEY_PREFIX}{older} (again as {KEY_PREFIX}{newer})" for older, newer in REPEATED_VIDEOS.items())
+    return f"Left out, posted twice on Instagram (the newer post goes on): {pairs}."
+
+
+def from_first_change(before: str, after: str) -> tuple[str, str]:
+    """Both texts from the start of the sentence where they first differ."""
+    same = len(os.path.commonprefix([before, after]))
+    found = max(before.rfind(f"{mark} ", 0, same) for mark in ".!?")
+    if found < 0:
+        return before, after
+    return "…" + before[found + 2:], "…" + after[found + 2:]
+
+
 def command_preview(reels: list[Reel], report: Path | None) -> int:
     lines = []
-    changed = 0
+    changed = shortened = 0
     for number, reel in enumerate(reels, start=1):
         shown = reel.title + ("\n" + reel.description if reel.description else "")
         rewritten = _words(shown) != _words(reel.caption)
         changed += rewritten
+        transcript = reel.transcript or ""
+        cut = transcript != reel.spoken_text
+        shortened += cut
+        ending_before, ending_after = from_first_change(reel.spoken_text, transcript)
         lines += [
             f"### {number}. {reel.key} ({reel.published_at.date().isoformat()})",
             "",
             f"- Title on the site: {reel.title}",
             *([f"- posts.json title: {json.dumps(reel.instagram_title, ensure_ascii=False)}"] if reel.instagram_title.strip() != reel.title else []),
-            f"- Transcript: {len(reel.transcript or '')} characters",
+            f"- Transcript: {len(transcript)} characters" + (", the spoken request taken out" if cut else ""),
             "",
             "Before (posts.json caption):",
             "",
@@ -487,12 +580,14 @@ def command_preview(reels: list[Reel], report: Path | None) -> int:
             "",
             *[f"> {line}" if line else ">" for line in shown.split("\n")],
             "",
+            *(["Transcript before, from the first change:", "", f"> {ending_before}", "",
+               "Transcript after:", "", f"> {ending_after}" if ending_after.strip("…") else "> (nothing)", ""] if cut else []),
         ]
-    lines.insert(0, f"{len(reels)} videos; {changed} captions rewritten.\n")
+    lines.insert(0, f"{len(reels)} videos; {changed} captions rewritten; {shortened} transcripts without the spoken request. {left_out()}\n")
     text = "\n".join(lines)
     if report:
         report.write_text(text, encoding="utf-8")
-        _say(f"Wrote {report} ({len(reels)} videos, {changed} captions rewritten).")
+        _say(f"Wrote {report} ({len(reels)} videos, {changed} captions rewritten, {shortened} transcripts shortened).")
     else:
         _say(text)
     return 0
@@ -530,7 +625,7 @@ def command_import(site: Site, reels: list[Reel], assume_yes: bool) -> int:
     sign_in(site)
     on_site = site.library()
     to_do = [reel for reel in reels if reel.key not in on_site or needs_finishing(on_site[reel.key])]
-    _say(f"{len(reels)} videos in the folder; {len(reels) - len(to_do)} already on the site; {len(to_do)} to do.")
+    _say(f"{len(reels)} videos to put on the site; {len(reels) - len(to_do)} already there; {len(to_do)} to do.")
     if to_do and not assume_yes:
         answer = input(f"Type YES to put {len(to_do)} videos on {site.site}: ").strip()
         if answer != "YES":
@@ -598,6 +693,7 @@ def main(argv: list[str] | None = None) -> int:
         return command_preview(reels, args.report)
     site = Site(args.site)
     _say(f"Site: {site.site}")
+    _say(left_out())
     try:
         if args.command == "check":
             return command_check(site, reels)

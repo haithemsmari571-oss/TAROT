@@ -1,7 +1,7 @@
-"""scripts/import_reels.py (ROUND67): the Instagram videos as reels.
+"""scripts/import_reels.py (ROUND67, ROUND68): the Instagram videos as reels.
 
-The captions here are made up in the export's style; the real posts.json is
-never part of the repository.
+The captions and spoken words here are made up in the export's style; the real
+posts.json is never part of the repository.
 """
 
 import importlib
@@ -50,6 +50,55 @@ def test_follow_dm_save_share_and_handles_go_with_their_whole_line():
     assert import_reels.remove_calls_to_action(offer) == "He pulled away."
     # A sentence about commenting is not a request to comment.
     assert import_reels.remove_calls_to_action("When you comment you are not just asking.") == "When you comment you are not just asking."
+
+
+def test_the_spoken_request_leaves_the_transcript_and_every_other_word_stays():
+    transcript = import_reels.reel_transcript
+    # The request, its condition before it and the promise after it go; the
+    # words after them stay.
+    assert transcript(
+        "The bridge is already built. If you are a Leo or if a Leo left a mark on you. "
+        "Comment ask Valentina and I will read for you. Part four is the water signs."
+    ) == "The bridge is already built. Part four is the water signs."
+    # As the speech-to-text heard "comment", and every promise that follows.
+    assert transcript(
+        "Pay the toll. Common Valentina if you are ready I will read for you. "
+        "The first one is free. Follow and like the video first."
+    ) == "Pay the toll."
+    assert transcript(
+        "Doors appear. If you are a Scorpio, come in only one number. "
+        "The one that found you today, claim it. I will also give you a reading."
+    ) == "Doors appear."
+    assert transcript("Stop asking. My name is Sam, Carmen Valentina, and your first reading is free. I will text you.") == (
+        "Stop asking. My name is Sam."
+    )
+    assert transcript(
+        "Try this tonight. Comment release when you do. Then tell me what happened. "
+        "And where it leads you next. Let's see who survives."
+    ) == "Try this tonight."
+    # A request run into the sentence before it: those words stay.
+    assert transcript(
+        "Reason three, you kept walking from now until September 15th, I'm offering free love readings. "
+        "DM me what's heavy on your heart and I'll take care of you."
+    ) == "Reason three, you kept walking."
+    assert transcript("Look, the first half revealed you, comment I received this, then tell me, I will read on it for you.") == (
+        "Look, the first half revealed you."
+    )
+    assert transcript("It is a tactic until the new moon, I'm opening space for readings") == "It is a tactic"
+    # Unless they are the request's own condition.
+    assert transcript("If you are a Scorpio, or if a Scorpio loved you, comment Valentina, I will reach out to you myself.") is None
+    assert transcript(
+        "Until you see it, you repeat it and if you're done repeating the same story. "
+        "I'm opening space until September 21st for free readings. Follow comment then DM me your sign."
+    ) == "Until you see it, you repeat it."
+    # An invitation with its own sentence stays, and so does "follow" that asks nothing.
+    kept = (
+        "If you are carrying something, come find me. But heartbreak doesn't follow logic. "
+        "You still follow each other online."
+    )
+    assert transcript(kept + " Comment Ask Valentina and I will read for you.") == kept
+    assert transcript("") is None
+    assert transcript(None) is None
 
 
 def test_titles_cut_by_the_export_are_mended():
@@ -130,6 +179,23 @@ def test_load_reels_keeps_instagrams_order_and_skips_photos(tmp_path):
     assert reels[2].published_at.isoformat() == "2026-05-01T12:00:00+00:00"
     assert [reel.transcript for reel in reels] == ["Said.", None, None]
     assert reels[0].description is None
+
+
+def test_load_reels_leaves_out_the_older_post_of_a_repeated_video(tmp_path):
+    older, newer = next(iter(import_reels.REPEATED_VIDEOS.items()))
+    posts = [
+        {"id": newer, "type": "video", "date": "2025-08-17", "title": "Hard truth.", "caption": "Hard truth.",
+         "spoken_text": "Hard truth. Drop it below and follow me for more.", "file": "media/n.mp4", "poster": "media/n.jpg"},
+        {"id": older, "type": "video", "date": "2025-08-15", "title": "Hard truth.", "caption": "Hard truth.",
+         "spoken_text": "Hard truth.", "file": "media/o.mp4", "poster": "media/o.jpg"},
+    ]
+    (tmp_path / "posts.json").write_text(json.dumps(posts), encoding="utf-8")
+    reels = import_reels.load_reels(tmp_path)
+    assert [reel.key for reel in reels] == [f"ig-{newer}"]
+    assert reels[0].transcript == "Hard truth."
+    assert len(import_reels.REPEATED_VIDEOS) == 2
+    # No newer post that stays is itself left out.
+    assert not set(import_reels.REPEATED_VIDEOS) & set(import_reels.REPEATED_VIDEOS.values())
 
 
 def test_a_reel_is_finished_only_when_a_run_stopped_before_showing_it():
