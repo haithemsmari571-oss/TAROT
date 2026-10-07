@@ -111,13 +111,20 @@ def create_psychic(
     return _psychic_to_out(psychic, viewer)
 
 
+def can_view_reader_email(viewer: User | None, reader_id: int) -> bool:
+    """Who may see a reader's login email: an admin, the owner admin, or the
+    reader herself. A client never does, wherever a reader appears (the
+    roster, my-chats, a chat's details)."""
+    return viewer is not None and (
+        viewer.role in (Role.ADMIN, Role.SUPERADMIN)
+        or (viewer.role == Role.PSYCHIC and viewer.id == reader_id)
+    )
+
+
 def _psychic_to_out(
     psychic: User, viewer: User | None = None, *, now: datetime | None = None
 ) -> PsychicRead:
-    can_view_email = viewer is not None and (
-        viewer.role in (Role.ADMIN, Role.SUPERADMIN)
-        or (viewer.role == Role.PSYCHIC and viewer.id == psychic.id)
-    )
+    can_view_email = can_view_reader_email(viewer, psychic.id)
     categories_mapped = [
         PsychicCategoryRead(
             id=psychic_category.category_id,

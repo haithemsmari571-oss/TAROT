@@ -44,6 +44,7 @@ from app.services.chats import (
     save_message,
     update_chat_status,
 )
+from app.services.psychics import can_view_reader_email
 from sqlalchemy import desc
 from app.routers.client_inbox import router as client_inbox_router
 
@@ -479,7 +480,12 @@ def get_my_chats_endpoint(
             "client_email": client.email if client else None,
             # Psychic details
             "psychic_username": psychic.username if psychic else None,
-            "psychic_email": psychic.email if psychic else None,
+            # Her login email is for an admin or herself, never the client.
+            "psychic_email": (
+                psychic.email
+                if psychic and can_view_reader_email(user, psychic.id)
+                else None
+            ),
         }
         chats_with_details.append(chat_dict)
 
@@ -568,7 +574,7 @@ def get_chat_details_endpoint(
         "psychic": {
             "id": psychic.id,
             "username": psychic.username,
-            "email": psychic.email,
+            "email": psychic.email if can_view_reader_email(user, psychic.id) else None,
             "price_per_second": psychic.price_per_second,
             "price_per_message": psychic.price_per_message,
         }
