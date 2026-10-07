@@ -33,8 +33,8 @@ def test_the_lifetime_access_email_footer_uses_the_brand(mail):
     )
 
     [message] = mail.sent
-    assert f"&copy; 2026 {email_service.BRAND_NAME}. Automated notification." in message.body
-    assert "AskValentina" not in message.body
+    assert f"&copy; 2026 {email_service.BRAND_NAME}. Automated notification." in message.alternative_body
+    assert "AskValentina" not in message.alternative_body
 
 
 def test_no_email_template_spells_the_brand_as_one_word():
@@ -73,7 +73,7 @@ def test_every_client_email_names_the_company_in_its_footer(mail):
         )
     assert len(mail.sent) == len(CLIENT_EMAILS)
     for message in mail.sent:
-        footer = message.body.split('<div class="footer">', 1)[1]
+        footer = message.alternative_body.split('<div class="footer">', 1)[1]
         assert email_service.COMPANY_IDENTITY in footer
         assert email_service.COMPANY_CONTACT in footer
 

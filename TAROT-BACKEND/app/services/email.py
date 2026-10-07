@@ -8,6 +8,7 @@ from fastapi_mail import (
     FastMail,
     MessageSchema,
     MessageType,
+    MultipartSubtypeEnum,
     NameEmail,
 )
 from pydantic import BaseModel
@@ -355,11 +356,17 @@ async def send_email(
         }
         subject = subject or email_subjects.get(template_key, f"{BRAND_NAME} Notification")
 
+        # Every email carries a plain-text version, first, beside the HTML
+        # exactly as filled (EMAIL_PLAINTEXT): an HTML-only message counts
+        # against it with spam filters. fastapi-mail sends the pair as
+        # multipart/related > multipart/alternative > [text/plain, text/html].
         message = MessageSchema(
             subject=subject,
             recipients=recepientEmail,
-            body=mail_body,
-            subtype=MessageType.html,
+            body=_plain_text(mail_body),
+            subtype=MessageType.plain,
+            alternative_body=mail_body,
+            multipart_subtype=MultipartSubtypeEnum.alternative,
         )
 
         logger.debug(
@@ -421,3 +428,32 @@ def _validate_all_vars_are_filled(template_filled: str):
             unfilled_variables=unfilled_vars,
         )
         raise TemplateVariabelNotFilled("Not all template variables were filled.")
+
+
+_HTML_DROPPED_BLOCK = re.compile(r"<(head|style|script)\b.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_HTML_LINK = re.compile(
+    r"<a\b[^>]*?\shref\s*=\s*([\"'])(.*?)\1[^>]*>(.*?)</a\s*>", re.IGNORECASE | re.DOTALL
+)
+_HTML_LINE_END = re.compile(r"<br\s*/?>|</(?:p|h[1-6]|div|li)\s*>", re.IGNORECASE)
+_HTML_CELL_END = re.compile(r"</td\s*>", re.IGNORECASE)
+_HTML_TAG = re.compile(r"<[^>]*>")
+
+
+def _plain_text(html_body: str) -> str:
+    """The plain-text version of a filled email, for every template: no head,
+    style or script; each link as "label: URL", so the verify and reset links
+    stay usable; a line break at br and at the end of p, h1 to h6, div and li;
+    a space at the end of a table cell, so the Lifetime Access rows keep their
+    words apart; no other tags; entities unescaped; at most one blank line in a
+    row. The values are still escaped while the tags go, so a username's "<"
+    comes out as text."""
+    text = _HTML_DROPPED_BLOCK.sub("", html_body)
+    text = _HTML_LINK.sub(
+        lambda link: f"{' '.join(_HTML_TAG.sub('', link.group(3)).split())}: {link.group(2)}",
+        text,
+    )
+    text = _HTML_LINE_END.sub("\n", text)
+    text = _HTML_CELL_END.sub(" ", text)
+    text = html.unescape(_HTML_TAG.sub("", text))
+    lines = (" ".join(line.split()) for line in text.splitlines())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip() + "\n"

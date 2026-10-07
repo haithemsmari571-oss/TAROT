@@ -91,7 +91,7 @@ def test_the_reply_email_names_a_handle_by_its_first_name_part(local, outbox):
     [sent] = outbox
     assert sent.subject == "Round replied to you"
     assert "round34_away" not in sent.subject.lower()
-    assert "round34_away" not in sent.body.lower()
+    assert "round34_away" not in sent.alternative_body.lower()
 
 
 def test_the_refund_email_names_a_handle_by_its_first_name_part(local, outbox):
@@ -109,7 +109,7 @@ def test_the_refund_email_names_a_handle_by_its_first_name_part(local, outbox):
 
     [sent] = outbox
     assert sent.subject == "End could not reply in time. Your £2.50 is back."
-    assert "end_control" not in sent.body.lower()
+    assert "end_control" not in sent.alternative_body.lower()
 
 
 def test_the_reply_email_capitalises_each_word_of_a_two_word_name(local, outbox):

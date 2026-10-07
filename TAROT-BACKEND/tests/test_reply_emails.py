@@ -154,12 +154,12 @@ def test_the_email_says_only_that_she_replied_and_opens_the_chat(local, outbox, 
     [message] = outbox
     assert message.subject == "Sophie replied to you"
     assert [r.email for r in message.recipients] == ["nadia@test.co"]
-    assert "<h2>Sophie replied to you</h2>" in message.body
-    assert f'href="https://askvalentina.co.uk/app/chats/{chat.id}"' in message.body
-    assert ">Open the chat</a>" in message.body
-    assert 'href="https://askvalentina.co.uk/app/you"' in message.body
-    assert "&copy; 2026 Ask Valentina." in message.body
-    assert REPLY_TEXT not in message.body
+    assert "<h2>Sophie replied to you</h2>" in message.alternative_body
+    assert f'href="https://askvalentina.co.uk/app/chats/{chat.id}"' in message.alternative_body
+    assert ">Open the chat</a>" in message.alternative_body
+    assert 'href="https://askvalentina.co.uk/app/you"' in message.alternative_body
+    assert "&copy; 2026 Ask Valentina." in message.alternative_body
+    assert REPLY_TEXT not in message.alternative_body
     assert email_service.conf.MAIL_FROM_NAME == "Ask Valentina"
 
 
@@ -253,9 +253,9 @@ def test_the_names_are_escaped_in_the_email(local, outbox):
     _conversation(local, reader="<b>Eve</b>")
     reply_emails.email_pass([], asyncio.run)
     [message] = outbox
-    assert "<b>eve" not in message.body.lower()
-    assert "&lt;" not in message.body
-    assert "<h2>B replied to you</h2>" in message.body
+    assert "<b>eve" not in message.alternative_body.lower()
+    assert "&lt;" not in message.alternative_body
+    assert "<h2>B replied to you</h2>" in message.alternative_body
 
 
 def test_an_apostrophe_in_a_name_is_escaped_in_the_email(local, outbox):
@@ -264,7 +264,7 @@ def test_an_apostrophe_in_a_name_is_escaped_in_the_email(local, outbox):
     [message] = outbox
     # ROUND56: the letter after an apostrophe is a capital too.
     assert message.subject == "O'Brien replied to you"
-    assert "<h2>O&#x27;Brien replied to you</h2>" in message.body
+    assert "<h2>O&#x27;Brien replied to you</h2>" in message.alternative_body
 
 
 def test_a_failed_send_is_logged_and_not_repeated(local, outbox, monkeypatch):
@@ -315,7 +315,7 @@ def test_a_refunded_message_gets_one_email_with_the_amount(local, outbox):
         "Sophie could not reply in time. Your £2.50 is back.")]
     [sent] = outbox
     assert sent.subject == "Sophie could not reply in time. Your £2.50 is back."
-    assert "<h2>Sophie could not reply in time. Your £2.50 is back.</h2>" in sent.body
+    assert "<h2>Sophie could not reply in time. Your £2.50 is back.</h2>" in sent.alternative_body
     # Her unanswered message is hers, not a reply: no second email.
     assert _stamp(local, chat) is None
 
@@ -409,8 +409,8 @@ def test_the_account_emails_sign_off_as_ask_valentina(outbox, key, vars):
     asyncio.run(email_service.send_email([NameEmail(email="nadia@test.co", name="nadia")],
                                          key.value, vars))
     [message] = outbox
-    assert "Thanks,<br>Ask Valentina" in message.body
-    assert "&copy; 2026 Ask Valentina. All rights reserved." in message.body
+    assert "Thanks,<br>Ask Valentina" in message.alternative_body
+    assert "&copy; 2026 Ask Valentina. All rights reserved." in message.alternative_body
     assert message.subject in ("Verify your Ask Valentina account", "Reset your password")
 
 

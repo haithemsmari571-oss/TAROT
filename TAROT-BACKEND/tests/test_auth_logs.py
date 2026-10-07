@@ -264,7 +264,7 @@ def test_the_verification_token_never_reaches_a_log_line(db, auth, mail, logs):
     assert auth.post("/api/auth/sign-up", json=_body()).status_code == 201
     [message] = mail.sent
     base = get_app_settings().VERIFY_ACCOUNT_BASE_URL
-    token = re.search(re.escape(base) + r"/([A-Za-z0-9_-]+)", message.body).group(1)
+    token = re.search(re.escape(base) + r"/([A-Za-z0-9_-]+)", message.alternative_body).group(1)
     user = db.query(User).one()
     user.is_verified = False
     db.commit()

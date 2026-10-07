@@ -57,7 +57,7 @@ def clock(monkeypatch):
 
 
 def _token_in(message, base: str) -> str:
-    return re.search(re.escape(base) + r"/([A-Za-z0-9_-]+)", message.body).group(1)
+    return re.search(re.escape(base) + r"/([A-Za-z0-9_-]+)", message.alternative_body).group(1)
 
 
 def _signed_up(auth, db, mail, *, verified=False):
@@ -158,8 +158,8 @@ def test_the_reset_email_says_its_link_lasts_60_minutes(db, auth, mail):
     _signed_up(auth, db, mail, verified=True)
     message, _ = _reset_email(auth, mail)
 
-    assert "This link will expire in 60 minutes." in message.body
-    assert "5 minutes" not in message.body
+    assert "This link will expire in 60 minutes." in message.alternative_body
+    assert "5 minutes" not in message.alternative_body
 
 
 def test_the_links_expiry_is_stored_with_it(db, auth, mail):
