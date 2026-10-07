@@ -3,6 +3,10 @@
    main bundle. */
 export const HOME_PATH = "/app/home";
 export const READERS_PATH = "/app/readers";
+export const SHORTS_PATH = "/app/shorts";
+/* The Shorts tab opened at one reel (ROUND71: a liked reel on Favourites). */
+export const SHORTS_REEL_PARAM = "reel";
+export const shortsAtReel = (key: string) => `${SHORTS_PATH}?${new URLSearchParams({ [SHORTS_REEL_PARAM]: key })}`;
 export const CHATS_PATH = "/app/chats";
 export const YOU_PATH = "/app/you";
 /* The account screens under You: two from YOU3A, Favourites from YOU3B. */

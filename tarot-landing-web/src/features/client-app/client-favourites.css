@@ -155,6 +155,26 @@
   text-decoration: none;
   color: var(--gl-text);
 }
+/* A liked reel's row (ROUND71): its poster, a 9:16 portrait in the disc's
+   gold edge, in place of the reader's disc; a reel without a poster shows
+   the glass. Its title may take two lines before it is cut. */
+.client-app-shell .client-favs-reel-poster {
+  flex: none;
+  width: 36px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--gl-accent-dim);
+  background: var(--gl-glass-2);
+}
+.client-app-shell .client-favs-reel-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.client-app-shell .client-favs-row .client-favs-reel-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  line-height: 1.3;
+}
 .client-app-shell .client-favs-row-link .client-chats-name { transition: color .4s var(--ease); }
 .client-app-shell .client-favs-row-link:hover .client-chats-name { color: var(--gl-accent); }
 .client-app-shell .client-favs-row-link:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 2px; }

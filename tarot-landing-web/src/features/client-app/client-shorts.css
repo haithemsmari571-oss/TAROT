@@ -61,6 +61,8 @@
   background: var(--gl-base);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  /* A double tap likes the reel (ROUND71); it must never zoom the page. */
+  touch-action: manipulation;
 }
 
 .client-app-shell .client-shorts-video {
@@ -129,6 +131,46 @@
 }
 .client-app-shell .client-shorts-sound:hover { background: var(--gl-glass-2); color: var(--gl-text); }
 .client-app-shell .client-shorts-sound:focus-visible { outline: 2px solid var(--gl-accent); outline-offset: 3px; }
+
+/* The heart (ROUND71): the readers' heart (client-favourites.css
+   .client-fav-heart, its glass and its lit gold) on the same right edge as the
+   sound switch, centred under it, 10px below, at a 48px touch target. Three
+   classes deep to outrank that rule's 44px whichever sheet loads last. */
+.client-app-shell .client-shorts-stage .client-shorts-like {
+  position: absolute;
+  top: 66px;
+  right: 10px;
+  width: 48px;
+  height: 48px;
+}
+
+/* A double tap's heart, where she tapped: it swells, settles and rises away. */
+.client-app-shell .client-shorts-burst {
+  position: absolute;
+  width: 84px;
+  height: 84px;
+  translate: -50% -50%;
+  pointer-events: none;
+  color: var(--gl-accent);
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .35));
+  animation: client-shorts-burst .9s var(--ease) forwards;
+}
+.client-app-shell .client-shorts-burst svg { display: block; width: 100%; height: 100%; }
+@keyframes client-shorts-burst {
+  0% { opacity: 0; scale: .3; }
+  18% { opacity: 1; scale: 1.15; }
+  32% { scale: .95; }
+  45% { scale: 1; }
+  75% { opacity: 1; translate: -50% -50%; }
+  100% { opacity: 0; scale: 1; translate: -50% -110%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .client-app-shell .client-shorts-burst { animation: client-shorts-burst-still .7s linear forwards; }
+}
+@keyframes client-shorts-burst-still {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 /* Shown only while the client has paused the reel in view. */
 .client-app-shell .client-shorts-play {

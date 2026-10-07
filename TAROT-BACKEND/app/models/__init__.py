@@ -41,6 +41,7 @@ from .reading_message_burst import ReadingMessageBurst
 from .hall_sound import HallSound
 from .library_item import LibraryItem
 from .reel_watch import ReelWatch
+from .reel_like import ReelLike
 from .auth_link_token import AuthLinkToken
 
 __all__ = [
@@ -84,5 +85,6 @@ __all__ = [
     "ReadingMessageBurst",
     "LibraryItem",
     "ReelWatch",
+    "ReelLike",
     "AuthLinkToken",
 ]

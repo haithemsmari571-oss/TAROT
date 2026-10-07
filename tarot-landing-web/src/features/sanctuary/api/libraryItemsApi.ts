@@ -79,15 +79,34 @@ export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   return response.data;
 };
 
+const REELS_PATH = "/library-items/reels";
+const reelPath = (key: string) => `${REELS_PATH}/${encodeURIComponent(key)}`;
+
 /** For a signed-in client, the reels she has not watched come first. */
 export const getReels = async (): Promise<ReelItem[]> => {
-  const response = await axiosClient.get<ReelItem[]>("/library-items/reels");
+  const response = await axiosClient.get<ReelItem[]>(REELS_PATH);
   return response.data;
 };
 
 /** Tells the server the signed-in client has watched this reel. */
 export const recordReelWatched = async (key: string): Promise<void> => {
-  await axiosClient.post(`/library-items/reels/${encodeURIComponent(key)}/watched`);
+  await axiosClient.post(`${reelPath(key)}/watched`);
+};
+
+/** The reels the signed-in client has liked, the newest like first. */
+export const getLikedReels = async (signal?: AbortSignal): Promise<ReelItem[]> => {
+  const response = await axiosClient.get<ReelItem[]>(`${REELS_PATH}/liked`, { signal });
+  return response.data;
+};
+
+/** Keeps a reel in the signed-in client's favourites. Idempotent. */
+export const likeReel = async (key: string): Promise<void> => {
+  await axiosClient.post(`${reelPath(key)}/like`);
+};
+
+/** Takes a reel out of the signed-in client's favourites. Idempotent. */
+export const unlikeReel = async (key: string): Promise<void> => {
+  await axiosClient.delete(`${reelPath(key)}/like`);
 };
 
 const getPublicArticles = async (): Promise<PublicArticle[]> => {

@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.library_item import LibraryItem
+from app.models.reel_like import ReelLike
 from app.models.reel_watch import ReelWatch
 from app.schemas.library_item import (
     LIBRARY_ITEM_KEY_PATTERN,
@@ -494,6 +495,16 @@ def list_public(db: Session, *, now: datetime | None = None) -> list[LibraryItem
     )
 
 
+def _published_reels(db: Session, visible_at: datetime):
+    """The reels on the shelf: video items, shown, published by visible_at."""
+    return db.query(LibraryItem).filter(
+        LibraryItem.video_file_path.is_not(None),
+        LibraryItem.enabled.is_(True),
+        LibraryItem.published_at.is_not(None),
+        LibraryItem.published_at <= visible_at,
+    )
+
+
 def list_public_reels(
     db: Session, *, now: datetime | None = None, watched_by: int | None = None
 ) -> list[LibraryItem]:
@@ -503,13 +514,7 @@ def list_public_reels(
     she has not watched, newest first, then those she has, the least recently
     watched first. Every reel is there either way.
     """
-    visible_at = now or datetime.now(timezone.utc)
-    query = db.query(LibraryItem).filter(
-        LibraryItem.video_file_path.is_not(None),
-        LibraryItem.enabled.is_(True),
-        LibraryItem.published_at.is_not(None),
-        LibraryItem.published_at <= visible_at,
-    )
+    query = _published_reels(db, now or datetime.now(timezone.utc))
     newest_first = (LibraryItem.published_at.desc(), LibraryItem.id.desc())
     if watched_by is None:
         return query.order_by(*newest_first).all()
@@ -538,6 +543,58 @@ def record_reel_watched(
     except IntegrityError:
         # Her other device kept the same reel at the same instant: it is kept.
         db.rollback()
+
+
+def list_liked_reels(
+    db: Session, *, user_id: int, now: datetime | None = None
+) -> list[LibraryItem]:
+    """The reels a client has liked that are still on the shelf, newest like first."""
+    return (
+        _published_reels(db, now or datetime.now(timezone.utc))
+        .join(
+            ReelLike,
+            and_(ReelLike.library_item_id == LibraryItem.id, ReelLike.user_id == user_id),
+        )
+        .order_by(ReelLike.created_at.desc(), LibraryItem.id.desc())
+        .all()
+    )
+
+
+def like_reel(
+    db: Session, *, user_id: int, item: LibraryItem, now: datetime | None = None
+) -> None:
+    """Keep a reel in a client's favourites. Liking it again changes nothing."""
+    if db.get(ReelLike, (user_id, item.id)) is not None:
+        return
+    db.add(
+        ReelLike(
+            user_id=user_id,
+            library_item_id=item.id,
+            created_at=now or datetime.now(timezone.utc),
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        # Her other device liked the same reel at the same instant: it is kept.
+        db.rollback()
+
+
+def unlike_reel(db: Session, *, user_id: int, key: str) -> None:
+    """Take a reel out of a client's favourites. One she has not liked is no change."""
+    liked = (
+        db.query(ReelLike)
+        .filter(
+            ReelLike.user_id == user_id,
+            ReelLike.library_item_id.in_(
+                db.query(LibraryItem.id).filter(LibraryItem.key == key)
+            ),
+        )
+        .first()
+    )
+    if liked is not None:
+        db.delete(liked)
+        db.commit()
 
 
 def get_public_by_key(db: Session, key: str, *, now: datetime | None = None) -> LibraryItem | None:

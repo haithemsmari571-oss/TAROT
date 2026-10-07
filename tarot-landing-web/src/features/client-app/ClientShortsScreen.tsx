@@ -3,14 +3,19 @@
    (GET /library-items/reels): the ones the client has not watched, newest
    first, then the ones she has, the least recently watched first. The reel at
    least 60 percent in view plays from its start; every other reel waits paused
-   at 0. Sound is one switch for every reel, off until the client turns it on. */
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Link } from "react-router-dom";
+   at 0. Sound is one switch for every reel, off until the client turns it on.
+   The heart on each reel, or a double tap on it, keeps it in her Favourites
+   (ROUND71); opened from there (?reel=key), the tab starts at that reel. */
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getReels, recordReelWatched, resolveLibraryMediaUrl, type ReelItem } from "@/features/sanctuary/api/libraryItemsApi";
 import { useSanctuaryPlayer } from "@/features/sanctuary/SanctuaryPlayerProvider";
 import { sanitizeClaims } from "@/lib/copy";
-import { READERS_PATH } from "./clientAppPaths";
+import { READERS_PATH, SHORTS_REEL_PARAM } from "./clientAppPaths";
+import { HeartGlyph } from "./FavouriteHeart";
+import ReelHeart from "./ReelHeart";
+import { useReelLikes } from "./useReelLikes";
 import "./client-chats.css";
 import "./client-shorts.css";
 
@@ -24,6 +29,10 @@ const NEAR_REELS = 2;
 
 /* How much of a reel must have played for it to count as watched. */
 const WATCHED_SHARE = 0.9;
+
+/* A second tap on a reel within this many milliseconds is a double tap, which
+   likes it; a single tap pauses once this has passed without a second. */
+const DOUBLE_TAP_MS = 300;
 
 /* The reading button under every reel. The public reels page carries the same
    words (TAROT-BACKEND/app/routers/public_seo.py, GET_YOUR_READING). */
@@ -97,6 +106,37 @@ function Reel({ reel, index, active, near, paused, muted, onToggleSound, onToggl
     return () => element?.pause();
   }, []);
 
+  const { isLiked, set: setLiked } = useReelLikes();
+  // A first tap waits for a second one before it pauses the reel.
+  const pendingTap = useRef<number | undefined>(undefined);
+  const [burst, setBurst] = useState<{ id: number; x: number; y: number } | null>(null);
+
+  // A waiting tap belongs to the reel in view: moving on, or leaving, drops it.
+  useEffect(() => {
+    const pending = pendingTap;
+    return () => {
+      window.clearTimeout(pending.current);
+      pending.current = undefined;
+    };
+  }, [active]);
+
+  const tap = (event: MouseEvent<HTMLDivElement>) => {
+    if (!active) return;
+    if (pendingTap.current === undefined) {
+      pendingTap.current = window.setTimeout(() => {
+        pendingTap.current = undefined;
+        onTogglePause();
+      }, DOUBLE_TAP_MS);
+      return;
+    }
+    // The second tap: a heart where she tapped and a like, never an unlike, and no pause.
+    window.clearTimeout(pendingTap.current);
+    pendingTap.current = undefined;
+    const stage = event.currentTarget.getBoundingClientRect();
+    setBurst({ id: event.timeStamp, x: event.clientX - stage.left, y: event.clientY - stage.top });
+    if (!isLiked(reel.key)) void setLiked(reel, true);
+  };
+
   const showProgress = () => {
     const element = video.current;
     if (!element || !progress.current) return;
@@ -109,7 +149,7 @@ function Reel({ reel, index, active, near, paused, muted, onToggleSound, onToggl
   const posterUrl = resolveLibraryMediaUrl(reel.cover_url);
   return (
     <div className="client-shorts-slide" data-index={index} data-reel-key={reel.key}>
-      <div className="client-shorts-stage" onClick={() => { if (active) onTogglePause(); }}>
+      <div className="client-shorts-stage" onClick={tap}>
         <video
           ref={video}
           className="client-shorts-video"
@@ -141,6 +181,12 @@ function Reel({ reel, index, active, near, paused, muted, onToggleSound, onToggl
         >
           <SoundGlyph muted={muted} />
         </button>
+        <ReelHeart reel={reel} className="client-shorts-like" />
+        {burst && (
+          <span key={burst.id} className="client-shorts-burst" style={{ left: burst.x, top: burst.y }} onAnimationEnd={() => setBurst(null)} aria-hidden="true">
+            <HeartGlyph on />
+          </span>
+        )}
         <span className="client-shorts-track" aria-hidden="true"><span ref={progress} className="client-shorts-progress" /></span>
       </div>
     </div>
@@ -221,7 +267,17 @@ function Reels({ reels }: { reels: ReelItem[] }) {
   );
 }
 
+/* Opened at a reel (a liked one, from Favourites): that reel first, then her
+   feed as the tab would open it, without that reel. A reel no longer on the
+   shelf opens the feed as usual. */
+function startingAt(reels: ReelItem[] | undefined, key: string | null) {
+  const first = key ? reels?.find(reel => reel.key === key) : undefined;
+  return first && reels ? [first, ...reels.filter(reel => reel !== first)] : reels;
+}
+
 export default function ClientShortsScreen() {
+  const [params] = useSearchParams();
+  const startKey = params.get(SHORTS_REEL_PARAM);
   const reels = useQuery({
     queryKey: ["app-reels"],
     queryFn: getReels,
@@ -232,6 +288,7 @@ export default function ClientShortsScreen() {
     gcTime: 0,
     refetchOnWindowFocus: false,
   });
+  const feed = useMemo(() => startingAt(reels.data, startKey), [reels.data, startKey]);
 
   return (
     <section className="client-shorts-screen" aria-label="Shorts">
@@ -242,7 +299,9 @@ export default function ClientShortsScreen() {
       {reels.data?.length === 0 && (
         <div className="client-shorts-state"><div className="client-chats-empty"><p>No reels yet. Valentina&apos;s first reels are on their way.</p></div></div>
       )}
-      {reels.data && reels.data.length > 0 && <Reels reels={reels.data} />}
+      {/* A new starting reel (the Shorts tab pressed on a reel opened from
+          Favourites) starts the scroller afresh at the top. */}
+      {feed && feed.length > 0 && <Reels key={startKey ?? ""} reels={feed} />}
     </section>
   );
 }

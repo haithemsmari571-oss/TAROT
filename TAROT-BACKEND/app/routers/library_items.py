@@ -37,10 +37,13 @@ from app.services.library_items import (
     create_video_upload_grant,
     delete_library_item,
     get_public_by_key,
+    like_reel,
     list_all,
+    list_liked_reels,
     list_public,
     list_public_reels,
     record_reel_watched,
+    unlike_reel,
     update_library_item,
     video_url,
 )
@@ -157,6 +160,13 @@ def public_list_reels(
     return [_reel_view(item) for item in list_public_reels(db, watched_by=watched_by)]
 
 
+def _published_reel_or_404(db: Session, key: str) -> LibraryItem:
+    item = get_public_by_key(db, key)
+    if item is None or item.video_file_path is None:
+        raise HTTPException(404, "Reel not found.")
+    return item
+
+
 # The Shorts tab calls this once a reel has played 90 percent of its length.
 @public_router.post("/reels/{key}/watched", status_code=204)
 def record_watched_reel(
@@ -164,10 +174,39 @@ def record_watched_reel(
     client: User = Depends(require_roles([Role.USER])),
     db: Session = Depends(get_db),
 ):
-    item = get_public_by_key(db, key)
-    if item is None or item.video_file_path is None:
-        raise HTTPException(404, "Reel not found.")
-    record_reel_watched(db, user_id=client.id, item=item)
+    record_reel_watched(db, user_id=client.id, item=_published_reel_or_404(db, key))
+    return None
+
+
+# A client's liked reels, newest like first: the filled hearts in the Shorts
+# tab and the Reels on her Favourites screen. Liking never changes the feed's order.
+@public_router.get("/reels/liked", response_model=list[LibraryReelPublic])
+def list_my_liked_reels(
+    client: User = Depends(require_roles([Role.USER])),
+    db: Session = Depends(get_db),
+):
+    return [_reel_view(item) for item in list_liked_reels(db, user_id=client.id)]
+
+
+# Like and unlike, the way a reader is favourited (routers/profile.py
+# /me/favorites): both idempotent, and only a reel on the shelf can be liked.
+@public_router.post("/reels/{key}/like", status_code=204)
+def like_a_reel(
+    key: str,
+    client: User = Depends(require_roles([Role.USER])),
+    db: Session = Depends(get_db),
+):
+    like_reel(db, user_id=client.id, item=_published_reel_or_404(db, key))
+    return None
+
+
+@public_router.delete("/reels/{key}/like", status_code=204)
+def unlike_a_reel(
+    key: str,
+    client: User = Depends(require_roles([Role.USER])),
+    db: Session = Depends(get_db),
+):
+    unlike_reel(db, user_id=client.id, key=key)
     return None
 
 
