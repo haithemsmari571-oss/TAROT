@@ -79,9 +79,15 @@ export const getLibraryItems = async (): Promise<LibraryItem[]> => {
   return response.data;
 };
 
+/** For a signed-in client, the reels she has not watched come first. */
 export const getReels = async (): Promise<ReelItem[]> => {
   const response = await axiosClient.get<ReelItem[]>("/library-items/reels");
   return response.data;
+};
+
+/** Tells the server the signed-in client has watched this reel. */
+export const recordReelWatched = async (key: string): Promise<void> => {
+  await axiosClient.post(`/library-items/reels/${encodeURIComponent(key)}/watched`);
 };
 
 const getPublicArticles = async (): Promise<PublicArticle[]> => {

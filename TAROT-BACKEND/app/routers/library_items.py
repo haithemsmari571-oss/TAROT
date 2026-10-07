@@ -1,4 +1,4 @@
-"""Public and owner-managed routes for the library of audio and video."""
+"""Public, client and owner-managed routes for the library of audio and video."""
 
 from datetime import datetime
 
@@ -8,9 +8,12 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.database.client import get_db
-from app.dependencies.authorization import require_permission
+from app.dependencies.authorization import require_permission, require_roles
+from app.dependencies.get_current_user import get_optional_current_user
 from app.enums.permissions import Permission
+from app.enums.role import Role
 from app.models.library_item import LibraryItem
+from app.models.user import User
 from app.schemas.library_item import (
     LibraryAudioReference,
     LibraryAudioUploadGrant,
@@ -37,6 +40,7 @@ from app.services.library_items import (
     list_all,
     list_public,
     list_public_reels,
+    record_reel_watched,
     update_library_item,
     video_url,
 )
@@ -143,8 +147,28 @@ def public_list_library_items(db: Session = Depends(get_db)):
 
 # Declared before /{key} so "reels" is never read as an item key.
 @public_router.get("/reels", response_model=list[LibraryReelPublic])
-def public_list_reels(db: Session = Depends(get_db)):
-    return [_reel_view(item) for item in list_public_reels(db)]
+def public_list_reels(
+    db: Session = Depends(get_db),
+    viewer: User | None = Depends(get_optional_current_user),
+):
+    # A signed-in client gets the reels she has not watched first; everyone
+    # else, the owner included, newest first.
+    watched_by = viewer.id if viewer is not None and viewer.role == Role.USER else None
+    return [_reel_view(item) for item in list_public_reels(db, watched_by=watched_by)]
+
+
+# The Shorts tab calls this once a reel has played 90 percent of its length.
+@public_router.post("/reels/{key}/watched", status_code=204)
+def record_watched_reel(
+    key: str,
+    client: User = Depends(require_roles([Role.USER])),
+    db: Session = Depends(get_db),
+):
+    item = get_public_by_key(db, key)
+    if item is None or item.video_file_path is None:
+        raise HTTPException(404, "Reel not found.")
+    record_reel_watched(db, user_id=client.id, item=item)
+    return None
 
 
 @public_router.get("/{key}", response_model=LibraryItemPublic | LibraryReelPublic)

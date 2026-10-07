@@ -9,9 +9,12 @@ import secrets
 from datetime import datetime, timezone
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.library_item import LibraryItem
+from app.models.reel_watch import ReelWatch
 from app.schemas.library_item import (
     LIBRARY_ITEM_KEY_PATTERN,
     MAX_LIBRARY_AUDIO_SIZE_BYTES,
@@ -491,19 +494,50 @@ def list_public(db: Session, *, now: datetime | None = None) -> list[LibraryItem
     )
 
 
-def list_public_reels(db: Session, *, now: datetime | None = None) -> list[LibraryItem]:
+def list_public_reels(
+    db: Session, *, now: datetime | None = None, watched_by: int | None = None
+) -> list[LibraryItem]:
+    """Every published reel, newest first.
+
+    With watched_by, a client's id, her own order for the Shorts tab: the reels
+    she has not watched, newest first, then those she has, the least recently
+    watched first. Every reel is there either way.
+    """
     visible_at = now or datetime.now(timezone.utc)
+    query = db.query(LibraryItem).filter(
+        LibraryItem.video_file_path.is_not(None),
+        LibraryItem.enabled.is_(True),
+        LibraryItem.published_at.is_not(None),
+        LibraryItem.published_at <= visible_at,
+    )
+    newest_first = (LibraryItem.published_at.desc(), LibraryItem.id.desc())
+    if watched_by is None:
+        return query.order_by(*newest_first).all()
     return (
-        db.query(LibraryItem)
-        .filter(
-            LibraryItem.video_file_path.is_not(None),
-            LibraryItem.enabled.is_(True),
-            LibraryItem.published_at.is_not(None),
-            LibraryItem.published_at <= visible_at,
+        query.outerjoin(
+            ReelWatch,
+            and_(ReelWatch.library_item_id == LibraryItem.id, ReelWatch.user_id == watched_by),
         )
-        .order_by(LibraryItem.published_at.desc(), LibraryItem.id.desc())
+        .order_by(ReelWatch.watched_at.asc().nulls_first(), *newest_first)
         .all()
     )
+
+
+def record_reel_watched(
+    db: Session, *, user_id: int, item: LibraryItem, now: datetime | None = None
+) -> None:
+    """Keep that a client watched a reel, and when: one row per client and reel."""
+    watched_at = now or datetime.now(timezone.utc)
+    watch = db.get(ReelWatch, (user_id, item.id))
+    if watch is None:
+        db.add(ReelWatch(user_id=user_id, library_item_id=item.id, watched_at=watched_at))
+    else:
+        watch.watched_at = watched_at
+    try:
+        db.commit()
+    except IntegrityError:
+        # Her other device kept the same reel at the same instant: it is kept.
+        db.rollback()
 
 
 def get_public_by_key(db: Session, key: str, *, now: datetime | None = None) -> LibraryItem | None:

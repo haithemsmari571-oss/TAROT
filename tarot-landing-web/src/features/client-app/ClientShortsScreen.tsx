@@ -1,12 +1,13 @@
 /* The Shorts tab: Valentina's reels, one at a time, full height, swiped up for
    the next the way Instagram Reels works. The reels come from the library shelf
-   (GET /library-items/reels), newest first. The reel at least 60 percent in
-   view plays from its start; every other reel waits paused at 0. Sound is one
-   switch for every reel, off until the client turns it on. */
+   (GET /library-items/reels): the ones the client has not watched, newest
+   first, then the ones she has, the least recently watched first. The reel at
+   least 60 percent in view plays from its start; every other reel waits paused
+   at 0. Sound is one switch for every reel, off until the client turns it on. */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getReels, resolveLibraryMediaUrl, type ReelItem } from "@/features/sanctuary/api/libraryItemsApi";
+import { getReels, recordReelWatched, resolveLibraryMediaUrl, type ReelItem } from "@/features/sanctuary/api/libraryItemsApi";
 import { useSanctuaryPlayer } from "@/features/sanctuary/SanctuaryPlayerProvider";
 import { sanitizeClaims } from "@/lib/copy";
 import { READERS_PATH } from "./clientAppPaths";
@@ -20,6 +21,9 @@ const ACTIVE_RATIO = 0.6;
    their video, so a long shelf costs a phone no more than a short one. Without
    an address a reel loads nothing, whatever the browser does with preload. */
 const NEAR_REELS = 2;
+
+/* How much of a reel must have played for it to count as watched. */
+const WATCHED_SHARE = 0.9;
 
 /* The reading button under every reel. The public reels page carries the same
    words (TAROT-BACKEND/app/routers/public_seo.py, GET_YOUR_READING). */
@@ -49,9 +53,10 @@ interface ReelProps {
   onTogglePause: () => void;
   onSoundRefused: () => void;
   onPlaying: () => void;
+  onWatched: () => void;
 }
 
-function Reel({ reel, index, active, near, paused, muted, onToggleSound, onTogglePause, onSoundRefused, onPlaying }: ReelProps) {
+function Reel({ reel, index, active, near, paused, muted, onToggleSound, onTogglePause, onSoundRefused, onPlaying, onWatched }: ReelProps) {
   const video = useRef<HTMLVideoElement>(null);
   const progress = useRef<HTMLSpanElement>(null);
 
@@ -97,6 +102,8 @@ function Reel({ reel, index, active, near, paused, muted, onToggleSound, onToggl
     if (!element || !progress.current) return;
     const share = element.duration > 0 ? element.currentTime / element.duration : 0;
     progress.current.style.width = `${Math.min(share, 1) * 100}%`;
+    // The reel loops, so it is counted on the way, before it starts again.
+    if (active && share >= WATCHED_SHARE) onWatched();
   };
 
   const posterUrl = resolveLibraryMediaUrl(reel.cover_url);
@@ -147,6 +154,15 @@ function Reels({ reels }: { reels: ReelItem[] }) {
   const [pausedIndex, setPausedIndex] = useState<number | null>(null);
   const [muted, setMutedState] = useState(sessionMuted);
   const { isPlaying: sanctuaryPlaying, pause: pauseSanctuary } = useSanctuaryPlayer();
+  // The reels told to the server this visit: each once, never awaited, and a
+  // failure is let go.
+  const recorded = useRef(new Set<string>());
+
+  const recordWatched = (key: string) => {
+    if (recorded.current.has(key)) return;
+    recorded.current.add(key);
+    recordReelWatched(key).catch(() => undefined);
+  };
 
   const setMuted = (value: boolean) => {
     sessionMuted = value;
@@ -198,6 +214,7 @@ function Reels({ reels }: { reels: ReelItem[] }) {
           onTogglePause={togglePause}
           onSoundRefused={() => setMuted(true)}
           onPlaying={() => { if (sanctuaryPlaying) pauseSanctuary(); }}
+          onWatched={() => recordWatched(reel.key)}
         />
       ))}
     </div>
@@ -208,8 +225,11 @@ export default function ClientShortsScreen() {
   const reels = useQuery({
     queryKey: ["app-reels"],
     queryFn: getReels,
-    staleTime: 60_000,
-    // A refetch must never restart the reel in view.
+    // Her order changes as she watches: it is read afresh on every visit (kept
+    // no longer than the tab is open) and holds still while she is here, since
+    // a refetch must never move or restart the reel in view.
+    staleTime: Infinity,
+    gcTime: 0,
     refetchOnWindowFocus: false,
   });
 

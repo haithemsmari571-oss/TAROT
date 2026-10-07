@@ -40,6 +40,7 @@ from .atlas_client_memory_job import AtlasClientMemoryJob
 from .reading_message_burst import ReadingMessageBurst
 from .hall_sound import HallSound
 from .library_item import LibraryItem
+from .reel_watch import ReelWatch
 from .auth_link_token import AuthLinkToken
 
 __all__ = [
@@ -82,5 +83,6 @@ __all__ = [
     "AtlasClientMemoryJob",
     "ReadingMessageBurst",
     "LibraryItem",
+    "ReelWatch",
     "AuthLinkToken",
 ]
